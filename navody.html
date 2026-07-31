@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Návody – Pasport Kaňa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css?v=1">
+    <link rel="icon" href="Pasport_Kana_white.png">
+</head>
+<body class="min-h-screen font-sans">
+
+<div id="appHeader"></div>
+
+<main class="max-w-[1180px] mx-auto px-6 py-8 flex flex-col gap-7">
+
+    <!-- ---------------------------------------------------------- drobečky -->
+    <nav class="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+        <a href="index.html" class="hover:text-slate-300">Rozcestník</a>
+        <span>/</span>
+        <span id="crumb" class="text-slate-300 font-semibold">Všechny návody</span>
+    </nav>
+
+    <!-- ------------------------------------------------------------ filtry -->
+    <section class="flex flex-col gap-4">
+        <div id="catRow" class="flex flex-wrap gap-2"></div>
+        <div id="subRow" class="flex flex-wrap gap-2"></div>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+                <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input id="search" type="search" autocomplete="off" placeholder="Hledat v návodech…"
+                       class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5
+                              text-sm text-white placeholder-slate-500
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <a href="editor.html" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold
+                      px-5 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shrink-0">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Nový návod
+            </a>
+        </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ seznam -->
+    <section class="flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+            <div id="listCount" class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Načítám…</div>
+            <button id="btnPrompt" class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                </svg>
+                Zkopírovat pokyn pro AI k této kategorii
+            </button>
+        </div>
+        <div id="list" class="flex flex-col gap-2.5"></div>
+    </section>
+</main>
+
+<script src="assets/js/taxonomy.js?v=1"></script>
+<script src="assets/js/doc.js?v=1"></script>
+<script src="assets/js/ui.js?v=1"></script>
+<script type="module" src="assets/js/store.js?v=1"></script>
+
+<script>
+(function () {
+    const params = new URLSearchParams(location.search);
+    let activeCat = params.get("kat") || "";
+    let activeSub = params.get("sub") || "";
+
+    const esc = (value) => window.KBDoc.esc(value);
+
+    /* ------------------------------------------------------------ filtry */
+
+    function setFilter(cat, sub) {
+        activeCat = cat || "";
+        activeSub = sub || "";
+        const next = new URLSearchParams();
+        if (activeCat) next.set("kat", activeCat);
+        if (activeSub) next.set("sub", activeSub);
+        history.replaceState(null, "", location.pathname + (next.toString() ? "?" + next : ""));
+        paintFilters();
+        paintList();
+    }
+    window.__setFilter = setFilter;
+
+    function paintFilters() {
+        const category = window.KB_findCategory(activeCat);
+
+        document.getElementById("catRow").innerHTML =
+            '<button class="chip ' + (activeCat ? "" : "chip--active") + '" onclick="__setFilter(\'\',\'\')">VŠE</button>' +
+            window.KB_CATEGORIES.map(c =>
+                '<button class="chip ' + (c.id === activeCat ? "chip--active" : "") + '" ' +
+                'onclick="__setFilter(\'' + c.id + '\',\'\')">' + c.title + "</button>"
+            ).join("");
+
+        const subRow = document.getElementById("subRow");
+        if (category && category.children && category.children.length) {
+            subRow.classList.remove("hidden");
+            subRow.innerHTML =
+                '<button class="chip ' + (activeSub ? "" : "chip--active") + '" ' +
+                'onclick="__setFilter(\'' + category.id + '\',\'\')">Vše v kategorii</button>' +
+                category.children.map(s =>
+                    '<button class="chip ' + (s.id === activeSub ? "chip--active" : "") + '" ' +
+                    'onclick="__setFilter(\'' + category.id + "','" + s.id + '\')">' + s.title + "</button>"
+                ).join("");
+        } else {
+            subRow.classList.add("hidden");
+            subRow.innerHTML = "";
+        }
+
+        const sub = window.KB_findSub(activeCat, activeSub);
+        document.getElementById("crumb").textContent = category
+            ? (sub ? category.title + " · " + sub.title : category.title)
+            : "Všechny návody";
+    }
+
+    /* ------------------------------------------------------------ seznam */
+
+    function guideRow(guide, query) {
+        const date = guide.updatedMs ? new Date(guide.updatedMs).toLocaleDateString("cs-CZ") : "";
+        const imageCount = (guide.steps || []).reduce((sum, s) => sum + ((s.images || []).length), 0);
+
+        return '<a class="guide-row" href="navod.html?id=' + encodeURIComponent(guide.id) + '">' +
+            '<div class="flex items-start justify-between gap-4">' +
+                '<div class="min-w-0 flex-1">' +
+                    '<div class="flex items-center gap-2 mb-1.5 flex-wrap">' +
+                        '<span class="text-[9px] font-extrabold uppercase tracking-wide bg-indigo-500/15 text-indigo-300 px-2 py-0.5 rounded">' +
+                            esc(window.KB_categoryLabel(guide)) + "</span>" +
+                        '<span class="text-[10px] text-slate-500">' + esc(guide.author || "Neznámý autor") + "</span>" +
+                        (guide.version ? '<span class="text-[10px] text-slate-600">' + esc(guide.version) + "</span>" : "") +
+                    "</div>" +
+                    '<div class="text-sm font-bold text-white">' + window.KBUI.highlight(guide.title || "Bez názvu", query) + "</div>" +
+                    (guide.desc ? '<div class="text-xs text-slate-400 mt-1">' + window.KBUI.highlight(guide.desc, query) + "</div>" : "") +
+                "</div>" +
+                '<div class="text-right shrink-0 text-[10px] text-slate-600 leading-relaxed">' +
+                    (date ? date + "<br>" : "") +
+                    ((guide.steps || []).length) + " kroků" +
+                    (imageCount ? "<br>" + imageCount + " obr." : "") +
+                "</div>" +
+            "</div>" +
+        "</a>";
+    }
+
+    function paintList() {
+        const query = document.getElementById("search").value.trim();
+        const listEl = document.getElementById("list");
+        const countEl = document.getElementById("listCount");
+        const all = window.KB.guides || [];
+
+        let items = all;
+        let note = "";
+
+        if (activeCat) {
+            const inCategory = all.filter(g => g.cat === activeCat && (!activeSub || g.subcat === activeSub));
+            if (inCategory.length) {
+                items = inCategory;
+            } else {
+                // zatím jsou všechny návody v jedné hromadě – nenecháme prázdnou stránku
+                items = all;
+                note = '<div class="card p-4 text-xs text-amber-300/90 bg-amber-500/5 border-amber-500/25">' +
+                       "V této kategorii zatím není žádný návod zařazený, proto se zobrazují všechny. " +
+                       "Zařazení nastavíš u návodu v editoru.</div>";
+            }
+        }
+
+        items = window.KBUI.searchGuides(items, query);
+
+        countEl.textContent = items.length === 0 ? "Žádné návody"
+            : items.length + (items.length === 1 ? " návod" : items.length < 5 ? " návody" : " návodů");
+
+        listEl.innerHTML = note + (items.length
+            ? items.map(g => guideRow(g, query)).join("")
+            : '<div class="card p-10 text-center text-sm text-slate-500">' +
+              "Zatím tu nic není.<br>" +
+              '<a href="editor.html" class="text-indigo-400 underline mt-2 inline-block">Vytvořit první návod</a></div>');
+    }
+
+    /* ------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountHeader({ title: "Návody", back: "index.html", backLabel: "Rozcestník" });
+        paintFilters();
+        paintList();
+
+        document.getElementById("search").addEventListener("input", paintList);
+        document.getElementById("btnPrompt").addEventListener("click",
+            () => window.KBUI.copyAiPrompt(activeCat, activeSub));
+
+        window.KB.on("guides", paintList);
+    });
+})();
+</script>
+</body>
+</html>

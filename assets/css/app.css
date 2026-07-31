@@ -1,0 +1,531 @@
+/* ==========================================================================
+   PASPORT KAŇA – firemní knowledge base
+   Sdílené styly pro všechny stránky.
+   Barevnost zachována podle původní verze (slate-900 + indigo-600).
+   ========================================================================== */
+
+:root {
+    --bg:        #0f172a;   /* slate-900 */
+    --bg-soft:   #1e293b;   /* slate-800 */
+    --bg-deep:   #020617;   /* slate-950 */
+    --line:      #334155;   /* slate-700 */
+    --line-soft: #1e293b;
+    --text:      #f1f5f9;   /* slate-100 */
+    --muted:     #94a3b8;   /* slate-400 */
+    --dim:       #64748b;   /* slate-500 */
+    --accent:    #4f46e5;   /* indigo-600 */
+    --accent-lt: #818cf8;   /* indigo-400 */
+    --ok:        #059669;   /* emerald-600 */
+    --warn:      #f59e0b;
+    --danger:    #f43f5e;
+
+    /* Geometrie A4 dokumentu – jediné místo, kde se definuje */
+    --a4-w:      210mm;
+    --a4-h:      297mm;
+    --a4-pad-x:  16mm;
+    --a4-pad-t:  14mm;
+    --a4-foot-h: 24mm;
+}
+
+/* --------------------------------------------------------------- základ */
+
+body {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.loader {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    width: 20px; height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Jemný podklad hlavní stránky */
+.hero-grid {
+    background-image:
+        radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.18), transparent 60%),
+        linear-gradient(rgba(51, 65, 85, 0.25) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(51, 65, 85, 0.25) 1px, transparent 1px);
+    background-size: 100% 100%, 44px 44px, 44px 44px;
+}
+
+/* --------------------------------------------------------------- dlaždice */
+
+.tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 148px;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.tile::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--tile-accent, var(--accent));
+    opacity: .55;
+    transition: opacity .16s ease;
+}
+.tile:hover {
+    transform: translateY(-3px);
+    border-color: var(--tile-accent, var(--accent));
+    box-shadow: 0 18px 32px -18px rgba(0, 0, 0, .9);
+}
+.tile:hover::after { opacity: 1; }
+
+.tile__icon {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--tile-accent, var(--accent)) 18%, transparent);
+    color: var(--tile-accent, var(--accent));
+}
+.tile__icon svg { width: 22px; height: 22px; }
+
+.tile__title {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    line-height: 1.25;
+    color: #fff;
+}
+.tile__sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+.tile__meta {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tile--soon { opacity: .5; pointer-events: none; }
+.tile--soon .tile__icon { background: rgba(100, 116, 139, .15); color: var(--dim); }
+
+/* Podkategorie uvnitř dlaždice */
+.tile__children {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 2px;
+}
+.chip {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, .12);
+    color: var(--muted);
+    border: 1px solid rgba(148, 163, 184, .18);
+    text-decoration: none;
+    transition: background .14s ease, color .14s ease, border-color .14s ease;
+    white-space: nowrap;
+}
+.chip:hover { background: rgba(79, 70, 229, .22); color: #c7d2fe; border-color: rgba(79, 70, 229, .5); }
+.chip--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* --------------------------------------------------------------- sekce */
+
+.section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft);
+}
+.section-head h2 {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: #fff;
+}
+.section-head p { font-size: 12px; color: var(--dim); }
+
+/* --------------------------------------------------------------- A4 dokument
+   Vše psáno v mm/pt čistým CSS (ne Tailwind), aby byl náhled na stránce
+   PIXEL ZA PIXEL shodný s exportovaným PDF – PDF se generuje přímo z těchto
+   elementů (html2canvas -> jsPDF), takže se nemůže rozejít.
+   -------------------------------------------------------------------------- */
+
+.a4-stage {
+    transform-origin: top center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8mm;
+}
+
+.a4-page {
+    position: relative;
+    width: var(--a4-w);
+    height: var(--a4-h);
+    min-height: var(--a4-h);
+    background: #ffffff;
+    color: #0f172a;
+    overflow: hidden;
+    box-shadow: 0 22px 48px -24px rgba(0, 0, 0, .85);
+    box-sizing: border-box;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.a4-watermark {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    opacity: .25;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.a4-body {
+    position: absolute;
+    top: var(--a4-pad-t);
+    left: var(--a4-pad-x);
+    right: var(--a4-pad-x);
+    bottom: var(--a4-foot-h);
+    z-index: 1;
+    overflow: hidden;
+}
+
+/* ---- hlavička dokumentu (jen 1. strana) ---- */
+.doc-head {
+    border-bottom: 1.2mm solid var(--accent);
+    padding-bottom: 5mm;
+    margin: 0 0 7mm 0;
+    position: relative;
+    min-height: 26mm;
+}
+.doc-head__logo {
+    position: absolute;
+    top: 0; right: 0;
+    height: 20mm;
+    object-fit: contain;
+}
+.doc-head__kicker {
+    position: absolute;
+    top: 21mm; right: 0;
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.doc-head__cat {
+    display: inline-block;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: #eef2ff;
+    padding: 1mm 2mm;
+    border-radius: 1mm;
+}
+.doc-head__title {
+    font-size: 21pt;
+    font-weight: 900;
+    line-height: 1.12;
+    color: #020617;
+    margin: 3mm 55mm 0 0;
+}
+.doc-head__desc {
+    font-size: 9.5pt;
+    font-style: italic;
+    color: #475569;
+    margin: 2mm 55mm 0 0;
+    line-height: 1.4;
+}
+
+/* ---- obsah ---- */
+.doc-step {
+    border-left: 0.6mm solid #c7d2fe;
+    padding-left: 4mm;
+    margin: 0 0 5mm 0;
+}
+.doc-step:last-child { margin-bottom: 0; }
+
+.doc-step-title {
+    font-size: 11.5pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 1.5mm 0;
+    line-height: 1.25;
+}
+.doc-cont {
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin: 0 0 1.5mm 0;
+}
+.doc-p {
+    font-size: 9.5pt;
+    line-height: 1.5;
+    color: #334155;
+    margin: 0 0 1.8mm 0;
+}
+.doc-p:last-child { margin-bottom: 0; }
+
+.doc-code {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-size: 8pt;
+    line-height: 1.45;
+    color: #312e81;
+    background: #f8fafc;
+    border: 0.3mm solid #e2e8f0;
+    border-radius: 1mm;
+    padding: 2.5mm 3mm;
+    margin: 0 0 2mm 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* odkaz na obrázek přímo v textu */
+.doc-ref {
+    color: var(--accent);
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 0.25mm dotted var(--accent);
+    cursor: pointer;
+}
+
+/* obrázek v dokumentu */
+.doc-fig {
+    margin: 0 0 3mm 0;
+    page-break-inside: avoid;
+}
+.doc-fig img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 0.3mm solid #e2e8f0;
+    border-radius: 1mm;
+    background: #fff;
+}
+.doc-fig--s { max-width: 60mm; }
+.doc-fig--m { max-width: 110mm; }
+.doc-fig--l { max-width: 100%; }
+.doc-fig figcaption {
+    font-size: 7.5pt;
+    color: #64748b;
+    margin-top: 1mm;
+    font-style: italic;
+}
+
+.doc-empty {
+    font-size: 9.5pt;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* ---- zápatí (shodné rozvržení na každé straně) ---- */
+.a4-foot {
+    position: absolute;
+    left: var(--a4-pad-x);
+    right: var(--a4-pad-x);
+    bottom: 6mm;
+    height: 16mm;
+    border-top: 0.35mm solid #e2e8f0;
+    padding-top: 2.4mm;
+    z-index: 1;
+    font-family: ui-monospace, Consolas, "Courier New", monospace;
+    font-size: 7.5pt;
+    color: #94a3b8;
+}
+.a4-foot__col { position: absolute; top: 2.4mm; }
+.a4-foot__col--l { left: 0; text-align: left; }
+.a4-foot__col--r { right: 0; text-align: right; }
+.a4-foot__row { line-height: 1.55; white-space: nowrap; }
+.a4-foot__cat {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-size: 8pt;
+}
+.a4-foot__title {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    color: #020617;
+    font-size: 8.5pt;
+}
+.a4-foot b { color: #334155; font-weight: 700; }
+
+/* měřicí element pro stránkování (neviditelný, ale se skutečnou šířkou) */
+#a4Ruler {
+    position: absolute;
+    top: -10000mm;
+    left: 0;
+    visibility: hidden;
+    pointer-events: none;
+    display: flow-root;
+    background: #fff;
+    color: #0f172a;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* --------------------------------------------------------------- lightbox */
+
+.lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(2, 6, 23, .93);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+}
+.lightbox.is-open { display: flex; }
+.lightbox img {
+    max-width: 96vw;
+    max-height: 86vh;
+    border-radius: 10px;
+    box-shadow: 0 30px 60px -20px #000;
+    background: #fff;
+}
+.lightbox__cap {
+    position: absolute;
+    bottom: 18px; left: 0; right: 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+}
+.lightbox__close {
+    position: absolute;
+    top: 18px; right: 22px;
+    font-size: 30px;
+    line-height: 1;
+    color: var(--muted);
+    background: none; border: none; cursor: pointer;
+}
+.lightbox__close:hover { color: #fff; }
+
+/* --------------------------------------------------------------- miniatury v editoru */
+
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.thumb {
+    position: relative;
+    width: 76px; height: 56px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: #0b1220;
+    cursor: zoom-in;
+    flex: none;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb__idx {
+    position: absolute;
+    left: 3px; bottom: 3px;
+    font-size: 9px; font-weight: 800;
+    background: rgba(2, 6, 23, .82);
+    color: #c7d2fe;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+.thumb__del {
+    position: absolute;
+    top: 2px; right: 2px;
+    width: 17px; height: 17px;
+    border-radius: 5px;
+    border: none;
+    background: rgba(2, 6, 23, .82);
+    color: #fda4af;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+}
+.thumb:hover .thumb__del { display: block; }
+.thumb__size {
+    position: absolute;
+    right: 2px; bottom: 2px;
+    font-size: 8px;
+    background: rgba(2, 6, 23, .82);
+    color: var(--muted);
+    border: none;
+    border-radius: 4px;
+    padding: 1px 2px;
+    cursor: pointer;
+}
+.thumb-add {
+    width: 76px; height: 56px;
+    border-radius: 8px;
+    border: 1px dashed var(--line);
+    color: var(--dim);
+    background: transparent;
+    font-size: 10px;
+    line-height: 1.2;
+    cursor: pointer;
+    flex: none;
+    transition: border-color .14s, color .14s;
+}
+.thumb-add:hover { border-color: var(--accent-lt); color: var(--accent-lt); }
+
+/* --------------------------------------------------------------- ostatní */
+
+.card {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+}
+
+.guide-row {
+    display: block;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, .5);
+    border: 1px solid rgba(51, 65, 85, .55);
+    text-decoration: none;
+    color: inherit;
+    transition: background .14s, border-color .14s, transform .14s;
+}
+.guide-row:hover {
+    background: rgba(51, 65, 85, .35);
+    border-color: var(--accent);
+    transform: translateX(2px);
+}
+
+mark { background: rgba(250, 204, 21, .28); color: #fde68a; border-radius: 2px; padding: 0 2px; }
+
+/* --------------------------------------------------------------- tisk */
+
+@media print {
+    @page { size: A4; margin: 0; }
+    body { background: #fff !important; }
+    .no-print { display: none !important; }
+    .a4-stage { transform: none !important; gap: 0 !important; }
+    .a4-page {
+        box-shadow: none !important;
+        margin: 0 !important;
+        page-break-after: always;
+        break-after: page;
+    }
+    .a4-page:last-child { page-break-after: auto; break-after: auto; }
+}

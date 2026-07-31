@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor návodu – Pasport Kaňa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="assets/css/app.css?v=1">
+    <link rel="icon" href="Pasport_Kana_white.png">
+</head>
+<body class="min-h-screen font-sans">
+
+<div id="appHeader"></div>
+
+<main class="p-5 flex flex-col xl:flex-row gap-5 max-w-[1900px] mx-auto items-start">
+
+    <!-- ================================================== LEVÝ PANEL ==== -->
+    <section class="no-print w-full xl:w-[560px] shrink-0 flex flex-col gap-4 xl:sticky xl:top-[68px]">
+
+        <div class="card p-1.5 flex gap-1">
+            <button id="tabEdit" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white transition">
+                Editor návodu
+            </button>
+            <button id="tabDb" class="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition">
+                Databáze <span id="dbCount" class="bg-slate-700 text-xs px-2 py-0.5 rounded-full">0</span>
+            </button>
+        </div>
+
+        <!-- ---------------------------------------------------- EDITOR -->
+        <div id="panelEdit" class="card p-5 flex flex-col gap-5 max-h-[calc(100vh-140px)] overflow-y-auto">
+
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-white">Obsah dokumentu</h3>
+                <button id="btnClear" class="text-xs text-rose-400 hover:text-rose-300">Nový prázdný</button>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Šablona</label>
+                <select id="templateSelector" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+                    <option value="">— Vlastní / prázdná —</option>
+                    <option value="sop">Technický postup (SOP)</option>
+                    <option value="trouble">Řešení problému</option>
+                    <option value="tip">Rychlý tip / zkratka</option>
+                    <option value="program">Nastavení programu</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="col-span-2">
+                    <label class="block text-[11px] text-slate-400 mb-1">Název návodu</label>
+                    <input type="text" id="docTitle" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-[11px] text-slate-400 mb-1">Stručný popis / cíl</label>
+                    <textarea id="docDesc" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white"></textarea>
+                </div>
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Kategorie</label>
+                    <select id="docCat" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white"></select>
+                </div>
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Podkategorie</label>
+                    <select id="docSub" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white"></select>
+                </div>
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Verze</label>
+                    <input type="text" id="docVersion" value="v1.0" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+                </div>
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Autor / zpracoval</label>
+                    <input type="text" id="docAuthor" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+                </div>
+                <div id="oldCatNote" class="col-span-2 hidden text-[11px] text-amber-400/90"></div>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-2.5">
+                    <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Kroky návodu</label>
+                    <button id="btnAddStep" class="bg-indigo-600/20 text-indigo-300 text-xs px-2.5 py-1 rounded border border-indigo-500/30 hover:bg-indigo-600/35">
+                        + Přidat krok
+                    </button>
+                </div>
+                <div id="stepsContainer" class="flex flex-col gap-3"></div>
+            </div>
+
+            <div class="text-[11px] text-slate-500 leading-relaxed border-t border-slate-700 pt-3">
+                <b class="text-slate-400">Formátování v popisu:</b>
+                <code class="text-indigo-300">**tučně**</code>,
+                <code class="text-indigo-300">`kód`</code>,
+                řádek začínající <code class="text-indigo-300">-&nbsp;</code> je odrážka.<br>
+                <b class="text-slate-400">Obrázek:</b> vlož ho u kroku (nebo rovnou <b>Ctrl+V</b> ze schránky)
+                a v textu na něj odkaž zápisem <code class="text-indigo-300">[obr 1]</code> —
+                v návodu i v PDF z toho bude proklik.
+            </div>
+
+            <button id="btnSave" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l6-6a1 1 0 00-1.414-1.414L11 12.586l-3.293-3.293z"/>
+                    <path d="M9 17a8 8 0 110-16 8 8 0 010 16zm0-2a6 6 0 100-12 6 6 0 000 12z"/>
+                </svg>
+                Uložit do cloudové databáze
+            </button>
+        </div>
+
+        <!-- -------------------------------------------------- DATABÁZE -->
+        <div id="panelDb" class="hidden card p-5 flex flex-col gap-4 max-h-[calc(100vh-140px)] overflow-y-auto">
+            <div class="flex items-center gap-2">
+                <button id="btnPrompt" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold px-2 py-2 rounded border border-slate-600 transition">
+                    Generovat pokyn pro AI
+                </button>
+                <button id="btnImport" class="flex-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[11px] font-semibold px-2 py-2 rounded border border-indigo-500/30 transition">
+                    Nahrát návod od AI
+                </button>
+            </div>
+
+            <input type="text" id="dbSearch" placeholder="Hledat v databázi…"
+                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white">
+
+            <div id="dbList" class="flex flex-col gap-2"></div>
+        </div>
+    </section>
+
+    <!-- ================================================= NÁHLED A4 ===== -->
+    <section class="flex-1 min-w-0 flex flex-col gap-3 w-full">
+        <div class="no-print flex items-center justify-between gap-3 flex-wrap">
+            <div class="text-[11px] text-slate-500">
+                Živý náhled — <b class="text-slate-400">přesně takto vypadne PDF</b>
+                <span id="pageInfo" class="ml-2 text-slate-600"></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg px-1 py-1">
+                    <button id="zoomOut" class="w-7 h-7 rounded text-slate-400 hover:text-white hover:bg-slate-700">−</button>
+                    <span id="zoomLabel" class="text-[11px] text-slate-400 w-11 text-center font-mono">auto</span>
+                    <button id="zoomIn" class="w-7 h-7 rounded text-slate-400 hover:text-white hover:bg-slate-700">+</button>
+                </div>
+                <button id="btnPdf" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
+                    Uložit do PDF
+                </button>
+            </div>
+        </div>
+
+        <div id="stageWrap" class="w-full flex justify-center overflow-hidden">
+            <div id="stage" class="a4-stage"></div>
+        </div>
+    </section>
+</main>
+
+<!-- ============================================================ IMPORT AI -->
+<div id="importOverlay" class="no-print fixed inset-0 bg-slate-950/85 z-[110] hidden items-center justify-center p-6">
+    <div class="card p-6 max-w-2xl w-full flex flex-col gap-4">
+        <h3 class="text-lg font-bold text-white">Importovat návod od AI</h3>
+        <p class="text-xs text-slate-400">
+            Vlož JSON, který ti vygenerovala AI podle zkopírovaného pokynu.
+            Načte se do editoru, kde ho můžeš zkontrolovat, doplnit obrázky a teprve pak uložit.
+        </p>
+        <textarea id="importText" rows="12"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-xs font-mono text-emerald-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder='{ "title": "...", "steps": [ ... ] }'></textarea>
+        <div class="flex justify-end gap-3">
+            <button id="btnImportCancel" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-700 transition">Zrušit</button>
+            <button id="btnImportRun" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition">Načíst do editoru</button>
+        </div>
+    </div>
+</div>
+
+<input type="file" id="filePicker" accept="image/*" multiple class="hidden">
+
+<script src="assets/js/taxonomy.js?v=1"></script>
+<script src="assets/js/doc.js?v=1"></script>
+<script src="assets/js/ui.js?v=1"></script>
+<script type="module" src="assets/js/store.js?v=1"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const esc = (value) => window.KBDoc.esc(value);
+    const $ = (id) => document.getElementById(id);
+
+    const state = {
+        docId: null,
+        isNew: true,
+        steps: [],
+        images: {},               // imageId -> data URL
+        savedImages: new Set(),   // co už je zapsané ve Firestore
+        legacyCategory: "",       // volný text kategorie u starších návodů
+        activeStep: 0,
+        zoom: null
+    };
+
+    /* =============================================================== KROKY */
+
+    const blankStep = () => ({ title: "Nový krok", content: "", code: "", images: [] });
+
+    const TEMPLATES = {
+        sop: {
+            title: "SOP: ", desc: "Standardní pracovní postup.",
+            steps: [
+                { title: "Před začátkem", content: "Co je potřeba mít připravené:\n- podklad\n- přístupy", code: "", images: [] },
+                { title: "Postup", content: "1. …\n2. …", code: "", images: [] },
+                { title: "Kontrola výsledku", content: "Jak poznám, že je hotovo správně.", code: "", images: [] }
+            ]
+        },
+        trouble: {
+            title: "Oprava: ", desc: "Řešení konkrétní chyby.",
+            steps: [
+                { title: "Projev problému", content: "Co se děje a kdy to nastane.", code: "", images: [] },
+                { title: "Příčina", content: "", code: "", images: [] },
+                { title: "Řešení", content: "", code: "", images: [] }
+            ]
+        },
+        tip: {
+            title: "Tip: ", desc: "Rychlejší způsob práce.",
+            steps: [{ title: "Postup", content: "", code: "", images: [] }]
+        },
+        program: {
+            title: "Nastavení: ", desc: "Základní konfigurace programu.",
+            steps: [
+                { title: "Kde nastavení najdu", content: "", code: "", images: [] },
+                { title: "Doporučené hodnoty", content: "", code: "", images: [] },
+                { title: "Ověření", content: "", code: "", images: [] }
+            ]
+        }
+    };
+
+    /* =========================================================== KATEGORIE */
+
+    function fillCategorySelects(catId, subId) {
+        $("docCat").innerHTML = '<option value="">— nezařazeno —</option>' +
+            window.KB_CATEGORIES.map(c =>
+                '<option value="' + c.id + '"' + (c.id === catId ? " selected" : "") + ">" + c.title + "</option>"
+            ).join("");
+        fillSubSelect(catId, subId);
+    }
+
+    function fillSubSelect(catId, subId) {
+        const category = window.KB_findCategory(catId);
+        const children = category && category.children ? category.children : [];
+        $("docSub").disabled = !children.length;
+        $("docSub").innerHTML = '<option value="">— celá kategorie —</option>' +
+            children.map(s =>
+                '<option value="' + s.id + '"' + (s.id === subId ? " selected" : "") + ">" + s.title + "</option>"
+            ).join("");
+    }
+
+    /* ============================================================== FORM */
+
+    function collect() {
+        const catId = $("docCat").value;
+        const subId = $("docSub").value;
+        const category = catId
+            ? window.KB_categoryLabel({ cat: catId, subcat: subId })
+            : state.legacyCategory;
+
+        return {
+            title: $("docTitle").value,
+            desc: $("docDesc").value,
+            cat: catId,
+            subcat: subId,
+            category: category,
+            version: $("docVersion").value,
+            author: $("docAuthor").value,
+            steps: state.steps,
+            dateLabel: new Date().toLocaleDateString("cs-CZ")
+        };
+    }
+
+    function fill(guide) {
+        $("docTitle").value = guide.title || "";
+        $("docDesc").value = guide.desc || "";
+        $("docVersion").value = guide.version || "v1.0";
+        $("docAuthor").value = guide.author || window.KB_USER || "";
+        state.legacyCategory = guide.cat ? "" : (guide.category || "");
+        state.steps = JSON.parse(JSON.stringify(guide.steps || []));
+        state.steps.forEach(s => { if (!Array.isArray(s.images)) s.images = []; });
+
+        fillCategorySelects(guide.cat || "", guide.subcat || "");
+        $("oldCatNote").classList.toggle("hidden", !state.legacyCategory);
+        $("oldCatNote").textContent = state.legacyCategory
+            ? 'Původní kategorie z databáze: „' + state.legacyCategory + '". Vyber prosím novou z nabídky.'
+            : "";
+
+        renderSteps();
+        refresh();
+    }
+
+    /* ====================================================== EDITOR KROKŮ */
+
+    function renderSteps() {
+        const container = $("stepsContainer");
+        container.innerHTML = state.steps.map((step, index) => {
+            const thumbs = (step.images || []).map((img, ii) =>
+                '<div class="thumb" data-zoom="' + img.id + '">' +
+                    '<img src="' + (state.images[img.id] || "") + '" alt="">' +
+                    '<span class="thumb__idx">' + (index + 1) + "." + (ii + 1) + "</span>" +
+                    '<button class="thumb__del" data-delimg="' + index + ":" + ii + '" title="Odebrat">&times;</button>' +
+                    '<button class="thumb__size" data-sizeimg="' + index + ":" + ii + '" title="Velikost v dokumentu">' +
+                        (img.size || "m").toUpperCase() + "</button>" +
+                "</div>"
+            ).join("");
+
+            return '<div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700 relative" data-step="' + index + '">' +
+                '<div class="flex items-center justify-between mb-2">' +
+                    '<span class="text-[11px] font-bold text-indigo-400">KROK ' + (index + 1) + "</span>" +
+                    '<div class="flex items-center gap-1.5">' +
+                        (index > 0 ? '<button class="text-slate-500 hover:text-white text-xs px-1" data-move="' + index + ':-1" title="Nahoru">▲</button>' : "") +
+                        (index < state.steps.length - 1 ? '<button class="text-slate-500 hover:text-white text-xs px-1" data-move="' + index + ':1" title="Dolů">▼</button>' : "") +
+                        '<button class="text-rose-500 hover:text-rose-400 text-[11px] font-bold ml-1" data-del="' + index + '">Odstranit</button>' +
+                    "</div>" +
+                "</div>" +
+                '<input type="text" value="' + esc(step.title) + '" data-field="' + index + ':title" placeholder="Nadpis kroku" ' +
+                    'class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-white mb-2">' +
+                '<textarea data-field="' + index + ':content" rows="4" placeholder="Popis postupu…" ' +
+                    'class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-white mb-2 resize-y">' + esc(step.content) + "</textarea>" +
+                '<textarea data-field="' + index + ':code" rows="1" placeholder="Volitelně: kód, cesta, příkaz" ' +
+                    'class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-[11px] font-mono text-emerald-300 mb-2.5 resize-y">' + esc(step.code || "") + "</textarea>" +
+                '<div class="thumbs">' + thumbs +
+                    '<button class="thumb-add" data-addimg="' + index + '">+ obrázek<br><span class="text-[9px]">nebo Ctrl+V</span></button>' +
+                "</div>" +
+            "</div>";
+        }).join("") || '<div class="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-700 rounded-xl">Zatím žádné kroky — přidej první.</div>';
+    }
+
+    /* --------------------------------------------- události v editoru kroků */
+
+    $("stepsContainer").addEventListener("input", (event) => {
+        const field = event.target.dataset.field;
+        if (!field) return;
+        const [index, key] = field.split(":");
+        state.steps[+index][key] = event.target.value;
+        refresh();
+    });
+
+    $("stepsContainer").addEventListener("focusin", (event) => {
+        const card = event.target.closest("[data-step]");
+        if (card) state.activeStep = +card.dataset.step;
+    });
+
+    $("stepsContainer").addEventListener("click", (event) => {
+        const target = event.target;
+
+        if (target.dataset.del !== undefined) {
+            const index = +target.dataset.del;
+            (state.steps[index].images || []).forEach(img => delete state.images[img.id]);
+            state.steps.splice(index, 1);
+            return renderSteps(), refresh();
+        }
+        if (target.dataset.move) {
+            const [index, direction] = target.dataset.move.split(":").map(Number);
+            const to = index + direction;
+            if (to < 0 || to >= state.steps.length) return;
+            [state.steps[index], state.steps[to]] = [state.steps[to], state.steps[index]];
+            return renderSteps(), refresh();
+        }
+        if (target.dataset.addimg !== undefined) {
+            state.activeStep = +target.dataset.addimg;
+            $("filePicker").click();
+            return;
+        }
+        if (target.dataset.delimg) {
+            const [si, ii] = target.dataset.delimg.split(":").map(Number);
+            const removed = state.steps[si].images.splice(ii, 1)[0];
+            if (removed) delete state.images[removed.id];
+            return renderSteps(), refresh();
+        }
+        if (target.dataset.sizeimg) {
+            const [si, ii] = target.dataset.sizeimg.split(":").map(Number);
+            const image = state.steps[si].images[ii];
+            const order = ["s", "m", "l"];
+            image.size = order[(order.indexOf(image.size || "m") + 1) % order.length];
+            return renderSteps(), refresh();
+        }
+        const thumb = target.closest("[data-zoom]");
+        if (thumb) window.KBDoc.openImage(state.images[thumb.dataset.zoom], "Náhled obrázku");
+    });
+
+    /* ============================================================ OBRÁZKY */
+
+    async function attachImages(files, stepIndex) {
+        const step = state.steps[stepIndex];
+        if (!step) return window.KBUI.toast("Nejdřív přidej krok, ke kterému obrázek patří.", "warn");
+
+        for (const file of files) {
+            if (!file.type.startsWith("image/")) continue;
+            try {
+                const result = await window.KBUI.compressImage(file);
+                const id = window.KB.newImageId();
+                state.images[id] = result.dataUrl;
+                step.images = step.images || [];
+                step.images.push({ id: id, size: "m", caption: "", w: result.w, h: result.h });
+
+                // do textu rovnou doplníme odkaz [obr KROK.POŘADÍ]
+                const marker = "[obr " + (stepIndex + 1) + "." + step.images.length + "]";
+                if (!String(step.content || "").includes(marker)) {
+                    step.content = (step.content ? step.content.replace(/\s*$/, "") + " " : "") + marker;
+                }
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Obrázek se nepodařilo zpracovat.", "error");
+            }
+        }
+        renderSteps();
+        refresh();
+    }
+
+    $("filePicker").addEventListener("change", async (event) => {
+        await attachImages(Array.from(event.target.files || []), state.activeStep);
+        event.target.value = "";
+    });
+
+    document.addEventListener("paste", (event) => {
+        if ($("importOverlay").classList.contains("flex")) return;   // v import okně necháme text
+        const files = Array.from(event.clipboardData ? event.clipboardData.files : []);
+        const images = files.filter(f => f.type.startsWith("image/"));
+        if (!images.length) return;
+        event.preventDefault();
+        attachImages(images, state.activeStep);
+        window.KBUI.toast("Obrázek vložen ke kroku " + (state.activeStep + 1) + ".");
+    });
+
+    /* ============================================================= NÁHLED */
+
+    let refreshTimer = null;
+    function refresh() {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => {
+            const pages = window.KBDoc.render($("stage"), collect(), state.images);
+            $("pageInfo").textContent = pages + (pages === 1 ? " strana" : pages < 5 ? " strany" : " stran");
+            applyZoom();
+        }, 220);
+    }
+
+    function applyZoom() {
+        if (state.zoom === null) {
+            window.KBDoc.fitStage($("stage"), $("stageWrap"));
+            const current = parseFloat(($("stage").style.transform.match(/[\d.]+/) || [1])[0]);
+            $("zoomLabel").textContent = Math.round(current * 100) + " %";
+        } else {
+            $("stage").style.transform = "scale(" + state.zoom + ")";
+            const pages = $("stage").children.length || 1;
+            $("stageWrap").style.height = ((pages * 297 + (pages - 1) * 8) * 3.7795 * state.zoom + 20) + "px";
+            $("zoomLabel").textContent = Math.round(state.zoom * 100) + " %";
+        }
+    }
+
+    function stepZoom(delta) {
+        const current = parseFloat(($("stage").style.transform.match(/[\d.]+/) || [1])[0]) || 1;
+        state.zoom = Math.min(2, Math.max(0.3, Math.round((current + delta) * 20) / 20));
+        applyZoom();
+    }
+
+    /* ============================================================ UKLÁDÁNÍ */
+
+    async function save() {
+        const data = collect();
+        if (!data.title.trim()) return window.KBUI.toast("Návod musí mít název.", "warn");
+        if (!data.author.trim()) {
+            const name = window.KBUI.requireUser();
+            if (!name) return window.KBUI.toast("Doplň autora návodu.", "warn");
+            $("docAuthor").value = name;
+            data.author = name;
+        }
+
+        const button = $("btnSave");
+        button.disabled = true;
+        const original = button.innerHTML;
+        button.innerHTML = '<span class="loader" style="width:16px;height:16px;border-width:2px"></span> Ukládám…';
+
+        try {
+            await window.KB.saveGuide(state.docId, data);
+
+            // obrázky: nahraj nové, smaž odebrané
+            const currentIds = new Set();
+            for (const step of state.steps) {
+                for (const img of (step.images || [])) {
+                    currentIds.add(img.id);
+                    if (!state.savedImages.has(img.id) && state.images[img.id]) {
+                        await window.KB.saveImage(state.docId, img.id, state.images[img.id], { w: img.w, h: img.h });
+                        state.savedImages.add(img.id);
+                    }
+                }
+            }
+            for (const id of Array.from(state.savedImages)) {
+                if (!currentIds.has(id)) {
+                    await window.KB.deleteImage(state.docId, id).catch(() => {});
+                    state.savedImages.delete(id);
+                }
+            }
+
+            state.isNew = false;
+            history.replaceState(null, "", "editor.html?id=" + encodeURIComponent(state.docId));
+            window.KBUI.toast("Uloženo do firemního cloudu.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo: " + err.message, "error");
+        } finally {
+            button.disabled = false;
+            button.innerHTML = original;
+        }
+    }
+
+    /* ============================================================ DATABÁZE */
+
+    function renderDbList() {
+        const query = $("dbSearch").value.trim();
+        const items = window.KBUI.searchGuides(window.KB.guides || [], query);
+        $("dbCount").textContent = (window.KB.guides || []).length;
+
+        $("dbList").innerHTML = items.length ? items.map(guide =>
+            '<div class="bg-slate-900/50 hover:bg-slate-700/30 p-3 rounded-xl border border-slate-700/50 flex justify-between items-start gap-3 transition">' +
+                '<button class="flex-1 text-left min-w-0" data-open="' + guide.id + '">' +
+                    '<div class="flex items-center gap-2 mb-1 flex-wrap">' +
+                        '<span class="text-[9px] font-extrabold uppercase bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded">' +
+                            esc(window.KB_categoryLabel(guide)) + "</span>" +
+                        '<span class="text-[10px] text-slate-500">' + esc(guide.author || "") + "</span>" +
+                    "</div>" +
+                    '<div class="text-sm font-bold text-white truncate">' + esc(guide.title || "Bez názvu") + "</div>" +
+                    '<div class="text-[11px] text-slate-400 truncate">' + esc(guide.desc || "") + "</div>" +
+                "</button>" +
+                '<div class="flex flex-col gap-1 shrink-0">' +
+                    '<a href="navod.html?id=' + encodeURIComponent(guide.id) + '" class="text-[10px] text-slate-400 hover:text-indigo-300">Zobrazit</a>' +
+                    '<button class="text-[10px] text-slate-500 hover:text-rose-400" data-remove="' + guide.id + '">Smazat</button>' +
+                "</div>" +
+            "</div>"
+        ).join("") : '<div class="text-center py-6 text-slate-500 text-sm">Databáze je zatím prázdná.</div>';
+    }
+
+    $("dbList").addEventListener("click", async (event) => {
+        const openId = event.target.closest("[data-open]");
+        if (openId) return loadGuide(openId.dataset.open);
+
+        const removeId = event.target.dataset.remove;
+        if (removeId) {
+            const guide = window.KB.guides.find(g => g.id === removeId);
+            if (!confirm('Opravdu smazat návod „' + (guide ? guide.title : removeId) + '" všem ve firmě?')) return;
+            try {
+                await window.KB.deleteGuide(removeId);
+                window.KBUI.toast("Návod smazán.");
+                if (state.docId === removeId) resetForm();
+            } catch (err) {
+                window.KBUI.toast("Smazání selhalo.", "error");
+            }
+        }
+    });
+
+    async function loadGuide(id) {
+        try {
+            const guide = await window.KB.getGuide(id);
+            if (!guide) return window.KBUI.toast("Návod se nenašel.", "error");
+            state.docId = id;
+            state.isNew = false;
+            state.images = await window.KB.loadImages(id).catch(() => ({}));
+            state.savedImages = new Set(Object.keys(state.images));
+            fill(guide);
+            switchTab("edit");
+            history.replaceState(null, "", "editor.html?id=" + encodeURIComponent(id));
+            window.KBUI.toast("Načteno k úpravě.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Načtení selhalo.", "error");
+        }
+    }
+
+    function resetForm() {
+        state.docId = window.KB.newId();
+        state.isNew = true;
+        state.images = {};
+        state.savedImages = new Set();
+        state.legacyCategory = "";
+        state.steps = [blankStep()];
+        $("templateSelector").value = "";
+        history.replaceState(null, "", "editor.html");
+        fill({ title: "", desc: "", version: "v1.0", author: window.KB_USER || "", steps: state.steps });
+    }
+
+    /* ================================================================ TABY */
+
+    function switchTab(which) {
+        const isEdit = which === "edit";
+        $("panelEdit").classList.toggle("hidden", !isEdit);
+        $("panelDb").classList.toggle("hidden", isEdit);
+        $("tabEdit").className = "flex-1 py-2 text-sm font-semibold rounded-lg transition " +
+            (isEdit ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-700/50");
+        $("tabDb").className = "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition " +
+            (isEdit ? "text-slate-400 hover:text-white hover:bg-slate-700/50" : "bg-indigo-600 text-white");
+    }
+
+    /* ============================================================== START */
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountHeader({
+            title: "Editor návodu",
+            back: "navody.html",
+            backLabel: "Návody",
+            actions: '<button id="btnHeaderPrompt" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-600 transition">Pokyn pro AI</button>'
+        });
+        $("btnHeaderPrompt").addEventListener("click", () => window.KBUI.copyAiPrompt($("docCat").value, $("docSub").value));
+
+        fillCategorySelects("", "");
+        state.docId = window.KB.newId();
+        state.steps = [blankStep()];
+        $("docAuthor").value = window.KB_USER || "";
+        renderSteps();
+        refresh();
+
+        // formulářová pole
+        ["docTitle", "docDesc", "docVersion", "docAuthor"].forEach(id =>
+            $(id).addEventListener("input", refresh));
+        $("docCat").addEventListener("change", () => {
+            fillSubSelect($("docCat").value, "");
+            if ($("docCat").value) {
+                state.legacyCategory = "";
+                $("oldCatNote").classList.add("hidden");
+            }
+            refresh();
+        });
+        $("docSub").addEventListener("change", refresh);
+
+        $("templateSelector").addEventListener("change", (event) => {
+            const template = TEMPLATES[event.target.value];
+            if (!template) return;
+            if (!$("docTitle").value) $("docTitle").value = template.title;
+            if (!$("docDesc").value) $("docDesc").value = template.desc;
+            state.steps = JSON.parse(JSON.stringify(template.steps));
+            renderSteps();
+            refresh();
+        });
+
+        $("btnAddStep").addEventListener("click", () => {
+            state.steps.push(blankStep());
+            state.activeStep = state.steps.length - 1;
+            renderSteps();
+            refresh();
+        });
+        $("btnClear").addEventListener("click", () => {
+            if (confirm("Vyčistit formulář a začít nový návod?")) resetForm();
+        });
+        $("btnSave").addEventListener("click", save);
+        $("tabEdit").addEventListener("click", () => switchTab("edit"));
+        $("tabDb").addEventListener("click", () => switchTab("db"));
+        $("dbSearch").addEventListener("input", renderDbList);
+        $("btnPrompt").addEventListener("click", () => window.KBUI.copyAiPrompt($("docCat").value, $("docSub").value));
+        $("zoomIn").addEventListener("click", () => stepZoom(0.1));
+        $("zoomOut").addEventListener("click", () => stepZoom(-0.1));
+        window.addEventListener("resize", () => { if (state.zoom === null) applyZoom(); });
+
+        $("btnPdf").addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            const original = button.textContent;
+            button.textContent = "Generuji…";
+            try {
+                await window.KBDoc.exportPdf($("stage"), $("docTitle").value || "Navod");
+                window.KBUI.toast("PDF staženo.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("PDF se nepodařilo vytvořit.", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+                applyZoom();
+            }
+        });
+
+        // import od AI
+        const overlay = $("importOverlay");
+        const openImport = () => { overlay.classList.remove("hidden"); overlay.classList.add("flex"); };
+        const closeImport = () => { overlay.classList.add("hidden"); overlay.classList.remove("flex"); $("importText").value = ""; };
+        $("btnImport").addEventListener("click", openImport);
+        $("btnImportCancel").addEventListener("click", closeImport);
+        $("btnImportRun").addEventListener("click", () => {
+            try {
+                const parsed = JSON.parse($("importText").value.trim().replace(/^```(json)?|```$/g, ""));
+                const guide = Array.isArray(parsed) ? parsed[0] : parsed;
+                state.docId = window.KB.newId();
+                state.isNew = true;
+                state.images = {};
+                state.savedImages = new Set();
+                guide.author = window.KB_USER ? window.KB_USER + " / AI" : "AI";
+                fill(guide);
+                closeImport();
+                switchTab("edit");
+                window.KBUI.toast("Načteno. Zkontroluj, doplň obrázky a ulož.");
+            } catch (err) {
+                window.KBUI.toast("JSON se nepodařilo přečíst – zkontroluj, že jsi zkopíroval celý.", "error");
+            }
+        });
+        if (location.hash === "#import") openImport();
+
+        // databáze + případné načtení konkrétního návodu z URL
+        window.KB.on("guides", renderDbList);
+        await window.KB.whenReady();
+        renderDbList();
+
+        // na jméno se ptáme až při ukládání, ať načtení stránky nic neblokuje
+        const requestedId = new URLSearchParams(location.search).get("id");
+        if (requestedId) await loadGuide(requestedId);
+    });
+
+    // getter, protože se mapa obrázků při načtení jiného návodu celá vymění
+    window.KBDoc.enableImageZoom($("stage"), () => state.images);
+})();
+</script>
+</body>
+</html>

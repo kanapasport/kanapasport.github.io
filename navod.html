@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Návod – Pasport Kaňa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="assets/css/app.css?v=1">
+    <link rel="icon" href="Pasport_Kana_white.png">
+</head>
+<body class="min-h-screen font-sans">
+
+<div id="appHeader"></div>
+
+<main class="max-w-[1180px] mx-auto px-6 py-8">
+
+    <div id="loadingBox" class="card p-12 text-center text-sm text-slate-400">
+        <div class="loader mx-auto mb-4"></div>
+        Načítám návod z databáze…
+    </div>
+
+    <div id="docBox" class="hidden flex flex-col gap-5">
+
+        <!-- ------------------------------------------------------ lišta -->
+        <div class="no-print card px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="min-w-0">
+                <div id="docTitle" class="text-base font-bold text-white truncate">…</div>
+                <div id="docMeta" class="text-[11px] text-slate-500 mt-0.5"></div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-1 py-1">
+                    <button id="zoomOut" class="w-7 h-7 rounded text-slate-400 hover:text-white hover:bg-slate-700">−</button>
+                    <span id="zoomLabel" class="text-[11px] text-slate-400 w-11 text-center font-mono">100 %</span>
+                    <button id="zoomIn" class="w-7 h-7 rounded text-slate-400 hover:text-white hover:bg-slate-700">+</button>
+                </div>
+                <a id="btnEdit" href="#" class="bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-semibold
+                          px-4 py-2 rounded-lg border border-slate-600 transition">Upravit</a>
+                <button id="btnPdf" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold
+                        px-4 py-2 rounded-lg transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/>
+                    </svg>
+                    Uložit do PDF
+                </button>
+            </div>
+        </div>
+
+        <p class="no-print text-[11px] text-slate-600 text-center -mt-2">
+            Náhled odpovídá 1:1 výslednému PDF – co vidíš, to se vytiskne. Klikni na obrázek nebo na odkaz
+            <span class="text-indigo-400">obr. 1</span> v textu pro zvětšení.
+        </p>
+
+        <!-- --------------------------------------------------- dokument -->
+        <div id="stageWrap" class="w-full flex justify-center overflow-hidden">
+            <div id="stage" class="a4-stage"></div>
+        </div>
+    </div>
+
+    <div id="errorBox" class="hidden card p-12 text-center text-sm text-slate-400">
+        Návod se nepodařilo najít.
+        <a href="navody.html" class="text-indigo-400 underline block mt-3">Zpět na seznam návodů</a>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=1"></script>
+<script src="assets/js/doc.js?v=1"></script>
+<script src="assets/js/ui.js?v=1"></script>
+<script type="module" src="assets/js/store.js?v=1"></script>
+
+<script>
+(function () {
+    const guideId = new URLSearchParams(location.search).get("id");
+    let guide = null;
+    let images = {};
+    let zoom = null;   // null = automaticky podle šířky okna
+
+    const stage = () => document.getElementById("stage");
+    const wrap = () => document.getElementById("stageWrap");
+
+    function applyZoom() {
+        if (zoom === null) {
+            window.KBDoc.fitStage(stage(), wrap());
+            const current = parseFloat((stage().style.transform.match(/[\d.]+/) || [1])[0]);
+            document.getElementById("zoomLabel").textContent = Math.round(current * 100) + " %";
+        } else {
+            stage().style.transform = "scale(" + zoom + ")";
+            const pages = stage().children.length || 1;
+            const naturalH = pages * 297 + (pages - 1) * 8;
+            wrap().style.height = (naturalH * 3.7795 * zoom + 20) + "px";
+            document.getElementById("zoomLabel").textContent = Math.round(zoom * 100) + " %";
+        }
+    }
+
+    function stepZoom(delta) {
+        const current = parseFloat((stage().style.transform.match(/[\d.]+/) || [1])[0]) || 1;
+        zoom = Math.min(2, Math.max(0.3, Math.round((current + delta) * 20) / 20));
+        applyZoom();
+    }
+
+    async function load() {
+        if (!guideId) return fail();
+        await window.KB.whenReady();
+
+        guide = await window.KB.getGuide(guideId).catch(() => null);
+        if (!guide) return fail();
+
+        images = await window.KB.loadImages(guideId).catch(() => ({}));
+
+        guide.dateLabel = guide.updatedMs
+            ? new Date(guide.updatedMs).toLocaleDateString("cs-CZ")
+            : new Date().toLocaleDateString("cs-CZ");
+
+        document.getElementById("loadingBox").classList.add("hidden");
+        document.getElementById("docBox").classList.remove("hidden");
+        document.getElementById("docTitle").textContent = guide.title || "Bez názvu";
+        document.getElementById("docMeta").textContent =
+            [window.KB_categoryLabel(guide), guide.author, guide.version, guide.dateLabel]
+                .filter(Boolean).join("  ·  ");
+        document.getElementById("btnEdit").href = "editor.html?id=" + encodeURIComponent(guideId);
+
+        window.KBDoc.render(stage(), guide, images);
+        window.KBDoc.enableImageZoom(stage(), images);
+        applyZoom();
+    }
+
+    function fail() {
+        document.getElementById("loadingBox").classList.add("hidden");
+        document.getElementById("errorBox").classList.remove("hidden");
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountHeader({ title: "Zobrazení návodu", back: "navody.html", backLabel: "Návody" });
+
+        document.getElementById("zoomIn").addEventListener("click", () => stepZoom(0.1));
+        document.getElementById("zoomOut").addEventListener("click", () => stepZoom(-0.1));
+
+        document.getElementById("btnPdf").addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<span class="loader" style="width:14px;height:14px;border-width:2px"></span> Generuji…';
+            try {
+                await window.KBDoc.exportPdf(stage(), guide.title || "Navod");
+                window.KBUI.toast("PDF staženo.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("PDF se nepodařilo vytvořit.", "error");
+            } finally {
+                button.disabled = false;
+                button.innerHTML = original;
+                applyZoom();
+            }
+        });
+
+        window.addEventListener("resize", () => { if (zoom === null) applyZoom(); });
+        load();
+    });
+})();
+</script>
+</body>
+</html>
