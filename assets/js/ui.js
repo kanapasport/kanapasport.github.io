@@ -118,6 +118,23 @@
     const CARET = '<svg class="navbtn__caret" fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
         '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>';
 
+    let lastNav = {};
+
+    /** Seznam zakázek do roletky ÚKOLOVNÍKU – bere se živě z databáze. */
+    function taskMenu() {
+        const names = [];
+        ((window.KB && window.KB.tasks) || []).forEach(task => {
+            const name = (task.zakazka || "").trim() || "Bez zakázky";
+            if (names.indexOf(name) === -1) names.push(name);
+        });
+        if (!names.length) return null;
+
+        return [{ title: "VŠECHNY ZAKÁZKY", href: "ukoly.html" }].concat(
+            names.map(name => ({ title: name, href: "ukoly.html?zak=" + encodeURIComponent(UI.slug(name)) })));
+    }
+
+    const menuOf = (item) => item.menu || (item.tasks ? taskMenu() : null);
+
     /**
      * Roletka u NÁVODŮ: svislý seznam kategorií pod sebou. Najetím myší na
      * řádek se rozbalí jeho obsah, kliknutím se přejde na danou sekci.
@@ -126,13 +143,14 @@
         const items = (window.KB_NAV || []).map((item, index) => {
             const isActive = active && item.href && item.href.split(/[?#]/)[0] === active;
             const cls = "navbtn" + (isActive ? " navbtn--active" : "");
+            const menu = menuOf(item);
 
-            if (!item.menu) {
+            if (!menu) {
                 return '<div class="navitem"><a class="' + cls + '" href="' + item.href + '">' +
                     (item.icon ? icon(item.icon) : "") + item.title + "</a></div>";
             }
 
-            const groups = item.menu.map(group =>
+            const groups = menu.map(group =>
                 '<div class="dropdown__group">' +
                     (group.href
                         ? '<a class="dropdown__title" href="' + group.href + '">' + group.title +
@@ -179,10 +197,11 @@
     function mobileNavHtml() {
         return '<div class="mobilenav" id="mobileNav">' +
             (window.KB_NAV || []).map((item, index) => {
-                if (!item.menu) {
+                const menu = menuOf(item);
+                if (!menu) {
                     return '<a class="mobilenav__row" href="' + item.href + '">' + item.title + "</a>";
                 }
-                const links = item.menu.map(group =>
+                const links = menu.map(group =>
                     (group.href ? '<a class="mobilenav__sublink" href="' + group.href + '"><b>' + group.title + "</b></a>" : "") +
                     (group.children || []).map(child =>
                         '<a class="mobilenav__sublink" href="' + child.href + '">' + child.title + "</a>").join("")
@@ -206,16 +225,22 @@
 
         const active = options.active || location.pathname.split("/").pop() || "index.html";
 
+        lastNav = options;
+
         slot.outerHTML =
             '<header class="appbar no-print' + (options.big ? " appbar--big" : "") + '">' +
-                '<div class="appbar__top"><div class="appbar__user" data-userbox></div></div>' +
-
-                '<div class="appbar__brand">' +
+                // červený pruh: uživatel vpravo nahoře, logo uprostřed,
+                // ikony nástrojů vpravo dole – tedy přímo nad lištou
+                '<div class="appbar__band"><div class="appbar__bandin">' +
+                    '<div class="appbar__userbox">' +
+                        '<div class="appbar__user" data-userbox></div>' +
+                        '<div class="appbar__status" data-cloud-status>Připojuji…</div>' +
+                    "</div>" +
                     '<a class="appbar__logo" href="index.html" aria-label="Domů">' +
-                        '<img src="Pasport_Kana_black.png" alt="Pasport Kaňa">' +
+                        '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa">' +
                     "</a>" +
                     toolsHtml() +
-                "</div>" +
+                "</div></div>" +
 
                 '<div class="appbar__bar"><div class="appbar__barin">' +
                     '<button type="button" class="appbar__burger" id="navBurger" aria-label="Menu">' +
@@ -233,10 +258,27 @@
             "</header>";
 
         bindNav();
+        bindHeader();
         bindSearch();
         UI.paintUser();
+        UI.bindCloudStatus("[data-cloud-status]");
         stickyOffset();
+
+        // v liště se nabízejí i jednotlivé zakázky – ty známe až z databáze
+        if (window.KB) window.KB.on("tasks", refreshNav);
     };
+
+    /** Překreslí jen navigaci (lišta se mění podle zakázek v databázi). */
+    function refreshNav() {
+        const nav = document.querySelector(".appbar__nav");
+        const mobile = document.getElementById("mobileNav");
+        if (!nav) return;
+
+        const active = lastNav.active || location.pathname.split("/").pop() || "index.html";
+        nav.outerHTML = navHtml(active);
+        if (mobile) mobile.outerHTML = mobileNavHtml();
+        bindNav();
+    }
 
     /**
      * Lišta má zůstat vidět i po odrolování, ale logo nad ní ne – proto se
@@ -254,6 +296,7 @@
         if (window.ResizeObserver) new ResizeObserver(apply).observe(header);
     }
 
+    /** Naváže prvky, které se při překreslení navigace vytvářejí znovu. */
     function bindNav() {
         // roletka: na myši se otevírá najetím (CSS), klikem kvůli dotyku
         document.querySelectorAll("[data-menu-toggle]").forEach(button => {
@@ -265,36 +308,39 @@
                 if (!wasOpen) item.classList.add("is-open");
             });
         });
-        document.addEventListener("click", () => {
-            document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
-        });
-        document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") {
-                document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
-            }
-        });
-
-        // mobilní panel
-        const burger = document.getElementById("navBurger");
-        const panel = document.getElementById("mobileNav");
-        if (burger && panel) {
-            burger.addEventListener("click", (event) => {
-                event.stopPropagation();
-                panel.classList.toggle("is-open");
-            });
-        }
         document.querySelectorAll("[data-msub]").forEach(button => {
             button.addEventListener("click", () => {
                 const target = document.querySelector('[data-msub-panel="' + button.dataset.msub + '"]');
                 if (target) target.classList.toggle("is-open");
             });
         });
+    }
 
+    /** Prvky, které vzniknou jen jednou při vykreslení hlavičky. */
+    function bindHeader() {
+        const burger = document.getElementById("navBurger");
+        if (burger) {
+            burger.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const panel = document.getElementById("mobileNav");
+                if (panel) panel.classList.toggle("is-open");
+            });
+        }
         // ikony nástrojů s akcí (zatím jen pokyn pro AI)
         document.querySelectorAll(".toolrail [data-action='ai-prompt']").forEach(button => {
             button.addEventListener("click", () => UI.copyAiPrompt());
         });
     }
+
+    // zavírání roletek – jednou pro celou stránku
+    document.addEventListener("click", () => {
+        document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
+        }
+    });
 
     // přihlášení / odhlášení a přepínač role – kdekoliv na stránce
     document.addEventListener("click", (event) => {
@@ -346,8 +392,7 @@
             document.querySelectorAll(selector).forEach(el => {
                 el.textContent = status === "online" ? "Živě synchronizováno"
                     : status === "offline" ? "Offline režim" : "Připojuji…";
-                el.style.color = status === "online" ? "var(--ok)"
-                    : status === "offline" ? "var(--warn)" : "var(--dim)";
+                el.dataset.state = status;   // barvu řeší CSS podle podkladu
             });
         };
         paint(window.KB ? window.KB.status : "connecting");
@@ -362,6 +407,9 @@
         .replace(/[̀-ͯ]/g, "");   // odstraní diakritiku, ať hledání funguje i bez háčků
 
     UI.fold = foldText;
+
+    /** Název → bezpečné id do adresy (zakázky). */
+    UI.slug = (value) => foldText(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "bez-zakazky";
 
     UI.searchGuides = (guides, query) => {
         const needle = foldText(query).trim();

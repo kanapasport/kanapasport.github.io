@@ -31,8 +31,9 @@ kategorie → program/oblast → téma. Skripty jsou rozdělené na
 **OBECNÉ / STAVBA / TECHNOLOGIE**; přesunout skript jinam znamená přesunout
 jeden řádek v `taxonomy.js`, v databázi se nic měnit nemusí.
 
-V dlaždici na rozcestníku se ukazují jen názvy podsekcí – ne kompletní výpis
-návodů a ne jejich počty.
+Dlaždice na rozcestníku jsou červené a mají dva vystředěné řádky prokliků:
+v prvním jsou **čtyři naposledy upravené** podsekce, ve druhém tlačítko, které
+rozbalí zbytek. Počty návodů se nikde nevypisují.
 
 ### Výpis návodů
 
@@ -63,16 +64,23 @@ Písmo se načítá z Google Fonts odkazem v hlavičce každého HTML. Když mě
 
 ### Hlavička
 
-Na všech stránkách stejná, tři patra:
+Na všech stránkách stejná. Nahoře **červený pruh** (v něm bílá varianta loga
+`Pasport_Kana_white.png`), pod ním lišta:
 
-1. vpravo nahoře **přihlášený uživatel** a odhlášení,
-2. uprostřed **logo** (na rozcestníku větší – `mountNav({ big: true })`),
-   vpravo od něj **ikony nástrojů** – popis vyjede až po najetí myší,
-3. dole **navigační lišta** (DOMŮ, NÁVODY, ÚKOLOVNÍK) vycentrovaná na střed
+1. v pruhu vpravo nahoře **přihlášený uživatel**, odhlášení a pod tím stav
+   připojení k databázi,
+2. uprostřed pruhu **logo** – zabírá skoro celou jeho výšku, na rozcestníku
+   je větší (`mountNav({ big: true })`),
+3. vpravo dole v pruhu, tedy **přímo nad lištou**, ikony nástrojů – popis
+   vyjede až po najetí myší,
+4. **navigační lišta** (DOMŮ, NÁVODY, ÚKOLOVNÍK) vycentrovaná na střed
    stránky a vpravo **hledání**,
-4. na výpisu návodů ještě **druhý řádek lišty** s filtry kategorie
+5. na výpisu návodů a v úkolovníku ještě **druhý řádek lišty** s filtry
    (`mountNav({ subbar: true })` vyrobí prázdný `#appSubbar`, stránka si ho
    naplní sama).
+
+Roletka u ÚKOLOVNÍKU se plní **zakázkami z databáze** – jakmile někdo založí
+novou, objeví se v liště sama (`taskMenu()` v `ui.js`).
 
 Při odrolování zůstává viset jen spodní část lišty – hlavička se posune nahoru
 přesně o výšku toho, co je nad ní (`stickyOffset()` v `ui.js`).
@@ -132,11 +140,13 @@ při přesměrování zahodí parametry v adrese).
 ## Úkolovník
 
 Úkoly jsou seskupené podle **zakázky** (BioPharma, C03, A08, Pasport Vrbice…).
-Na rozcestníku má každá zakázka svou dlaždici se seznamem úkolů a procenty;
-kliknutím se skočí přímo na tu skupinu (`ukoly.html#zak-nazev-zakazky`).
+Zakázka se vybírá v roletce ÚKOLOVNÍKU nebo ve druhém řádku lišty
+(`ukoly.html?zak=nazev-zakazky`); na rozcestníku má každá svou dlaždici se
+seznamem úkolů a procenty.
 
-Tlačítko **Doplnit vzorové zakázky** (jen v režimu správce) založí ukázková
-data a přeskočí to, co už v databázi je.
+Ve vybrané zakázce má správce vpravo v liště **+ Nová zakázka** a
+**+ Nový úkol do …** (druhé rovnou předvyplní zakázku). Když je seznam
+prázdný, nabídne se tlačítko na založení vzorových zakázek.
 
 ## Role – dočasné řešení
 

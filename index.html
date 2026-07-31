@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
-    <link rel="stylesheet" href="assets/css/app.css?v=6">
+    <link rel="stylesheet" href="assets/css/app.css?v=7">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -20,14 +20,6 @@
 <div id="appHeader"></div>
 
 <main>
-
-    <!-- ============================================================ úvod -->
-    <section class="wrap center" style="padding:26px 20px 4px">
-        <p class="hero__lead" style="margin-top:0">
-            Návody, pracovní postupy a úkolovník na jednom místě.
-        </p>
-        <div style="margin-top:8px;font-size:12px" data-cloud-status>Připojuji…</div>
-    </section>
 
     <!-- ======================================================== výsledky -->
     <section id="searchResults" class="wrap" hidden style="padding-top:24px;padding-bottom:56px">
@@ -46,10 +38,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=6"></script>
-<script src="assets/js/doc.js?v=6"></script>
-<script src="assets/js/ui.js?v=6"></script>
-<script type="module" src="assets/js/store.js?v=6"></script>
+<script src="assets/js/taxonomy.js?v=7"></script>
+<script src="assets/js/doc.js?v=7"></script>
+<script src="assets/js/ui.js?v=7"></script>
+<script type="module" src="assets/js/store.js?v=7"></script>
 
 <script>
 (function () {
@@ -59,6 +51,23 @@
 
     /* ------------------------------------------------------- dlaždice */
 
+    const VISIBLE_CHIPS = 4;
+
+    /**
+     * Seřadí podsekce podle toho, kde se naposledy něco upravovalo –
+     * v dlaždici je pak vidět poslední čtyři, zbytek se dá rozbalit.
+     */
+    function sortedChildren(tile) {
+        const guides = window.KB.guides || [];
+        return (tile.children || []).map(child => {
+            const ids = window.KB_descendantIds(tile.cat, child.id);
+            const last = guides.reduce((max, guide) =>
+                (guide.cat === tile.cat && ids.indexOf(guide.subcat) !== -1)
+                    ? Math.max(max, guide.updatedMs || 0) : max, 0);
+            return { id: child.id, title: child.title, last: last };
+        }).sort((a, b) => b.last - a.last);
+    }
+
     function tileHtml(tile) {
         const head =
             '<div class="tile__head">' +
@@ -67,16 +76,31 @@
             "</div>" +
             (tile.sub ? '<div class="tile__sub">' + esc(tile.sub) + "</div>" : "");
 
-        // štítky podkategorií jsou samostatné odkazy (proto dlaždice není celá <a>)
-        const chips = (tile.children && tile.children.length)
-            ? '<div class="tile__children">' + tile.children.map(child =>
-                '<a class="chip" href="navody.html?kat=' + tile.cat + "&sub=" + child.id + '">' +
-                esc(child.title) + "</a>").join("") + "</div>"
-            : "";
-
         if (tile.soon) {
             return '<div class="tile tile--soon"><div class="tile__main">' + head + "</div>" +
                 '<div class="tile__meta">Připravujeme</div></div>';
+        }
+
+        // štítky podsekcí jsou samostatné odkazy (proto dlaždice není celá <a>)
+        const children = sortedChildren(tile);
+        const link = (child) =>
+            '<a class="chip" href="navody.html?kat=' + tile.cat + "&sub=" + child.id + '">' +
+            esc(child.title) + "</a>";
+
+        let chips = "";
+        if (children.length) {
+            chips = '<div class="tile__children">' +
+                children.slice(0, VISIBLE_CHIPS).map(link).join("") + "</div>";
+
+            const rest = children.slice(VISIBLE_CHIPS);
+            if (rest.length) {
+                chips += '<div class="tile__children">' +
+                        '<button type="button" class="chip chip--more" data-more="' + tile.cat + '">' +
+                        "Další sekce (" + rest.length + ") ▾</button>" +
+                    "</div>" +
+                    '<div class="tile__children" data-morelist="' + tile.cat + '" hidden>' +
+                        rest.map(link).join("") + "</div>";
+            }
         }
 
         const main = tile.action
@@ -96,18 +120,25 @@
         "</section>";
 
     function renderSections() {
-        document.getElementById("sections").innerHTML = window.KB_SECTIONS.map(section => {
-            // v dlaždici jsou jen názvy podsekcí, ne kompletní výpis návodů
-            const tiles = section.tiles.map(tile => tileHtml(Object.assign({}, tile, {
-                children: (tile.children || []).map(child => ({ id: child.id, title: child.title }))
-            }))).join("");
-            return sectionHtml(section, tiles);
-        }).join("");
+        document.getElementById("sections").innerHTML = window.KB_SECTIONS
+            .map(section => sectionHtml(section, section.tiles.map(tileHtml).join(""))).join("");
     }
+
+    // rozbalení zbylých podsekcí v dlaždici
+    document.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-more]");
+        if (!button) return;
+        const list = document.querySelector('[data-morelist="' + button.dataset.more + '"]');
+        if (!list) return;
+        list.hidden = !list.hidden;
+        button.textContent = list.hidden
+            ? "Další sekce (" + list.children.length + ") ▾"
+            : "Skrýt ▴";
+    });
 
     /* ------------------------------------------- úkolovník podle zakázek */
 
-    const slug = (value) => window.KBUI.fold(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "bez-zakazky";
+    const slug = (value) => window.KBUI.slug(value);
 
     const taskPercent = (task) => {
         const subs = task.subtasks || [];
@@ -138,7 +169,7 @@
             (deadlines.length ? " · nejbližší termín " + czDate(deadlines[0]) : "");
 
         return '<div class="tile">' +
-            '<a class="tile__main" href="ukoly.html#zak-' + slug(name) + '">' +
+            '<a class="tile__main" href="ukoly.html?zak=' + encodeURIComponent(slug(name)) + '">' +
                 '<div class="tile__head">' +
                     '<div class="tile__icon">' + icon("building") + "</div>" +
                     '<div class="tile__title">' + esc(name.toUpperCase()) + "</div>" +
@@ -222,10 +253,14 @@
         window.KBUI.mountNav({ active: "index.html", big: true });
         renderSections();
         renderTasks(window.KB.tasks);
-        window.KBUI.bindCloudStatus("[data-cloud-status]");
         window.KBUI.onSearch(runSearch);
 
-        window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
+        // pořadí štítků závisí na tom, kde se naposledy upravovalo
+        window.KB.on("guides", () => {
+            renderSections();
+            renderTasks(window.KB.tasks);
+            runSearch(window.KBUI.searchValue());
+        });
         window.KB.on("tasks", (event) => renderTasks(event.detail));
     });
 })();

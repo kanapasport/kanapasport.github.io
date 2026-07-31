@@ -175,7 +175,8 @@ window.KB_NAV = [
             }))
         }))
     },
-    { title: 'ÚKOLOVNÍK', href: 'ukoly.html' }
+    // roletka se naplní zakázkami z databáze (viz taskMenu v ui.js)
+    { title: 'ÚKOLOVNÍK', href: 'ukoly.html', tasks: true }
 ];
 
 /* ------------------------------------------------- nástroje (ikony) -----
