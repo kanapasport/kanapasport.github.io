@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#c8102e">
+    <title>Barvy webu – Pasport Kaňa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
+    <link rel="stylesheet" href="assets/css/app.css?v=9">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        .lab { display: grid; gap: 18px; grid-template-columns: 1fr; align-items: start; }
+        @media (min-width: 1000px) {
+            .lab { grid-template-columns: 380px 1fr; }
+            .lab__panel { position: sticky; top: 74px; }
+        }
+        .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+        .swatch {
+            border: 2px solid transparent;
+            border-radius: var(--radius);
+            padding: 0;
+            background: none;
+            cursor: pointer;
+            text-align: left;
+            font: inherit;
+        }
+        .swatch__color { height: 46px; border-radius: var(--radius); border: 1px solid rgba(0, 0, 0, .12); }
+        .swatch__name { display: block; font-size: 11.5px; font-weight: 700; margin-top: 5px; line-height: 1.25; }
+        .swatch__hex  { display: block; font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+        .swatch.is-active { border-color: var(--text); }
+        .swatch.is-active .swatch__name { color: var(--accent); }
+
+        .slider { display: flex; align-items: center; gap: 10px; }
+        .slider input[type=range] { flex: 1; accent-color: var(--accent); }
+        .slider__val { width: 46px; text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+        .vars { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 12px; }
+        .vars code { font-family: ui-monospace, Consolas, monospace; }
+        .vars i { width: 22px; height: 14px; display: inline-block; border-radius: 3px; border: 1px solid var(--line); vertical-align: -2px; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:18px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
+
+    <div>
+        <h2 style="font-size:20px;font-weight:900">Barvy webu</h2>
+        <p class="small muted" style="margin-top:3px">
+            Posuvníky nebo hotové odstíny mění barvu rovnou v celé stránce – včetně lišty nahoře.
+            Až si nějakou vybereš, dej <b>Použít na celý web</b> a proklikej si návody i úkolovník.
+        </p>
+    </div>
+
+    <div class="lab">
+        <!-- ------------------------------------------------------ ovládání -->
+        <section class="lab__panel card col" style="padding:18px;gap:18px">
+
+            <div>
+                <span class="label">Hotové odstíny</span>
+                <div class="swatches" id="presets"></div>
+            </div>
+
+            <div class="col" style="gap:10px">
+                <span class="label" style="margin:0">Vlastní míchání</span>
+                <div class="slider">
+                    <span class="tiny muted" style="width:56px">Odstín</span>
+                    <input type="range" id="sH" min="0" max="360" step="1">
+                    <span class="slider__val" id="vH"></span>
+                </div>
+                <div class="slider">
+                    <span class="tiny muted" style="width:56px">Sytost</span>
+                    <input type="range" id="sS" min="0" max="100" step="1">
+                    <span class="slider__val" id="vS"></span>
+                </div>
+                <div class="slider">
+                    <span class="tiny muted" style="width:56px">Světlost</span>
+                    <input type="range" id="sL" min="10" max="70" step="1">
+                    <span class="slider__val" id="vL"></span>
+                </div>
+                <div class="row" style="gap:10px">
+                    <input type="color" id="picker" style="width:52px;height:40px;border:1px solid var(--line);border-radius:var(--radius);background:none;padding:2px;cursor:pointer">
+                    <input type="text" id="hex" class="field grow" style="font-family:ui-monospace,Consolas,monospace" spellcheck="false">
+                </div>
+            </div>
+
+            <div>
+                <span class="label">Dopočítané odstíny</span>
+                <div class="vars" id="vars"></div>
+                <div id="contrast" class="tiny" style="margin-top:10px;line-height:1.5"></div>
+            </div>
+
+            <div class="col" style="gap:8px">
+                <button id="btnUse" class="btn btn--primary">Použít na celý web</button>
+                <div class="row" style="gap:8px">
+                    <button id="btnCss" class="btn btn--ghost btn--sm grow">Zkopírovat CSS</button>
+                    <button id="btnReset" class="btn btn--ghost btn--sm grow">Vrátit původní</button>
+                </div>
+                <div class="tiny muted" style="line-height:1.5">
+                    Uloží se jen do tvého prohlížeče. Až budeš rozhodnutý, řekni mi hex
+                    a zapíšu ho natrvalo do <code>app.css</code> pro všechny.
+                </div>
+            </div>
+        </section>
+
+        <!-- -------------------------------------------------------- ukázka -->
+        <section class="col" style="gap:16px">
+
+            <div class="card col" style="padding:16px;gap:12px">
+                <span class="label" style="margin:0">Dlaždice rozcestníku</span>
+                <div class="tilegrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">
+                    <div class="tile">
+                        <a class="tile__main" href="#">
+                            <div class="tile__head">
+                                <div class="tile__icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" id="ico1"></svg></div>
+                                <div class="tile__title">PASPORTIZAČNÍ POSTUPY</div>
+                            </div>
+                            <div class="tile__sub">Pracovní postupy u jednotlivých profesí</div>
+                        </a>
+                        <div class="tile__children">
+                            <span class="chip">SLN</span><span class="chip">STĚNY</span><span class="chip">CHLAZENÍ</span>
+                        </div>
+                    </div>
+                    <div class="tile">
+                        <a class="tile__main" href="#">
+                            <div class="tile__head">
+                                <div class="tile__icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" id="ico2"></svg></div>
+                                <div class="tile__title">BIOPHARMA</div>
+                            </div>
+                            <div class="tile__sub">2 úkoly · nejbližší termín 14. 8. 2026</div>
+                        </a>
+                        <div class="tile__list">
+                            <div class="tile__listrow"><span class="tile__dot tile__dot--run"></span><b>Odevzdání stavby</b><span class="tile__listpct">43 %</span></div>
+                            <div class="tile__listrow"><span class="tile__dot tile__dot--done"></span><b>Zaměření</b><span class="tile__listpct">100 %</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card col" style="padding:16px;gap:12px">
+                <span class="label" style="margin:0">Lišta, filtry a tlačítka</span>
+                <div class="subbar__in" style="padding:0">
+                    <div class="subbar__left">
+                        <span class="subbar__cat">SKRIPTY</span>
+                        <span class="subbar__sep"></span>
+                        <span class="chip chip--active">VŠE</span>
+                        <span class="chip">OBECNÉ</span>
+                        <span class="chip">STAVBA</span>
+                    </div>
+                </div>
+                <div class="row row--wrap" style="gap:8px">
+                    <button class="btn btn--primary btn--sm">Hlavní tlačítko</button>
+                    <button class="btn btn--ghost btn--sm">Vedlejší</button>
+                    <span class="tag">ŠTÍTEK KATEGORIE</span>
+                    <span class="rolepill rolepill--admin">REŽIM SPRÁVCE</span>
+                </div>
+                <button class="gtile" style="max-width:320px">
+                    <div class="gtile__cat">OBECNÉ</div>
+                    <div class="gtile__title">Jak si nechat od AI napsat funkční skript</div>
+                    <div class="gtile__meta">Michal Kočiš · v1.0</div>
+                </button>
+            </div>
+
+            <div class="card col" style="padding:16px;gap:12px">
+                <span class="label" style="margin:0">Hlavička tištěného návodu (PDF)</span>
+                <div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px">
+                    <div style="border-bottom:3px solid var(--doc-accent);padding-bottom:10px">
+                        <span style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--doc-accent);background:var(--accent-tint);padding:3px 6px;border-radius:3px">SKRIPTY · OBECNÉ</span>
+                        <div style="font-size:22px;font-weight:900;color:#0b0d10;margin-top:8px">Kopie polygonů</div>
+                        <div style="font-size:12px;font-style:italic;color:#4b5563;margin-top:4px">Z podkladů udělá polygony a vloží je do cílové vrstvy.</div>
+                    </div>
+                    <div style="border-left:2px solid var(--accent-lt);padding-left:12px;margin-top:14px">
+                        <div style="font-size:14px;font-weight:800">1. K čemu to je</div>
+                        <div style="font-size:12.5px;color:#333a42;line-height:1.5;margin-top:4px">
+                            Odkaz na obrázek vypadá takto:
+                            <span style="color:var(--doc-accent);font-weight:700;border-bottom:1px dotted var(--doc-accent)">obr. 1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=9"></script>
+<script src="assets/js/doc.js?v=9"></script>
+<script src="assets/js/ui.js?v=9"></script>
+<script type="module" src="assets/js/store.js?v=9"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+
+    const PRESETS = [
+        { name: "Pasport (současná)", hex: "#c8102e" },
+        { name: "Signální",           hex: "#e01b24" },
+        { name: "Korálová",           hex: "#ef3340" },
+        { name: "Malinová",           hex: "#d21e50" },
+        { name: "Cihlová",            hex: "#b23a2b" },
+        { name: "Vínová",             hex: "#a4161a" },
+        { name: "Bordó",              hex: "#7d1128" },
+        { name: "Kaštanová",          hex: "#8c2f27" },
+        { name: "Ferrari",            hex: "#d40000" },
+        { name: "Tlumená cihla",      hex: "#9e2a2b" },
+        { name: "Rubín",              hex: "#b01030" },
+        { name: "Tmavá krev",         hex: "#6d0f1a" }
+    ];
+
+    // hex si držíme přesně, HSL je jen pro posuvníky (jinak by se barva
+    // zaokrouhlením při každém překreslení nepatrně posouvala)
+    let current = window.KBUI.savedAccent() || "#c8102e";
+    let hsl = window.KBUI.hexToHsl(current);
+
+    const hex = () => current;
+
+    function setHex(value) {
+        current = value.trim().toLowerCase();
+        if (current[0] !== "#") current = "#" + current;
+        hsl = window.KBUI.hexToHsl(current);
+        paint();
+    }
+
+    function setHsl() {
+        current = window.KBUI.hslToHex(hsl[0], hsl[1], hsl[2]);
+        paint();
+    }
+
+    /* ------------------------------------------------------- kontrast */
+
+    function luminance(color) {
+        const m = /^#(..)(..)(..)$/.exec(color);
+        const parts = [1, 2, 3].map(i => {
+            const v = parseInt(m[i], 16) / 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+    }
+
+    const contrastWithWhite = (color) => Math.round((1.05 / (luminance(color) + 0.05)) * 100) / 100;
+
+    /* ------------------------------------------------------- vykreslení */
+
+    function paint() {
+        const current = hex();
+        window.KBUI.applyAccent(current);
+
+        $("sH").value = hsl[0]; $("vH").textContent = hsl[0] + "°";
+        $("sS").value = hsl[1]; $("vS").textContent = hsl[1] + " %";
+        $("sL").value = hsl[2]; $("vL").textContent = hsl[2] + " %";
+        $("picker").value = current;
+        if (document.activeElement !== $("hex")) $("hex").value = current;
+
+        document.querySelectorAll(".swatch").forEach(el =>
+            el.classList.toggle("is-active", el.dataset.hex === current));
+
+        const vars = window.KBUI.accentVars(current);
+        $("vars").innerHTML = Object.keys(vars).map(name =>
+            "<code>" + name + "</code><span><i style=\"background:" + vars[name] + "\"></i> " +
+            "<code>" + vars[name] + "</code></span>").join("");
+
+        const ratio = contrastWithWhite(current);
+        const ok = ratio >= 4.5;
+        $("contrast").innerHTML = "Bílý text na téhle barvě má kontrast <b>" + ratio.toFixed(2) + ":1</b> – " +
+            (ok ? '<span style="color:var(--ok);font-weight:700">dobře čitelné</span>'
+                : '<span style="color:var(--warn);font-weight:700">málo, zkus tmavší odstín</span>') +
+            " (doporučené minimum je 4,5:1).";
+    }
+
+    /* ------------------------------------------------------------ start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "barvy.html" });
+
+        $("ico1").innerHTML = window.KB_ICONS.map;
+        $("ico2").innerHTML = window.KB_ICONS.building;
+
+        $("presets").innerHTML = PRESETS.map(preset =>
+            '<button type="button" class="swatch" data-hex="' + preset.hex + '">' +
+                '<span class="swatch__color" style="background:' + preset.hex + '"></span>' +
+                '<span class="swatch__name">' + preset.name + "</span>" +
+                '<span class="swatch__hex">' + preset.hex + "</span>" +
+            "</button>").join("");
+
+        $("presets").addEventListener("click", (event) => {
+            const button = event.target.closest(".swatch");
+            if (button) setHex(button.dataset.hex);
+        });
+
+        [["sH", 0], ["sS", 1], ["sL", 2]].forEach(([id, index]) => {
+            $(id).addEventListener("input", () => { hsl[index] = +$(id).value; setHsl(); });
+        });
+
+        $("picker").addEventListener("input", () => setHex($("picker").value));
+        $("hex").addEventListener("input", () => {
+            if (/^#?[\da-f]{6}$/i.test($("hex").value.trim())) setHex($("hex").value);
+        });
+
+        $("btnUse").addEventListener("click", () => {
+            window.KBUI.saveAccent(hex());
+            window.KBUI.toast("Barva " + hex() + " nasazená – proklikej si zbytek webu.");
+        });
+
+        $("btnReset").addEventListener("click", () => {
+            window.KBUI.resetAccent();
+            setHex("#c8102e");
+            window.KBUI.toast("Zpátky na původní červenou.");
+        });
+
+        $("btnCss").addEventListener("click", async () => {
+            const vars = window.KBUI.accentVars(hex());
+            const css = Object.keys(vars).map(name => "    " + name + ": " + vars[name] + ";").join("\n");
+            try {
+                await navigator.clipboard.writeText(css);
+                window.KBUI.toast("CSS zkopírováno.");
+            } catch (err) {
+                window.KBUI.toast("Kopírování se nezdařilo.", "error");
+            }
+        });
+
+        paint();
+    });
+})();
+</script>
+</body>
+</html>

@@ -19,6 +19,77 @@
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     UI.esc = esc;
 
+    /* -------------------------------------------------------------- barvy ---
+       Zkoušení odstínů na stránce barvy.html. Vybraná barva se drží
+       v prohlížeči, takže se dá proklikat celý web a teprve pak ji zapsat
+       natvrdo do app.css. */
+
+    const ACCENT_KEY = "company_kb_accent";
+    const ACCENT_VARS = ["--accent", "--accent-dark", "--accent-lt", "--accent-tint", "--doc-accent"];
+
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+    /** #rrggbb -> [h 0-360, s 0-100, l 0-100] */
+    UI.hexToHsl = (hex) => {
+        const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(String(hex).trim());
+        if (!m) return [349, 85, 42];
+        const [r, g, b] = [1, 2, 3].map(i => parseInt(m[i], 16) / 255);
+        const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+        const l = (max + min) / 2;
+        let h = 0;
+        if (d) {
+            h = max === r ? ((g - b) / d + (g < b ? 6 : 0))
+              : max === g ? ((b - r) / d + 2)
+              : ((r - g) / d + 4);
+            h *= 60;
+        }
+        const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+        return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+    };
+
+    UI.hslToHex = (h, s, l) => {
+        h = ((h % 360) + 360) % 360;
+        s = clamp(s, 0, 100) / 100;
+        l = clamp(l, 0, 100) / 100;
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        const m = l - c / 2;
+        const rgb = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
+                  : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return "#" + rgb.map(v => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
+    };
+
+    /** Z jedné barvy dopočítá celou sadu odstínů, které web používá. */
+    UI.accentVars = (hex) => {
+        const [h, s, l] = UI.hexToHsl(hex);
+        return {
+            "--accent":      hex,
+            "--accent-dark": UI.hslToHex(h, s, l - 9),
+            "--accent-lt":   UI.hslToHex(h, clamp(s + 4, 0, 100), l + 14),
+            "--accent-tint": UI.hslToHex(h, clamp(s - 10, 0, 100), 96),
+            "--doc-accent":  hex
+        };
+    };
+
+    UI.applyAccent = (hex) => {
+        const vars = UI.accentVars(hex);
+        Object.keys(vars).forEach(name => document.documentElement.style.setProperty(name, vars[name]));
+    };
+
+    UI.saveAccent = (hex) => {
+        localStorage.setItem(ACCENT_KEY, hex);
+        UI.applyAccent(hex);
+    };
+
+    UI.savedAccent = () => localStorage.getItem(ACCENT_KEY) || "";
+
+    UI.resetAccent = () => {
+        localStorage.removeItem(ACCENT_KEY);
+        ACCENT_VARS.forEach(name => document.documentElement.style.removeProperty(name));
+    };
+
+    if (UI.savedAccent()) UI.applyAccent(UI.savedAccent());
+
     /* ------------------------------------------------------------- toast */
 
     UI.toast = (message, tone) => {
@@ -232,6 +303,8 @@
                 // červený pruh: uživatel vpravo nahoře, logo uprostřed,
                 // ikony nástrojů vpravo dole – tedy přímo nad lištou
                 '<div class="appbar__band"><div class="appbar__bandin">' +
+                    '<a class="appbar__theme" href="barvy.html" title="Zkusit jinou barvu webu">' +
+                        icon("palette") + "<span>Barvy webu</span></a>" +
                     '<div class="appbar__userbox">' +
                         '<div class="appbar__user" data-userbox></div>' +
                         '<div class="appbar__status" data-cloud-status>Připojuji…</div>' +

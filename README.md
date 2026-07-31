@@ -13,6 +13,7 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `navod.html` | Čtení jednoho návodu (`?id=…`) – sazba A4 + export do PDF |
 | `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor, vpravo živý náhled |
 | `ukoly.html` | Úkolovník – úkoly seskupené podle zakázek, patra, procenta, poznámky |
+| `barvy.html` | Zkoušení odstínů hlavní barvy na živé ukázce (odkaz je v patičce) |
 
 ## Sdílené soubory
 
@@ -61,6 +62,19 @@ Barvy, písmo i zaoblení rohů jsou na jednom místě v `:root` v `app.css`:
 
 Písmo se načítá z Google Fonts odkazem v hlavičce každého HTML. Když měníš
 `--font`, změň i ten odkaz.
+
+### Zkoušení jiné červené
+
+Na `barvy.html` se dá barva namíchat posuvníky nebo vybrat z hotových odstínů;
+mění se rovnou celá stránka včetně lišty. **Použít na celý web** si volbu
+zapamatuje v prohlížeči (klíč `company_kb_accent`), takže se dá proklikat celý
+web – ostatním se nic nemění. Trvale se barva nastaví přepsáním `--accent`
+v `:root` v `app.css`; ostatní odstíny (`--accent-dark`, `--accent-lt`,
+`--accent-tint`) se z ní dopočítávají v `UI.accentVars()`, takže je stačí
+zkopírovat tlačítkem **Zkopírovat CSS**.
+
+Stránka hlídá i **kontrast bílého textu** – pod 4,5:1 už je barva na bílé
+písmo moc světlá.
 
 ### Hlavička
 
