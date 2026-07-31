@@ -335,6 +335,30 @@
         wrapper.style.height = (naturalH * scale + 20) + "px";
     }
 
+    /**
+     * Hlídá skutečnou šířku kontejneru a při každé změně přepočítá měřítko.
+     * Řeší i případy, kdy událost resize nestačí – otočení iPadu, sbalení
+     * panelu, doběhnutí layoutu po načtení písem.
+     */
+    function watchFit(wrapper, handler) {
+        let lastWidth = -1;
+
+        const check = () => {
+            const width = wrapper.clientWidth;
+            if (Math.abs(width - lastWidth) < 2) return;   // ignoruj změny výšky
+            lastWidth = width;
+            handler();
+        };
+
+        // Dvě nezávislé cesty schválně: ResizeObserver zachytí i změny, které
+        // nesouvisí s oknem (sbalení panelu), a posluchače na okně fungují
+        // i tam, kde observer nedostane snímek k vykreslení.
+        if (typeof ResizeObserver !== "undefined") new ResizeObserver(check).observe(wrapper);
+        window.addEventListener("resize", check);
+        window.addEventListener("orientationchange", () => setTimeout(check, 250));
+        window.addEventListener("load", check);
+    }
+
     async function exportPdf(stage, filename) {
         if (!window.html2canvas || !window.jspdf) throw new Error("Chybí knihovny pro PDF.");
         const { jsPDF } = window.jspdf;
@@ -366,5 +390,5 @@
         }
     }
 
-    window.KBDoc = { render, exportPdf, fitStage, enableImageZoom, openImage, esc, MM };
+    window.KBDoc = { render, exportPdf, fitStage, watchFit, enableImageZoom, openImage, esc, MM };
 })();
