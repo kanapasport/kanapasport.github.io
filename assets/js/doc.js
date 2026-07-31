@@ -327,7 +327,8 @@
     function fitStage(stage, wrapper) {
         const available = wrapper.clientWidth - 24;
         const natural = mm(MM.pageW);
-        const scale = Math.min(1, available / natural);
+        // schovaný nebo nulový kontejner by dal záporné měřítko a náhled by zmizel
+        const scale = available > 40 ? Math.min(1, available / natural) : 1;
         stage.style.transform = "scale(" + scale + ")";
         // po zmenšení zůstává původní výška – korigujeme spodní mezerou
         const pages = stage.children.length || 1;

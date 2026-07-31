@@ -9,10 +9,10 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | Soubor | K čemu je |
 |---|---|
 | `index.html` | Rozcestník – logo, hledání v celé databázi, dlaždice sekcí |
-| `navody.html` | Přehled návodů, filtr kategorie → program → téma (`?kat=…&sub=…`) |
+| `navody.html` | Výpis návodů – vlevo dlaždice, vpravo rovnou náhled (`?kat=…&sub=…&id=…`) |
 | `navod.html` | Čtení jednoho návodu (`?id=…`) – sazba A4 + export do PDF |
-| `editor.html` | Tvorba a úprava návodu (`?id=…`), obrázky, živý náhled |
-| `ukoly.html` | Úkolovník – zakázky, patra, procenta hotovo, poznámky |
+| `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor, vpravo živý náhled |
+| `ukoly.html` | Úkolovník – úkoly seskupené podle zakázek, patra, procenta, poznámky |
 
 ## Sdílené soubory
 
@@ -27,17 +27,65 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 
 **Chceš přidat nebo přejmenovat kategorii?** Stačí upravit `assets/js/taxonomy.js` –
 rozcestník, horní lišta i filtry se přizpůsobí samy. Kategorie umí tři úrovně:
-kategorie → program/oblast → téma.
+kategorie → program/oblast → téma. Skripty jsou rozdělené na
+**OBECNÉ / STAVBA / TECHNOLOGIE**; přesunout skript jinam znamená přesunout
+jeden řádek v `taxonomy.js`, v databázi se nic měnit nemusí.
+
+V dlaždici na rozcestníku se ukazují jen názvy podsekcí – ne kompletní výpis
+návodů a ne jejich počty.
+
+### Výpis návodů
+
+Druhý řádek lišty má vlevo barevně označenou **kategorii** a její sekce
+(VŠE / OBECNÉ / STAVBA / …), vpravo pokyn pro AI a nový návod. Třetí úroveň
+(témata uvnitř programu) se ukáže jen tam, kde na jedno téma připadá víc
+návodů – jinak by jen opisovala dlaždice.
+
+Vlevo jsou červené dlaždice návodů (kategorie, název, autor – nic víc),
+vpravo se rovnou vykreslí náhled vybraného. Když se kategorie jen rozklikne,
+otevře se její **hlavní návod** – ten se určuje klíčem `main` u kategorie
+v `taxonomy.js` (u skriptů je to `skript-ai`).
 
 ## Vzhled
 
-Světlý šedý motiv, hlavní barva červená. Barvy jsou na jednom místě v `:root`
-v `app.css`. Tištěný dokument má vlastní proměnnou `--doc-accent` – když chceš
-PDF zpátky do modré, změní se jen ten jeden řádek.
+Světlý šedý motiv, hlavní barva červená, písmo **Lato** (300/400/700/900).
+Barvy, písmo i zaoblení rohů jsou na jednom místě v `:root` v `app.css`:
 
-Web je navržený pro PC, iPad i iPhone: pod 1024 px se horní lišta sbalí pod
-tlačítko, dlaždice jdou do jednoho sloupce a ovládací prvky mají minimálně
-44 px pro pohodlné ťuknutí prstem.
+| Proměnná | K čemu je |
+|---|---|
+| `--font` | písmo celého webu **i tištěného dokumentu** |
+| `--accent` | hlavní červená (nadpisy dlaždic, ikony, aktivní prvky) |
+| `--radius`, `--radius-lg` | zaoblení – držené nízko, ať jsou tvary obdélníkové |
+| `--doc-accent` | barva tištěného dokumentu (PDF zpátky do modré = jeden řádek) |
+
+Písmo se načítá z Google Fonts odkazem v hlavičce každého HTML. Když měníš
+`--font`, změň i ten odkaz.
+
+### Hlavička
+
+Na všech stránkách stejná, tři patra:
+
+1. vpravo nahoře **přihlášený uživatel** a odhlášení,
+2. uprostřed **logo** (na rozcestníku větší – `mountNav({ big: true })`),
+   vpravo od něj **ikony nástrojů** – popis vyjede až po najetí myší,
+3. dole **navigační lišta** (DOMŮ, NÁVODY, ÚKOLOVNÍK) vycentrovaná na střed
+   stránky a vpravo **hledání**,
+4. na výpisu návodů ještě **druhý řádek lišty** s filtry kategorie
+   (`mountNav({ subbar: true })` vyrobí prázdný `#appSubbar`, stránka si ho
+   naplní sama).
+
+Při odrolování zůstává viset jen spodní část lišty – hlavička se posune nahoru
+přesně o výšku toho, co je nad ní (`stickyOffset()` v `ui.js`).
+
+Roletka u NÁVODŮ je svislý seznam kategorií; najetím myší na řádek vyjede
+obsah kategorie **vpravo vedle seznamu**, kliknutím se přejde na danou sekci.
+
+Pole hledání v liště obsluhuje stránka sama přes `KBUI.onSearch(handler)`.
+Kde handler není, odešle Enter dotaz na `navody.html?q=…`.
+
+Web je navržený pro PC, iPad i iPhone: pod 1024 px se lišta sbalí pod
+tlačítko, pod 820 px jdou ikony nástrojů pod logo, dlaždice jdou do jednoho
+sloupce a ovládací prvky mají minimálně 44 px pro pohodlné ťuknutí prstem.
 
 ## Jak vypadá dokument
 
@@ -70,20 +118,39 @@ zkomprimuje do JPEG (typicky 50–250 kB).
 ## Po úpravě sdílených souborů
 
 GitHub Pages cachuje assety cca 10 minut. Když měníš `assets/…`, zvyš číslo
-verze v odkazech ve všech HTML (`?v=2` → `?v=3`), jinak lidé uvidí starou verzi.
+verze v odkazech ve všech HTML (`?v=5` → `?v=6`), jinak lidé uvidí starou verzi.
+
+## Náhled na svém počítači
+
+```
+npx --yes serve -l 4173 .
+```
+
+Otevři `http://localhost:4173/index.html` (s koncovkou `.html`, jinak `serve`
+při přesměrování zahodí parametry v adrese).
+
+## Úkolovník
+
+Úkoly jsou seskupené podle **zakázky** (BioPharma, C03, A08, Pasport Vrbice…).
+Na rozcestníku má každá zakázka svou dlaždici se seznamem úkolů a procenty;
+kliknutím se skočí přímo na tu skupinu (`ukoly.html#zak-nazev-zakazky`).
+
+Tlačítko **Doplnit vzorové zakázky** (jen v režimu správce) založí ukázková
+data a přeskočí to, co už v databázi je.
 
 ## Role – dočasné řešení
 
 Úkolovník rozlišuje **správce** (zakládá a maže úkoly) a **zaměstnance**
-(zaškrtává hotovo a píše poznámky). Role se zatím jen přepíná tlačítkem
-v pravém horním rohu a drží se v prohlížeči – **není to zabezpečení**.
-Skutečné oddělení práv přijde s přihlašováním účtem a heslem.
+(zaškrtává hotovo a píše poznámky). Role se přepíná tlačítkem nad seznamem
+úkolů a drží se v prohlížeči – **není to zabezpečení**. V hlavičce je proto
+jen „Přihlášen jako …"; skutečné oddělení práv přijde s přihlašováním účtem
+a heslem.
 
 ## Co je hotové a co ne
 
-Hotové: rozcestník, tři úrovně kategorií, hledání, sazba A4 = PDF, obrázky
-s proklikem, šablony, import od AI, vodoznak, úkolovník, responzivita pro
-telefon a tablet, dokumentace ke všem skriptům v toolboxu.
+Hotové: rozcestník, tři úrovně kategorií, hledání v liště, sazba A4 = PDF,
+obrázky s proklikem, šablony, import od AI, vodoznak, úkolovník po zakázkách,
+responzivita pro telefon a tablet, dokumentace ke všem skriptům v toolboxu.
 
 Zatím ne (schválně, až bude obsah): přihlašování účtem a heslem od správce,
 přehled přihlášení pro správce, omezení stahování PDF jen na správce.

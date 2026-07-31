@@ -8,7 +8,10 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa – firemní knowledge base</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
+    <link rel="stylesheet" href="assets/css/app.css?v=6">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -19,50 +22,34 @@
 <main>
 
     <!-- ============================================================ úvod -->
-    <section class="wrap" style="padding-top:44px;padding-bottom:34px;text-align:center">
-        <img src="Pasport_Kana_black.png" alt="Pasport Kaňa"
-             style="height:92px;margin:0 auto;object-fit:contain;display:block">
-
-        <h1 class="hero__title">Firemní knowledge base</h1>
-        <p class="hero__lead">
+    <section class="wrap center" style="padding:26px 20px 4px">
+        <p class="hero__lead" style="margin-top:0">
             Návody, pracovní postupy a úkolovník na jednom místě.
-            Vyber si oblast, nebo rovnou hledej v celé databázi.
         </p>
-        <div style="margin-top:10px;font-size:12px" data-cloud-status>Připojuji…</div>
-
-        <div style="margin:26px auto 0;max-width:640px;position:relative">
-            <svg style="width:20px;height:20px;position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--dim);pointer-events:none"
-                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input id="globalSearch" type="search" autocomplete="off" class="field"
-                   placeholder="Hledat v návodech – název, postup, program, chyba…"
-                   style="min-height:52px;padding-left:46px;border-radius:16px;font-size:15px;box-shadow:var(--shadow)">
-        </div>
+        <div style="margin-top:8px;font-size:12px" data-cloud-status>Připojuji…</div>
     </section>
 
     <!-- ======================================================== výsledky -->
-    <section id="searchResults" class="wrap" hidden style="padding-bottom:56px">
+    <section id="searchResults" class="wrap" hidden style="padding-top:24px;padding-bottom:56px">
         <div class="section-head">
             <h2>Výsledky hledání</h2>
             <p id="searchCount"></p>
         </div>
-        <div id="searchList" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="searchList" class="col" style="gap:10px"></div>
     </section>
 
     <!-- =========================================================== sekce -->
-    <div id="sections" class="wrap" style="padding-bottom:70px;display:flex;flex-direction:column;gap:58px"></div>
+    <div id="sections" class="wrap" style="padding:34px 20px 70px;display:flex;flex-direction:column;gap:46px"></div>
 
     <footer style="border-top:1px solid var(--line);padding:26px 0 calc(26px + env(safe-area-inset-bottom));text-align:center;font-size:12px;color:var(--dim)">
         Pasport Kaňa · interní dokumentace · data jsou určena pouze pro potřeby firmy
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=4"></script>
-<script src="assets/js/doc.js?v=4"></script>
-<script src="assets/js/ui.js?v=4"></script>
-<script type="module" src="assets/js/store.js?v=4"></script>
+<script src="assets/js/taxonomy.js?v=6"></script>
+<script src="assets/js/doc.js?v=6"></script>
+<script src="assets/js/ui.js?v=6"></script>
+<script type="module" src="assets/js/store.js?v=6"></script>
 
 <script>
 (function () {
@@ -87,73 +74,128 @@
                 esc(child.title) + "</a>").join("") + "</div>"
             : "";
 
-        const meta = tile.cat ? '<div class="tile__meta" data-count="' + tile.cat + '">—</div>'
-            : tile.tasks ? '<div class="tile__meta" data-tasks>—</div>'
-            : tile.soon ? '<div class="tile__meta">Připravujeme</div>' : "";
-
-        if (tile.soon) return '<div class="tile tile--soon"><div class="tile__main">' + head + "</div>" + meta + "</div>";
+        if (tile.soon) {
+            return '<div class="tile tile--soon"><div class="tile__main">' + head + "</div>" +
+                '<div class="tile__meta">Připravujeme</div></div>';
+        }
 
         const main = tile.action
             ? '<button type="button" class="tile__main" data-action="' + tile.action + '" style="cursor:pointer;background:none;border:none;font:inherit">' + head + "</button>"
             : '<a class="tile__main" href="' + tile.href + '">' + head + "</a>";
 
-        return '<div class="tile">' + main + chips + meta + "</div>";
+        return '<div class="tile">' + main + chips + "</div>";
     }
+
+    const sectionHtml = (section, tiles) =>
+        '<section id="sec-' + section.id + '">' +
+            '<div class="section-head">' +
+                "<h2>" + esc(section.title) + "</h2>" +
+                (section.desc ? "<p>" + esc(section.desc) + "</p>" : "") +
+            "</div>" +
+            '<div class="tilegrid">' + tiles + "</div>" +
+        "</section>";
 
     function renderSections() {
-        document.getElementById("sections").innerHTML = window.KB_SECTIONS.map(section =>
-            "<section>" +
-                '<div class="section-head">' +
-                    "<h2>" + esc(section.title) + "</h2>" +
-                    (section.desc ? "<p>" + esc(section.desc) + "</p>" : "") +
+        document.getElementById("sections").innerHTML = window.KB_SECTIONS.map(section => {
+            // v dlaždici jsou jen názvy podsekcí, ne kompletní výpis návodů
+            const tiles = section.tiles.map(tile => tileHtml(Object.assign({}, tile, {
+                children: (tile.children || []).map(child => ({ id: child.id, title: child.title }))
+            }))).join("");
+            return sectionHtml(section, tiles);
+        }).join("");
+    }
+
+    /* ------------------------------------------- úkolovník podle zakázek */
+
+    const slug = (value) => window.KBUI.fold(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "bez-zakazky";
+
+    const taskPercent = (task) => {
+        const subs = task.subtasks || [];
+        if (!subs.length) return 0;
+        return Math.round(subs.reduce((sum, s) => sum + (s.percent || 0), 0) / subs.length);
+    };
+
+    const czDate = (iso) => {
+        if (!iso) return "";
+        const [y, m, d] = iso.split("-");
+        return d.replace(/^0/, "") + ". " + m.replace(/^0/, "") + ". " + y;
+    };
+
+    /** Seskupí úkoly podle zakázky – z každé zakázky je jedna dlaždice se seznamem. */
+    function taskTileHtml(name, tasks) {
+        const rows = tasks.map(task => {
+            const percent = taskPercent(task);
+            const state = percent === 100 ? " tile__dot--done" : percent > 0 ? " tile__dot--run" : "";
+            return '<div class="tile__listrow">' +
+                '<span class="tile__dot' + state + '"></span>' +
+                "<b>" + esc(task.title || "Bez názvu") + "</b>" +
+                '<span class="tile__listpct">' + percent + " %</span>" +
+            "</div>";
+        }).join("");
+
+        const deadlines = tasks.map(t => t.deadline).filter(Boolean).sort();
+        const sub = tasks.length + (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
+            (deadlines.length ? " · nejbližší termín " + czDate(deadlines[0]) : "");
+
+        return '<div class="tile">' +
+            '<a class="tile__main" href="ukoly.html#zak-' + slug(name) + '">' +
+                '<div class="tile__head">' +
+                    '<div class="tile__icon">' + icon("building") + "</div>" +
+                    '<div class="tile__title">' + esc(name.toUpperCase()) + "</div>" +
                 "</div>" +
-                '<div class="tilegrid">' + section.tiles.map(tileHtml).join("") + "</div>" +
-            "</section>"
-        ).join("");
-
-        document.querySelectorAll("[data-action='ai-prompt']").forEach(button =>
-            button.addEventListener("click", () => window.KBUI.copyAiPrompt()));
+                '<div class="tile__sub">' + esc(sub) + "</div>" +
+            "</a>" +
+            '<div class="tile__list">' + rows + "</div>" +
+        "</div>";
     }
 
-    /* ------------------------------------------- počty v dlaždicích */
+    function renderTasks(tasks) {
+        const host = document.getElementById("sec-ukolovnik");
+        const section = { id: "ukolovnik", title: "Úkolovník", desc: "Rozdělané zakázky a stav rozpracovanosti po patrech." };
 
-    function paintCounts(guides) {
-        document.querySelectorAll("[data-count]").forEach(el => {
-            const count = guides.filter(g => g.cat === el.dataset.count).length;
-            el.textContent = count === 0 ? "Zatím bez návodů"
-                : count === 1 ? "1 návod"
-                : count < 5 ? count + " návody"
-                : count + " návodů";
+        const groups = new Map();
+        (tasks || []).forEach(task => {
+            const name = (task.zakazka || "").trim() || "Bez zakázky";
+            if (!groups.has(name)) groups.set(name, []);
+            groups.get(name).push(task);
         });
-    }
 
-    function paintTasks(tasks) {
-        const el = document.querySelector("[data-tasks]");
-        if (!el) return;
-        if (!tasks.length) return void (el.textContent = "Zatím žádné úkoly");
-        const open = tasks.filter(t => {
-            const subs = t.subtasks || [];
-            return !subs.length || subs.some(s => (s.percent || 0) < 100);
-        }).length;
-        el.textContent = open ? open + " rozdělaných z " + tasks.length : "Vše hotovo (" + tasks.length + ")";
+        const tiles = groups.size
+            ? Array.from(groups.entries()).map(([name, list]) => taskTileHtml(name, list)).join("")
+            : '<div class="tile"><a class="tile__main" href="ukoly.html">' +
+                '<div class="tile__head"><div class="tile__icon">' + icon("tasks") + "</div>" +
+                '<div class="tile__title">ÚKOLOVNÍK</div></div>' +
+                '<div class="tile__sub">Zatím tu nejsou žádné úkoly. Otevři úkolovník a založ první zakázku.</div>' +
+              "</a></div>";
+
+        const html = sectionHtml(section, tiles);
+        if (host) {
+            host.outerHTML = html;
+        } else {
+            // úkolovník patří mezi Návody a Připravujeme
+            const wrap = document.getElementById("sections");
+            const last = document.getElementById("sec-pripravujeme");
+            const holder = document.createElement("div");
+            holder.innerHTML = html;
+            wrap.insertBefore(holder.firstChild, last || null);
+        }
     }
 
     /* ---------------------------------------------------------- hledání */
 
     function guideRow(guide, query) {
         return '<a class="guide-row" href="navod.html?id=' + encodeURIComponent(guide.id) + '">' +
-            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">' +
+            '<div class="row row--wrap" style="gap:8px;margin-bottom:6px">' +
                 '<span class="tag">' + esc(window.KB_categoryLabel(guide)) + "</span>" +
-                '<span style="font-size:11.5px;color:var(--dim)">' + esc(guide.author || "Neznámý autor") + "</span>" +
+                '<span class="tiny muted">' + esc(guide.author || "Neznámý autor") + "</span>" +
             "</div>" +
-            '<div style="font-size:15px;font-weight:800">' + window.KBUI.highlight(guide.title || "Bez názvu", query) + "</div>" +
-            (guide.desc ? '<div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5">' +
+            '<div style="font-size:15px;font-weight:900">' + window.KBUI.highlight(guide.title || "Bez názvu", query) + "</div>" +
+            (guide.desc ? '<div class="small muted" style="margin-top:4px;line-height:1.5">' +
                 window.KBUI.highlight(guide.desc, query) + "</div>" : "") +
         "</a>";
     }
 
-    function runSearch() {
-        const query = document.getElementById("globalSearch").value.trim();
+    function runSearch(query) {
         const results = document.getElementById("searchResults");
         const sections = document.getElementById("sections");
 
@@ -170,26 +212,21 @@
             found.length + " z " + window.KB.guides.length + " návodů";
         document.getElementById("searchList").innerHTML = found.length
             ? found.map(g => guideRow(g, query)).join("")
-            : '<div class="card" style="padding:34px;text-align:center;color:var(--muted);font-size:14px">' +
+            : '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
               'Nic nenalezeno. Zkus jiné slovo nebo <a href="navody.html" style="color:var(--accent)">projdi celou databázi</a>.</div>';
     }
 
     /* ------------------------------------------------------------- start */
 
     document.addEventListener("DOMContentLoaded", () => {
-        window.KBUI.mountNav({ active: "index.html" });
+        window.KBUI.mountNav({ active: "index.html", big: true });
         renderSections();
+        renderTasks(window.KB.tasks);
         window.KBUI.bindCloudStatus("[data-cloud-status]");
-        document.getElementById("globalSearch").addEventListener("input", runSearch);
+        window.KBUI.onSearch(runSearch);
 
-        window.KB.on("guides", (event) => {
-            paintCounts(event.detail);
-            if (document.getElementById("globalSearch").value.trim()) runSearch();
-        });
-        window.KB.on("tasks", (event) => paintTasks(event.detail));
-
-        if (window.KB.guides.length) paintCounts(window.KB.guides);
-        if (window.KB.tasks.length) paintTasks(window.KB.tasks);
+        window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
+        window.KB.on("tasks", (event) => renderTasks(event.detail));
     });
 })();
 </script>

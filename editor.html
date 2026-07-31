@@ -8,23 +8,26 @@
     <title>Editor návodu – Pasport Kaňa</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="assets/css/app.css?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
+    <link rel="stylesheet" href="assets/css/app.css?v=6">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
+        /* vlevo úprava návodu, vpravo živý náhled – bez ničeho dalšího */
         .editor-layout { display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
-        @media (min-width: 1180px) {
-            .editor-layout { flex-direction: row; }
-            .editor-panel { width: 560px; flex: none; position: sticky; top: 74px; }
-        }
         .editor-panel { width: 100%; }
+        /* POZOR: tohle pravidlo musí zůstat AŽ ZA .editor-panel nahoře,
+           jinak by ho přebilo a náhled by se srazil na nulovou šířku. */
+        @media (min-width: 1080px) {
+            .editor-layout { flex-direction: row; }
+            .editor-panel { width: 500px; flex: none; position: sticky; top: 74px; }
+        }
         .panel-scroll { max-height: calc(100vh - 150px); overflow-y: auto; }
-        @media (max-width: 1179px) { .panel-scroll { max-height: none; } }
-        .stepcard { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+        @media (max-width: 1079px) { .panel-scroll { max-height: none; } }
+        .stepcard { background: var(--bg-soft); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
         .stepcard textarea, .stepcard input { font-size: 13px; }
-        .tabs { display: flex; gap: 6px; padding: 5px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; }
-        .tabs button { flex: 1; min-height: 40px; border: none; border-radius: 10px; background: none; font: inherit; font-weight: 800; font-size: 13.5px; color: var(--muted); cursor: pointer; }
-        .tabs button.is-active { background: var(--accent); color: #fff; }
     </style>
 </head>
 <body>
@@ -36,17 +39,15 @@
     <!-- ================================================== LEVÝ PANEL ==== -->
     <section class="no-print editor-panel col" style="gap:14px">
 
-        <div class="tabs">
-            <button id="tabEdit" class="is-active">Editor návodu</button>
-            <button id="tabDb">Databáze <span id="dbCount">0</span></button>
-        </div>
-
         <!-- ---------------------------------------------------- EDITOR -->
         <div id="panelEdit" class="card panel-scroll col" style="padding:18px;gap:18px">
 
             <div class="spread">
-                <b style="font-size:15px">Obsah dokumentu</b>
-                <button id="btnClear" class="btn btn--sm btn--ghost" style="color:var(--danger)">Nový prázdný</button>
+                <b style="font-size:15px">Úprava návodu</b>
+                <div class="row" style="gap:8px">
+                    <button id="btnClear" class="btn btn--sm btn--ghost">Nový prázdný</button>
+                    <button id="btnDelete" class="btn btn--sm btn--ghost" style="color:var(--danger)" hidden>Smazat</button>
+                </div>
             </div>
 
             <div>
@@ -114,16 +115,6 @@
                 Uložit do cloudové databáze
             </button>
         </div>
-
-        <!-- -------------------------------------------------- DATABÁZE -->
-        <div id="panelDb" hidden class="card panel-scroll col" style="padding:18px;gap:14px">
-            <div class="row" style="gap:8px">
-                <button id="btnPrompt" class="btn btn--ghost btn--sm grow">Pokyn pro AI</button>
-                <button id="btnImport" class="btn btn--ghost btn--sm grow">Nahrát návod od AI</button>
-            </div>
-            <input type="text" id="dbSearch" class="field" placeholder="Hledat v databázi…">
-            <div id="dbList" class="col" style="gap:8px"></div>
-        </div>
     </section>
 
     <!-- ================================================= NÁHLED A4 ===== -->
@@ -169,10 +160,10 @@
 
 <input type="file" id="filePicker" accept="image/*" multiple hidden>
 
-<script src="assets/js/taxonomy.js?v=4"></script>
-<script src="assets/js/doc.js?v=4"></script>
-<script src="assets/js/ui.js?v=4"></script>
-<script type="module" src="assets/js/store.js?v=4"></script>
+<script src="assets/js/taxonomy.js?v=6"></script>
+<script src="assets/js/doc.js?v=6"></script>
+<script src="assets/js/ui.js?v=6"></script>
+<script type="module" src="assets/js/store.js?v=6"></script>
 
 <script>
 (function () {
@@ -513,47 +504,13 @@
         }
     }
 
-    /* ============================================================ DATABÁZE */
+    /* ====================================================== NAČTENÍ A MAZÁNÍ */
 
-    function renderDbList() {
-        const items = window.KBUI.searchGuides(window.KB.guides || [], $("dbSearch").value.trim());
-        $("dbCount").textContent = (window.KB.guides || []).length;
-
-        $("dbList").innerHTML = items.length ? items.map(guide =>
-            '<div class="card row" style="padding:12px;gap:10px;align-items:flex-start;box-shadow:none;background:var(--bg-soft)">' +
-                '<button class="grow" data-open="' + guide.id + '" style="text-align:left;border:none;background:none;font:inherit;cursor:pointer;min-width:0">' +
-                    '<div class="row row--wrap" style="gap:6px;margin-bottom:4px">' +
-                        '<span class="tag">' + esc(window.KB_categoryLabel(guide)) + "</span>" +
-                        '<span class="tiny muted">' + esc(guide.author || "") + "</span>" +
-                    "</div>" +
-                    '<div class="truncate" style="font-size:14px;font-weight:800">' + esc(guide.title || "Bez názvu") + "</div>" +
-                    '<div class="truncate tiny muted">' + esc(guide.desc || "") + "</div>" +
-                "</button>" +
-                '<div class="col" style="gap:4px;flex:none">' +
-                    '<a href="navod.html?id=' + encodeURIComponent(guide.id) + '" class="tiny" style="color:var(--muted)">Zobrazit</a>' +
-                    '<button data-remove="' + guide.id + '" class="tiny" style="border:none;background:none;color:var(--danger);cursor:pointer;padding:0;text-align:left">Smazat</button>' +
-                "</div>" +
-            "</div>").join("")
-            : '<div class="center small muted" style="padding:26px">Databáze je zatím prázdná.</div>';
+    /** Tlačítko Smazat dává smysl jen u návodu, který v databázi opravdu je. */
+    function paintDelete() {
+        const exists = (window.KB.guides || []).some(g => g.id === state.docId);
+        $("btnDelete").hidden = !exists;
     }
-
-    $("dbList").addEventListener("click", async (event) => {
-        const open = event.target.closest("[data-open]");
-        if (open) return loadGuide(open.dataset.open);
-
-        const removeId = event.target.dataset.remove;
-        if (removeId) {
-            const guide = window.KB.guides.find(g => g.id === removeId);
-            if (!confirm('Opravdu smazat návod „' + (guide ? guide.title : removeId) + '" všem ve firmě?')) return;
-            try {
-                await window.KB.deleteGuide(removeId);
-                window.KBUI.toast("Návod smazán.");
-                if (state.docId === removeId) resetForm();
-            } catch (err) {
-                window.KBUI.toast("Smazání selhalo.", "error");
-            }
-        }
-    });
 
     async function loadGuide(id) {
         try {
@@ -563,12 +520,25 @@
             state.images = await window.KB.loadImages(id).catch(() => ({}));
             state.savedImages = new Set(Object.keys(state.images));
             fill(guide);
-            switchTab("edit");
+            paintDelete();
             history.replaceState(null, "", "editor.html?id=" + encodeURIComponent(id));
             window.KBUI.toast("Načteno k úpravě.");
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Načtení selhalo.", "error");
+        }
+    }
+
+    async function removeGuide() {
+        const guide = (window.KB.guides || []).find(g => g.id === state.docId);
+        if (!guide) return;
+        if (!confirm('Opravdu smazat návod „' + (guide.title || state.docId) + '" všem ve firmě?')) return;
+        try {
+            await window.KB.deleteGuide(state.docId);
+            window.KBUI.toast("Návod smazán.");
+            resetForm();
+        } catch (err) {
+            window.KBUI.toast("Smazání selhalo.", "error");
         }
     }
 
@@ -580,14 +550,7 @@
         $("templateSelector").value = "";
         history.replaceState(null, "", "editor.html");
         fill({ title: "", desc: "", version: "v1.0", author: window.KB_USER || "", steps: [blankStep()] });
-    }
-
-    function switchTab(which) {
-        const isEdit = which === "edit";
-        $("panelEdit").hidden = !isEdit;
-        $("panelDb").hidden = isEdit;
-        $("tabEdit").className = isEdit ? "is-active" : "";
-        $("tabDb").className = isEdit ? "" : "is-active";
+        paintDelete();
     }
 
     /* ============================================================== START */
@@ -635,10 +598,7 @@
             if (confirm("Vyčistit formulář a začít nový návod?")) resetForm();
         });
         $("btnSave").addEventListener("click", save);
-        $("tabEdit").addEventListener("click", () => switchTab("edit"));
-        $("tabDb").addEventListener("click", () => switchTab("db"));
-        $("dbSearch").addEventListener("input", renderDbList);
-        $("btnPrompt").addEventListener("click", () => window.KBUI.copyAiPrompt($("docCat").value, currentSub()));
+        $("btnDelete").addEventListener("click", removeGuide);
         $("zoomIn").addEventListener("click", () => stepZoom(0.1));
         $("zoomOut").addEventListener("click", () => stepZoom(-0.1));
         window.KBDoc.watchFit($("stageWrap"), () => { if (state.zoom === null) applyZoom(); });
@@ -664,7 +624,6 @@
         const overlay = $("importOverlay");
         const openImport = () => { overlay.hidden = false; };
         const closeImport = () => { overlay.hidden = true; $("importText").value = ""; };
-        $("btnImport").addEventListener("click", openImport);
         $("btnImportCancel").addEventListener("click", closeImport);
         $("btnImportRun").addEventListener("click", () => {
             try {
@@ -675,18 +634,20 @@
                 state.savedImages = new Set();
                 guide.author = window.KB_USER ? window.KB_USER + " / AI" : "AI";
                 fill(guide);
+                paintDelete();
                 closeImport();
-                switchTab("edit");
                 window.KBUI.toast("Načteno. Zkontroluj, doplň obrázky a ulož.");
             } catch (err) {
                 window.KBUI.toast("JSON se nepodařilo přečíst – zkontroluj, že jsi zkopíroval celý.", "error");
             }
         });
         if (location.hash === "#import") openImport();
+        // import se dá otevřít i ikonou v hlavičce, když už jsme na editoru
+        window.addEventListener("hashchange", () => { if (location.hash === "#import") openImport(); });
 
-        window.KB.on("guides", renderDbList);
+        window.KB.on("guides", paintDelete);
         await window.KB.whenReady();
-        renderDbList();
+        paintDelete();
 
         const requestedId = new URLSearchParams(location.search).get("id");
         if (requestedId) await loadGuide(requestedId);

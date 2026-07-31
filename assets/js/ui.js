@@ -65,14 +65,41 @@
     };
 
     UI.paintUser = () => {
+        document.querySelectorAll("[data-userbox]").forEach(box => {
+            box.innerHTML = window.KB_USER
+                ? "Přihlášen jako <b>" + esc(window.KB_USER) + "</b>" +
+                  '<button type="button" class="linkbtn" data-logout>Odhlásit</button>'
+                : '<button type="button" class="linkbtn" data-login>Přihlásit se</button>';
+        });
         document.querySelectorAll("[data-user-name]").forEach(el => {
             el.textContent = window.KB_USER || "nepřihlášen";
         });
         document.querySelectorAll("[data-role-pill]").forEach(el => {
             const admin = UI.isAdmin();
-            el.textContent = admin ? "SPRÁVCE" : "ZAMĚSTNANEC";
+            el.textContent = admin ? "REŽIM SPRÁVCE" : "REŽIM ZAMĚSTNANCE";
             el.className = "rolepill" + (admin ? " rolepill--admin" : "");
         });
+    };
+
+    /** Odhlášení – zatím jen zapomene jméno v prohlížeči. */
+    UI.logout = () => {
+        localStorage.removeItem(USER_KEY);
+        window.KB_USER = "";
+        UI.setRole("zamestnanec");
+        UI.paintUser();
+        UI.toast("Odhlášeno.");
+    };
+
+    /** Přepnutí role – dočasné, než bude přihlašování účtem. */
+    UI.toggleRole = () => {
+        if (UI.isAdmin()) {
+            UI.setRole("zamestnanec");
+            UI.toast("Přepnuto na zaměstnance.");
+        } else {
+            if (!window.KB_USER) UI.requireUser();
+            UI.setRole("spravce");
+            UI.toast("Přepnuto na správce. Po zavedení přihlašování to bude podle účtu.");
+        }
     };
 
     /** Vyžádá jméno, pokud ještě není známé (dočasná identifikace autora). */
@@ -91,6 +118,10 @@
     const CARET = '<svg class="navbtn__caret" fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
         '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>';
 
+    /**
+     * Roletka u NÁVODŮ: svislý seznam kategorií pod sebou. Najetím myší na
+     * řádek se rozbalí jeho obsah, kliknutím se přejde na danou sekci.
+     */
     function navHtml(active) {
         const items = (window.KB_NAV || []).map((item, index) => {
             const isActive = active && item.href && item.href.split(/[?#]/)[0] === active;
@@ -104,21 +135,45 @@
             const groups = item.menu.map(group =>
                 '<div class="dropdown__group">' +
                     (group.href
-                        ? '<a class="dropdown__title" href="' + group.href + '">' + group.title + "</a>"
+                        ? '<a class="dropdown__title" href="' + group.href + '">' + group.title +
+                          ((group.children || []).length ? '<span class="dropdown__more">›</span>' : "") + "</a>"
                         : '<span class="dropdown__title">' + group.title + "</span>") +
-                    (group.children || []).map(child =>
-                        '<a class="dropdown__link" href="' + child.href + '">' + child.title + "</a>").join("") +
+                    ((group.children || []).length
+                        ? '<div class="dropdown__sub"><div class="dropdown__subin">' +
+                            group.children.map(child =>
+                                '<a class="dropdown__link" href="' + child.href + '">' + child.title + "</a>").join("") +
+                          "</div></div>"
+                        : "") +
                 "</div>"
             ).join("");
 
             return '<div class="navitem" data-menu="' + index + '">' +
                 '<button type="button" class="' + cls + '" data-menu-toggle="' + index + '">' +
                     item.title + CARET + "</button>" +
-                '<div class="dropdown' + (item.menu.length > 1 ? " dropdown--wide" : "") + '">' + groups + "</div>" +
+                '<div class="dropdown">' + groups + "</div>" +
             "</div>";
         }).join("");
 
         return '<nav class="appbar__nav">' + items + "</nav>";
+    }
+
+    /** Nástroje vpravo nad lištou – vidět je ikona, popis vyjede po najetí. */
+    function toolsHtml() {
+        const tools = (window.KB_TOOLS || []).map(tool => {
+            const inner = icon(tool.icon) + "<span>" + tool.title + "</span>";
+            return tool.action
+                ? '<button type="button" class="toolbtn" data-action="' + tool.action + '" title="' + tool.title + '">' + inner + "</button>"
+                : '<a class="toolbtn" href="' + tool.href + '" title="' + tool.title + '">' + inner + "</a>";
+        }).join("");
+        return '<div class="toolrail">' + tools + "</div>";
+    }
+
+    function searchHtml() {
+        return '<div class="searchbox">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">' +
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>' +
+            '<input id="kbSearch" type="search" autocomplete="off" placeholder="Hledat…" aria-label="Hledat">' +
+        "</div>";
     }
 
     function mobileNavHtml() {
@@ -136,16 +191,14 @@
                         item.title + "<span>+</span></button>" +
                     '<div class="mobilenav__sub" data-msub-panel="' + index + '">' + links + "</div>";
             }).join("") +
-            '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 6px 4px">' +
-                '<span style="font-size:12px;color:var(--muted)">Přihlášen jako <b data-user-name>…</b></span>' +
-                '<button type="button" class="rolepill" data-role-pill></button>' +
-            "</div>" +
         "</div>";
     }
 
     /**
-     * Vykreslí horní lištu do prvku #appHeader.
-     * @param {Object} options – { active: "navody.html" }
+     * Vykreslí hlavičku do prvku #appHeader.
+     * Nahoře vpravo přihlášený uživatel, pod ním vycentrované logo
+     * (vpravo od něj ikony nástrojů) a úplně dole navigační lišta.
+     * @param {Object} options – { active: "navody.html", big: true, subbar: true }
      */
     UI.mountNav = (options = {}) => {
         const slot = document.getElementById("appHeader");
@@ -154,30 +207,55 @@
         const active = options.active || location.pathname.split("/").pop() || "index.html";
 
         slot.outerHTML =
-            '<header class="appbar no-print">' +
-                '<div class="appbar__inner">' +
+            '<header class="appbar no-print' + (options.big ? " appbar--big" : "") + '">' +
+                '<div class="appbar__top"><div class="appbar__user" data-userbox></div></div>' +
+
+                '<div class="appbar__brand">' +
                     '<a class="appbar__logo" href="index.html" aria-label="Domů">' +
                         '<img src="Pasport_Kana_black.png" alt="Pasport Kaňa">' +
                     "</a>" +
-                    navHtml(active) +
-                    '<div class="appbar__right">' +
-                        '<div class="appbar__user">Přihlášen jako<br><b data-user-name>…</b></div>' +
-                        '<button type="button" class="rolepill" data-role-pill></button>' +
-                        '<button type="button" class="appbar__burger" id="navBurger" aria-label="Menu">' +
-                            '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
-                            '<path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>' +
-                        "</button>" +
-                    "</div>" +
+                    toolsHtml() +
                 "</div>" +
+
+                '<div class="appbar__bar"><div class="appbar__barin">' +
+                    '<button type="button" class="appbar__burger" id="navBurger" aria-label="Menu">' +
+                        '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+                        '<path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>' +
+                    "</button>" +
+                    navHtml(active) +
+                    searchHtml() +
+                "</div></div>" +
+
+                // druhý řádek lišty – stránka si ho naplní sama (filtry kategorie)
+                (options.subbar ? '<div class="appbar__sub" id="appSubbar"></div>' : "") +
+
                 mobileNavHtml() +
             "</header>";
 
         bindNav();
+        bindSearch();
         UI.paintUser();
+        stickyOffset();
     };
 
+    /**
+     * Lišta má zůstat vidět i po odrolování, ale logo nad ní ne – proto se
+     * hlavička posouvá nahoru přesně o výšku toho, co je nad lištou.
+     */
+    function stickyOffset() {
+        const header = document.querySelector(".appbar");
+        const bar = header && header.querySelector(".appbar__bar");
+        if (!header || !bar) return;
+        const apply = () => {
+            header.style.top = "-" + Math.max(0, bar.offsetTop) + "px";
+        };
+        apply();
+        window.addEventListener("resize", apply);
+        if (window.ResizeObserver) new ResizeObserver(apply).observe(header);
+    }
+
     function bindNav() {
-        // roletky na desktopu – klik (funguje i na dotykovém iPadu)
+        // roletka: na myši se otevírá najetím (CSS), klikem kvůli dotyku
         document.querySelectorAll("[data-menu-toggle]").forEach(button => {
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
@@ -212,18 +290,52 @@
             });
         });
 
-        // přepínač role (dočasné, než bude opravdové přihlašování)
-        document.querySelectorAll("[data-role-pill]").forEach(pill => {
-            pill.addEventListener("click", () => {
-                if (!UI.isAdmin()) {
-                    if (!window.KB_USER) UI.requireUser();
-                    UI.setRole("spravce");
-                    UI.toast("Přepnuto na správce. Po zavedení přihlašování to bude podle účtu.");
-                } else {
-                    UI.setRole("zamestnanec");
-                    UI.toast("Přepnuto na zaměstnance.");
-                }
-            });
+        // ikony nástrojů s akcí (zatím jen pokyn pro AI)
+        document.querySelectorAll(".toolrail [data-action='ai-prompt']").forEach(button => {
+            button.addEventListener("click", () => UI.copyAiPrompt());
+        });
+    }
+
+    // přihlášení / odhlášení a přepínač role – kdekoliv na stránce
+    document.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-logout],[data-login],[data-role-pill]");
+        if (!target) return;
+        if (target.hasAttribute("data-logout")) return UI.logout();
+        if (target.hasAttribute("data-login")) return void UI.requireUser();
+        UI.toggleRole();
+    });
+
+    /* ------------------------------------------------ hledání v liště */
+
+    let searchHandler = null;
+
+    /** Stránka si řekne, co má hledání v liště dělat. */
+    UI.onSearch = (handler) => {
+        searchHandler = handler;
+        const input = document.getElementById("kbSearch");
+        if (input && input.value.trim()) handler(input.value.trim());
+    };
+
+    UI.searchValue = () => {
+        const input = document.getElementById("kbSearch");
+        return input ? input.value.trim() : "";
+    };
+
+    function bindSearch() {
+        const input = document.getElementById("kbSearch");
+        if (!input) return;
+
+        const preset = new URLSearchParams(location.search).get("q");
+        if (preset) input.value = preset;
+
+        input.addEventListener("input", () => {
+            if (searchHandler) searchHandler(input.value.trim());
+        });
+        input.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            const value = input.value.trim();
+            // stránky bez vlastního hledání pošlou dotaz do přehledu návodů
+            if (!searchHandler && value) location.href = "navody.html?q=" + encodeURIComponent(value);
         });
     }
 

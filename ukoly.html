@@ -6,7 +6,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Úkolovník – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
+    <link rel="stylesheet" href="assets/css/app.css?v=6">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -22,21 +25,15 @@
            poznámkou se dá dopsat, na co se čeká.</p>
     </div>
 
-    <div class="row row--wrap" style="gap:12px">
-        <div class="grow" style="position:relative">
-            <svg style="width:18px;height:18px;position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--dim);pointer-events:none"
-                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input id="search" type="search" class="field" placeholder="Hledat zakázku nebo úkol…" style="padding-left:42px">
-        </div>
-        <button id="btnFilterOpen" class="btn btn--ghost">Jen rozdělané</button>
-        <button id="btnNew" class="btn btn--primary" hidden>+ Nový úkol</button>
+    <div class="row row--wrap" style="gap:10px;justify-content:center">
+        <button id="btnFilterOpen" class="btn btn--ghost btn--sm">Jen rozdělané</button>
+        <button type="button" class="rolepill" data-role-pill></button>
+        <button id="btnSamples" class="btn btn--ghost btn--sm" hidden>Doplnit vzorové zakázky</button>
+        <button id="btnNew" class="btn btn--primary btn--sm" hidden>+ Nový úkol</button>
     </div>
 
     <div id="adminHint" class="card small" style="padding:14px 16px;color:var(--muted);line-height:1.6" hidden>
-        Zakládat a mazat úkoly může jen <b>správce</b>. Přepni si roli vpravo nahoře
+        Zakládat a mazat úkoly může jen <b>správce</b>. Přepni si režim tlačítkem nad seznamem
         (dočasné řešení, než bude hotové přihlašování účtem).
     </div>
 
@@ -82,10 +79,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=4"></script>
-<script src="assets/js/doc.js?v=4"></script>
-<script src="assets/js/ui.js?v=4"></script>
-<script type="module" src="assets/js/store.js?v=4"></script>
+<script src="assets/js/taxonomy.js?v=6"></script>
+<script src="assets/js/doc.js?v=6"></script>
+<script src="assets/js/ui.js?v=6"></script>
+<script type="module" src="assets/js/store.js?v=6"></script>
 
 <script>
 (function () {
@@ -180,7 +177,6 @@
         return '<article class="task" data-task="' + task.id + '">' +
             '<div class="task__head">' +
                 '<div class="grow" style="min-width:190px">' +
-                    '<div class="task__zak">' + esc(task.zakazka || "bez zakázky") + "</div>" +
                     '<div class="task__title">' + esc(task.title || "Bez názvu") + "</div>" +
                     '<div class="task__meta">' +
                         (task.owner ? "odpovídá <b>" + esc(task.owner) + "</b> · " : "") +
@@ -207,8 +203,24 @@
         "</article>";
     }
 
+    /** Nadpis zakázky – podle něj jsou úkoly rozdělené do skupin. */
+    const slug = (value) => window.KBUI.fold(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "bez-zakazky";
+
+    function groupHtml(name, tasks) {
+        const done = tasks.filter(t => taskPercent(t) === 100).length;
+        return '<section id="zak-' + slug(name) + '" class="col" style="gap:12px">' +
+            '<div class="taskgroup__head">' +
+                '<span class="taskgroup__name">' + esc(name) + "</span>" +
+                '<span class="taskgroup__meta">' + tasks.length +
+                    (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
+                    (done ? " · " + done + " hotovo" : "") + "</span>" +
+            "</div>" +
+            tasks.map(taskHtml).join("") +
+        "</section>";
+    }
+
     function render() {
-        const query = window.KBUI.fold($("search").value.trim());
+        const query = window.KBUI.fold(window.KBUI.searchValue());
         let tasks = window.KB.tasks || [];
 
         if (query) {
@@ -219,19 +231,32 @@
         if (onlyOpen) tasks = tasks.filter(task => taskPercent(task) < 100);
 
         $("btnNew").hidden = !window.KBUI.isAdmin();
+        $("btnSamples").hidden = !window.KBUI.isAdmin();
         $("adminHint").hidden = window.KBUI.isAdmin() || !!tasks.length;
 
-        $("list").innerHTML = tasks.length
-            ? tasks.map(taskHtml).join("")
+        const groups = new Map();
+        tasks.forEach(task => {
+            const name = (task.zakazka || "").trim() || "Bez zakázky";
+            if (!groups.has(name)) groups.set(name, []);
+            groups.get(name).push(task);
+        });
+
+        $("list").innerHTML = groups.size
+            ? Array.from(groups.entries()).map(([name, list]) => groupHtml(name, list)).join("")
             : '<div class="card center" style="padding:44px;color:var(--muted);font-size:14px">' +
               "Žádné úkoly k zobrazení." +
-              (window.KBUI.isAdmin()
-                ? '<br><button id="btnSeed" class="btn btn--ghost btn--sm" style="margin-top:14px">Vytvořit vzorový úkol (BioPharma)</button>'
-                : "") +
+              '<br><button id="btnSeed" class="btn btn--ghost btn--sm" style="margin-top:14px">Vytvořit vzorové zakázky</button>' +
               "</div>";
 
         const seed = $("btnSeed");
-        if (seed) seed.addEventListener("click", createSample);
+        if (seed) seed.addEventListener("click", createSamples);
+    }
+
+    /** Skočí na zakázku, na kterou se kliklo na rozcestníku (ukoly.html#zak-…). */
+    function jumpToHash() {
+        if (!location.hash.startsWith("#zak-")) return;
+        const target = document.getElementById(location.hash.slice(1));
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     /* ------------------------------------------------------------- akce */
@@ -401,27 +426,60 @@
         }
     }
 
-    /** Vzorový úkol podle zadání – BioPharma, patra 3PP až 4NP. */
-    async function createSample() {
-        const patra = ["3PP", "2PP", "1PP", "1NP", "2NP", "3NP", "4NP"];
-        const task = {
-            id: window.KB.newTaskId(),
-            zakazka: "BioPharma",
-            title: "Odevzdání stavby",
-            owner: "Filip",
-            deadline: "2026-07-31",
-            subtasks: patra.map((title, i) => ({
-                id: "sub_bio_" + title.toLowerCase(),
-                title: title, percent: 0, by: "", ms: 0
-            })),
-            notes: [],
-            createdBy: window.KB_USER || "",
-            createdMs: Date.now()
-        };
+    /** Vzorové zakázky, ať je vidět, jak se úkolovník chová s daty. */
+    const SAMPLES = [
+        {
+            zakazka: "BioPharma", title: "Odevzdání stavby", owner: "Filip", deadline: "2026-08-14",
+            subs: [["3PP", 100], ["2PP", 100], ["1PP", 75], ["1NP", 50], ["2NP", 0], ["3NP", 0], ["4NP", 0]]
+        },
+        {
+            zakazka: "C03", title: "Pasportizace technologií", owner: "Michal", deadline: "2026-08-28",
+            subs: [["1PP", 100], ["1NP", 100], ["2NP", 50], ["3NP", 25]]
+        },
+        {
+            zakazka: "C03", title: "Výkresy do tisku", owner: "Filip", deadline: "2026-09-11",
+            subs: [["Situace", 50], ["Půdorysy", 25], ["Řezy", 0]]
+        },
+        {
+            zakazka: "A08", title: "Skenování a mračna", owner: "Petr", deadline: "2026-08-07",
+            subs: [["Sběr dat", 100], ["Registrace mračna", 75], ["Export do ArcGIS", 0]]
+        },
+        {
+            zakazka: "Pasport Vrbice", title: "Pasport obecního úřadu", owner: "Michal", deadline: "2026-09-30",
+            subs: [["Zaměření 1NP", 100], ["Zaměření 2NP", 40], ["Půdní vestavba", 0], ["Zpráva pro obec", 0]]
+        }
+    ];
+
+    /** Založí jen ty vzorové zakázky, které v databázi ještě nejsou. */
+    async function createSamples() {
+        const existing = (window.KB.tasks || []).map(t => (t.zakazka || "") + "|" + (t.title || ""));
+        const missing = SAMPLES.filter(s => existing.indexOf(s.zakazka + "|" + s.title) === -1);
+        if (!missing.length) return window.KBUI.toast("Vzorové zakázky už v databázi jsou.");
+
         try {
-            await window.KB.saveTask(task.id, task);
-            window.KBUI.toast("Vzorový úkol vytvořen.");
+            for (const sample of missing) {
+                const id = window.KB.newTaskId() + "_" + slug(sample.zakazka);
+                await window.KB.saveTask(id, {
+                    id: id,
+                    zakazka: sample.zakazka,
+                    title: sample.title,
+                    owner: sample.owner,
+                    deadline: sample.deadline,
+                    subtasks: sample.subs.map(([title, percent]) => ({
+                        id: "sub_" + slug(sample.zakazka) + "_" + slug(title),
+                        title: title,
+                        percent: percent,
+                        by: percent > 0 ? sample.owner : "",
+                        ms: percent > 0 ? Date.now() : 0
+                    })),
+                    notes: [],
+                    createdBy: window.KB_USER || "",
+                    createdMs: Date.now()
+                });
+            }
+            window.KBUI.toast("Vzorové zakázky vytvořeny.");
         } catch (err) {
+            console.error(err);
             window.KBUI.toast("Nepodařilo se vytvořit.", "error");
         }
     }
@@ -431,22 +489,29 @@
     document.addEventListener("DOMContentLoaded", async () => {
         window.KBUI.mountNav({ active: "ukoly.html" });
 
-        $("search").addEventListener("input", render);
+        window.KBUI.onSearch(render);
         $("btnFilterOpen").addEventListener("click", (event) => {
             onlyOpen = !onlyOpen;
-            event.currentTarget.className = "btn " + (onlyOpen ? "btn--primary" : "btn--ghost");
+            event.currentTarget.className = "btn btn--sm " + (onlyOpen ? "btn--primary" : "btn--ghost");
             render();
         });
         $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnSamples").addEventListener("click", createSamples);
         $("btnFormCancel").addEventListener("click", () => { $("taskOverlay").hidden = true; });
         $("btnFormSave").addEventListener("click", saveForm);
 
         document.addEventListener("kb-role", render);
-        window.KB.on("tasks", render);
+
+        let jumped = false;
+        window.KB.on("tasks", () => {
+            render();
+            if (!jumped) { jumped = true; jumpToHash(); }   // po doručení dat skoč na zakázku
+        });
 
         render();
         await window.KB.whenReady();
         render();
+        jumpToHash();
 
         if (location.hash === "#novy" && window.KBUI.isAdmin()) openForm(null);
     });

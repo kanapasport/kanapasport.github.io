@@ -27,7 +27,9 @@ window.KB_ICONS = {
     home:     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>'
 };
 
-/* ------------------------------------------------------------- kategorie */
+/* ------------------------------------------------------------- kategorie ---
+   `main` = téma toho nejdůležitějšího návodu kategorie. Ten se na stránce
+   návodů otevře rovnou v náhledu, když se kategorie jen rozklikne. */
 
 window.KB_CATEGORIES = [
     {
@@ -77,19 +79,32 @@ window.KB_CATEGORIES = [
         title: 'SKRIPTY',
         sub: 'Naše nástroje v ArcGIS Pro a tvorba nových',
         icon: 'code',
+        main: 'skript-ai',
         children: [
-            { id: 'skript-body',       title: 'Body v polygonu' },
-            { id: 'skript-cistic',     title: 'Čistič polygonů' },
-            { id: 'skript-dvere',      title: 'Dveře – automatizace' },
-            { id: 'skript-ftp',        title: 'FeatureToPolygon Upgrade' },
-            { id: 'skript-mistnosti',  title: 'Generování místností' },
-            { id: 'skript-atributy',   title: 'Hromadný zápis atributů' },
-            { id: 'skript-kontrola',   title: 'Kontrola polohových kódů' },
-            { id: 'skript-kopie',      title: 'Kopie polygonů' },
-            { id: 'skript-symbolika',  title: 'Hromadná symbolika' },
-            { id: 'skript-plocha',     title: 'Zápis plochy a obvodu' },
-            { id: 'skript-instalace',  title: 'Instalace a spouštění' },
-            { id: 'skript-ai',         title: 'Jak si nechat skript napsat od AI' }
+            {
+                id: 'skripty-obecne', title: 'OBECNÉ', children: [
+                    { id: 'skript-instalace',  title: 'Instalace a spouštění' },
+                    { id: 'skript-body',       title: 'Body v polygonu' },
+                    { id: 'skript-cistic',     title: 'Čistič polygonů' },
+                    { id: 'skript-ftp',        title: 'FeatureToPolygon Upgrade' },
+                    { id: 'skript-kopie',      title: 'Kopie polygonů' },
+                    { id: 'skript-symbolika',  title: 'Hromadná symbolika' },
+                    { id: 'skript-ai',         title: 'Jak si nechat skript napsat od AI' }
+                ]
+            },
+            {
+                id: 'skripty-stavba', title: 'STAVBA', children: [
+                    { id: 'skript-mistnosti', title: 'Generování místností' },
+                    { id: 'skript-dvere',     title: 'Dveře – automatizace' },
+                    { id: 'skript-plocha',    title: 'Zápis plochy a obvodu' }
+                ]
+            },
+            {
+                id: 'skripty-technologie', title: 'TECHNOLOGIE', children: [
+                    { id: 'skript-kontrola', title: 'Kontrola polohových kódů' },
+                    { id: 'skript-atributy', title: 'Hromadný zápis atributů' }
+                ]
+            }
         ]
     },
     {
@@ -104,7 +119,7 @@ window.KB_CATEGORIES = [
     },
     {
         id: 'pasporty',
-        title: 'PASPORTY BARÁKŮ',
+        title: 'PASPORTIZACE DOMŮ',
         sub: 'Výstupy, zprávy a výkresy',
         icon: 'building',
         children: [
@@ -121,7 +136,7 @@ window.KB_SECTIONS = [
     {
         id: 'navody',
         title: 'Návody',
-        desc: 'Pracovní postupy rozdělené podle oblasti. Klikni na dlaždici a dostaneš se na výpis návodů.',
+        desc: 'Klikni na dlaždici a dostaneš se na výpis návodů dané oblasti.',
         tiles: window.KB_CATEGORIES.map(category => ({
             title: category.title,
             sub: category.sub,
@@ -130,26 +145,6 @@ window.KB_SECTIONS = [
             cat: category.id,
             children: category.children
         }))
-    },
-    {
-        id: 'ukolovnik',
-        title: 'Úkolovník',
-        desc: 'Rozdělané zakázky, termíny a stav rozpracovanosti po jednotlivých patrech.',
-        tiles: [
-            { title: 'PŘEHLED ÚKOLŮ', sub: 'Zakázky, patra a procenta hotovo', icon: 'tasks', href: 'ukoly.html', tasks: true },
-            { title: 'NOVÝ ÚKOL',     sub: 'Založí zakázku s termínem (jen správce)', icon: 'plus', href: 'ukoly.html#novy' }
-        ]
-    },
-    {
-        id: 'tvorba',
-        title: 'Tvorba a nástroje',
-        desc: 'Jak dostat nový návod do databáze.',
-        tiles: [
-            { title: 'NOVÝ NÁVOD',     sub: 'Editor s živým náhledem A4 a obrázky', icon: 'plus',     href: 'editor.html' },
-            { title: 'POKYN PRO AI',   sub: 'Zkopíruje prompt pro Gemini či Claude', icon: 'sparkles', action: 'ai-prompt' },
-            { title: 'IMPORT OD AI',   sub: 'Vložit hotový JSON a zkontrolovat',     icon: 'download', href: 'editor.html#import' },
-            { title: 'VŠECHNY NÁVODY', sub: 'Kompletní databáze s vyhledáváním',     icon: 'library',  href: 'navody.html' }
-        ]
     },
     {
         id: 'pripravujeme',
@@ -163,7 +158,9 @@ window.KB_SECTIONS = [
     }
 ];
 
-/* ------------------------------------------------------ horní navigace */
+/* ------------------------------------------------------ horní navigace ---
+   V liště jsou jen dvě položky a jsou vycentrované. Roletka u NÁVODŮ je
+   svislý seznam kategorií – rozbalí se až najetím myší na řádek. */
 
 window.KB_NAV = [
     { title: 'DOMŮ', href: 'index.html', icon: 'home' },
@@ -178,18 +175,17 @@ window.KB_NAV = [
             }))
         }))
     },
-    { title: 'ÚKOLOVNÍK', href: 'ukoly.html' },
-    {
-        title: 'TVORBA', href: 'editor.html',
-        menu: [{
-            title: 'Nástroje',
-            children: [
-                { title: 'Nový návod', href: 'editor.html' },
-                { title: 'Import od AI', href: 'editor.html#import' },
-                { title: 'Všechny návody', href: 'navody.html' }
-            ]
-        }]
-    }
+    { title: 'ÚKOLOVNÍK', href: 'ukoly.html' }
+];
+
+/* ------------------------------------------------- nástroje (ikony) -----
+   Vpravo nad lištou. Vidět je jen ikona, po najetí myší se rozbalí popis. */
+
+window.KB_TOOLS = [
+    { title: 'Nový návod',     icon: 'plus',     href: 'editor.html' },
+    { title: 'Pokyn pro AI',   icon: 'sparkles', action: 'ai-prompt' },
+    { title: 'Import od AI',   icon: 'download', href: 'editor.html#import' },
+    { title: 'Všechny návody', icon: 'library',  href: 'navody.html' }
 ];
 
 /* --------------------------------------------------------------- pomocné */

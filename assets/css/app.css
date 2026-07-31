@@ -27,8 +27,16 @@
     --warn:    #b45309;
     --danger:  #b91c1c;
 
-    --radius:    14px;
-    --radius-lg: 20px;
+    /* --- písmo ---
+       Lato ve váhách 300/400/700/900. Chceš jiné písmo? Změň tenhle řádek
+       a odkaz na Google Fonts v hlavičkách HTML. */
+    --font: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+    /* --- tvary ---
+       Obdélníkové s jemným zaoblením; drž hodnoty nízko, ať to nevypadá
+       jako bubliny. */
+    --radius:    6px;
+    --radius-lg: 8px;
     --shadow:    0 1px 2px rgba(16, 20, 26, .05), 0 8px 20px -12px rgba(16, 20, 26, .22);
     --shadow-up: 0 4px 10px rgba(16, 20, 26, .07), 0 18px 34px -18px rgba(16, 20, 26, .3);
 
@@ -49,8 +57,12 @@ html { -webkit-text-size-adjust: 100%; }
 body {
     background: var(--bg);
     color: var(--text);
+    font-family: var(--font);
     -webkit-font-smoothing: antialiased;
 }
+
+/* formulářové prvky si písmo nedědí samy */
+input, select, textarea, button { font-family: inherit; }
 
 .loader {
     border: 3px solid var(--line);
@@ -84,43 +96,131 @@ body {
 
 /* ======================================================== HORNÍ LIŠTA ==== */
 
+/* Hlavička má tři patra: uživatel vpravo nahoře, logo uprostřed
+   (s ikonami nástrojů vpravo) a navigační lišta úplně dole.
+   Odrolováním zůstane nalepená jen ta spodní lišta – posun hlavičky
+   nahoru dopočítá JS (ui.js → stickyOffset). */
+
 .appbar {
     position: sticky;
     top: 0;
     z-index: 60;
-    background: rgba(255, 255, 255, .92);
-    backdrop-filter: blur(10px);
+    background: var(--surface);
     border-bottom: 1px solid var(--line);
     padding-top: env(safe-area-inset-top);
 }
 
-.appbar__inner {
+/* ---- 1. patro: přihlášený uživatel ---- */
+.appbar__top {
     max-width: 1180px;
     margin: 0 auto;
-    padding: 10px 20px;
+    padding: 9px 20px 0;
+    display: flex;
+    justify-content: flex-end;
+}
+.appbar__user {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--muted);
+}
+.appbar__user b { color: var(--text); font-weight: 700; }
+
+.linkbtn {
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: var(--text-soft);
+    border-radius: var(--radius);
+    padding: 5px 11px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.linkbtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---- 2. patro: logo uprostřed + nástroje vpravo ---- */
+.appbar__brand {
+    position: relative;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 10px 20px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.appbar__logo { display: flex; align-items: center; }
+.appbar__logo img { height: 78px; object-fit: contain; transition: height .18s ease; }
+.appbar--big .appbar__logo img { height: 112px; }
+
+.toolrail {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 6px;
+}
+.toolbtn {
+    display: inline-flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    color: var(--text-soft);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.toolbtn svg { width: 19px; height: 19px; flex: none; }
+/* popis je schovaný a vyjede až po najetí myší */
+.toolbtn span {
+    max-width: 0;
+    margin-left: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 0;
+    font-size: 12.5px;
+    font-weight: 700;
+    transition: max-width .24s ease, opacity .18s ease, margin-left .24s ease;
+}
+.toolbtn:hover { background: var(--accent-tint); color: var(--accent); border-color: var(--accent-lt); }
+.toolbtn:hover span, .toolbtn:focus-visible span { max-width: 180px; opacity: 1; margin-left: 8px; }
+
+/* ---- 3. patro: navigační lišta ---- */
+.appbar__bar {
+    border-top: 1px solid var(--line-soft);
+    background: rgba(255, 255, 255, .96);
+    backdrop-filter: blur(10px);
+}
+.appbar__barin {
+    position: relative;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 20px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.appbar__logo { display: flex; align-items: center; flex: none; }
-.appbar__logo img { height: 34px; object-fit: contain; }
-
-.appbar__nav { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.appbar__nav { display: flex; align-items: center; gap: 8px; }
 
 .navbtn {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    height: 40px;
-    padding: 0 15px;
+    height: 38px;
+    padding: 0 18px;
     border: 1px solid transparent;
-    border-radius: 999px;          /* zaoblené rohy dlaždiček v liště */
+    border-radius: var(--radius);
     background: transparent;
     color: var(--text-soft);
-    font-size: 12.5px;
-    font-weight: 800;
-    letter-spacing: .06em;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: .08em;
     text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
@@ -136,65 +236,117 @@ body {
 
 .navitem { position: relative; }
 
-/* roletka s podvrstvami */
+/* Roletka = svislý seznam kategorií. Rozbalí se ta, na které je myš. */
 .dropdown {
     position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    min-width: 260px;
-    max-width: min(760px, calc(100vw - 32px));
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 330px;
+    max-width: calc(100vw - 24px);
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-up);
-    padding: 12px;
+    padding: 6px;
     display: none;
-    gap: 4px 22px;
     z-index: 70;
 }
-.navitem.is-open .dropdown { display: grid; }
-.dropdown--wide { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
-
-.dropdown__group { padding: 4px; }
-.dropdown__title {
-    display: block;
-    font-size: 11.5px;
-    font-weight: 900;
-    letter-spacing: .09em;
-    color: var(--accent);
-    text-decoration: none;
-    padding: 7px 10px;
-    border-radius: 9px;
+.navitem.is-open .dropdown { display: block; }
+@media (hover: hover) {
+    .navitem:hover .dropdown { display: block; }
 }
-.dropdown__title:hover { background: var(--accent-tint); }
+
+.dropdown__group { position: relative; }
+.dropdown__group + .dropdown__group { border-top: 1px solid var(--line-soft); }
+.dropdown__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    font-weight: 900;
+    letter-spacing: .07em;
+    color: var(--text);
+    text-decoration: none;
+    padding: 11px 12px;
+    border-radius: var(--radius);
+}
+.dropdown__more { color: var(--dim); font-size: 15px; line-height: 1; }
+.dropdown__group:hover .dropdown__title { background: var(--accent-tint); color: var(--accent); }
+.dropdown__group:hover .dropdown__more { color: var(--accent); }
+
+/* obsah kategorie vyjede vpravo vedle seznamu, ne pod něj */
+.dropdown__sub {
+    position: absolute;
+    left: 100%;
+    top: -6px;
+    width: 290px;
+    padding-left: 6px;
+    display: none;
+    z-index: 80;
+}
+.dropdown__group:hover .dropdown__sub { display: block; }
+.dropdown__subin {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-up);
+    padding: 6px;
+}
+
 .dropdown__link {
     display: block;
-    font-size: 13.5px;
+    font-size: 13px;
     color: var(--text-soft);
     text-decoration: none;
-    padding: 7px 10px;
-    border-radius: 9px;
+    padding: 9px 12px;
+    border-radius: var(--radius);
     transition: background .13s, color .13s;
 }
 .dropdown__link:hover { background: var(--bg); color: var(--accent); }
 
-.appbar__right { display: flex; align-items: center; gap: 10px; flex: none; }
-.appbar__user {
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.35;
-    text-align: right;
-    max-width: 190px;
+/* na dotyku není kam najet myší – obsah kategorií je rovnou pod nimi */
+@media (hover: none) {
+    .dropdown__sub { position: static; display: block; width: auto; padding: 0 0 6px 14px; }
+    .dropdown__subin { border: none; box-shadow: none; padding: 0; background: none; }
 }
-.appbar__user b { color: var(--text); font-weight: 700; }
+
+/* hledání v liště – vpravo */
+.searchbox {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 250px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+}
+.searchbox svg { width: 17px; height: 17px; color: var(--dim); flex: none; }
+.searchbox input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    outline: none;
+    font-size: 13.5px;
+    color: var(--text);
+}
+.searchbox:focus-within { border-color: var(--accent); background: var(--surface); }
 
 .rolepill {
     border: 1px solid var(--line);
     background: var(--bg-soft);
     color: var(--text-soft);
-    border-radius: 999px;
-    padding: 5px 11px;
-    font-size: 11px;
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    font-size: 11.5px;
     font-weight: 800;
     letter-spacing: .04em;
     cursor: pointer;
@@ -205,9 +357,13 @@ body {
 
 .appbar__burger {
     display: none;
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 42px; height: 42px;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--text);
     align-items: center;
@@ -215,6 +371,99 @@ body {
     cursor: pointer;
 }
 .appbar__burger svg { width: 22px; height: 22px; }
+
+/* ---- 4. patro (jen kde je potřeba): filtry kategorie ----
+   Lišta se tím jakoby roztáhne o druhý řádek. Vlevo je barevně označená
+   kategorie a její sekce, vpravo akce ke kategorii. */
+.appbar__sub {
+    border-top: 1px solid var(--line-soft);
+    background: var(--bg-soft);
+}
+.subbar__in {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 9px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.subbar__left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+}
+.subbar__right { display: flex; align-items: center; gap: 8px; flex: none; }
+
+.subbar__cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: .07em;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.subbar__cat:hover { background: var(--accent-dark); }
+.subbar__cat svg { width: 17px; height: 17px; }
+.subbar__sep { width: 1px; height: 24px; background: var(--line); flex: none; }
+
+/* ================================================== VÝPIS NÁVODŮ ==== */
+
+.browse { display: grid; gap: 18px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 1080px) {
+    .browse { grid-template-columns: 340px 1fr; }
+    .browse__preview { position: sticky; top: 122px; }
+}
+.browse__list { display: grid; gap: 10px; align-content: start; }
+@media (max-width: 1079px) {
+    .browse__list { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+}
+
+/* dlaždice návodu – barevné, bez zbytečných údajů */
+.gtile {
+    display: block;
+    padding: 13px 15px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--accent);
+    color: #fff;
+    text-align: left;
+    text-decoration: none;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    font: inherit;
+    width: 100%;
+    transition: background .15s, transform .15s, box-shadow .15s;
+}
+.gtile:hover { background: var(--accent-dark); border-color: var(--accent-dark); transform: translateY(-2px); box-shadow: var(--shadow-up); }
+.gtile--active {
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
+    box-shadow: inset 4px 0 0 #fff, var(--shadow-up);
+}
+.gtile__cat {
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .8);
+    margin-bottom: 4px;
+}
+.gtile__title { font-size: 14.5px; font-weight: 900; line-height: 1.3; }
+.gtile__meta { font-size: 11.5px; color: rgba(255, 255, 255, .78); margin-top: 5px; }
+.gtile mark { background: #ffe9a8; color: #6b4b00; }
+
+@media (hover: none) { .gtile:hover { transform: none; } }
 
 /* mobilní panel */
 .mobilenav {
@@ -262,17 +511,17 @@ body {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    min-height: 168px;
-    padding: 22px 18px;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 148px;
+    padding: 16px;
     border-radius: var(--radius-lg);
     background: var(--surface);
     border: 1px solid var(--line);
     box-shadow: var(--shadow);
     text-decoration: none;
     color: inherit;
-    text-align: center;
+    text-align: left;
     overflow: hidden;
     transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
@@ -298,51 +547,50 @@ body {
 .tile__main {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-start;
+    gap: 8px;
     width: 100%;
+    text-align: left;
     text-decoration: none;
     color: inherit;
 }
 
-/* ikona + nadpis jako jeden celek, vycentrovaný */
+/* ikona + nadpis jako jeden celek */
 .tile__head {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 11px;
+    gap: 10px;
     width: 100%;
 }
 .tile__icon {
-    width: 38px; height: 38px;
+    width: 34px; height: 34px;
     flex: none;
-    border-radius: 11px;
+    border-radius: var(--radius);
     display: flex; align-items: center; justify-content: center;
     background: var(--accent-tint);
     color: var(--accent);
 }
-.tile__icon svg { width: 21px; height: 21px; }
+.tile__icon svg { width: 19px; height: 19px; }
 
+/* nadpis dlaždice má stejnou barvu jako ikona */
 .tile__title {
-    font-size: 15.5px;
+    font-size: 14.5px;
     font-weight: 900;
-    letter-spacing: .015em;
+    letter-spacing: .03em;
     line-height: 1.2;
-    color: var(--text);
+    color: var(--accent);
     text-align: left;
 }
 .tile__sub {
-    font-size: 13px;
+    font-size: 12.5px;
     color: var(--muted);
     line-height: 1.45;
-    max-width: 30ch;
 }
 
 .tile__children {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
+    gap: 5px;
     margin-top: auto;
     padding-top: 4px;
 }
@@ -356,15 +604,16 @@ body {
 
 .tile--soon { opacity: .58; pointer-events: none; box-shadow: none; }
 .tile--soon .tile__icon { background: var(--bg); color: var(--dim); }
+.tile--soon .tile__title { color: var(--text-soft); }
 
-/* štítky podkategorií – větší text podle zadání */
+/* štítky podkategorií */
 .chip {
     display: inline-block;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: .015em;
-    padding: 6px 12px;
-    border-radius: 999px;
+    padding: 5px 10px;
+    border-radius: var(--radius);
     background: var(--bg);
     color: var(--text-soft);
     border: 1px solid var(--line);
@@ -468,7 +717,7 @@ body {
     gap: 8px;
     min-height: 44px;
     padding: 0 18px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     border: 1px solid transparent;
     font-size: 14px;
     font-weight: 800;
@@ -483,14 +732,14 @@ body {
 .btn--ghost:hover { border-color: var(--accent); color: var(--accent); }
 .btn--ok { background: var(--ok); color: #fff; }
 .btn--ok:hover { filter: brightness(.92); }
-.btn--sm { min-height: 36px; padding: 0 13px; font-size: 12.5px; border-radius: 10px; }
+.btn--sm { min-height: 36px; padding: 0 13px; font-size: 12.5px; border-radius: var(--radius); }
 
 .field {
     width: 100%;
     min-height: 44px;
     padding: 10px 13px;
     border: 1px solid var(--line);
-    border-radius: 11px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--text);
     font-size: 14px;
@@ -512,6 +761,52 @@ body {
 mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; }
 
 /* ========================================================= ÚKOLOVNÍK ==== */
+
+/* nadpis zakázky – úkoly jsou pod ním seskupené */
+[id^="zak-"] { scroll-margin-top: 74px; }   /* ať skok na zakázku neskončí pod lištou */
+.taskgroup__head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 10px 0 2px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+}
+.taskgroup__name {
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+.taskgroup__meta { font-size: 12.5px; color: var(--muted); }
+
+/* seznam úkolů uvnitř dlaždice na rozcestníku */
+.tile__list { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.tile__listrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-soft);
+    line-height: 1.35;
+}
+.tile__listrow b { font-weight: 700; }
+.tile__dot {
+    width: 7px; height: 7px;
+    flex: none;
+    border-radius: 2px;
+    background: var(--dim);
+}
+.tile__dot--done { background: var(--ok); }
+.tile__dot--run  { background: var(--accent); }
+.tile__listpct {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
 
 .task {
     background: var(--surface);
@@ -568,7 +863,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .subtask__check {
     width: 26px; height: 26px;
     flex: none;
-    border-radius: 8px;
+    border-radius: var(--radius);
     border: 2px solid var(--line);
     background: var(--surface);
     cursor: pointer;
@@ -627,7 +922,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     overflow: hidden;
     box-shadow: 0 18px 40px -20px rgba(16, 20, 26, .45);
     box-sizing: border-box;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--font);
 }
 
 .a4-watermark {
@@ -731,12 +1026,12 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .a4-foot__col--r { right: 0; text-align: right; }
 .a4-foot__row { line-height: 1.55; white-space: nowrap; }
 .a4-foot__cat {
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font);
     font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
     color: var(--doc-accent); font-size: 8pt;
 }
 .a4-foot__title {
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font);
     font-weight: 700; color: #0b0d10; font-size: 8.5pt;
 }
 .a4-foot b { color: #333a42; font-weight: 700; }
@@ -746,7 +1041,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     visibility: hidden; pointer-events: none;
     display: flow-root;
     background: #fff; color: #16191d;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-family: var(--font);   /* musí sedět s .a4-page, jinak se rozejde stránkování */
 }
 
 /* ========================================================== LIGHTBOX ==== */
@@ -822,24 +1117,35 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
    ------------------------------------------------------------------------ */
 
 @media (max-width: 1024px) {
+    /* lišta se sbalí pod tlačítko, hledání zabere zbytek řádku */
     .appbar__nav { display: none; }
-    .appbar__burger { display: flex; }
-    .appbar__user { display: none; }
+    .appbar__burger { display: flex; position: static; transform: none; }
+    .appbar__barin { justify-content: flex-start; gap: 10px; }
+    .searchbox { position: static; transform: none; width: auto; flex: 1; }
     .section-head h2 { font-size: 24px; }
     .section-head p { font-size: 15px; }
 }
 
+/* úzká okna – nástroje se přesunou pod logo, ať se nic nepřekrývá */
+@media (max-width: 820px) {
+    .appbar__brand { flex-direction: column; gap: 12px; padding-bottom: 12px; }
+    .toolrail { position: static; transform: none; flex-wrap: wrap; justify-content: center; }
+    .appbar--big .appbar__logo img { height: 78px; }
+}
+
 @media (max-width: 640px) {
     .wrap { padding-inline: 14px; }
-    .appbar__inner { padding: 8px 14px; gap: 10px; }
-    .appbar__logo img { height: 28px; }
+    .appbar__top { padding: 8px 14px 0; }
+    .appbar__brand { padding: 8px 14px 10px; }
+    .appbar__barin { padding: 0 14px; height: 50px; }
+    .appbar__user { font-size: 13px; }
+    .appbar__logo img { height: 52px; }
+    .appbar--big .appbar__logo img { height: 66px; }
+    .subbar__in { padding: 8px 14px; }
+    .subbar__right { width: 100%; }
 
-    .tile { min-height: 0; padding: 18px 16px; align-items: flex-start; text-align: left; }
-    .tile__main { align-items: flex-start; }
-    .tile__head { justify-content: flex-start; }
-    .tile__title { font-size: 15px; }
-    .tile__sub { max-width: none; text-align: left; }
-    .tile__children { justify-content: flex-start; }
+    .tile { min-height: 0; padding: 14px; }
+    .tile__title { font-size: 14px; }
 
     .section-head h2 { font-size: 21px; }
     .section-head p { font-size: 14.5px; margin-top: 10px; }
@@ -851,12 +1157,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     .subtask { padding: 12px 14px; flex-wrap: wrap; }
     .subtask__info { flex-basis: 100%; order: 5; padding-left: 38px; }
 
-    .chip { font-size: 12.5px; padding: 7px 12px; }
-}
-
-/* iPad na výšku – dvě dlaždice vedle sebe vypadají líp než čtyři */
-@media (min-width: 641px) and (max-width: 1024px) {
-    .tile__sub { max-width: none; }
+    .taskgroup__name { font-size: 15px; }
 }
 
 @media (hover: none) {

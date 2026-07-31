@@ -6,7 +6,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Návody – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
+    <link rel="stylesheet" href="assets/css/app.css?v=6">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -14,199 +17,268 @@
 
 <div id="appHeader"></div>
 
-<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:22px">
+<main class="wrap" style="padding-top:18px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
 
-    <!-- ------------------------------------------------------------ hlava -->
-    <div class="section-head" style="margin-bottom:2px">
-        <h2 id="pageTitle">Všechny návody</h2>
-        <p id="pageDesc">Kompletní databáze firemních postupů.</p>
-    </div>
-
-    <!-- ----------------------------------------------------------- filtry -->
-    <div class="col" style="gap:12px">
-        <div id="catRow" class="row row--wrap" style="justify-content:center;gap:8px"></div>
-        <div id="groupRow" class="row row--wrap" style="justify-content:center;gap:8px"></div>
-        <div id="subRow" class="row row--wrap" style="justify-content:center;gap:8px"></div>
-    </div>
-
-    <div class="row row--wrap" style="gap:12px">
-        <div class="grow" style="position:relative">
-            <svg style="width:18px;height:18px;position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--dim);pointer-events:none"
-                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input id="search" type="search" autocomplete="off" class="field"
-                   placeholder="Hledat v návodech…" style="padding-left:42px">
-        </div>
-        <a href="editor.html" class="btn btn--primary">
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Nový návod
-        </a>
-    </div>
-
-    <!-- ----------------------------------------------------------- seznam -->
     <div class="spread">
-        <div id="listCount" class="tiny" style="font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Načítám…</div>
-        <button id="btnPrompt" class="btn btn--ghost btn--sm">Zkopírovat pokyn pro AI k této kategorii</button>
+        <div>
+            <h2 id="pageTitle" style="font-size:20px;font-weight:900;line-height:1.2">Všechny návody</h2>
+            <p id="pageDesc" class="small muted" style="margin-top:3px"></p>
+        </div>
+        <div id="listCount" class="tiny" style="font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Načítám…</div>
     </div>
 
-    <div id="list" class="col" style="gap:10px"></div>
+    <div class="browse">
+        <!-- ------------------------------------------- dlaždice návodů -->
+        <div id="list" class="browse__list"></div>
+
+        <!-- --------------------------------------------- náhled návodu -->
+        <div class="browse__preview">
+            <div id="previewHead" class="card spread no-print" style="padding:12px 15px;margin-bottom:10px"></div>
+            <div id="stageWrap" style="width:100%;display:flex;justify-content:center;overflow:hidden">
+                <div id="stage" class="a4-stage"></div>
+            </div>
+        </div>
+    </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=4"></script>
-<script src="assets/js/doc.js?v=4"></script>
-<script src="assets/js/ui.js?v=4"></script>
-<script type="module" src="assets/js/store.js?v=4"></script>
+<script src="assets/js/taxonomy.js?v=6"></script>
+<script src="assets/js/doc.js?v=6"></script>
+<script src="assets/js/ui.js?v=6"></script>
+<script type="module" src="assets/js/store.js?v=6"></script>
 
 <script>
 (function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
     const esc = (value) => window.KBUI.esc(value);
+    const icon = (name) =>
+        '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' + (window.KB_ICONS[name] || "") + "</svg>";
+
     const params = new URLSearchParams(location.search);
 
     let activeCat = params.get("kat") || "";
     let activeSub = params.get("sub") || "";   // může být skupina (program) i konkrétní téma
+    let activeId = params.get("id") || "";     // návod otevřený v náhledu
+    let shownId = null;                        // co je právě vykreslené
+    const imageCache = {};
 
-    /* ------------------------------------------------------------ filtry */
+    /* ------------------------------------------------------------ adresa */
 
-    function setFilter(cat, sub) {
-        activeCat = cat || "";
-        activeSub = sub || "";
+    function pushUrl() {
         const next = new URLSearchParams();
         if (activeCat) next.set("kat", activeCat);
         if (activeSub) next.set("sub", activeSub);
+        if (activeId) next.set("id", activeId);
         history.replaceState(null, "", location.pathname + (next.toString() ? "?" + next : ""));
-        paintFilters();
-        paintList();
     }
-    window.__setFilter = setFilter;
+
+    /* --------------------------------------------- druhý řádek lišty */
 
     const chip = (label, active, cat, sub) =>
         '<button type="button" class="chip' + (active ? " chip--active" : "") + '" ' +
-        "onclick=\"__setFilter('" + cat + "','" + sub + "')\">" + esc(label) + "</button>";
+        'data-cat="' + esc(cat) + '" data-sub="' + esc(sub) + '">' + esc(label) + "</button>";
 
-    function paintFilters() {
+    function paintSubbar() {
         const category = window.KB_findCategory(activeCat);
         const hit = window.KB_findNode(activeCat, activeSub);
         const path = hit ? hit.path : [];
 
-        // 1. řádek – kategorie
-        document.getElementById("catRow").innerHTML =
-            chip("VŠE", !activeCat, "", "") +
-            window.KB_CATEGORIES.map(c => chip(c.title, c.id === activeCat, c.id, "")).join("");
+        let left = "";
 
-        // 2. řádek – přímí potomci kategorie (u PROGRAMŮ jsou to názvy programů)
-        const groupRow = document.getElementById("groupRow");
-        const groups = category && category.children ? category.children : [];
-        groupRow.hidden = !groups.length;
-        groupRow.innerHTML = groups.length
-            ? chip("Vše v kategorii", !activeSub, activeCat, "") +
-              groups.map(g => chip(g.title, path[0] && path[0].id === g.id, activeCat, g.id)).join("")
-            : "";
+        if (!category) {
+            // bez vybrané kategorie nabídneme rovnou všechny
+            left = '<span class="subbar__cat" style="background:var(--text);border-color:var(--text)">' +
+                    icon("library") + "VŠECHNY NÁVODY</span>" +
+                '<span class="subbar__sep"></span>' +
+                window.KB_CATEGORIES.map(c => chip(c.title, false, c.id, "")).join("");
+        } else {
+            const groups = category.children || [];
+            left = '<a class="subbar__cat" href="navody.html?kat=' + category.id + '">' +
+                    icon(category.icon) + esc(category.title) + "</a>" +
+                (groups.length ? '<span class="subbar__sep"></span>' +
+                    chip("VŠE", !activeSub, activeCat, "") +
+                    groups.map(g => chip(g.title, path[0] && path[0].id === g.id, activeCat, g.id)).join("") : "");
 
-        // 3. řádek – rozdělení uvnitř vybraného programu
-        const subRow = document.getElementById("subRow");
-        const group = path[0];
-        const children = group && group.children ? group.children : [];
-        subRow.hidden = !children.length;
-        subRow.innerHTML = children.length
-            ? chip("Celý " + group.title, activeSub === group.id, activeCat, group.id) +
-              children.map(c => chip(c.title, c.id === activeSub, activeCat, c.id)).join("")
-            : "";
+            // Třetí úroveň (např. témata uvnitř ArcGISu). Má smysl jen tam, kde
+            // na jedno téma připadá víc návodů – jinak by jen opisovala dlaždice.
+            const group = path[0];
+            const children = group && group.children ? group.children : [];
+            if (children.length) {
+                const ids = window.KB_descendantIds(activeCat, group.id);
+                const inGroup = (window.KB.guides || []).filter(g =>
+                    g.cat === activeCat && ids.indexOf(g.subcat) !== -1);
 
-        // nadpis stránky
-        const title = document.getElementById("pageTitle");
-        const desc = document.getElementById("pageDesc");
+                if (inGroup.length > children.length || (activeSub && activeSub !== group.id)) {
+                    left += '<span class="subbar__sep"></span>' +
+                        chip("Celý " + group.title, activeSub === group.id, activeCat, group.id) +
+                        children.map(c => chip(c.title, c.id === activeSub, activeCat, c.id)).join("");
+                }
+            }
+        }
+
+        $("appSubbar").innerHTML =
+            '<div class="subbar__in">' +
+                '<div class="subbar__left">' + left + "</div>" +
+                '<div class="subbar__right">' +
+                    '<button type="button" class="btn btn--ghost btn--sm" data-prompt>Zkopírovat pokyn pro AI</button>' +
+                    '<a href="editor.html" class="btn btn--primary btn--sm">+ Nový návod</a>' +
+                "</div>" +
+            "</div>";
+
+        const title = $("pageTitle");
+        const desc = $("pageDesc");
         if (!category) {
             title.textContent = "Všechny návody";
             desc.textContent = "Kompletní databáze firemních postupů.";
         } else {
             title.textContent = path.length ? path[path.length - 1].title : category.title;
-            desc.textContent = path.length
-                ? category.title.charAt(0) + category.title.slice(1).toLowerCase()
-                : (category.sub || "");
+            desc.textContent = path.length ? category.title : (category.sub || "");
         }
     }
 
-    /* ------------------------------------------------------------ seznam */
+    /* ------------------------------------------------------------ výběr */
 
-    function guideRow(guide, query) {
-        const date = guide.updatedMs ? new Date(guide.updatedMs).toLocaleDateString("cs-CZ") : "";
-        const images = (guide.steps || []).reduce((sum, s) => sum + ((s.images || []).length), 0);
-
-        return '<a class="guide-row" href="navod.html?id=' + encodeURIComponent(guide.id) + '">' +
-            '<div class="row" style="align-items:flex-start;gap:16px">' +
-                '<div class="grow">' +
-                    '<div class="row row--wrap" style="gap:8px;margin-bottom:6px">' +
-                        '<span class="tag">' + esc(window.KB_categoryLabel(guide)) + "</span>" +
-                        '<span class="tiny muted">' + esc(guide.author || "Neznámý autor") + "</span>" +
-                        (guide.version ? '<span class="tiny" style="color:var(--dim)">' + esc(guide.version) + "</span>" : "") +
-                    "</div>" +
-                    '<div style="font-size:15px;font-weight:800;line-height:1.3">' +
-                        window.KBUI.highlight(guide.title || "Bez názvu", query) + "</div>" +
-                    (guide.desc ? '<div class="small muted" style="margin-top:5px;line-height:1.5">' +
-                        window.KBUI.highlight(guide.desc, query) + "</div>" : "") +
-                "</div>" +
-                '<div class="tiny" style="text-align:right;flex:none;color:var(--dim);line-height:1.6">' +
-                    (date ? date + "<br>" : "") +
-                    ((guide.steps || []).length) + " kroků" +
-                    (images ? "<br>" + images + " obr." : "") +
-                "</div>" +
-            "</div>" +
-        "</a>";
-    }
-
-    function paintList() {
-        const query = document.getElementById("search").value.trim();
-        const listEl = document.getElementById("list");
+    /** Návody spadající do aktuálního filtru a hledání. */
+    function currentGuides() {
         const all = window.KB.guides || [];
-
         let items = all;
-        let note = "";
 
         if (activeCat) {
             // u skupiny (např. celý ArcGIS) bereme i všechna témata pod ní
             const allowed = activeSub ? window.KB_descendantIds(activeCat, activeSub) : null;
-            const inCategory = all.filter(g =>
-                g.cat === activeCat && (!allowed || allowed.indexOf(g.subcat) !== -1));
+            items = all.filter(g => g.cat === activeCat && (!allowed || allowed.indexOf(g.subcat) !== -1));
+        }
+        return window.KBUI.searchGuides(items, window.KBUI.searchValue());
+    }
 
-            if (inCategory.length) {
-                items = inCategory;
-            } else {
-                items = all;
-                note = '<div class="card" style="padding:14px 16px;font-size:12.5px;color:var(--warn);' +
-                       'background:#fff8ed;border-color:#f6dcb4">' +
-                       "Tady zatím žádný návod zařazený není, proto se zobrazují všechny. " +
-                       "Zařazení nastavíš u návodu v editoru.</div>";
-            }
+    /** Hlavní návod kategorie – ten se otevře, když se kategorie jen rozklikne. */
+    function defaultGuide(items) {
+        const category = window.KB_findCategory(activeCat);
+        if (category && category.main) {
+            const main = items.find(g => g.subcat === category.main);
+            if (main) return main;
+        }
+        return items[0] || null;
+    }
+
+    /* ------------------------------------------------------------ seznam */
+
+    function tileHtml(guide, query) {
+        const label = window.KB_categoryLabel(guide).split(" · ").pop();
+        return '<button type="button" class="gtile' + (guide.id === activeId ? " gtile--active" : "") + '" ' +
+            'data-guide="' + esc(guide.id) + '">' +
+            '<div class="gtile__cat">' + esc(label) + "</div>" +
+            '<div class="gtile__title">' + window.KBUI.highlight(guide.title || "Bez názvu", query) + "</div>" +
+            '<div class="gtile__meta">' + esc(guide.author || "Neznámý autor") +
+                (guide.version ? " · " + esc(guide.version) : "") + "</div>" +
+        "</button>";
+    }
+
+    function paintList() {
+        const items = currentGuides();
+        const query = window.KBUI.searchValue();
+
+        if (!items.some(g => g.id === activeId)) {
+            const preferred = defaultGuide(items);
+            activeId = preferred ? preferred.id : "";
         }
 
-        items = window.KBUI.searchGuides(items, query);
-
-        document.getElementById("listCount").textContent = items.length === 0 ? "Žádné návody"
+        $("listCount").textContent = items.length === 0 ? "Žádné návody"
             : items.length + (items.length === 1 ? " návod" : items.length < 5 ? " návody" : " návodů");
 
-        listEl.innerHTML = note + (items.length
-            ? items.map(g => guideRow(g, query)).join("")
-            : '<div class="card" style="padding:44px;text-align:center;color:var(--muted);font-size:14px">' +
-              "Zatím tu nic není.<br>" +
-              '<a href="editor.html" style="color:var(--accent);font-weight:700">Vytvořit první návod</a></div>');
+        $("list").innerHTML = items.length
+            ? items.map(g => tileHtml(g, query)).join("")
+            : '<div class="card center small muted" style="padding:30px;line-height:1.6">' +
+              "V téhle sekci zatím žádný návod není.<br>" +
+              '<a href="editor.html" style="color:var(--accent);font-weight:900">Vytvořit první</a></div>';
+
+        pushUrl();
+        paintPreview();
     }
+
+    /* ------------------------------------------------------------ náhled */
+
+    async function paintPreview() {
+        const guide = (window.KB.guides || []).find(g => g.id === activeId);
+
+        if (!guide) {
+            $("previewHead").innerHTML = '<span class="small muted">Vyber návod vlevo a rovnou uvidíš jeho náhled.</span>';
+            $("stage").innerHTML = "";
+            $("stageWrap").style.height = "";
+            shownId = null;
+            return;
+        }
+        if (shownId === guide.id) return;
+        shownId = guide.id;
+
+        $("previewHead").innerHTML =
+            '<div class="grow" style="min-width:180px">' +
+                '<div style="font-size:14px;font-weight:900;line-height:1.3">' + esc(guide.title || "Bez názvu") + "</div>" +
+                '<div class="tiny muted" style="margin-top:2px">' +
+                    esc([window.KB_categoryLabel(guide), guide.author, guide.version].filter(Boolean).join("  ·  ")) +
+                "</div>" +
+            "</div>" +
+            '<div class="row" style="gap:8px">' +
+                '<a class="btn btn--ghost btn--sm" href="editor.html?id=' + encodeURIComponent(guide.id) + '">Upravit</a>' +
+                '<a class="btn btn--primary btn--sm" href="navod.html?id=' + encodeURIComponent(guide.id) + '">Otevřít a stáhnout PDF</a>' +
+            "</div>";
+
+        if (!imageCache[guide.id]) {
+            imageCache[guide.id] = await window.KB.loadImages(guide.id).catch(() => ({}));
+        }
+        if (shownId !== guide.id) return;   // mezitím se kliklo jinam
+
+        const data = Object.assign({}, guide, {
+            dateLabel: new Date(guide.updatedMs || Date.now()).toLocaleDateString("cs-CZ")
+        });
+        window.KBDoc.render($("stage"), data, imageCache[guide.id]);
+        window.KBDoc.enableImageZoom($("stage"), () => imageCache[guide.id]);
+        window.KBDoc.fitStage($("stage"), $("stageWrap"));
+    }
+
+    /* ------------------------------------------------------------- akce */
+
+    function setFilter(cat, sub) {
+        activeCat = cat || "";
+        activeSub = sub || "";
+        activeId = "";           // ať se otevře hlavní návod nové sekce
+        paintSubbar();
+        paintList();
+    }
+
+    document.addEventListener("click", (event) => {
+        const chipEl = event.target.closest(".subbar__left .chip");
+        if (chipEl) return setFilter(chipEl.dataset.cat, chipEl.dataset.sub);
+
+        const prompt = event.target.closest("[data-prompt]");
+        if (prompt) return window.KBUI.copyAiPrompt(activeCat, activeSub);
+
+        const tile = event.target.closest("[data-guide]");
+        if (tile) {
+            activeId = tile.dataset.guide;
+            document.querySelectorAll(".gtile").forEach(el =>
+                el.classList.toggle("gtile--active", el.dataset.guide === activeId));
+            pushUrl();
+            paintPreview();
+        }
+    });
 
     /* ------------------------------------------------------------- start */
 
-    document.addEventListener("DOMContentLoaded", () => {
-        window.KBUI.mountNav({ active: "navody.html" });
-        paintFilters();
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountNav({ active: "navody.html", subbar: true });
+        paintSubbar();
         paintList();
 
-        document.getElementById("search").addEventListener("input", paintList);
-        document.getElementById("btnPrompt").addEventListener("click",
-            () => window.KBUI.copyAiPrompt(activeCat, activeSub));
+        window.KBUI.onSearch(paintList);
+        // filtry závisí i na tom, kolik návodů v sekcích je – překreslit s daty
+        window.KB.on("guides", () => { paintSubbar(); paintList(); });
+        window.KBDoc.watchFit($("stageWrap"), () => window.KBDoc.fitStage($("stage"), $("stageWrap")));
 
-        window.KB.on("guides", paintList);
+        await window.KB.whenReady();
+        paintSubbar();
+        paintList();
     });
 })();
 </script>
