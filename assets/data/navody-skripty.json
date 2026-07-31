@@ -1,0 +1,503 @@
+[
+{
+  "id": "guide_skript_instalace",
+  "cat": "skripty",
+  "subcat": "skript-instalace",
+  "version": "v1.0",
+  "title": "Skripty: instalace toolboxu a společná pravidla",
+  "desc": "Než pustíš jakýkoliv náš skript – jak dostat toolbox do ArcGIS Pro a čeho se držet, aby nic nespadlo.",
+  "steps": [
+    {
+      "title": "Kde skripty leží",
+      "content": "Všechny naše nástroje jsou ve složce se skripty jako soubory `.py` a k nim jeden soubor `PASPORT_KANA_Skripty.atbx`.\n- `.atbx` je **toolbox** – rozcestník, přes který se nástroje spouští v ArcGIS Pro. Sám o sobě nic nedělá, jen ukazuje na `.py` soubory vedle sebe.\n- `.py` je samotný skript. Když se v něm něco opraví, stačí ho uložit – toolbox si novou verzi vezme sám, nic se znovu nepřipojuje.\n\nDůležité: **složku se skripty nerozděluj.** Toolbox hledá `.py` soubory vedle sebe, takže se přesouvá vždy celá složka.",
+      "code": ""
+    },
+    {
+      "title": "Připojení toolboxu do ArcGIS Pro (jednorázově)",
+      "content": "1. V ArcGIS Pro otevři panel **Catalog** (záložka `View` → `Catalog Pane`).\n2. Najdi položku **Toolboxes**, klikni na ni pravým tlačítkem a dej **Add Toolbox**.\n3. Prokliknej se do složky se skripty a vyber `PASPORT_KANA_Skripty.atbx`.\n4. Toolbox se objeví v seznamu. Rozbal ho a uvidíš všechny nástroje.\n\nToolbox zůstane připojený v tom projektu, kde jsi ho přidal. V novém projektu se přidává znovu – je to na tři kliknutí.",
+      "code": ""
+    },
+    {
+      "title": "Jak nástroj spustit",
+      "content": "Dvojklik na název nástroje otevře okno s parametry. Vyplníš, co po tobě chce, a dáš **Run**.\n\nVrstvy se vybírají **z roletky** – nabízí se to, co máš načtené v mapě. Když v roletce něco nevidíš, znamená to, že vrstva není v mapě přidaná (nebo je v jiné mapě, než která je aktivní).",
+      "code": ""
+    },
+    {
+      "title": "Kde se čtou výsledky a chyby",
+      "content": "Každý náš skript průběžně **vypisuje, co dělá**. Po spuštění se dole objeví okno geoprocessingu – rozklikni v něm **View Details** a čti záložku `Messages`.\n\nCo tam uvidíš:\n- modré/černé řádky = normální průběh a shrnutí (kolik prvků se upravilo)\n- oranžové = varování, skript pokračoval dál\n- červené = chyba, ta část se neprovedla\n\n**Vždy si to přečti.** Většina skriptů na konci vypíše počet upravených prvků – když je tam nula, něco nesedí a jinak se to nepozná.",
+      "code": ""
+    },
+    {
+      "title": "Zásadní pravidlo: ulož editace a zruš výběr",
+      "content": "Skripty zapisují přímo do geodatabáze. Když máš rozeditovaná neuložená data nebo aktivní výběr, ArcGIS má soubory zamčené a skript spadne (typicky hláška o **schema lock**).\n\nPřed každým spuštěním proto:\n- záložka `Edit` → tlačítko **Save** (uložit rozeditované změny)\n- záložka `Map` → **Clear** (zrušit výběr prvků)\n\nVýjimka: nástroje, které mají v popisu, že pracují jen s výběrem.",
+      "code": ""
+    },
+    {
+      "title": "Než pustíš cokoliv, co přepisuje data",
+      "content": "Skripty píšou natvrdo do tabulky a **nemají undo**. U větších zásahů (generování místností, hromadný zápis atributů, čistič polygonů) si napřed udělej kopii geodatabáze, nebo si aspoň vyzkoušej nástroj na jednom patře.\n\nNěkteré nástroje mají zaškrtávátko **Přepsat existující data** – když ho necháš prázdné, už vyplněné buňky zůstanou beze změny. Používej to, dokud si nejsi jistý.",
+      "code": ""
+    },
+    {
+      "title": "Česká čárka v číslech",
+      "content": "Tam, kde se zadává desetinné číslo (tolerance, výška), si skripty poradí s **čárkou i tečkou** – `0,01` i `0.01` fungují stejně. Nemusíš to řešit.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_body",
+  "cat": "skripty",
+  "subcat": "skript-body",
+  "version": "v1.0",
+  "title": "Body v polygonu – tvorba bodů ve středu a přenos atributů",
+  "desc": "Vytvoří body v těžišti polygonů, nebo doplní atributy do bodů, které už v polygonech leží.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Nástroj umí **dvě různé věci** podle jednoho zaškrtávátka:\n- **Vytvořit nové body** – ke každému polygonu vyrobí bod v jeho těžišti a rovnou mu přepíše atributy z polygonu.\n- **Aktualizovat existující body** – body nechá, kde jsou, jen jim podle polohy dohledá polygon, ve kterém leží, a přepíše jim z něj atributy.\n\nTypicky: z křivek místností udělat popisné body, nebo doplnit polohové kódy do bodů dveří.",
+      "code": ""
+    },
+    {
+      "title": "Co musí být připravené",
+      "content": "Skript přenáší atributy **podle názvů sloupců**. Automaticky si najde všechny sloupce, které mají zdroj i cíl **stejně pojmenované** (na velikosti písmen nezáleží), a jen ty přenese.\n\n- Sloupec, který je jen v jedné z vrstev, se ignoruje.\n- Systémové sloupce (`OBJECTID`, `SHAPE`, `SHAPE_Length`, `SHAPE_Area`) se přeskakují.\n\nHned na začátku výpisu uvidíš, které sloupce si skript našel – **zkontroluj ten řádek**, je to nejrychlejší způsob, jak odhalit překlep v názvu pole.",
+      "code": "Našly se tyto shodné atributy k přenosu:\n -> POLOH_KOD, NAZEV, PLOCHA_PRESNA"
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Zdroj: Vrstva otvorů** – polygonová vrstva, ze které se berou data (např. `Q3_op_dvere`, `Q6_fm_kriv_mistn`).\n- **Cíl: Vrstva bodů** – bodová vrstva, do které se zapisuje (např. `Q3_op_dvere_attr`).\n- **Vytvořit nové body?** – zaškrtnuté = režim tvorby nových bodů, prázdné = jen doplnění atributů do stávajících.",
+      "code": ""
+    },
+    {
+      "title": "Režim A: vytvoření nových bodů",
+      "content": "Skript projde všechny polygony a ke každému **přidá nový bod** do cílové vrstvy. Bod je v `centroidu` – v těžišti polygonu.\n\nPozor na dvě věci:\n- U hodně protáhlých nebo do „L\" zalomených tvarů může těžiště padnout **mimo polygon**. U místností to prakticky nenastává, u chodeb to zkontroluj.\n- Skript body jen **přidává**, nikdy nemaže. Když ho pustíš dvakrát, budeš mít všechno dvakrát. Před opakováním smaž předchozí body.",
+      "code": ""
+    },
+    {
+      "title": "Režim B: doplnění atributů do existujících bodů",
+      "content": "Skript si načte polygony do paměti a pak projde body. U každého bodu hledá polygon, který ho **obsahuje**, a z něj přepíše atributy.\n\n- Bod, který neleží uvnitř žádného polygonu, zůstane beze změny.\n- Když bod padne přesně na hranici dvou polygonů, vezme se první nalezený – u hraničních prvků výsledek raději zkontroluj.\n- Existující hodnoty se **přepisují bez ptaní**.",
+      "code": ""
+    },
+    {
+      "title": "Kontrola po doběhnutí",
+      "content": "Na konci se vypíše, kolik bodů vzniklo nebo se aktualizovalo. Porovnej to s počtem polygonů:\n\n- **Sedí to** – hotovo.\n- **Je jich míň** – část bodů leží mimo polygony, nebo mají polygony prázdnou geometrii.\n- **Je jich nula** – nejspíš je špatně pořadí vrstev (zdroj a cíl prohozené), nebo vrstvy nemají žádný společný sloupec.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_cistic",
+  "cat": "skripty",
+  "subcat": "skript-cistic",
+  "version": "v1.0",
+  "title": "Čistič polygonů – hromadné zjednodušení geometrie",
+  "desc": "Odstraní přebytečné lomové body z polygonů. Zvládne víc vrstev najednou.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Data z CADu mají často **stovky zbytečných lomových bodů** na jedné stěně – z převodu oblouků, ze zdvojených linií, z nepřesného kreslení. To zdržuje vykreslování i editaci.\n\nSkript projede vybrané vrstvy a u každého polygonu spustí zjednodušení metodou **Douglas–Peucker**: vyhodí body, jejichž vynecháním se tvar posune o míň, než je zadaná tolerance.",
+      "code": ""
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Vyberte vrstvu** – dá se jich naklikat **víc najednou**, skript je zpracuje jednu po druhé.\n- **Tolerance** – v metrech, o kolik se smí tvar maximálně posunout.\n\nOsvědčené hodnoty:\n- `0,01` (1 cm) pro **stěny**\n- `0,005` (5 mm) pro **vzduchotechniku** a jemnější prvky\n\nČeská čárka i tečka fungují obojí.",
+      "code": ""
+    },
+    {
+      "title": "Jak zvolit toleranci",
+      "content": "Tolerance je kompromis mezi čistotou a přesností. Platí jednoduché pravidlo: **nikdy nedávej víc, než je přesnost, se kterou data potřebuješ.**\n\n- Malá tolerance (0,001) – uklidí jen úplně zbytečné body, tvar zůstane prakticky stejný.\n- Velká tolerance (0,05 a víc) – hodně zjednoduší, ale **začne ukrajovat rohy** a u úzkých prvků může tvar zdeformovat.\n\nNejde vzít zpět. Pusť to nejdřív na jednu vrstvu, mrkni na výsledek a teprve pak na celé patro.",
+      "code": ""
+    },
+    {
+      "title": "Co skript udělá",
+      "content": "U každé vrstvy vypíše, kolik polygonů zjednodušil. Když jedna vrstva selže (chybí práva, je zamčená), skript **nespadne celý** – vypíše chybu a jde na další. Proto na konci vždycky zkontroluj výpis, jestli tam někde není červený řádek.",
+      "code": "Zpracovávám vrstvu: Q3_st_steny\n  -> HOTOVO: Úspěšně zjednodušeno 412 polygonů."
+    },
+    {
+      "title": "Časté chyby",
+      "content": "- **Nula upravených polygonů** – vrstva je prázdná, nebo je na ní filtr (definition query), který skryl všechno ostatní.\n- **Chyba o zamčeném souboru** – máš rozeditovaná neuložená data. `Edit` → `Save` a zkus to znovu.\n- **Tvary se rozpadly** – tolerance byla moc velká. Zavři projekt **bez uložení**, pokud jsi ještě neukládal, jinak se vracej ze zálohy.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_dvere",
+  "cat": "skripty",
+  "subcat": "skript-dvere",
+  "version": "v1.0",
+  "title": "Dveře – kompletní automatizace kódů, šířek a vazeb na místnosti",
+  "desc": "Ke každým dveřím dopočítá polohový kód, pořadové číslo, šířku v mm a určí, které dvě místnosti spojují.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Nejsložitější z našich nástrojů. Pro každé dveře vyplní naráz:\n- **POLOH_KOD** – kód patra, vytažený automaticky z místnosti (prvních 8 znaků jejího kódu)\n- **POLOH_KOD_DVERE** – kód patra + pořadové číslo ve tvaru `D001`, `D002`, …\n- **SIRKA** – šířka dveří v milimetrech, dopočítaná z geometrie rámu\n- **MISTNOST1_PK** a **MISTNOST2_PK** – ze které místnosti do které se prochází\n- volitelně výšky `vyska_od`, `vyska_do`, `abs_vyska`\n\nNavíc propíše kód patra a výšky do vrstvy otevírání.",
+      "code": ""
+    },
+    {
+      "title": "Co musí být připravené – tohle je klíčové",
+      "content": "**Místnosti musí mít vyplněný polohový kód.** Skript z něj bere kód patra i názvy místností; bez něj nevyplní nic.\n\nVrstva dveří musí mít založené sloupce (přesné názvy, ne aliasy):",
+      "code": "POLOH_KOD\nPOLOH_KOD_DVERE\nSIRKA\nMISTNOST1_PK\nMISTNOST2_PK\nvyska_od\nvyska_do\nabs_vyska"
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Vrstva rámů dveří** – polygony rámů (`Q3_op_dvere`)\n- **Vrstva otevírání** – polygony vyznačující, kam se dveře otevírají (`Q3_vo_dvere`)\n- **Vrstva místností** – křivky místností (`Q6_fm_kriv_mistn`)\n- **Vyber POLOH_KOD** – sloupec s kódem místnosti; **musí být vyplněný**\n- **Zapsat výškové údaje?** – zaškrtni, když chceš doplnit i výšky\n- **Spodní / Horní / Absolutní výška** – hodnoty se zapíšou **všem** zpracovaným dveřím stejné\n- **Přepsat data polohových kódů dveří?** – prázdné = už vyplněné dveře se přeskočí",
+      "code": ""
+    },
+    {
+      "title": "Jak skript pozná, odkud kam se jde",
+      "content": "Kolem dveří si udělá **obálku 5 cm** a zjistí, kterých místností se dotýká:\n\n- **Dotkne se jedné místnosti** → druhá strana je `Exteriér` (vstupní dveře do budovy).\n- **Dotkne se dvou a víc** → hledá k dveřím příslušný polygon otevírání (v okruhu 10 cm). Místnost, ve které leží **střed otevírání**, se zapíše jako `MISTNOST2_PK` (kam se otevírá), druhá jako `MISTNOST1_PK`.\n- **Nenajde otevírání** → vezme první dvě dotčené místnosti v pořadí, jak je našel. Tady může být směr obrácený – proto se vyplatí mít otevírání nakreslené.",
+      "code": ""
+    },
+    {
+      "title": "Jak se počítá šířka",
+      "content": "Skript rám dveří nepřeměřuje ručně – dopočítá **delší stranu obdélníku** z obvodu a plochy geometrie a převede ji na milimetry.\n\nZ toho plyne, na co si dát pozor:\n- Funguje to jen na **obdélníkové rámy**. U zaoblených nebo do L zalomených tvarů vyjde nesmysl, případně nula.\n- Když je výsledek `0`, geometrie obdélníková není.",
+      "code": ""
+    },
+    {
+      "title": "Číslování dveří",
+      "content": "Dveře se číslují `D001`, `D002`, … **v pořadí, ve kterém je skript prochází** – tedy podle pořadí v tabulce, ne podle polohy v budově.\n\nDvě důležité věci:\n- Čítač běží i přes přeskočené dveře, takže když necháš přepis vypnutý, čísla se **nezmění** a nezduplikují.\n- Když skript pustíš na patro znovu **s přepisem**, čísla se přidělí od začátku – můžou se lišit od těch původních.",
+      "code": ""
+    },
+    {
+      "title": "Pozor na vrstvu otevírání",
+      "content": "Do vrstvy otevírání se zapisuje **jeden společný kód patra pro všechny prvky** – ten poslední, který skript vytáhl z místností u dveří.\n\nProto plati: **pouštěj skript vždy jen na jedno patro**. Když máš v mapě víc pater najednou, otevírání dostane kód posledního zpracovaného patra a bude to špatně.",
+      "code": ""
+    },
+    {
+      "title": "Kontrola výsledku",
+      "content": "Na konci se vypíše počet zpracovaných dveří a otevírání. V tabulce dveří pak projeď hlavně:\n- prázdný `POLOH_KOD` → dveře se nedotkly žádné místnosti (chybí kód místnosti, nebo dveře leží mimo)\n- `SIRKA` rovnou nule → neobdélníkový rám\n- `MISTNOST2_PK` prázdné → nenašlo se otevírání ani druhá místnost",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_ftp",
+  "cat": "skripty",
+  "subcat": "skript-ftp",
+  "version": "v1.0",
+  "title": "FeatureToPolygon Upgrade – z linií rovnou do cílové vrstvy",
+  "desc": "Z uzavřených linií vytvoří polygony a rovnou je vloží do existující vrstvy, bez mezisouborů na disku.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Standardní nástroj ArcGISu **Feature To Polygon** umí z linií udělat plochy, ale vždycky založí **novou vrstvu**. Ty ji pak musíš ručně přiappendovat do své cílové vrstvy a novou smazat.\n\nTenhle skript udělá obojí najednou: polygony vyrobí v paměti, vloží do tvojí vrstvy a po sobě uklidí. Na disku nezůstane žádný odpad.",
+      "code": ""
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Vyber vrstvu s liniemi** – zdrojové linie; dá se vybrat **víc vrstev najednou** (např. stěny + příčky), skript je zpracuje dohromady jako jeden celek.\n- **Cíl: Vrstva kam se má vložit polygon** – existující polygonová vrstva.",
+      "code": ""
+    },
+    {
+      "title": "Co skript udělá",
+      "content": "1. Ze všech vybraných liniových vrstev vyrobí polygony do dočasné paměti.\n2. Spočítá, kolik jich vzniklo, a vypíše to.\n3. Vloží je do cílové vrstvy režimem `NO_TEST` – to znamená, že **atributy se nepřenášejí** a vloží se jen geometrie, i když se sloupce vůbec neshodují. Nové polygony přijdou s prázdnou tabulkou.\n4. Smaže dočasná data z paměti.",
+      "code": ""
+    },
+    {
+      "title": "Když nevzniknou žádné polygony",
+      "content": "Nejčastější problém. Skript vypíše varování, že z linií nevznikly žádné uzavřené plochy.\n\nPříčina je vždycky stejná: **linie na sebe nedosedají**. Mezi konci je mezera – klidně setinu milimetru, oko ji nevidí.\n\nCo s tím:\n- Zapni **snapping** a konce k sobě dotáhni.\n- Na hromadné dočištění použij `Edit` → `Modify Features` → **Trim/Extend**.\n- Pomůže i mít linie topologicky čisté už z CADu.",
+      "code": ""
+    },
+    {
+      "title": "Na co si dát pozor",
+      "content": "- Skript polygony jen **přidává**. Dvojí spuštění = plochy dvakrát přes sebe.\n- Když linie tvoří i vnější obálku, vznikne navíc **jeden velký polygon kolem všeho** – ten po doběhnutí smaž.\n- Atributy si musíš doplnit sám (nebo přes nástroj *Body v polygonu*).",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_mistnosti",
+  "cat": "skripty",
+  "subcat": "skript-mistnosti",
+  "version": "v1.0",
+  "title": "Generování místností – z obdélníku a stěn udělá jednotlivé místnosti",
+  "desc": "Vykrojí stěny a dveře z jednoho velkého obdélníku a zbylé plochy rozpadne na samostatné místnosti.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Nejrychlejší způsob, jak dostat křivky místností, když máš nakreslené stěny.\n\nMyšlenka je jednoduchá: přes celé patro nakreslíš **jeden velký obdélník**, skript z něj vykrojí všechny stěny a příčky a to, co zbude, rozpadne na samostatné plochy – jednotlivé místnosti.",
+      "code": ""
+    },
+    {
+      "title": "PŘEČTI SI TOHLE, NEŽ TO PUSTÍŠ",
+      "content": "Skript **smaže veškerý obsah cílové vrstvy** (té s obdélníkem) a nahradí ho vygenerovanými místnostmi.\n\nTo znamená:\n- V té vrstvě nesmí být nic, o co bys mohl přijít.\n- Nejde to vrátit zpět.\n- Pusť to **jen na čerstvou vrstvu, kde je opravdu jen ten obdélník**.\n\nMáš-li ve vrstvě už rozdělané místnosti s vyplněnými atributy, tenhle nástroj nepoužívej.",
+      "code": ""
+    },
+    {
+      "title": "Příprava",
+      "content": "1. Do cílové vrstvy nakresli **jeden obdélník** přes celý půdorys patra, s přesahem přes obvodové zdi.\n2. Měj hotové a uzavřené vrstvy překážek – stěny, příčky, dveřní rámy, šachty.\n3. `Edit` → **Save** a `Map` → **Clear** (uložit editace, zrušit výběr). Bez toho to spadne na zamčené soubory.",
+      "code": ""
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Cíl: Vrstva s obdélníkem** – vrstva, kde je ten jeden velký obdélník. Sem se místnosti nakonec uloží.\n- **Vrstvy pro ořez** – všechny vrstvy překážek (stěny, dveře atd.); dá se jich vybrat víc najednou.",
+      "code": ""
+    },
+    {
+      "title": "Co skript udělá",
+      "content": "Postupuje ve čtyřech krocích a každý vypíše:\n1. **Sloučí všechny překážky** do jedné dočasné vrstvy v paměti.\n2. **Vykrojí je z obdélníku** (nástroj Erase).\n3. **Rozdělí zbytek** na samostatné plochy (MultipartToSinglepart) – z jednoho děravého tvaru vzniknou jednotlivé místnosti.\n4. **Smaže obsah cílové vrstvy a vloží tam výsledek.**\n\nDočasná data se pak z paměti uklidí, i když nastane chyba.",
+      "code": "1/4 Slučuji všechny překážky (stěny, dveře) do paměti...\n2/4 Vykrajuji překážky z obdélníku...\n3/4 Rozděluji plochy na samostatné místnosti...\n4/4 Zapisuji výsledky zpět do vaší vrstvy"
+    },
+    {
+      "title": "Kontrola výsledku",
+      "content": "Projdi vygenerované místnosti a hledej dvě typické vady:\n\n- **Dvě místnosti splynuly v jednu** – mezi nimi je díra ve stěně. Doplň chybějící kus příčky a pusť to znovu.\n- **Zůstal velký polygon kolem celé budovy** – obdélník přesahoval přes obvodové zdi a okolí se stalo „místností\". Smaž ho ručně.\n\nDrobné špičky v rozích jsou normální, ty se dají uklidit *Čističem polygonů*.",
+      "code": ""
+    },
+    {
+      "title": "Když to spadne",
+      "content": "Nejčastější hláška se týká zamčených dat. Skript sám radí správně: zkontroluj, že máš v záložce `Edit` uložené změny (**Save**) a zrušený výběr (**Clear**).\n\nDruhá častá příčina – některá z vrstev překážek je jen liniová. Erase potřebuje **plochy**, ne linie. Z linií si napřed udělej polygony (*FeatureToPolygon Upgrade*).",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_atributy",
+  "cat": "skripty",
+  "subcat": "skript-atributy",
+  "version": "v1.0",
+  "title": "Hromadný zápis atributů – jedna hodnota do celého patra",
+  "desc": "Zapíše datum, výšku a výrobce do všech vrstev uvnitř zvolené skupiny (podlaží) najednou.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Když potřebuješ do celého patra doplnit stejné údaje – datum zaměření, absolutní výšku podlaží, výrobce – nemusíš to klikat vrstvu po vrstvě.\n\nSkript projde **všechny vrstvy uvnitř jedné skupiny** (typicky skupina = podlaží) a do zadaných sloupců zapíše hodnotu **všem prvkům**.",
+      "code": ""
+    },
+    {
+      "title": "Do kterých sloupců to píše",
+      "content": "Skript má názvy sloupců napevno v kódu:",
+      "code": "Datum_01     <- Datum (Sloupec 5)\nDatum_02     <- Datum (Sloupec 6)\nAbs_Vyska    <- Absolutní výška\nVyrobce      <- Výrobce"
+    },
+    {
+      "title": "Jak si vybírá, kam zapsat",
+      "content": "Tohle je na skriptu to chytré – u každé vrstvy se podívá, jaké sloupce reálně má, a zapíše jen tam, kde to jde:\n\n- Sloupec ve vrstvě **není** → přeskočí se, nic nespadne.\n- Pole v okně nástroje jsi **nechal prázdné** → ten sloupec se nemění.\n- Vrstva nemá **žádný** z těch sloupců → přeskočí se celá a vypíše se to.\n\nMůžeš tedy klidně vyplnit jen výrobce a zbytek nechat být.",
+      "code": ""
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Cílové podlaží (skupina vrstev)** – tady se píše **název skupiny přesně tak, jak je v panelu Contents**. Ne vrstva, ale ta složka nad nimi.\n- **Datum (Sloupec 5)** a **Datum (Sloupec 6)** – textově, ve tvaru, jaký používáte.\n- **Absolutní výška** – desetinné číslo, čárka i tečka fungují.\n- **Výrobce** – text.",
+      "code": ""
+    },
+    {
+      "title": "Časté chyby",
+      "content": "- **„Skupina nebyla v mapě nalezena\"** – překlep v názvu, nebo je skupina v jiné mapě, než která je zrovna aktivní. Název zkopíruj přímo z panelu Contents.\n- **Zapsalo se to jen do některých vrstev** – ostatní ty sloupce nemají. Ve výpisu je u každé přeskočené vrstvy důvod.\n- **Zapsalo se to i tam, kde jsem nechtěl** – skript píše **všem prvkům** ve vrstvě, výběr neřeší. Není žádná ochrana existujících hodnot, přepisuje se natvrdo.",
+      "code": ""
+    },
+    {
+      "title": "Když potřebuješ jiné sloupce",
+      "content": "Názvy sloupců jsou v horní části skriptu, v sekci s definicí polí. Upravují se přepsáním textu v uvozovkách – musí přesně sedět na **Field Name** v geodatabázi, ne na alias zobrazený v tabulce.",
+      "code": "sloupec_datum1 = \"Datum_01\"\nsloupec_datum2 = \"Datum_02\"\nsloupec_vyska  = \"Abs_Vyska\"\nsloupec_vyrobce = \"Vyrobce\""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_kontrola",
+  "cat": "skripty",
+  "subcat": "skript-kontrola",
+  "version": "v1.0",
+  "title": "Kontrola polohových kódů – najde prvky zapsané ve špatné místnosti",
+  "desc": "Porovná zapsaný polohový kód technologie s místností, ve které prvek reálně leží. Nic nepřepisuje.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Kontrolní nástroj, který **nic nemění** – jen vypíše, co nesedí. Můžeš ho pustit kdykoliv bez rizika.\n\nU každého prvku technologie porovná, co má zapsáno ve sloupci `polohova_cast`, s kódem místnosti, ve které fyzicky leží. Odhalí tak zásuvky přiřazené do vedlejší místnosti, prvky bez kódu i prvky ležící mimo budovu.",
+      "code": ""
+    },
+    {
+      "title": "Co musí být připravené",
+      "content": "Skript používá dva sloupce s pevně danými názvy:\n- v **technologické vrstvě** sloupec `polohova_cast`\n- ve **vrstvě místností** sloupec `POLOH_KOD`\n\nMísnosti musí mít kódy vyplněné – jinak není s čím porovnávat.",
+      "code": "polohova_cast   <- technologie (zásuvky, svítidla, …)\nPOLOH_KOD       <- místnosti"
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Vrstva místností** – polygony s vyplněným `POLOH_KOD`.\n- **Kontrola technologické vrstvy** – dá se vybrat **víc vrstev najednou**, projedou se jedna po druhé.\n- **Hlásit prvky s prázdným kódem?** – vypíše prvky, které v místnosti leží, ale kód nemají.\n- **Upozornit na prvky ležící mimo budovu?** – vypíše prvky mimo všechny místnosti. Když jich máš hodně venku (venkovní osvětlení), nech vypnuté, jinak se ve výpisu ztratíš.",
+      "code": ""
+    },
+    {
+      "title": "Jak číst výsledky",
+      "content": "Skript vypisuje ke každé chybě **OID prvku**, takže ho pak snadno najdeš.\n\n- **NESHODA** – prvek má zapsaný jiný kód, než je místnost, ve které leží. Tohle je ta chyba, kvůli které se to pouští. Hlásí se vždycky.\n- **PRÁZDNÝ KÓD** – prvek je v místnosti, ale kód nemá vyplněný.\n- **MIMO BUDOVU** – prvek neleží v žádné místnosti.\n\nNa konci každé vrstvy je souhrnné skóre.",
+      "code": "⚠ NESHODA (OID 412): Zapsáno 'N01_105', reálně leží v 'N01_106'!\n-> VÝSLEDEK: 3 neshod | 12 prázdných | 2 mimo budovu."
+    },
+    {
+      "title": "Jak prvek podle OID najít",
+      "content": "V atributové tabulce vrstvy použij **Select By Attributes** a vyber prvek podle OBJECTID. Pak `Zoom To Selected`.",
+      "code": "OBJECTID = 412"
+    },
+    {
+      "title": "Na co si dát pozor",
+      "content": "- Prostorové spojení používá **INTERSECT** – když prvek leží přesně na hranici dvou místností, přiřadí se mu jedna z nich a může to vypadat jako neshoda. U hraničních prvků výsledek posuď okem.\n- Skript **nic neopravuje**. Opravu udělej ručně, nebo hromadně nástrojem *Body v polygonu* v režimu aktualizace.\n- Hláška o chybějícím sloupci `polohova_cast` znamená, že vybraná vrstva ten sloupec nemá – zkontroluj, že jsi nevybral omylem jinou vrstvu.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_kopie",
+  "cat": "skripty",
+  "subcat": "skript-kopie",
+  "version": "v1.0",
+  "title": "Kopie polygonů – rychlé přenesení ploch do jiné vrstvy",
+  "desc": "Z podkladů udělá polygony a vloží je do cílové vrstvy. Bez vybírání a mezikroků.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Zjednodušená verze *FeatureToPolygon Upgrade* pro případ, kdy jen potřebuješ dostat plochy z jedné vrstvy do druhé a nechceš řešit kopírování přes schránku ani ruční append.\n\nHodí se, když máš podklad (z CADu, z jiné geodatabáze) a chceš z něj naplnit svoji pracovní vrstvu.",
+      "code": ""
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Vyber vrstvu** – zdrojové podklady, linie nebo polygony.\n- **Cílová vrstva** – kam se plochy vloží.\n\nSkript pracuje s **celou vrstvou**, výběr prvků neřeší.",
+      "code": ""
+    },
+    {
+      "title": "Co skript udělá",
+      "content": "1. Z podkladů vyrobí polygony do dočasné paměti.\n2. Vloží je do cílové vrstvy režimem `NO_TEST` – geometrie se přenese vždy, i když se atributové sloupce vůbec neshodují. **Atributy se ale nepřenášejí**, nové polygony budou mít prázdnou tabulku.\n3. Uklidí dočasná data.",
+      "code": ""
+    },
+    {
+      "title": "Kdy použít který nástroj",
+      "content": "- **Kopie polygonů** – jedna zdrojová vrstva, chci to rychle přenést.\n- **FeatureToPolygon Upgrade** – víc zdrojových vrstev najednou a chci vidět, kolik ploch vzniklo, než se zapíšou.\n\nOba nakonec dělají totéž, jen se liší mírou kontroly.",
+      "code": ""
+    },
+    {
+      "title": "Na co si dát pozor",
+      "content": "- Polygony se jen **přidávají**. Dvojí spuštění = data dvakrát.\n- Z liniových podkladů vzniknou plochy jen tam, kde jsou linie **uzavřené**.\n- Atributy si doplň zvlášť.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_symbolika",
+  "cat": "skripty",
+  "subcat": "skript-symbolika",
+  "version": "v1.0",
+  "title": "Hromadná symbolika – nasazení vzhledu na celé patro naráz",
+  "desc": "Ke každé vrstvě ve skupině přiřadí symboliku ze stejnojmenného .lyrx souboru.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "Nastavovat vzhled ručně u třiceti vrstev v každém patře je nekonečná práce. Tenhle skript to udělá naráz.\n\nProjde všechny vrstvy ve zvolené skupině a u každé se podívá, jestli je ve složce se symbolikou soubor `.lyrx` **se stejným názvem jako vrstva**. Když ano, nasadí ho.",
+      "code": ""
+    },
+    {
+      "title": "Jak si připravit složku se symbolikou (jednorázově)",
+      "content": "Tohle je celý základ – bez správně pojmenovaných souborů skript nic neudělá.\n\n1. V mapě si jednu vrstvu nastyluj přesně tak, jak ji chceš mít.\n2. Klikni na ni v panelu Contents pravým tlačítkem → **Sharing** → **Save As Layer File**.\n3. Ulož ji do společné složky se symbolikou.\n4. **Název souboru musí přesně odpovídat názvu vrstvy v mapě**, včetně velkých písmen, podtržítek a mezer.\n\nJednou připravená složka pak slouží pro všechna patra i všechny projekty.",
+      "code": "Q3_op_dvere.lyrx\nQ3_st_steny.lyrx\nQ6_fm_kriv_mistn.lyrx"
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Složka se symbolikou** – vyber složku s `.lyrx` soubory.\n- **Cílová skupina vrstev** – název skupiny přesně tak, jak je v panelu Contents (typicky celé patro).",
+      "code": ""
+    },
+    {
+      "title": "Jak číst výpis",
+      "content": "U každé vrstvy skript napíše, co udělal:\n- **ÚSPĚCH** – symbolika nasazena.\n- **PŘESKOČENO** – pro tuhle vrstvu ve složce žádný `.lyrx` není. Většinou překlep v názvu.\n- **CHYBA** – soubor existuje, ale nešel použít. Typicky je uložený z jiného typu geometrie (bodová symbolika na polygonovou vrstvu).\n\nNa konci je počet úspěšně ostylovaných vrstev.",
+      "code": " -> ÚSPĚCH: Symbolika přiřazena k vrstvě 'Q3_op_dvere'.\n -> PŘESKOČENO: Pro vrstvu 'Q3_st_steny' nebyl nalezen soubor 'Q3_st_steny.lyrx'."
+    },
+    {
+      "title": "Časté chyby",
+      "content": "- **Všechno přeskočeno** – špatná složka, nebo se názvy souborů neshodují s názvy vrstev. Porovnej je znak po znaku; nejjistější je název vrstvy zkopírovat a vložit jako název souboru.\n- **„Skupina nebyla nalezena\"** – překlep v názvu skupiny, nebo je aktivní jiná mapa.\n- **Nasadilo se to, ale vypadá to divně** – `.lyrx` byl uložený z vrstvy s jinými daty. Přeulož ho z aktuální vrstvy.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_plocha",
+  "cat": "skripty",
+  "subcat": "skript-plocha",
+  "version": "v1.0",
+  "title": "Zápis plochy a obvodu – dopočítání přesných hodnot do tabulky",
+  "desc": "Zapíše skutečnou plochu a obvod z geometrie do sloupců, zaokrouhlené na dvě desetinná místa.",
+  "steps": [
+    {
+      "title": "K čemu to je",
+      "content": "ArcGIS si plochu a obvod drží ve sloupcích `Shape_Area` a `Shape_Length`, ale ty nejde exportovat ani rozumně formátovat.\n\nSkript vezme hodnoty přímo z geometrie, zaokrouhlí je na **dvě desetinná místa** a zapíše do vlastních sloupců, se kterými se dá dál pracovat.",
+      "code": ""
+    },
+    {
+      "title": "Co musí být připravené",
+      "content": "Cílová vrstva musí mít založené dva sloupce **s přesně těmito názvy** (číselný typ, `Double`):",
+      "code": "PLOCHA_PRESNA\nOBVOD_PRESNY"
+    },
+    {
+      "title": "Vyplnění okna nástroje",
+      "content": "- **Skupina vrstev nebo pouze cílová vrstva** – tady je to chytré: můžeš vybrat **jednu vrstvu**, nebo rovnou **celou skupinu**. Když vybereš skupinu, skript si sám najde všechny vrstvy uvnitř.\n- **Přepsat existující data?** – prázdné = řádky, které už mají plochu nebo obvod vyplněné, zůstanou beze změny.",
+      "code": ""
+    },
+    {
+      "title": "Výběr se ignoruje",
+      "content": "Skript si na začátku u každé vrstvy **sám zruší výběr** a zpracuje vždycky celou tabulku.\n\nJe to schválně, aby se nestalo, že se dopočítá jen část dat a zbytek zůstane prázdný. Když potřebuješ přepočítat opravdu jen vybrané prvky, udělej to přes Calculate Field.",
+      "code": ""
+    },
+    {
+      "title": "Jak číst výpis",
+      "content": "U každé vrstvy uvidíš dvě čísla – kolik prvků se zapsalo a kolik se přeskočilo jako už vyplněné.\n\nKdyž je zapsaných nula a přeskočených hodně, znamená to, že data už vyplněná jsou a ty jsi nezaškrtl přepis.",
+      "code": "Zpracovávám vrstvu: Q6_fm_kriv_mistn ...\n  -> HOTOVO: Zapsáno u 84 prvků (Přeskočeno chráněných: 12)."
+    },
+    {
+      "title": "Časté chyby",
+      "content": "- **„Zkontrolujte, zda má vrstva sloupce PLOCHA_PRESNA a OBVOD_PRESNY\"** – přesně to, co je v hlášce. Sloupce chybí nebo jsou pojmenované jinak (pozor na alias vs. skutečný Field Name). Skript kvůli jedné vrstvě nespadne celý, jde na další.\n- **Vyšla divná čísla** – vrstva má nastavený jiný souřadnicový systém, než ve kterém měříš. Plocha se počítá v jednotkách souřadnicového systému vrstvy.",
+      "code": ""
+    }
+  ]
+},
+
+{
+  "id": "guide_skript_ai",
+  "cat": "skripty",
+  "subcat": "skript-ai",
+  "version": "v1.0",
+  "title": "Jak si nechat od AI napsat funkční skript pro ArcGIS Pro",
+  "desc": "Návod na zadání pro AI. Co všechno musíš popsat, aby výsledek fungoval napoprvé a nemusel se dokola opravovat.",
+  "steps": [
+    {
+      "title": "Proč většina zadání selže",
+      "content": "AI umí napsat arcpy skript velmi dobře. Problém skoro nikdy není v ní, ale v tom, že **nemá dost informací**.\n\nKdyž napíšeš „udělej mi skript, který doplní kódy místností\", AI si musí domyslet, jak se vrstvy jmenují, jaké mají sloupce, jaký mají typ a co má být výsledek. Domyslí si to špatně a ty pak hodinu opravuješ.\n\nPlatí jednoduché pravidlo: **čas, který dáš do zadání, ušetříš pětkrát na opravách.**",
+      "code": ""
+    },
+    {
+      "title": "Šest věcí, které musí zadání obsahovat",
+      "content": "Projeď si to jako checklist, než zadání odešleš:\n\n1. **Prostředí** – že jde o Python skript pro ArcGIS Pro přes `arcpy`, spouštěný jako Script Tool z toolboxu.\n2. **Problém** – co se dnes dělá ručně a co má skript nahradit.\n3. **Vstupy** – které vrstvy, jaký mají typ geometrie (bod / linie / polygon).\n4. **Sloupce** – přesné názvy a datové typy, odkud se čte a kam se zapisuje.\n5. **Pravidlo** – podle čeho se má rozhodovat (prostorově, podle hodnoty, podle pořadí).\n6. **Výsledek** – co má být v tabulce, když je hotovo.",
+      "code": ""
+    },
+    {
+      "title": "Sloupce popiš úplně přesně",
+      "content": "Tohle je nejčastější zdroj chyb. AI netuší, jak se tvoje pole jmenují, a **alias zobrazený v tabulce bývá jiný než skutečný název pole**.\n\nSkutečný název zjistíš takto: pravý klik na vrstvu → `Data Design` → **Fields**. Sloupec **Field Name** je ten, který potřebuješ, ne **Alias**.\n\nDo zadání to napiš i s typem:",
+      "code": "Vrstva Q6_fm_kriv_mistn (polygony), sloupce:\n  POLOH_KOD      Text(20)   – čte se\n  PLOCHA_PRESNA  Double     – zapisuje se\n\nVrstva Q3_op_dvere (polygony), sloupce:\n  MISTNOST1_PK   Text(20)   – zapisuje se\n  SIRKA          Long       – zapisuje se (v mm)"
+    },
+    {
+      "title": "Řekni, jak se má rozhodovat",
+      "content": "Nejdůležitější věta celého zadání. Popiš pravidlo tak, jak bys ho vysvětlil kolegovi, který to má udělat ručně.\n\nMísto „přiřaď body k místnostem\" napiš:\n\n- „Pro každý **bod** najdi **polygon místnosti, uvnitř kterého leží**, a zapiš mu do `polohova_cast` hodnotu z `POLOH_KOD` té místnosti.\"\n- „Když bod neleží v žádné místnosti, **nech ho beze změny** a vypiš jeho OBJECTID do zpráv.\"\n\nVždycky dopiš i **co dělat s výjimkami** – co když se nic nenajde, co když se najde víc věcí najednou, co když je pole prázdné. Bez toho si AI vymyslí vlastní chování.",
+      "code": ""
+    },
+    {
+      "title": "Vyžádej si věci, které mají naše skripty společné",
+      "content": "Přidej na konec zadání tenhle odstavec – zajistí, že nový skript zapadne mezi ostatní a bude se s ním dobře pracovat:",
+      "code": "Skript prosím napiš tak, aby:\n- parametry četl přes arcpy.GetParameterAsText(0), (1), ... a nahoře\n  je měl okomentované, co který znamená,\n- průběh vypisoval přes arcpy.AddMessage(), varování přes\n  arcpy.AddWarning() a chyby přes arcpy.AddError(),\n- na konci vypsal, kolik prvků reálně upravil,\n- byl celý v try/except, takže při chybě u jedné vrstvy\n  nespadne celý, ale pokračuje na další,\n- desetinná čísla přijímal s čárkou i s tečkou,\n- dočasná data ukládal do \"memory\\\\nazev\" a na konci je smazal,\n- komentáře a hlášky byly česky."
+    },
+    {
+      "title": "Vzorové zadání, které můžeš rovnou použít",
+      "content": "Zkopíruj, přepiš názvy vrstev a sloupců za svoje a pošli AI:",
+      "code": "Potřebuji Python skript pro ArcGIS Pro (arcpy), který budu\nspouštět jako Script Tool z toolboxu.\n\nCO ŘEŠÍM:\nDnes ručně proklikávám každou zásuvku a opisuji do ní kód\nmístnosti, ve které leží. Je jich přes 2000 na patro.\n\nVSTUPY (parametry nástroje):\n0) Vrstva místností (polygony) – z roletky\n1) Vrstva technologie (body) – z roletky, může jich být víc\n2) Zaškrtávátko: přepsat i už vyplněné hodnoty?\n\nSLOUPCE:\n- místnosti: POLOH_KOD, Text(20) – odsud se čte\n- technologie: polohova_cast, Text(20) – sem se zapisuje\n\nPRAVIDLO:\nPro každý bod najdi polygon místnosti, uvnitř kterého bod leží,\na zapiš mu do polohova_cast hodnotu POLOH_KOD té místnosti.\n- Když bod neleží v žádné místnosti, neměň ho a vypiš jeho\n  OBJECTID jako varování.\n- Když už má polohova_cast vyplněnou a zaškrtávátko není\n  zaškrtnuté, bod přeskoč.\n\nVÝSLEDEK:\nNa konci vypiš: kolik bodů se zapsalo, kolik se přeskočilo\na kolik leželo mimo místnosti."
+    },
+    {
+      "title": "Když skript nefunguje – jak to reportovat",
+      "content": "Neposílej „nefunguje to\". Pošli tři věci a AI to opraví většinou napoprvé:\n\n1. **Celé chybové hlášení** z okna geoprocessingu, i s číslem řádku. Zkopíruj ho celé, ne jen poslední větu.\n2. **Co jsi do nástroje vyplnil** – které vrstvy a hodnoty.\n3. **Co se stalo místo očekávaného** – „zapsalo se to jen do 3 prvků z 200\", „všechny buňky zůstaly prázdné\".\n\nTypické chyby a jejich příčina:\n- `RuntimeError: cannot open` → zamčená data, ulož editace a zruš výběr\n- `The value type is incompatible` → zapisuješ text do číselného sloupce\n- `Field not found` → překlep v názvu, nebo použitý alias místo Field Name",
+      "code": ""
+    },
+    {
+      "title": "Než nový skript pustíš na ostrá data",
+      "content": "AI napsaný skript je pořád jen kód, který nikdo netestoval.\n\n1. Udělej si **kopii geodatabáze** a zkoušej na ní.\n2. Pusť to nejdřív na **jedno patro nebo pár prvků**.\n3. Zkontroluj výsledek v tabulce ručně, aspoň deset řádků.\n4. Teprve pak na celou zakázku.\n\nAž bude skript funkční, dej ho do naší složky se skripty, přidej do toolboxu a **napiš k němu sem návod** – ať to po tobě umí pustit i ostatní.",
+      "code": ""
+    }
+  ]
+}
+]

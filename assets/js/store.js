@@ -7,6 +7,7 @@
    Struktura v databázi:
      artifacts/{APP_ID}/public/data/guides/{guideId}              ← text návodu
      artifacts/{APP_ID}/public/data/guides/{guideId}/images/{id}  ← obrázek (base64)
+     artifacts/{APP_ID}/public/data/tasks/{taskId}                ← úkol ze zakázky
      artifacts/{APP_ID}/public/data/logs/{autoId}                 ← záznamy přihlášení
    ========================================================================== */
 
@@ -31,6 +32,7 @@ const APP_ID = "firemni-kb-app";
 const bus = new EventTarget();
 const KB = {
     guides: [],
+    tasks: [],
     status: "connecting",   // connecting | online | offline
     ready: false
 };
@@ -45,6 +47,8 @@ let authReady = null;
 
 const guidesCol = () => collection(db, "artifacts", APP_ID, "public", "data", "guides");
 const guideDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "guides", id);
+const tasksCol = () => collection(db, "artifacts", APP_ID, "public", "data", "tasks");
+const taskDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "tasks", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
 const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images", imgId);
 
@@ -74,6 +78,14 @@ try {
             console.error("Chyba čtení databáze:", err);
             setStatus("offline");
         });
+
+        onSnapshot(tasksCol(), (snapshot) => {
+            KB.tasks = [];
+            snapshot.forEach(d => KB.tasks.push({ id: d.id, ...d.data() }));
+            // nejbližší termín nahoře, úkoly bez termínu na konec
+            KB.tasks.sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"));
+            emit("tasks", KB.tasks);
+        }, (err) => console.error("Chyba čtení úkolů:", err));
     });
 } catch (err) {
     console.warn("Firebase se nepodařilo spustit – offline režim.", err);
@@ -171,6 +183,41 @@ KB.loadImages = async (guideId) => {
     const map = {};
     snap.forEach(d => { map[d.id] = d.data().data; });
     return map;
+};
+
+/* ------------------------------------------------------------------ úkoly */
+
+KB.newTaskId = () => "task_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+/**
+ * Uloží úkol. Struktura:
+ *   { zakazka, title, owner, deadline: "2026-07-31",
+ *     subtasks: [{ id, title, percent, by, ms }],
+ *     notes:    [{ id, subtaskId, text, author, ms }] }
+ * Poznámky jsou uvnitř dokumentu – je jich málo a načtou se rovnou se seznamem.
+ */
+KB.saveTask = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(taskDoc(id), {
+        zakazka:  data.zakazka || "",
+        title:    data.title || "Bez názvu",
+        owner:    data.owner || "",
+        deadline: data.deadline || "",
+        subtasks: data.subtasks || [],
+        notes:    data.notes || [],
+        createdBy: data.createdBy || window.KB_USER || "",
+        createdMs: data.createdMs || Date.now(),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    return id;
+};
+
+KB.deleteTask = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(taskDoc(id));
 };
 
 /* ------------------------------------------------------------------- logy */

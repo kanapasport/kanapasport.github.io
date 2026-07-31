@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Úkolovník – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=2">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:22px">
+
+    <div class="section-head" style="margin-bottom:0">
+        <h2>Úkolovník</h2>
+        <p>Rozdělané zakázky a stav rozpracovanosti po patrech. Zaškrtnutím potvrdíš, že je patro hotové;
+           poznámkou se dá dopsat, na co se čeká.</p>
+    </div>
+
+    <div class="row row--wrap" style="gap:12px">
+        <div class="grow" style="position:relative">
+            <svg style="width:18px;height:18px;position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--dim);pointer-events:none"
+                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input id="search" type="search" class="field" placeholder="Hledat zakázku nebo úkol…" style="padding-left:42px">
+        </div>
+        <button id="btnFilterOpen" class="btn btn--ghost">Jen rozdělané</button>
+        <button id="btnNew" class="btn btn--primary" hidden>+ Nový úkol</button>
+    </div>
+
+    <div id="adminHint" class="card small" style="padding:14px 16px;color:var(--muted);line-height:1.6" hidden>
+        Zakládat a mazat úkoly může jen <b>správce</b>. Přepni si roli vpravo nahoře
+        (dočasné řešení, než bude hotové přihlašování účtem).
+    </div>
+
+    <div id="list" class="col" style="gap:16px"></div>
+</main>
+
+<!-- ======================================================= OKNO NOVÝ ÚKOL -->
+<div id="taskOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:560px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b id="taskFormTitle" style="font-size:17px">Nový úkol</b>
+
+        <div>
+            <label class="label" for="fZakazka">Zakázka</label>
+            <input type="text" id="fZakazka" class="field" placeholder="např. BioPharma">
+        </div>
+        <div>
+            <label class="label" for="fTitle">Název úkolu</label>
+            <input type="text" id="fTitle" class="field" placeholder="např. Odevzdání stavby">
+        </div>
+        <div class="row" style="gap:12px">
+            <div class="grow">
+                <label class="label" for="fOwner">Odpovědný</label>
+                <input type="text" id="fOwner" class="field" placeholder="např. Filip">
+            </div>
+            <div class="grow">
+                <label class="label" for="fDeadline">Termín</label>
+                <input type="date" id="fDeadline" class="field">
+            </div>
+        </div>
+        <div>
+            <label class="label" for="fSubs">Podúkoly (jeden na řádek)</label>
+            <textarea id="fSubs" rows="8" class="field"
+                      placeholder="3PP&#10;2PP&#10;1PP&#10;1NP&#10;2NP"></textarea>
+            <div class="tiny muted" style="margin-top:6px">
+                U existujícího úkolu se zachovají už zaškrtnutá patra, která ponecháš ve stejném názvu.
+            </div>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button id="btnFormCancel" class="btn btn--ghost">Zrušit</button>
+            <button id="btnFormSave" class="btn btn--primary">Uložit úkol</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=2"></script>
+<script src="assets/js/doc.js?v=2"></script>
+<script src="assets/js/ui.js?v=2"></script>
+<script type="module" src="assets/js/store.js?v=2"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    let onlyOpen = false;
+    let editingId = null;
+
+    const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M5 13l4 4L19 7"/></svg>';
+
+    /* ------------------------------------------------------------ výpočty */
+
+    const taskPercent = (task) => {
+        const subs = task.subtasks || [];
+        if (!subs.length) return 0;
+        return Math.round(subs.reduce((sum, s) => sum + (s.percent || 0), 0) / subs.length);
+    };
+
+    const czDate = (iso) => {
+        if (!iso) return "";
+        const [y, m, d] = iso.split("-");
+        return d.replace(/^0/, "") + ". " + m.replace(/^0/, "") + ". " + y;
+    };
+
+    const stamp = (ms) => {
+        if (!ms) return "";
+        const date = new Date(ms);
+        return date.toLocaleDateString("cs-CZ") + " " +
+               date.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+    };
+
+    function deadlineStyle(task) {
+        if (!task.deadline) return { text: "bez termínu", color: "var(--dim)" };
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const due = new Date(task.deadline + "T00:00:00");
+        const days = Math.round((due - today) / 86400000);
+        const done = taskPercent(task) === 100;
+        if (done)      return { text: "termín " + czDate(task.deadline), color: "var(--ok)" };
+        if (days < 0)  return { text: "po termínu (" + czDate(task.deadline) + ")", color: "var(--danger)" };
+        if (days <= 3) return { text: "do " + czDate(task.deadline) + " – zbývá " + days + " dnů", color: "var(--warn)" };
+        return { text: "do " + czDate(task.deadline), color: "var(--muted)" };
+    }
+
+    /* --------------------------------------------------------- vykreslení */
+
+    function subtaskHtml(task, sub, index) {
+        const percent = sub.percent || 0;
+        const done = percent === 100;
+        const notes = (task.notes || []).filter(n => n.subtaskId === sub.id);
+
+        return '<div>' +
+            '<div class="subtask' + (done ? " subtask--done" : "") + '">' +
+                '<button class="subtask__check" data-toggle="' + task.id + "|" + sub.id + '" ' +
+                    'title="Označit jako hotové">' + CHECK + "</button>" +
+                '<span class="subtask__name">' + esc(sub.title) + "</span>" +
+                '<span class="subtask__info">' +
+                    (sub.by ? "zapsal " + esc(sub.by) + " · " + stamp(sub.ms) : "zatím nikdo nepotvrdil") +
+                "</span>" +
+                '<button class="subtask__pct" data-cycle="' + task.id + "|" + sub.id + '" ' +
+                    'style="border:none;background:none;cursor:pointer" title="Klikni pro dílčí procenta">' +
+                    percent + " %</button>" +
+                '<button class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 10px" ' +
+                    'data-note="' + task.id + "|" + sub.id + '" title="Přidat poznámku">+</button>' +
+            "</div>" +
+            '<div style="padding:0 18px 0 56px">' +
+                notes.map(note =>
+                    '<div class="note">' + esc(note.text) +
+                        '<span class="note__who">' + esc(note.author || "neznámý") + " · " + stamp(note.ms) +
+                        (window.KBUI.isAdmin()
+                            ? ' · <button data-delnote="' + task.id + "|" + note.id + '" ' +
+                              'style="border:none;background:none;color:var(--danger);cursor:pointer;font:inherit;padding:0">smazat</button>'
+                            : "") +
+                        "</span>" +
+                    "</div>").join("") +
+                '<div hidden data-noteform="' + task.id + "|" + sub.id + '" class="row" style="gap:8px;margin-top:8px">' +
+                    '<input type="text" class="field grow" placeholder="např. čekám, až to na stavbě udělají">' +
+                    '<button class="btn btn--sm btn--primary" data-notesave="' + task.id + "|" + sub.id + '">Přidat</button>' +
+                "</div>" +
+            "</div>" +
+        "</div>";
+    }
+
+    function taskHtml(task) {
+        const percent = taskPercent(task);
+        const due = deadlineStyle(task);
+        const admin = window.KBUI.isAdmin();
+
+        return '<article class="task" data-task="' + task.id + '">' +
+            '<div class="task__head">' +
+                '<div class="grow" style="min-width:190px">' +
+                    '<div class="task__zak">' + esc(task.zakazka || "bez zakázky") + "</div>" +
+                    '<div class="task__title">' + esc(task.title || "Bez názvu") + "</div>" +
+                    '<div class="task__meta">' +
+                        (task.owner ? "odpovídá <b>" + esc(task.owner) + "</b> · " : "") +
+                        '<span style="color:' + due.color + ';font-weight:700">' + due.text + "</span>" +
+                    "</div>" +
+                "</div>" +
+                '<div class="task__progress">' +
+                    '<div class="spread" style="margin-bottom:6px">' +
+                        '<span class="tiny muted">hotovo</span>' +
+                        '<span style="font-size:15px;font-weight:900;color:' + (percent === 100 ? "var(--ok)" : "var(--text)") + '">' +
+                            percent + " %</span>" +
+                    "</div>" +
+                    '<div class="bar"><div class="bar__fill' + (percent === 100 ? " bar__fill--done" : "") +
+                        '" style="width:' + percent + '%"></div></div>' +
+                "</div>" +
+                (admin
+                    ? '<div class="col" style="gap:6px;flex:none">' +
+                        '<button class="btn btn--sm btn--ghost" data-edit="' + task.id + '">Upravit</button>' +
+                        '<button class="btn btn--sm btn--ghost" style="color:var(--danger)" data-remove="' + task.id + '">Smazat</button>' +
+                      "</div>"
+                    : "") +
+            "</div>" +
+            (task.subtasks || []).map((sub, i) => subtaskHtml(task, sub, i)).join("") +
+        "</article>";
+    }
+
+    function render() {
+        const query = window.KBUI.fold($("search").value.trim());
+        let tasks = window.KB.tasks || [];
+
+        if (query) {
+            tasks = tasks.filter(task => window.KBUI.fold(
+                [task.zakazka, task.title, task.owner,
+                 (task.subtasks || []).map(s => s.title).join(" ")].join(" ")).includes(query));
+        }
+        if (onlyOpen) tasks = tasks.filter(task => taskPercent(task) < 100);
+
+        $("btnNew").hidden = !window.KBUI.isAdmin();
+        $("adminHint").hidden = window.KBUI.isAdmin() || !!tasks.length;
+
+        $("list").innerHTML = tasks.length
+            ? tasks.map(taskHtml).join("")
+            : '<div class="card center" style="padding:44px;color:var(--muted);font-size:14px">' +
+              "Žádné úkoly k zobrazení." +
+              (window.KBUI.isAdmin()
+                ? '<br><button id="btnSeed" class="btn btn--ghost btn--sm" style="margin-top:14px">Vytvořit vzorový úkol (BioPharma)</button>'
+                : "") +
+              "</div>";
+
+        const seed = $("btnSeed");
+        if (seed) seed.addEventListener("click", createSample);
+    }
+
+    /* ------------------------------------------------------------- akce */
+
+    const findTask = (id) => (window.KB.tasks || []).find(t => t.id === id);
+
+    async function persist(task) {
+        try {
+            await window.KB.saveTask(task.id, task);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení se nepodařilo.", "error");
+        }
+    }
+
+    function whoAmI() {
+        return window.KB_USER || window.KBUI.requireUser() || "";
+    }
+
+    async function setPercent(taskId, subId, percent) {
+        const task = findTask(taskId);
+        if (!task) return;
+        const sub = (task.subtasks || []).find(s => s.id === subId);
+        if (!sub) return;
+
+        const name = whoAmI();
+        if (!name) return window.KBUI.toast("Nejdřív zadej své jméno.", "warn");
+
+        sub.percent = percent;
+        sub.by = percent > 0 ? name : "";
+        sub.ms = percent > 0 ? Date.now() : 0;
+
+        render();
+        await persist(task);
+    }
+
+    $("list").addEventListener("click", async (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+
+        if (button.dataset.toggle) {
+            const [taskId, subId] = button.dataset.toggle.split("|");
+            const task = findTask(taskId);
+            const sub = task && (task.subtasks || []).find(s => s.id === subId);
+            return setPercent(taskId, subId, (sub && sub.percent === 100) ? 0 : 100);
+        }
+
+        if (button.dataset.cycle) {
+            const [taskId, subId] = button.dataset.cycle.split("|");
+            const task = findTask(taskId);
+            const sub = task && (task.subtasks || []).find(s => s.id === subId);
+            const steps = [0, 25, 50, 75, 100];
+            const next = steps[(steps.indexOf(sub ? (sub.percent || 0) : 0) + 1) % steps.length];
+            return setPercent(taskId, subId, next);
+        }
+
+        if (button.dataset.note) {
+            const form = document.querySelector('[data-noteform="' + button.dataset.note + '"]');
+            if (form) {
+                form.hidden = !form.hidden;
+                if (!form.hidden) form.querySelector("input").focus();
+            }
+            return;
+        }
+
+        if (button.dataset.notesave) {
+            const [taskId, subId] = button.dataset.notesave.split("|");
+            const form = document.querySelector('[data-noteform="' + button.dataset.notesave + '"]');
+            const text = form ? form.querySelector("input").value.trim() : "";
+            if (!text) return;
+
+            const name = whoAmI();
+            if (!name) return window.KBUI.toast("Nejdřív zadej své jméno.", "warn");
+
+            const task = findTask(taskId);
+            if (!task) return;
+            task.notes = task.notes || [];
+            task.notes.push({
+                id: "note_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                subtaskId: subId, text: text, author: name, ms: Date.now()
+            });
+            render();
+            return persist(task);
+        }
+
+        if (button.dataset.delnote) {
+            const [taskId, noteId] = button.dataset.delnote.split("|");
+            const task = findTask(taskId);
+            if (!task) return;
+            task.notes = (task.notes || []).filter(n => n.id !== noteId);
+            render();
+            return persist(task);
+        }
+
+        if (button.dataset.edit) return openForm(button.dataset.edit);
+
+        if (button.dataset.remove) {
+            const task = findTask(button.dataset.remove);
+            if (!task) return;
+            if (!confirm('Opravdu smazat úkol „' + task.title + '"?')) return;
+            try {
+                await window.KB.deleteTask(task.id);
+                window.KBUI.toast("Úkol smazán.");
+            } catch (err) {
+                window.KBUI.toast("Smazání selhalo.", "error");
+            }
+        }
+    });
+
+    $("list").addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        const form = event.target.closest("[data-noteform]");
+        if (!form) return;
+        const save = form.querySelector("[data-notesave]");
+        if (save) save.click();
+    });
+
+    /* ------------------------------------------------------- formulář */
+
+    function openForm(taskId) {
+        editingId = taskId || null;
+        const task = taskId ? findTask(taskId) : null;
+
+        $("taskFormTitle").textContent = task ? "Upravit úkol" : "Nový úkol";
+        $("fZakazka").value = task ? (task.zakazka || "") : "";
+        $("fTitle").value = task ? (task.title || "") : "";
+        $("fOwner").value = task ? (task.owner || "") : "";
+        $("fDeadline").value = task ? (task.deadline || "") : "";
+        $("fSubs").value = task ? (task.subtasks || []).map(s => s.title).join("\n") : "3PP\n2PP\n1PP\n1NP\n2NP";
+        $("taskOverlay").hidden = false;
+    }
+
+    async function saveForm() {
+        const titles = $("fSubs").value.split("\n").map(t => t.trim()).filter(Boolean);
+        if (!$("fTitle").value.trim()) return window.KBUI.toast("Doplň název úkolu.", "warn");
+
+        const existing = editingId ? findTask(editingId) : null;
+        const previous = existing ? (existing.subtasks || []) : [];
+
+        const subtasks = titles.map(title => {
+            const keep = previous.find(s => s.title === title);
+            return keep || {
+                id: "sub_" + Date.now() + "_" + Math.floor(Math.random() * 10000) + "_" + title.replace(/\W/g, ""),
+                title: title, percent: 0, by: "", ms: 0
+            };
+        });
+
+        const task = {
+            id: editingId || window.KB.newTaskId(),
+            zakazka: $("fZakazka").value.trim(),
+            title: $("fTitle").value.trim(),
+            owner: $("fOwner").value.trim(),
+            deadline: $("fDeadline").value,
+            subtasks: subtasks,
+            notes: existing ? (existing.notes || []) : [],
+            createdBy: existing ? existing.createdBy : (window.KB_USER || ""),
+            createdMs: existing ? existing.createdMs : Date.now()
+        };
+
+        try {
+            await window.KB.saveTask(task.id, task);
+            $("taskOverlay").hidden = true;
+            window.KBUI.toast(editingId ? "Úkol upraven." : "Úkol založen.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    /** Vzorový úkol podle zadání – BioPharma, patra 3PP až 4NP. */
+    async function createSample() {
+        const patra = ["3PP", "2PP", "1PP", "1NP", "2NP", "3NP", "4NP"];
+        const task = {
+            id: window.KB.newTaskId(),
+            zakazka: "BioPharma",
+            title: "Odevzdání stavby",
+            owner: "Filip",
+            deadline: "2026-07-31",
+            subtasks: patra.map((title, i) => ({
+                id: "sub_bio_" + title.toLowerCase(),
+                title: title, percent: 0, by: "", ms: 0
+            })),
+            notes: [],
+            createdBy: window.KB_USER || "",
+            createdMs: Date.now()
+        };
+        try {
+            await window.KB.saveTask(task.id, task);
+            window.KBUI.toast("Vzorový úkol vytvořen.");
+        } catch (err) {
+            window.KBUI.toast("Nepodařilo se vytvořit.", "error");
+        }
+    }
+
+    /* ------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountNav({ active: "ukoly.html" });
+
+        $("search").addEventListener("input", render);
+        $("btnFilterOpen").addEventListener("click", (event) => {
+            onlyOpen = !onlyOpen;
+            event.currentTarget.className = "btn " + (onlyOpen ? "btn--primary" : "btn--ghost");
+            render();
+        });
+        $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnFormCancel").addEventListener("click", () => { $("taskOverlay").hidden = true; });
+        $("btnFormSave").addEventListener("click", saveForm);
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("tasks", render);
+
+        render();
+        await window.KB.whenReady();
+        render();
+
+        if (location.hash === "#novy" && window.KBUI.isAdmin()) openForm(null);
+    });
+})();
+</script>
+</body>
+</html>

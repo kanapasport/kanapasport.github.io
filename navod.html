@@ -2,44 +2,44 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
     <title>Návod – Pasport Kaňa</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="assets/css/app.css?v=1">
-    <link rel="icon" href="Pasport_Kana_white.png">
+    <link rel="stylesheet" href="assets/css/app.css?v=2">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
 </head>
-<body class="min-h-screen font-sans">
+<body>
 
 <div id="appHeader"></div>
 
-<main class="max-w-[1180px] mx-auto px-6 py-8">
+<main class="wrap" style="padding-top:22px;padding-bottom:60px">
 
-    <div id="loadingBox" class="card p-12 text-center text-sm text-slate-400">
-        <div class="loader mx-auto mb-4"></div>
+    <div id="loadingBox" class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        <div class="loader" style="margin:0 auto 16px"></div>
         Načítám návod z databáze…
     </div>
 
-    <div id="docBox" class="hidden flex flex-col gap-5">
+    <div id="docBox" hidden class="col" style="gap:16px">
 
         <!-- ------------------------------------------------------ lišta -->
-        <div class="no-print card px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
-            <div class="min-w-0">
-                <div id="docTitle" class="text-base font-bold text-white truncate">…</div>
-                <div id="docMeta" class="text-[11px] text-slate-500 mt-0.5"></div>
+        <div class="no-print card spread" style="padding:14px 18px">
+            <div class="grow" style="min-width:200px">
+                <div id="docTitle" style="font-size:16px;font-weight:900;line-height:1.3">…</div>
+                <div id="docMeta" class="tiny muted" style="margin-top:3px"></div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-                <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-1 py-1">
-                    <button id="zoomOut" class="w-7 h-7 rounded text-slate-400 hover:text-white hover:bg-slate-700">−</button>
-                    <span id="zoomLabel" class="text-[11px] text-slate-400 w-11 text-center font-mono">100 %</span>
-                    <button id="zoomIn" class="w-7 h-7 rounded text-slate-400 hover:text-white hover:bg-slate-700">+</button>
+            <div class="row" style="gap:8px">
+                <div class="row" style="gap:2px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:3px">
+                    <button id="zoomOut" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">−</button>
+                    <span id="zoomLabel" class="tiny muted" style="width:46px;text-align:center;font-variant-numeric:tabular-nums">100 %</span>
+                    <button id="zoomIn" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">+</button>
                 </div>
-                <a id="btnEdit" href="#" class="bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-semibold
-                          px-4 py-2 rounded-lg border border-slate-600 transition">Upravit</a>
-                <button id="btnPdf" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold
-                        px-4 py-2 rounded-lg transition flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <a id="btnEdit" href="#" class="btn btn--ghost btn--sm">Upravit</a>
+                <button id="btnPdf" class="btn btn--primary btn--sm">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/>
                     </svg>
@@ -48,27 +48,26 @@
             </div>
         </div>
 
-        <p class="no-print text-[11px] text-slate-600 text-center -mt-2">
-            Náhled odpovídá 1:1 výslednému PDF – co vidíš, to se vytiskne. Klikni na obrázek nebo na odkaz
-            <span class="text-indigo-400">obr. 1</span> v textu pro zvětšení.
+        <p class="no-print tiny center" style="color:var(--dim);margin-top:-6px">
+            Náhled odpovídá 1:1 výslednému PDF. Klikni na obrázek nebo na odkaz
+            <span style="color:var(--accent);font-weight:700">obr. 1</span> v textu pro zvětšení.
         </p>
 
-        <!-- --------------------------------------------------- dokument -->
-        <div id="stageWrap" class="w-full flex justify-center overflow-hidden">
+        <div id="stageWrap" style="width:100%;display:flex;justify-content:center;overflow:hidden">
             <div id="stage" class="a4-stage"></div>
         </div>
     </div>
 
-    <div id="errorBox" class="hidden card p-12 text-center text-sm text-slate-400">
+    <div id="errorBox" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
         Návod se nepodařilo najít.
-        <a href="navody.html" class="text-indigo-400 underline block mt-3">Zpět na seznam návodů</a>
+        <a href="navody.html" style="color:var(--accent);font-weight:700;display:block;margin-top:12px">Zpět na seznam návodů</a>
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=1"></script>
-<script src="assets/js/doc.js?v=1"></script>
-<script src="assets/js/ui.js?v=1"></script>
-<script type="module" src="assets/js/store.js?v=1"></script>
+<script src="assets/js/taxonomy.js?v=2"></script>
+<script src="assets/js/doc.js?v=2"></script>
+<script src="assets/js/ui.js?v=2"></script>
+<script type="module" src="assets/js/store.js?v=2"></script>
 
 <script>
 (function () {
@@ -88,8 +87,7 @@
         } else {
             stage().style.transform = "scale(" + zoom + ")";
             const pages = stage().children.length || 1;
-            const naturalH = pages * 297 + (pages - 1) * 8;
-            wrap().style.height = (naturalH * 3.7795 * zoom + 20) + "px";
+            wrap().style.height = ((pages * 297 + (pages - 1) * 8) * 3.7795 * zoom + 20) + "px";
             document.getElementById("zoomLabel").textContent = Math.round(zoom * 100) + " %";
         }
     }
@@ -109,12 +107,10 @@
 
         images = await window.KB.loadImages(guideId).catch(() => ({}));
 
-        guide.dateLabel = guide.updatedMs
-            ? new Date(guide.updatedMs).toLocaleDateString("cs-CZ")
-            : new Date().toLocaleDateString("cs-CZ");
+        guide.dateLabel = new Date(guide.updatedMs || Date.now()).toLocaleDateString("cs-CZ");
 
-        document.getElementById("loadingBox").classList.add("hidden");
-        document.getElementById("docBox").classList.remove("hidden");
+        document.getElementById("loadingBox").hidden = true;
+        document.getElementById("docBox").hidden = false;
         document.getElementById("docTitle").textContent = guide.title || "Bez názvu";
         document.getElementById("docMeta").textContent =
             [window.KB_categoryLabel(guide), guide.author, guide.version, guide.dateLabel]
@@ -122,17 +118,17 @@
         document.getElementById("btnEdit").href = "editor.html?id=" + encodeURIComponent(guideId);
 
         window.KBDoc.render(stage(), guide, images);
-        window.KBDoc.enableImageZoom(stage(), images);
+        window.KBDoc.enableImageZoom(stage(), () => images);
         applyZoom();
     }
 
     function fail() {
-        document.getElementById("loadingBox").classList.add("hidden");
-        document.getElementById("errorBox").classList.remove("hidden");
+        document.getElementById("loadingBox").hidden = true;
+        document.getElementById("errorBox").hidden = false;
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        window.KBUI.mountHeader({ title: "Zobrazení návodu", back: "navody.html", backLabel: "Návody" });
+        window.KBUI.mountNav({ active: "navody.html" });
 
         document.getElementById("zoomIn").addEventListener("click", () => stepZoom(0.1));
         document.getElementById("zoomOut").addEventListener("click", () => stepZoom(-0.1));
@@ -141,7 +137,7 @@
             const button = event.currentTarget;
             const original = button.innerHTML;
             button.disabled = true;
-            button.innerHTML = '<span class="loader" style="width:14px;height:14px;border-width:2px"></span> Generuji…';
+            button.textContent = "Generuji…";
             try {
                 await window.KBDoc.exportPdf(stage(), guide.title || "Navod");
                 window.KBUI.toast("PDF staženo.");

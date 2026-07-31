@@ -1,25 +1,42 @@
 /* ==========================================================================
    PASPORT KAŇA – firemní knowledge base
-   Sdílené styly pro všechny stránky.
-   Barevnost zachována podle původní verze (slate-900 + indigo-600).
+   Sdílené styly pro všechny stránky. Světlý šedý motiv, hlavní barva červená.
+   Navrženo pro PC, iPad i iPhone (viz sekce RESPONZIVITA na konci).
    ========================================================================== */
 
 :root {
-    --bg:        #0f172a;   /* slate-900 */
-    --bg-soft:   #1e293b;   /* slate-800 */
-    --bg-deep:   #020617;   /* slate-950 */
-    --line:      #334155;   /* slate-700 */
-    --line-soft: #1e293b;
-    --text:      #f1f5f9;   /* slate-100 */
-    --muted:     #94a3b8;   /* slate-400 */
-    --dim:       #64748b;   /* slate-500 */
-    --accent:    #4f46e5;   /* indigo-600 */
-    --accent-lt: #818cf8;   /* indigo-400 */
-    --ok:        #059669;   /* emerald-600 */
-    --warn:      #f59e0b;
-    --danger:    #f43f5e;
+    /* --- světlý motiv --- */
+    --bg:         #eef0f3;   /* podklad stránky */
+    --bg-soft:    #f7f8fa;   /* jemnější plocha */
+    --surface:    #ffffff;   /* karty, dlaždice */
+    --line:       #dfe3e8;
+    --line-soft:  #eaedf1;
+    --text:       #16191d;
+    --text-soft:  #3f4650;
+    --muted:      #6b7480;
+    --dim:        #949ca6;
 
-    /* Geometrie A4 dokumentu – jediné místo, kde se definuje */
+    /* --- hlavní barva --- */
+    --accent:      #c8102e;
+    --accent-dark: #a10d25;
+    --accent-lt:   #e14257;
+    --accent-tint: #fdeef0;
+
+    --ok:      #16794a;
+    --ok-tint: #e6f5ed;
+    --warn:    #b45309;
+    --danger:  #b91c1c;
+
+    --radius:    14px;
+    --radius-lg: 20px;
+    --shadow:    0 1px 2px rgba(16, 20, 26, .05), 0 8px 20px -12px rgba(16, 20, 26, .22);
+    --shadow-up: 0 4px 10px rgba(16, 20, 26, .07), 0 18px 34px -18px rgba(16, 20, 26, .3);
+
+    /* --- barva tištěného dokumentu ---
+       Chceš PDF zpátky do modré? Změň jen tenhle jeden řádek. */
+    --doc-accent: #c8102e;
+
+    /* --- geometrie A4 --- */
     --a4-w:      210mm;
     --a4-h:      297mm;
     --a4-pad-x:  16mm;
@@ -27,15 +44,16 @@
     --a4-foot-h: 24mm;
 }
 
-/* --------------------------------------------------------------- základ */
+html { -webkit-text-size-adjust: 100%; }
 
 body {
     background: var(--bg);
     color: var(--text);
+    -webkit-font-smoothing: antialiased;
 }
 
 .loader {
-    border: 3px solid #f3f3f3;
+    border: 3px solid var(--line);
     border-top: 3px solid var(--accent);
     border-radius: 50%;
     width: 20px; height: 20px;
@@ -44,130 +62,552 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Jemný podklad hlavní stránky */
-.hero-grid {
-    background-image:
-        radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.18), transparent 60%),
-        linear-gradient(rgba(51, 65, 85, 0.25) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(51, 65, 85, 0.25) 1px, transparent 1px);
-    background-size: 100% 100%, 44px 44px, 44px 44px;
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; }
+
+/* mřížka dlaždic – 1 sloupec na telefonu, 2 na tabletu, 3 na PC */
+.tilegrid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 620px)  { .tilegrid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .tilegrid { grid-template-columns: repeat(3, 1fr); } }
+
+/* drobné pomůcky, ať nemusíme tahat celý Tailwind */
+.row { display: flex; align-items: center; gap: 10px; }
+.row--wrap { flex-wrap: wrap; }
+.col { display: flex; flex-direction: column; gap: 10px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+.tiny { font-size: 11.5px; }
+.center { text-align: center; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[hidden] { display: none !important; }
+
+/* ======================================================== HORNÍ LIŠTA ==== */
+
+.appbar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: rgba(255, 255, 255, .92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    padding-top: env(safe-area-inset-top);
 }
 
-/* --------------------------------------------------------------- dlaždice */
+.appbar__inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.appbar__logo { display: flex; align-items: center; flex: none; }
+.appbar__logo img { height: 34px; object-fit: contain; }
+
+.appbar__nav { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+
+.navbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 40px;
+    padding: 0 15px;
+    border: 1px solid transparent;
+    border-radius: 999px;          /* zaoblené rohy dlaždiček v liště */
+    background: transparent;
+    color: var(--text-soft);
+    font-size: 12.5px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.navbtn svg { width: 17px; height: 17px; }
+.navbtn:hover { background: var(--accent-tint); color: var(--accent); border-color: #f5d4da; }
+.navbtn--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.navbtn--active:hover { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+.navbtn__caret { width: 12px; height: 12px; opacity: .6; transition: transform .18s; }
+.navitem.is-open .navbtn__caret { transform: rotate(180deg); }
+.navitem.is-open .navbtn { background: var(--accent-tint); color: var(--accent); border-color: #f5d4da; }
+
+.navitem { position: relative; }
+
+/* roletka s podvrstvami */
+.dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    min-width: 260px;
+    max-width: min(760px, calc(100vw - 32px));
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-up);
+    padding: 12px;
+    display: none;
+    gap: 4px 22px;
+    z-index: 70;
+}
+.navitem.is-open .dropdown { display: grid; }
+.dropdown--wide { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+
+.dropdown__group { padding: 4px; }
+.dropdown__title {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 900;
+    letter-spacing: .09em;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 7px 10px;
+    border-radius: 9px;
+}
+.dropdown__title:hover { background: var(--accent-tint); }
+.dropdown__link {
+    display: block;
+    font-size: 13.5px;
+    color: var(--text-soft);
+    text-decoration: none;
+    padding: 7px 10px;
+    border-radius: 9px;
+    transition: background .13s, color .13s;
+}
+.dropdown__link:hover { background: var(--bg); color: var(--accent); }
+
+.appbar__right { display: flex; align-items: center; gap: 10px; flex: none; }
+.appbar__user {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.35;
+    text-align: right;
+    max-width: 190px;
+}
+.appbar__user b { color: var(--text); font-weight: 700; }
+
+.rolepill {
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: var(--text-soft);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.rolepill:hover { border-color: var(--accent); color: var(--accent); }
+.rolepill--admin { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.appbar__burger {
+    display: none;
+    width: 42px; height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.appbar__burger svg { width: 22px; height: 22px; }
+
+/* mobilní panel */
+.mobilenav {
+    display: none;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+    padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
+    max-height: 78vh;
+    overflow-y: auto;
+}
+.mobilenav.is-open { display: block; }
+.mobilenav__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 13px 6px;
+    border: none;
+    border-bottom: 1px solid var(--line-soft);
+    background: none;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-decoration: none;
+    text-align: left;
+    cursor: pointer;
+}
+.mobilenav__sub { display: none; padding: 2px 0 10px 12px; }
+.mobilenav__sub.is-open { display: block; }
+.mobilenav__sublink {
+    display: block;
+    padding: 11px 8px;
+    font-size: 14px;
+    color: var(--text-soft);
+    text-decoration: none;
+    border-radius: 9px;
+}
+.mobilenav__sublink:hover, .mobilenav__sublink:active { background: var(--accent-tint); color: var(--accent); }
+
+/* =========================================================== DLAŽDICE ==== */
 
 .tile {
     position: relative;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    gap: 14px;
-    min-height: 148px;
-    padding: 20px;
-    border-radius: 16px;
-    background: var(--bg-soft);
+    align-items: center;
+    gap: 12px;
+    min-height: 168px;
+    padding: 22px 18px;
+    border-radius: var(--radius-lg);
+    background: var(--surface);
     border: 1px solid var(--line);
+    box-shadow: var(--shadow);
     text-decoration: none;
     color: inherit;
+    text-align: center;
     overflow: hidden;
-    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
 .tile::after {
     content: "";
     position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: var(--tile-accent, var(--accent));
-    opacity: .55;
-    transition: opacity .16s ease;
+    inset: auto 0 0 0;
+    height: 4px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform .2s ease;
 }
 .tile:hover {
     transform: translateY(-3px);
-    border-color: var(--tile-accent, var(--accent));
-    box-shadow: 0 18px 32px -18px rgba(0, 0, 0, .9);
+    border-color: var(--accent-lt);
+    box-shadow: var(--shadow-up);
+    background: linear-gradient(180deg, var(--surface) 60%, var(--accent-tint) 100%);
 }
-.tile:hover::after { opacity: 1; }
+.tile:hover::after { transform: scaleX(1); }
 
-.tile__icon {
-    width: 42px; height: 42px;
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    background: color-mix(in srgb, var(--tile-accent, var(--accent)) 18%, transparent);
-    color: var(--tile-accent, var(--accent));
+/* hlavní prokliková plocha dlaždice (štítky uvnitř mají vlastní odkazy) */
+.tile__main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
 }
-.tile__icon svg { width: 22px; height: 22px; }
 
-.tile__title {
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: .02em;
-    line-height: 1.25;
-    color: #fff;
-}
-.tile__sub {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 4px;
-    line-height: 1.4;
-}
-.tile__meta {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--dim);
+/* ikona + nadpis jako jeden celek, vycentrovaný */
+.tile__head {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    gap: 11px;
+    width: 100%;
+}
+.tile__icon {
+    width: 38px; height: 38px;
+    flex: none;
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-tint);
+    color: var(--accent);
+}
+.tile__icon svg { width: 21px; height: 21px; }
+
+.tile__title {
+    font-size: 15.5px;
+    font-weight: 900;
+    letter-spacing: .015em;
+    line-height: 1.2;
+    color: var(--text);
+    text-align: left;
+}
+.tile__sub {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+    max-width: 30ch;
 }
 
-.tile--soon { opacity: .5; pointer-events: none; }
-.tile--soon .tile__icon { background: rgba(100, 116, 139, .15); color: var(--dim); }
-
-/* Podkategorie uvnitř dlaždice */
 .tile__children {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 2px;
+    justify-content: center;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 4px;
 }
-.chip {
-    font-size: 10px;
+.tile__meta {
+    font-size: 11.5px;
     font-weight: 700;
-    letter-spacing: .03em;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, .12);
-    color: var(--muted);
-    border: 1px solid rgba(148, 163, 184, .18);
-    text-decoration: none;
-    transition: background .14s ease, color .14s ease, border-color .14s ease;
-    white-space: nowrap;
+    color: var(--dim);
+    margin-top: auto;
+    padding-top: 6px;
 }
-.chip:hover { background: rgba(79, 70, 229, .22); color: #c7d2fe; border-color: rgba(79, 70, 229, .5); }
-.chip--active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-/* --------------------------------------------------------------- sekce */
+.tile--soon { opacity: .58; pointer-events: none; box-shadow: none; }
+.tile--soon .tile__icon { background: var(--bg); color: var(--dim); }
+
+/* štítky podkategorií – větší text podle zadání */
+.chip {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .015em;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--text-soft);
+    border: 1px solid var(--line);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .14s, color .14s, border-color .14s;
+}
+.chip:hover { background: var(--accent-tint); color: var(--accent); border-color: var(--accent-lt); }
+.chip--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chip--active:hover { background: var(--accent-dark); color: #fff; }
+
+/* ============================================================== ÚVOD ==== */
+
+.hero__title {
+    margin-top: 22px;
+    font-size: 30px;
+    font-weight: 900;
+    letter-spacing: -.01em;
+    line-height: 1.15;
+}
+.hero__lead {
+    margin: 12px auto 0;
+    max-width: 56ch;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+/* ============================================================= SEKCE ==== */
 
 .section-head {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    margin-bottom: 18px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--line-soft);
+    text-align: center;
+    margin-bottom: 26px;
 }
 .section-head h2 {
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-    color: #fff;
+    font-size: 27px;
+    font-weight: 900;
+    letter-spacing: .01em;
+    color: var(--text);
+    line-height: 1.15;
 }
-.section-head p { font-size: 12px; color: var(--dim); }
+.section-head h2::after {
+    content: "";
+    display: block;
+    width: 54px;
+    height: 3px;
+    margin: 12px auto 0;
+    border-radius: 999px;
+    background: var(--accent);
+}
+.section-head p {
+    font-size: 15.5px;
+    color: var(--muted);
+    line-height: 1.55;
+    max-width: 60ch;
+    margin: 14px auto 0;
+}
 
-/* --------------------------------------------------------------- A4 dokument
+/* ============================================================= KARTY ==== */
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+}
+
+.guide-row {
+    display: block;
+    padding: 16px 18px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .14s, transform .14s, box-shadow .14s;
+}
+.guide-row:hover {
+    border-color: var(--accent-lt);
+    box-shadow: var(--shadow-up);
+    transform: translateX(2px);
+}
+
+.tag {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--accent-tint);
+    color: var(--accent);
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 18px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.btn svg { width: 17px; height: 17px; }
+.btn--primary { background: var(--accent); color: #fff; }
+.btn--primary:hover { background: var(--accent-dark); }
+.btn--ghost { background: var(--surface); color: var(--text-soft); border-color: var(--line); }
+.btn--ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn--ok { background: var(--ok); color: #fff; }
+.btn--ok:hover { filter: brightness(.92); }
+.btn--sm { min-height: 36px; padding: 0 13px; font-size: 12.5px; border-radius: 10px; }
+
+.field {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 13px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+}
+.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.field::placeholder { color: var(--dim); }
+
+.label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; }
+
+/* ========================================================= ÚKOLOVNÍK ==== */
+
+.task {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+.task__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line-soft);
+}
+.task__zak {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+.task__title { font-size: 17px; font-weight: 900; line-height: 1.25; }
+.task__meta { font-size: 12.5px; color: var(--muted); }
+
+.task__progress { flex: none; width: 168px; }
+.bar {
+    height: 9px;
+    border-radius: 999px;
+    background: var(--bg);
+    overflow: hidden;
+    border: 1px solid var(--line-soft);
+}
+.bar__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width .3s ease, background .3s ease;
+}
+.bar__fill--done { background: var(--ok); }
+
+.subtask {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line-soft);
+    transition: background .15s;
+}
+.subtask:last-child { border-bottom: none; }
+.subtask--done { background: var(--ok-tint); }
+
+.subtask__check {
+    width: 26px; height: 26px;
+    flex: none;
+    border-radius: 8px;
+    border: 2px solid var(--line);
+    background: var(--surface);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: transparent;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.subtask__check svg { width: 15px; height: 15px; }
+.subtask__check:hover { border-color: var(--ok); }
+.subtask--done .subtask__check { background: var(--ok); border-color: var(--ok); color: #fff; }
+
+.subtask__name { font-size: 15px; font-weight: 800; flex: none; min-width: 62px; }
+.subtask__info { font-size: 11.5px; color: var(--muted); flex: 1; min-width: 0; line-height: 1.4; }
+.subtask__pct {
+    font-size: 13px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    min-width: 48px;
+    text-align: right;
+    color: var(--muted);
+}
+.subtask--done .subtask__pct { color: var(--ok); }
+
+.note {
+    font-size: 12.5px;
+    color: var(--text-soft);
+    background: var(--bg-soft);
+    border-left: 3px solid var(--line);
+    border-radius: 0 8px 8px 0;
+    padding: 7px 11px;
+    margin: 6px 0 0;
+}
+.note__who { display: block; font-size: 10.5px; color: var(--dim); margin-top: 3px; }
+
+/* ======================================================== A4 DOKUMENT ====
    Vše psáno v mm/pt čistým CSS (ne Tailwind), aby byl náhled na stránce
    PIXEL ZA PIXEL shodný s exportovaným PDF – PDF se generuje přímo z těchto
    elementů (html2canvas -> jsPDF), takže se nemůže rozejít.
-   -------------------------------------------------------------------------- */
+   ------------------------------------------------------------------------ */
 
 .a4-stage {
     transform-origin: top center;
@@ -183,9 +623,9 @@ body {
     height: var(--a4-h);
     min-height: var(--a4-h);
     background: #ffffff;
-    color: #0f172a;
+    color: #16191d;
     overflow: hidden;
-    box-shadow: 0 22px 48px -24px rgba(0, 0, 0, .85);
+    box-shadow: 0 18px 40px -20px rgba(16, 20, 26, .45);
     box-sizing: border-box;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
@@ -210,151 +650,81 @@ body {
     overflow: hidden;
 }
 
-/* ---- hlavička dokumentu (jen 1. strana) ---- */
 .doc-head {
-    border-bottom: 1.2mm solid var(--accent);
+    border-bottom: 1.2mm solid var(--doc-accent);
     padding-bottom: 5mm;
     margin: 0 0 7mm 0;
     position: relative;
     min-height: 26mm;
 }
-.doc-head__logo {
-    position: absolute;
-    top: 0; right: 0;
-    height: 20mm;
-    object-fit: contain;
-}
+.doc-head__logo { position: absolute; top: 0; right: 0; height: 20mm; object-fit: contain; }
 .doc-head__kicker {
-    position: absolute;
-    top: 21mm; right: 0;
-    font-size: 6.5pt;
-    font-weight: 700;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: #64748b;
+    position: absolute; top: 21mm; right: 0;
+    font-size: 6.5pt; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: #6b7480;
 }
 .doc-head__cat {
     display: inline-block;
-    font-size: 7.5pt;
-    font-weight: 800;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: #eef2ff;
-    padding: 1mm 2mm;
-    border-radius: 1mm;
+    font-size: 7.5pt; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--doc-accent); background: #fdeef0;
+    padding: 1mm 2mm; border-radius: 1mm;
 }
 .doc-head__title {
-    font-size: 21pt;
-    font-weight: 900;
-    line-height: 1.12;
-    color: #020617;
-    margin: 3mm 55mm 0 0;
+    font-size: 21pt; font-weight: 900; line-height: 1.12;
+    color: #0b0d10; margin: 3mm 55mm 0 0;
 }
 .doc-head__desc {
-    font-size: 9.5pt;
-    font-style: italic;
-    color: #475569;
-    margin: 2mm 55mm 0 0;
-    line-height: 1.4;
+    font-size: 9.5pt; font-style: italic; color: #4b5563;
+    margin: 2mm 55mm 0 0; line-height: 1.4;
 }
 
-/* ---- obsah ---- */
 .doc-step {
-    border-left: 0.6mm solid #c7d2fe;
+    border-left: 0.6mm solid #f2c3cb;
     padding-left: 4mm;
     margin: 0 0 5mm 0;
 }
 .doc-step:last-child { margin-bottom: 0; }
 
-.doc-step-title {
-    font-size: 11.5pt;
-    font-weight: 800;
-    color: #0f172a;
-    margin: 0 0 1.5mm 0;
-    line-height: 1.25;
-}
-.doc-cont {
-    font-size: 7pt;
-    font-weight: 700;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    margin: 0 0 1.5mm 0;
-}
-.doc-p {
-    font-size: 9.5pt;
-    line-height: 1.5;
-    color: #334155;
-    margin: 0 0 1.8mm 0;
-}
+.doc-step-title { font-size: 11.5pt; font-weight: 800; color: #16191d; margin: 0 0 1.5mm 0; line-height: 1.25; }
+.doc-cont { font-size: 7pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #949ca6; margin: 0 0 1.5mm 0; }
+.doc-p { font-size: 9.5pt; line-height: 1.5; color: #333a42; margin: 0 0 1.8mm 0; }
 .doc-p:last-child { margin-bottom: 0; }
 
 .doc-code {
     font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
-    font-size: 8pt;
-    line-height: 1.45;
-    color: #312e81;
-    background: #f8fafc;
-    border: 0.3mm solid #e2e8f0;
-    border-radius: 1mm;
-    padding: 2.5mm 3mm;
-    margin: 0 0 2mm 0;
-    white-space: pre-wrap;
-    word-break: break-word;
+    font-size: 8pt; line-height: 1.45; color: #7a1224;
+    background: #fafbfc; border: 0.3mm solid #e5e8ec; border-radius: 1mm;
+    padding: 2.5mm 3mm; margin: 0 0 2mm 0;
+    white-space: pre-wrap; word-break: break-word;
 }
 
-/* odkaz na obrázek přímo v textu */
 .doc-ref {
-    color: var(--accent);
-    font-weight: 700;
-    text-decoration: none;
-    border-bottom: 0.25mm dotted var(--accent);
-    cursor: pointer;
+    color: var(--doc-accent); font-weight: 700; text-decoration: none;
+    border-bottom: 0.25mm dotted var(--doc-accent); cursor: pointer;
 }
 
-/* obrázek v dokumentu */
-.doc-fig {
-    margin: 0 0 3mm 0;
-    page-break-inside: avoid;
-}
+.doc-fig { margin: 0 0 3mm 0; page-break-inside: avoid; }
 .doc-fig img {
-    display: block;
-    width: 100%;
-    height: auto;
-    border: 0.3mm solid #e2e8f0;
-    border-radius: 1mm;
-    background: #fff;
+    display: block; width: 100%; height: auto;
+    border: 0.3mm solid #e5e8ec; border-radius: 1mm; background: #fff;
 }
 .doc-fig--s { max-width: 60mm; }
 .doc-fig--m { max-width: 110mm; }
 .doc-fig--l { max-width: 100%; }
-.doc-fig figcaption {
-    font-size: 7.5pt;
-    color: #64748b;
-    margin-top: 1mm;
-    font-style: italic;
-}
+.doc-fig figcaption { font-size: 7.5pt; color: #6b7480; margin-top: 1mm; font-style: italic; }
 
-.doc-empty {
-    font-size: 9.5pt;
-    color: #94a3b8;
-    font-style: italic;
-}
+.doc-empty { font-size: 9.5pt; color: #949ca6; font-style: italic; }
 
-/* ---- zápatí (shodné rozvržení na každé straně) ---- */
 .a4-foot {
     position: absolute;
-    left: var(--a4-pad-x);
-    right: var(--a4-pad-x);
-    bottom: 6mm;
+    left: var(--a4-pad-x); right: var(--a4-pad-x); bottom: 6mm;
     height: 16mm;
-    border-top: 0.35mm solid #e2e8f0;
+    border-top: 0.35mm solid #e5e8ec;
     padding-top: 2.4mm;
     z-index: 1;
     font-family: ui-monospace, Consolas, "Courier New", monospace;
     font-size: 7.5pt;
-    color: #94a3b8;
+    color: #949ca6;
 }
 .a4-foot__col { position: absolute; top: 2.4mm; }
 .a4-foot__col--l { left: 0; text-align: left; }
@@ -362,164 +732,144 @@ body {
 .a4-foot__row { line-height: 1.55; white-space: nowrap; }
 .a4-foot__cat {
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-weight: 800;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-size: 8pt;
+    font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--doc-accent); font-size: 8pt;
 }
 .a4-foot__title {
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-weight: 700;
-    color: #020617;
-    font-size: 8.5pt;
+    font-weight: 700; color: #0b0d10; font-size: 8.5pt;
 }
-.a4-foot b { color: #334155; font-weight: 700; }
+.a4-foot b { color: #333a42; font-weight: 700; }
 
-/* měřicí element pro stránkování (neviditelný, ale se skutečnou šířkou) */
 #a4Ruler {
-    position: absolute;
-    top: -10000mm;
-    left: 0;
-    visibility: hidden;
-    pointer-events: none;
+    position: absolute; top: -10000mm; left: 0;
+    visibility: hidden; pointer-events: none;
     display: flow-root;
-    background: #fff;
-    color: #0f172a;
+    background: #fff; color: #16191d;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
-/* --------------------------------------------------------------- lightbox */
+/* ========================================================== LIGHTBOX ==== */
 
 .lightbox {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: rgba(2, 6, 23, .93);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 32px;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(11, 13, 16, .9);
+    display: none; align-items: center; justify-content: center;
+    padding: 28px;
 }
 .lightbox.is-open { display: flex; }
 .lightbox img {
-    max-width: 96vw;
-    max-height: 86vh;
-    border-radius: 10px;
+    max-width: 96vw; max-height: 86vh;
+    border-radius: 10px; background: #fff;
     box-shadow: 0 30px 60px -20px #000;
-    background: #fff;
 }
 .lightbox__cap {
-    position: absolute;
-    bottom: 18px; left: 0; right: 0;
-    text-align: center;
-    font-size: 13px;
-    color: var(--muted);
+    position: absolute; bottom: 18px; left: 0; right: 0;
+    text-align: center; font-size: 13px; color: #d3d7dc;
 }
 .lightbox__close {
-    position: absolute;
-    top: 18px; right: 22px;
-    font-size: 30px;
-    line-height: 1;
-    color: var(--muted);
+    position: absolute; top: 14px; right: 18px;
+    width: 44px; height: 44px;
+    font-size: 30px; line-height: 1; color: #d3d7dc;
     background: none; border: none; cursor: pointer;
 }
 .lightbox__close:hover { color: #fff; }
 
-/* --------------------------------------------------------------- miniatury v editoru */
+/* ========================================================= MINIATURY ==== */
 
 .thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
 .thumb {
     position: relative;
-    width: 76px; height: 56px;
-    border-radius: 8px;
-    overflow: hidden;
+    width: 78px; height: 58px;
+    border-radius: 9px; overflow: hidden;
     border: 1px solid var(--line);
-    background: #0b1220;
-    cursor: zoom-in;
-    flex: none;
+    background: var(--bg);
+    cursor: zoom-in; flex: none;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb__idx {
-    position: absolute;
-    left: 3px; bottom: 3px;
-    font-size: 9px; font-weight: 800;
-    background: rgba(2, 6, 23, .82);
-    color: #c7d2fe;
-    padding: 1px 5px;
-    border-radius: 4px;
+    position: absolute; left: 3px; bottom: 3px;
+    font-size: 9.5px; font-weight: 800;
+    background: rgba(11, 13, 16, .78); color: #fff;
+    padding: 1px 5px; border-radius: 4px;
 }
 .thumb__del {
-    position: absolute;
-    top: 2px; right: 2px;
-    width: 17px; height: 17px;
-    border-radius: 5px;
-    border: none;
-    background: rgba(2, 6, 23, .82);
-    color: #fda4af;
-    font-size: 11px;
-    line-height: 1;
-    cursor: pointer;
-    display: none;
+    position: absolute; top: 2px; right: 2px;
+    width: 20px; height: 20px;
+    border-radius: 6px; border: none;
+    background: rgba(11, 13, 16, .78); color: #ffb4bd;
+    font-size: 12px; line-height: 1; cursor: pointer;
 }
-.thumb:hover .thumb__del { display: block; }
 .thumb__size {
-    position: absolute;
-    right: 2px; bottom: 2px;
-    font-size: 8px;
-    background: rgba(2, 6, 23, .82);
-    color: var(--muted);
-    border: none;
-    border-radius: 4px;
-    padding: 1px 2px;
-    cursor: pointer;
+    position: absolute; right: 2px; bottom: 2px;
+    font-size: 8.5px; font-weight: 800;
+    background: rgba(11, 13, 16, .78); color: #fff;
+    border: none; border-radius: 4px; padding: 2px 4px; cursor: pointer;
 }
 .thumb-add {
-    width: 76px; height: 56px;
-    border-radius: 8px;
+    width: 78px; height: 58px;
+    border-radius: 9px;
     border: 1px dashed var(--line);
-    color: var(--dim);
-    background: transparent;
-    font-size: 10px;
-    line-height: 1.2;
-    cursor: pointer;
-    flex: none;
+    color: var(--muted); background: transparent;
+    font-size: 10.5px; line-height: 1.25; cursor: pointer; flex: none;
     transition: border-color .14s, color .14s;
 }
-.thumb-add:hover { border-color: var(--accent-lt); color: var(--accent-lt); }
+.thumb-add:hover { border-color: var(--accent); color: var(--accent); }
 
-/* --------------------------------------------------------------- ostatní */
+/* ====================================================== RESPONZIVITA ====
+   Tablet a telefon: lišta se sbalí pod tlačítko, dlaždice do jednoho
+   sloupce, ovládací prvky mají min. 44px pro pohodlné ťuknutí prstem.
+   ------------------------------------------------------------------------ */
 
-.card {
-    background: var(--bg-soft);
-    border: 1px solid var(--line);
-    border-radius: 16px;
+@media (max-width: 1024px) {
+    .appbar__nav { display: none; }
+    .appbar__burger { display: flex; }
+    .appbar__user { display: none; }
+    .section-head h2 { font-size: 24px; }
+    .section-head p { font-size: 15px; }
 }
 
-.guide-row {
-    display: block;
-    padding: 14px 16px;
-    border-radius: 12px;
-    background: rgba(15, 23, 42, .5);
-    border: 1px solid rgba(51, 65, 85, .55);
-    text-decoration: none;
-    color: inherit;
-    transition: background .14s, border-color .14s, transform .14s;
-}
-.guide-row:hover {
-    background: rgba(51, 65, 85, .35);
-    border-color: var(--accent);
-    transform: translateX(2px);
+@media (max-width: 640px) {
+    .wrap { padding-inline: 14px; }
+    .appbar__inner { padding: 8px 14px; gap: 10px; }
+    .appbar__logo img { height: 28px; }
+
+    .tile { min-height: 0; padding: 18px 16px; align-items: flex-start; text-align: left; }
+    .tile__main { align-items: flex-start; }
+    .tile__head { justify-content: flex-start; }
+    .tile__title { font-size: 15px; }
+    .tile__sub { max-width: none; text-align: left; }
+    .tile__children { justify-content: flex-start; }
+
+    .section-head h2 { font-size: 21px; }
+    .section-head p { font-size: 14.5px; margin-top: 10px; }
+    .hero__title { font-size: 23px; margin-top: 18px; }
+    .hero__lead { font-size: 14.5px; }
+
+    .task__head { padding: 14px; }
+    .task__progress { width: 100%; }
+    .subtask { padding: 12px 14px; flex-wrap: wrap; }
+    .subtask__info { flex-basis: 100%; order: 5; padding-left: 38px; }
+
+    .chip { font-size: 12.5px; padding: 7px 12px; }
 }
 
-mark { background: rgba(250, 204, 21, .28); color: #fde68a; border-radius: 2px; padding: 0 2px; }
+/* iPad na výšku – dvě dlaždice vedle sebe vypadají líp než čtyři */
+@media (min-width: 641px) and (max-width: 1024px) {
+    .tile__sub { max-width: none; }
+}
 
-/* --------------------------------------------------------------- tisk */
+@media (hover: none) {
+    .tile:hover { transform: none; }      /* na dotyku nechceme poskakování */
+    .guide-row:hover { transform: none; }
+}
+
+/* ============================================================== TISK ==== */
 
 @media print {
     @page { size: A4; margin: 0; }
     body { background: #fff !important; }
-    .no-print { display: none !important; }
+    .no-print, .appbar, .mobilenav { display: none !important; }
     .a4-stage { transform: none !important; gap: 0 !important; }
     .a4-page {
         box-shadow: none !important;

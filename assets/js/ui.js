@@ -1,15 +1,23 @@
 /* ==========================================================================
-   Sdílené UI – hlavička, toasty, uživatel, vyhledávání, práce s obrázky.
+   Sdílené UI – horní lišta s roletkami, toasty, uživatel a role,
+   vyhledávání, práce s obrázky, pokyn pro AI.
    ========================================================================== */
 
 (function () {
     "use strict";
 
     const USER_KEY = "company_kb_username";
+    const ROLE_KEY = "company_kb_role";
+
     window.KB_USER = localStorage.getItem(USER_KEY) || "";
+    window.KB_ROLE = localStorage.getItem(ROLE_KEY) || "zamestnanec";
 
     const UI = {};
     window.KBUI = UI;
+
+    const esc = (value) => String(value == null ? "" : value)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    UI.esc = esc;
 
     /* ------------------------------------------------------------- toast */
 
@@ -18,24 +26,29 @@
         if (!el) {
             el = document.createElement("div");
             el.id = "kbToast";
-            el.className = "no-print fixed bottom-5 right-5 text-white px-5 py-3 rounded-xl shadow-2xl " +
-                           "transition-all transform translate-y-24 opacity-0 z-[300] text-sm font-semibold";
+            el.className = "no-print";
+            el.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translate(-50%,140%);" +
+                "z-index:300;padding:13px 20px;border-radius:12px;color:#fff;font-size:14px;font-weight:700;" +
+                "box-shadow:0 18px 34px -14px rgba(0,0,0,.5);transition:transform .25s ease,opacity .25s ease;" +
+                "opacity:0;max-width:min(560px,calc(100vw - 32px));text-align:center";
             document.body.appendChild(el);
         }
-        el.style.background = tone === "error" ? "#e11d48" : tone === "warn" ? "#d97706" : "#059669";
+        el.style.background = tone === "error" ? "#b91c1c" : tone === "warn" ? "#b45309" : "#16794a";
         el.textContent = message;
         requestAnimationFrame(() => {
-            el.classList.replace("translate-y-24", "translate-y-0");
-            el.classList.replace("opacity-0", "opacity-100");
+            el.style.transform = "translate(-50%, 0)";
+            el.style.opacity = "1";
         });
         clearTimeout(el._timer);
         el._timer = setTimeout(() => {
-            el.classList.replace("translate-y-0", "translate-y-24");
-            el.classList.replace("opacity-100", "opacity-0");
-        }, 3200);
+            el.style.transform = "translate(-50%, 140%)";
+            el.style.opacity = "0";
+        }, 3400);
     };
 
-    /* -------------------------------------------------------- uživatel */
+    /* ------------------------------------------------------ uživatel a role */
+
+    UI.isAdmin = () => window.KB_ROLE === "spravce";
 
     UI.setUser = (name) => {
         window.KB_USER = name;
@@ -44,44 +57,189 @@
         if (window.KB && window.KB.logLogin) window.KB.logLogin(name);
     };
 
-    UI.clearUser = () => {
-        window.KB_USER = "";
-        localStorage.removeItem(USER_KEY);
+    UI.setRole = (role) => {
+        window.KB_ROLE = role;
+        localStorage.setItem(ROLE_KEY, role);
         UI.paintUser();
+        document.dispatchEvent(new CustomEvent("kb-role"));
     };
 
     UI.paintUser = () => {
         document.querySelectorAll("[data-user-name]").forEach(el => {
             el.textContent = window.KB_USER || "nepřihlášen";
         });
+        document.querySelectorAll("[data-role-pill]").forEach(el => {
+            const admin = UI.isAdmin();
+            el.textContent = admin ? "SPRÁVCE" : "ZAMĚSTNANEC";
+            el.className = "rolepill" + (admin ? " rolepill--admin" : "");
+        });
     };
 
-    /** Vyžádá jméno, pokud ještě není známé (jednoduchá identifikace autora). */
+    /** Vyžádá jméno, pokud ještě není známé (dočasná identifikace autora). */
     UI.requireUser = () => {
         if (window.KB_USER) return window.KB_USER;
-        const name = (prompt("Zadejte své jméno (podepíše se pod návod):") || "").trim();
+        const name = (prompt("Zadejte své jméno – podepíše se pod vaše zápisy:") || "").trim();
         if (name) UI.setUser(name);
         return window.KB_USER;
     };
 
-    /* ------------------------------------------------------- stav cloudu */
+    /* ---------------------------------------------------------- horní lišta */
+
+    const icon = (name) =>
+        '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' + ((window.KB_ICONS || {})[name] || "") + "</svg>";
+
+    const CARET = '<svg class="navbtn__caret" fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>';
+
+    function navHtml(active) {
+        const items = (window.KB_NAV || []).map((item, index) => {
+            const isActive = active && item.href && item.href.split(/[?#]/)[0] === active;
+            const cls = "navbtn" + (isActive ? " navbtn--active" : "");
+
+            if (!item.menu) {
+                return '<div class="navitem"><a class="' + cls + '" href="' + item.href + '">' +
+                    (item.icon ? icon(item.icon) : "") + item.title + "</a></div>";
+            }
+
+            const groups = item.menu.map(group =>
+                '<div class="dropdown__group">' +
+                    (group.href
+                        ? '<a class="dropdown__title" href="' + group.href + '">' + group.title + "</a>"
+                        : '<span class="dropdown__title">' + group.title + "</span>") +
+                    (group.children || []).map(child =>
+                        '<a class="dropdown__link" href="' + child.href + '">' + child.title + "</a>").join("") +
+                "</div>"
+            ).join("");
+
+            return '<div class="navitem" data-menu="' + index + '">' +
+                '<button type="button" class="' + cls + '" data-menu-toggle="' + index + '">' +
+                    item.title + CARET + "</button>" +
+                '<div class="dropdown' + (item.menu.length > 1 ? " dropdown--wide" : "") + '">' + groups + "</div>" +
+            "</div>";
+        }).join("");
+
+        return '<nav class="appbar__nav">' + items + "</nav>";
+    }
+
+    function mobileNavHtml() {
+        return '<div class="mobilenav" id="mobileNav">' +
+            (window.KB_NAV || []).map((item, index) => {
+                if (!item.menu) {
+                    return '<a class="mobilenav__row" href="' + item.href + '">' + item.title + "</a>";
+                }
+                const links = item.menu.map(group =>
+                    (group.href ? '<a class="mobilenav__sublink" href="' + group.href + '"><b>' + group.title + "</b></a>" : "") +
+                    (group.children || []).map(child =>
+                        '<a class="mobilenav__sublink" href="' + child.href + '">' + child.title + "</a>").join("")
+                ).join("");
+                return '<button type="button" class="mobilenav__row" data-msub="' + index + '">' +
+                        item.title + "<span>+</span></button>" +
+                    '<div class="mobilenav__sub" data-msub-panel="' + index + '">' + links + "</div>";
+            }).join("") +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 6px 4px">' +
+                '<span style="font-size:12px;color:var(--muted)">Přihlášen jako <b data-user-name>…</b></span>' +
+                '<button type="button" class="rolepill" data-role-pill></button>' +
+            "</div>" +
+        "</div>";
+    }
+
+    /**
+     * Vykreslí horní lištu do prvku #appHeader.
+     * @param {Object} options – { active: "navody.html" }
+     */
+    UI.mountNav = (options = {}) => {
+        const slot = document.getElementById("appHeader");
+        if (!slot) return;
+
+        const active = options.active || location.pathname.split("/").pop() || "index.html";
+
+        slot.outerHTML =
+            '<header class="appbar no-print">' +
+                '<div class="appbar__inner">' +
+                    '<a class="appbar__logo" href="index.html" aria-label="Domů">' +
+                        '<img src="Pasport_Kana_black.png" alt="Pasport Kaňa">' +
+                    "</a>" +
+                    navHtml(active) +
+                    '<div class="appbar__right">' +
+                        '<div class="appbar__user">Přihlášen jako<br><b data-user-name>…</b></div>' +
+                        '<button type="button" class="rolepill" data-role-pill></button>' +
+                        '<button type="button" class="appbar__burger" id="navBurger" aria-label="Menu">' +
+                            '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+                            '<path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>' +
+                        "</button>" +
+                    "</div>" +
+                "</div>" +
+                mobileNavHtml() +
+            "</header>";
+
+        bindNav();
+        UI.paintUser();
+    };
+
+    function bindNav() {
+        // roletky na desktopu – klik (funguje i na dotykovém iPadu)
+        document.querySelectorAll("[data-menu-toggle]").forEach(button => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const item = button.closest(".navitem");
+                const wasOpen = item.classList.contains("is-open");
+                document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
+                if (!wasOpen) item.classList.add("is-open");
+            });
+        });
+        document.addEventListener("click", () => {
+            document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
+            }
+        });
+
+        // mobilní panel
+        const burger = document.getElementById("navBurger");
+        const panel = document.getElementById("mobileNav");
+        if (burger && panel) {
+            burger.addEventListener("click", (event) => {
+                event.stopPropagation();
+                panel.classList.toggle("is-open");
+            });
+        }
+        document.querySelectorAll("[data-msub]").forEach(button => {
+            button.addEventListener("click", () => {
+                const target = document.querySelector('[data-msub-panel="' + button.dataset.msub + '"]');
+                if (target) target.classList.toggle("is-open");
+            });
+        });
+
+        // přepínač role (dočasné, než bude opravdové přihlašování)
+        document.querySelectorAll("[data-role-pill]").forEach(pill => {
+            pill.addEventListener("click", () => {
+                if (!UI.isAdmin()) {
+                    if (!window.KB_USER) UI.requireUser();
+                    UI.setRole("spravce");
+                    UI.toast("Přepnuto na správce. Po zavedení přihlašování to bude podle účtu.");
+                } else {
+                    UI.setRole("zamestnanec");
+                    UI.toast("Přepnuto na zaměstnance.");
+                }
+            });
+        });
+    }
+
+    /* --------------------------------------------------------- stav cloudu */
 
     UI.bindCloudStatus = (selector) => {
         const paint = (status) => {
             document.querySelectorAll(selector).forEach(el => {
-                if (status === "online") {
-                    el.innerHTML = '<span class="inline-flex items-center gap-1.5 text-emerald-400">' +
-                        '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Živě synchronizováno</span>';
-                } else if (status === "offline") {
-                    el.innerHTML = '<span class="text-amber-400">Offline režim</span>';
-                } else {
-                    el.innerHTML = '<span class="text-slate-400">Připojuji…</span>';
-                }
+                el.textContent = status === "online" ? "Živě synchronizováno"
+                    : status === "offline" ? "Offline režim" : "Připojuji…";
+                el.style.color = status === "online" ? "var(--ok)"
+                    : status === "offline" ? "var(--warn)" : "var(--dim)";
             });
         };
         paint(window.KB ? window.KB.status : "connecting");
-        const attach = () => window.KB.on("status", (e) => paint(e.detail));
-        if (window.KB) attach(); else document.addEventListener("kb-loaded", attach, { once: true });
+        if (window.KB) window.KB.on("status", (event) => paint(event.detail));
     };
 
     /* ------------------------------------------------------ vyhledávání */
@@ -93,7 +251,6 @@
 
     UI.fold = foldText;
 
-    /** Prohledá název, popis, kategorii i text jednotlivých kroků. */
     UI.searchGuides = (guides, query) => {
         const needle = foldText(query).trim();
         if (!needle) return guides;
@@ -109,23 +266,23 @@
     };
 
     UI.highlight = (text, query) => {
-        const escaped = window.KBDoc ? window.KBDoc.esc(text) : String(text || "");
+        const escaped = esc(text);
         const needle = foldText(query).trim();
         if (!needle) return escaped;
-        const folded = foldText(escaped);
-        const start = folded.indexOf(needle.split(/\s+/)[0]);
+        const first = needle.split(/\s+/)[0];
+        const start = foldText(escaped).indexOf(first);
         if (start < 0) return escaped;
-        const len = needle.split(/\s+/)[0].length;
-        return escaped.slice(0, start) + "<mark>" + escaped.slice(start, start + len) + "</mark>" + escaped.slice(start + len);
+        return escaped.slice(0, start) + "<mark>" + escaped.slice(start, start + first.length) +
+               "</mark>" + escaped.slice(start + first.length);
     };
 
     /* ------------------------------------------------------- pokyn pro AI */
 
     UI.aiPrompt = (catId, subId) => {
-        const cat = window.KB_findCategory ? window.KB_findCategory(catId) : null;
-        const sub = window.KB_findSub ? window.KB_findSub(catId, subId) : null;
-        const catLine = cat
-            ? '"cat": "' + cat.id + '"' + (sub ? ', "subcat": "' + sub.id + '"' : "")
+        const category = window.KB_findCategory ? window.KB_findCategory(catId) : null;
+        const hit = window.KB_findNode ? window.KB_findNode(catId, subId) : null;
+        const catLine = category
+            ? '"cat": "' + category.id + '"' + (hit ? ', "subcat": "' + hit.node.id + '"' : "")
             : '"cat": "" (nech prázdné, doplním ručně)';
 
         return [
@@ -158,7 +315,6 @@
 
     /* ---------------------------------------------------------- obrázky */
 
-    /** Zmenší a zkomprimuje screenshot, ať databázi nezahltíme. */
     UI.compressImage = (file, maxWidth = 1400, quality = 0.72) => new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(new Error("Soubor se nepodařilo načíst."));
@@ -176,8 +332,7 @@
                 ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
                 resolve({
                     dataUrl: canvas.toDataURL("image/jpeg", quality),
-                    w: canvas.width,
-                    h: canvas.height,
+                    w: canvas.width, h: canvas.height,
                     name: file.name || "screenshot.jpg"
                 });
             };
@@ -185,39 +340,6 @@
         };
         reader.readAsDataURL(file);
     });
-
-    /* ------------------------------------------------------------ hlavička */
-
-    UI.header = (options = {}) => {
-        const back = options.back
-            ? '<a href="' + options.back + '" class="text-slate-400 hover:text-white text-sm flex items-center gap-1.5 shrink-0">' +
-              '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>' +
-              (options.backLabel || "Zpět") + "</a>"
-            : "";
-
-        return '<header class="no-print bg-slate-800 border-b border-slate-700 sticky top-0 z-50 px-5 py-3 flex items-center gap-4 shadow-md">' +
-            back +
-            '<a href="index.html" class="flex items-center gap-3 shrink-0">' +
-                '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa" class="h-8 object-contain">' +
-            "</a>" +
-            '<div class="min-w-0 flex-1">' +
-                '<div class="text-sm font-bold text-white truncate">' + (options.title || "Firemní návody") + "</div>" +
-                '<div class="text-[11px] text-slate-500 truncate" data-cloud-status></div>' +
-            "</div>" +
-            '<div class="flex items-center gap-2 shrink-0">' + (options.actions || "") + "</div>" +
-            '<div class="hidden md:block text-[11px] text-slate-500 border-l border-slate-700 pl-4 shrink-0">' +
-                'Uživatel<br><span class="text-slate-300 font-semibold" data-user-name>…</span>' +
-            "</div>" +
-        "</header>";
-    };
-
-    UI.mountHeader = (options) => {
-        const slot = document.getElementById("appHeader");
-        if (!slot) return;
-        slot.outerHTML = UI.header(options);
-        UI.paintUser();
-        UI.bindCloudStatus("[data-cloud-status]");
-    };
 
     document.addEventListener("DOMContentLoaded", UI.paintUser);
 })();
