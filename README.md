@@ -60,8 +60,25 @@ Barvy, písmo i zaoblení rohů jsou na jednom místě v `:root` v `app.css`:
 | `--radius`, `--radius-lg` | zaoblení – držené nízko, ať jsou tvary obdélníkové |
 | `--doc-accent` | barva tištěného dokumentu (PDF zpátky do modré = jeden řádek) |
 
-Písmo se načítá z Google Fonts odkazem v hlavičce každého HTML. Když měníš
-`--font`, změň i ten odkaz.
+### Písmo je v repozitáři, ne z Google Fonts
+
+V `assets/fonts/` leží **Lato 2.015** z originální rodiny (latofonts.com,
+licence SIL OFL) převedené z TTF do WOFF:
+
+| Soubor | Váha v CSS | K čemu |
+|---|---|---|
+| `lato-semibold.woff` | 100–800 | běžný text i zvýraznění |
+| `lato-black.woff` | 900 | nadpisy |
+
+**Proč ne Google Fonts:** servírují Lato rozsekané na `latin` a `latin-ext`
+a ten druhý soubor se nenačítal – `č, ř, ž, ě, ů` se pak kreslily systémovým
+písmem a v nadpisech vyčnívaly. Vlastní soubory mají celou diakritiku
+v jednom kuse a web navíc nečeká na cizí server.
+
+Převod TTF → WOFF je bezztrátový (stejné tabulky, jen zabalené zlibem);
+skript na to je v historii commitů, kdyby bylo potřeba přidat další řez.
+Chceš jinou váhu (např. Regular na text v dokumentu)? Přidej soubor do
+`assets/fonts/` a `@font-face` na začátku `app.css`.
 
 ### Zkoušení jiné červené
 
