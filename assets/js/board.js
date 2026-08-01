@@ -185,24 +185,22 @@
      * potomek leží – všechny větve tak vyjíždějí z jednoho místa a teprve
      * pak se rozbíhají, jako v myšlenkových mapách.
      */
+    const OPPOSITE = { left: "right", right: "left", up: "down", down: "up" };
+
     function linkPath(link) {
         const a = find(link.from), b = find(link.to);
         if (!a || !b) return "";
         const A = anchors(a), Bn = anchors(b);
         if (!A || !Bn) return "";
 
-        const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
-        const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
-
-        let p1, p2;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            p1 = dx >= 0 ? A.right : A.left;
-            p2 = dx >= 0 ? Bn.left : Bn.right;
-        } else {
-            p1 = dy >= 0 ? A.down : A.up;
-            p2 = dy >= 0 ? Bn.up : Bn.down;
+        // strana je daná tím, kam se uzel přidával; bez ní se odvodí z polohy
+        let dir = link.dir;
+        if (!dir || !A[dir]) {
+            const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
+            const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
+            dir = Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? "right" : "left") : (dy >= 0 ? "down" : "up");
         }
-        return curve(p1, p2);
+        return curve(A[dir], Bn[OPPOSITE[dir]]);
     }
 
     const linksOf = (id) => S.elements.filter(e =>
@@ -295,8 +293,18 @@
         const stroke = 'stroke="' + esc(e.color || "#16191d") + '" stroke-width="' + (e.width || 3) + '"';
 
         if (e.type === "link") {
-            return '<path data-el="' + e.id + '" d="' + linkPath(e) + '" fill="none" stroke="' +
-                esc(e.color || "#8a95a3") + '" stroke-width="2.5" stroke-linecap="round" class="blink"/>';
+            const path = '<path data-el="' + e.id + '" d="' + linkPath(e) + '" fill="none" stroke="' +
+                esc(sel ? "#c8102e" : (e.color || "#8a95a3")) + '" stroke-width="' + (sel ? 3.5 : 2.5) +
+                '" stroke-linecap="round" class="blink"/>';
+            if (!sel) return path;
+
+            // vybraná čára: tečky na stranách rodiče přehodí, odkud vychází
+            const parent = find(e.from);
+            const A = parent ? anchors(parent) : null;
+            if (!A) return path;
+            return path + Object.keys(A).map(dir =>
+                '<circle class="bside' + ((e.dir || "right") === dir ? " is-on" : "") + '" data-side="' + e.id + "|" + dir +
+                '" cx="' + A[dir].x + '" cy="' + A[dir].y + '" r="7"/>').join("");
         }
         if (e.type === "ink") {
             return '<path data-el="' + e.id + '" d="' + inkPath(e.points) + '" fill="none" ' + stroke +
@@ -507,33 +515,70 @@
         return node;
     }
 
+    /**
+     * Rozprostře potomky rovnoměrně na tu stranu, na které vznikli –
+     * jako v Miru. Střed skupiny sedí na středu rodiče, takže s přibývajícími
+     * uzly se větev roztahuje na obě strany, ne jen dolů.
+     */
+    function arrangeChildren(parentId) {
+        const parent = find(parentId);
+        if (!parent) return;
+
+        const groups = {};
+        S.elements.filter(e => e.type === "link" && e.from === parentId).forEach(link => {
+            const dir = link.dir || "right";
+            (groups[dir] = groups[dir] || []).push(link.to);
+        });
+
+        const GAP = 18;
+        Object.keys(groups).forEach(dir => {
+            const kids = groups[dir].map(find).filter(Boolean);
+            if (!kids.length) return;
+
+            if (dir === "left" || dir === "right") {
+                const total = kids.reduce((sum, k) => sum + k.h, 0) + GAP * (kids.length - 1);
+                let y = parent.y + parent.h / 2 - total / 2;
+                kids.forEach(k => {
+                    k.x = dir === "right" ? parent.x + parent.w + GAP_X : parent.x - k.w - GAP_X;
+                    k.y = y;
+                    y += k.h + GAP;
+                });
+            } else {
+                const total = kids.reduce((sum, k) => sum + k.w, 0) + GAP * (kids.length - 1);
+                let x = parent.x + parent.w / 2 - total / 2;
+                kids.forEach(k => {
+                    k.y = dir === "down" ? parent.y + parent.h + GAP_Y : parent.y - k.h - GAP_Y;
+                    k.x = x;
+                    x += k.w + GAP;
+                });
+            }
+        });
+    }
+
     function addChild(parentId, dir, at) {
         const parent = find(parentId);
         if (!parent) return;
 
-        const w = 180, h = 46;
-        let x, y;
-        if (at) { x = at.x - w / 2; y = at.y - h / 2; }
-        else {
-            x = parent.x; y = parent.y + (parent.h - h) / 2;
-            if (dir === "right") x = parent.x + parent.w + GAP_X;
-            if (dir === "left")  x = parent.x - w - GAP_X;
-            if (dir === "up")   { x = parent.x + (parent.w - w) / 2; y = parent.y - h - GAP_Y; }
-            if (dir === "down") { x = parent.x + (parent.w - w) / 2; y = parent.y + parent.h + GAP_Y; }
-
-            const hits = () => S.elements.some(e => BOXES.indexOf(e.type) !== -1 &&
-                x < e.x + e.w + 14 && x + w + 14 > e.x && y < e.y + e.h + 14 && y + h + 14 > e.y);
-            for (let i = 0; i < 24 && hits(); i++) {
-                if (dir === "left" || dir === "right") y += h + 20; else x += w + 20;
-            }
-        }
-
         pushUndo();
-        const node = makeMind(x, y, parent);
-        S.elements.push({ id: newId(), type: "link", from: parentId, to: node.id, color: "#8a95a3" });
+        const node = makeMind(parent.x, parent.y, parent);
+        S.elements.push({ id: newId(), type: "link", from: parentId, to: node.id, dir: dir, color: "#8a95a3" });
+
+        if (at) { node.x = at.x - node.w / 2; node.y = at.y - node.h / 2; }
+        else arrangeChildren(parentId);      // nový uzel se vejde mezi ostatní
+
         S.sel = [node.id];
         render(); save();
         startEditing(node.id);
+    }
+
+    /** Enter při psaní = další uzel na stejné úrovni (stejný rodič i strana). */
+    function addSibling(id) {
+        const link = S.elements.find(e => e.type === "link" && e.to === id);
+        if (!link) {
+            const me = find(id);
+            return me ? addChild(id, "right") : null;
+        }
+        addChild(link.from, link.dir || "right");
     }
 
     function startElement(point) {
@@ -554,7 +599,11 @@
     }
 
     function onDown(event) {
-        if (event.target.closest("[data-add],[data-tadd],[data-tdel]")) return;   // tlačítka řeší klik
+        if (event.target.closest("[data-add],[data-tadd],[data-tdel],[data-side]")) return;   // tlačítka řeší klik
+
+        // v rozepsaném textu má myš vybírat písmena, ne tahat s polem
+        if (event.target.closest('[contenteditable="true"]')) return;
+
         pointers.set(event.pointerId, event);
 
         if (pointers.size === 2) {
@@ -613,10 +662,12 @@
             if (hit) {
                 const e = find(hit.dataset.el);
                 if (!e) return;
+                const cell = event.target.closest("[data-cell]");
                 if (!isSel(e.id)) select([e.id], event.shiftKey);
                 pushUndo();
                 Object.assign(drag, {
                     mode: "move", x0: point.x, y0: point.y, moved: false,
+                    cell: cell ? cell.dataset.cell : "",
                     start: S.sel.map(id => ({ id: id, snap: JSON.stringify(find(id)) }))
                 });
                 return;
@@ -879,12 +930,13 @@
         }
 
         if (mode === "move") {
-            // ťuknutí bez tažení = rovnou psát (i do prázdného pole)
+            // ťuknutí bez tažení = rovnou psát (i do prázdné buňky tabulky)
             if (!moved && S.sel.length === 1) {
                 const one = find(S.sel[0]);
+                if (drag.cell) { render(); return editCell(drag.cell); }
                 if (one && TEXTY.indexOf(one.type) !== -1) { render(); return startEditing(one.id); }
             }
-            render();
+            render();     // ručně posunutý uzel zůstane, kde ho člověk nechal
             return save();
         }
         if (mode === "arrowpt") {
@@ -993,6 +1045,7 @@
         if (parent) {
             if (e.x + oldW < parent.x) e.x -= (e.w - oldW);
             if (e.y + oldH < parent.y) e.y -= (e.h - oldH);
+            arrangeChildren(parent.id);     // sourozenci se přerovnají kolem něj
         }
     }
 
@@ -1235,6 +1288,19 @@
             if (event.target.dataset && event.target.dataset.text) stopEditing();
         });
 
+        // přehození strany, ze které vychází vybraná spojnice
+        el.svg.addEventListener("click", (event) => {
+            const side = event.target.closest("[data-side]");
+            if (!side) return;
+            const [id, dir] = side.dataset.side.split("|");
+            const link = find(id);
+            if (!link) return;
+            pushUndo();
+            link.dir = dir;
+            arrangeChildren(link.from);
+            render(); save();
+        });
+
         // tečky u uzlu mapy: klik = přidat směrem, tažení = umístit ručně
         el.html.addEventListener("pointerdown", (event) => {
             const plus = event.target.closest("[data-add]");
@@ -1293,6 +1359,16 @@
             if (event.code === "Space" && !S.editing) { S.space = true; el.stage.dataset.space = "1"; }
             if (S.editing) {
                 if (event.key === "Escape") { event.preventDefault(); document.activeElement.blur(); }
+                // Enter uzavře psaní a přidá další uzel na stejnou úroveň
+                if (event.key === "Enter" && !event.shiftKey) {
+                    const e = find(S.editing);
+                    if (e && e.type === "mind") {
+                        event.preventDefault();
+                        const id = e.id;
+                        stopEditing();
+                        addSibling(id);
+                    }
+                }
                 return;
             }
             if (/input|textarea/i.test(event.target.tagName || "")) return;

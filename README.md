@@ -225,11 +225,16 @@ jestli se hýbe pohled, nebo jen prvek.
 obdélník, elipsa, šipka, obrázek. Jedenáct barev zvlášť pro výplň a pro
 okraj, čtyři tvary buňky, tři tloušťky čáry.
 
-**Myšlenková mapa:** uzel je jednořádkový a hned se do něj píše. Vybraný
-uzel má na stranách tečky – **kliknutím** vznikne navázané pole tím směrem,
-**tažením** ho umístíš, kam chceš. Spojnice vycházejí kolmo z nejbližších
-stran a drží se uzlů při přesunu. Tlačítka v liště srovnají mapu shora dolů
-nebo zleva doprava.
+**Myšlenková mapa:** do uzlu se píše hned po umístění, text se zalomí na víc
+řádků a pole se mu přizpůsobí. **Enter** uzavře psaní a přidá další uzel na
+stejnou úroveň. Vybraný uzel má na stranách tečky – **kliknutím** vznikne
+navázané pole tím směrem, **tažením** ho umístíš kam chceš, a když ho pustíš
+nad existujícím polem, jen se k němu připojí.
+
+Potomci se rovnoměrně rozprostřou na tu stranu, na které vznikli, a jsou
+vystředění na rodiče – s přibývajícími uzly se větev roztahuje nahoru i dolů,
+ne jen pod sebe. Strana je uložená u spojnice; **kliknutím na čáru** se
+ukážou čtyři tečky, kterými se přehodí, ze které strany vychází.
 
 **Tabulka:** tažením určíš počet řádků a sloupců, pak `+` na kterékoliv ze
 čtyř stran přidá řádek nebo sloupec právě tam (obsah se posune, ne přepíše).
