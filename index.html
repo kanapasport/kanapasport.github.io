@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa – firemní knowledge base</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=15">
+    <link rel="stylesheet" href="assets/css/app.css?v=17">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -35,10 +35,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=15"></script>
-<script src="assets/js/doc.js?v=15"></script>
-<script src="assets/js/ui.js?v=15"></script>
-<script type="module" src="assets/js/store.js?v=15"></script>
+<script src="assets/js/taxonomy.js?v=17"></script>
+<script src="assets/js/doc.js?v=17"></script>
+<script src="assets/js/ui.js?v=17"></script>
+<script type="module" src="assets/js/store.js?v=17"></script>
 
 <script>
 (function () {
@@ -210,17 +210,51 @@
                 '<div class="tile__sub">Zatím tu nejsou žádné úkoly. Otevři úkolovník a založ první zakázku.</div>' +
               "</a></div>";
 
-        const html = sectionHtml(section, tiles);
-        if (host) {
-            host.outerHTML = html;
-        } else {
-            // úkolovník patří mezi Návody a Připravujeme
-            const wrap = document.getElementById("sections");
-            const last = document.getElementById("sec-pripravujeme");
-            const holder = document.createElement("div");
-            holder.innerHTML = html;
-            wrap.insertBefore(holder.firstChild, last || null);
-        }
+        placeSection("sec-ukolovnik", sectionHtml(section, tiles), ["sec-boards", "sec-pripravujeme"]);
+    }
+
+    /** Vloží nebo nahradí sekci; pořadí drží podle seznamu následníků. */
+    function placeSection(id, html, beforeIds) {
+        const host = document.getElementById(id);
+        if (host) return void (host.outerHTML = html);
+
+        const wrap = document.getElementById("sections");
+        const holder = document.createElement("div");
+        holder.innerHTML = html;
+        const anchor = beforeIds.map(x => document.getElementById(x)).find(Boolean);
+        wrap.insertBefore(holder.firstChild, anchor || null);
+    }
+
+    /* --------------------------------------------------- tabule na nápady */
+
+    function renderBoards(boards) {
+        const section = {
+            id: "boards", title: "Tabule", href: "tabule.html", icon: "board",
+            desc: "Nekonečné plátno na myšlenkové mapy, poznámky a náčrtky."
+        };
+
+        const list = (boards || []).slice(0, 6);
+        const tiles = list.length
+            ? list.map(board =>
+                '<div class="tile">' +
+                    '<a class="tile__main" href="tabule.html?id=' + encodeURIComponent(board.id) + '">' +
+                        '<div class="tile__head">' +
+                            '<div class="tile__icon">' + icon("board") + "</div>" +
+                            '<div class="tile__title">' + esc((board.title || "Bez názvu").toUpperCase()) + "</div>" +
+                        "</div>" +
+                        '<div class="tile__sub">' +
+                            (board.updatedBy ? "naposledy kreslil " + esc(board.updatedBy) : "zatím prázdná") +
+                            (board.updatedMs ? " · " + new Date(board.updatedMs).toLocaleDateString("cs-CZ") : "") +
+                        "</div>" +
+                    "</a>" +
+                "</div>").join("")
+            : '<div class="tile"><a class="tile__main" href="tabule.html">' +
+                '<div class="tile__head"><div class="tile__icon">' + icon("board") + "</div>" +
+                '<div class="tile__title">ZALOŽIT TABULI</div></div>' +
+                '<div class="tile__sub">Zatím tu žádná není. Klikni a založ první.</div>' +
+              "</a></div>";
+
+        placeSection("sec-boards", sectionHtml(section, tiles), ["sec-pripravujeme"]);
     }
 
     /* ---------------------------------------------------------- hledání */
@@ -273,6 +307,8 @@
             runSearch(window.KBUI.searchValue());
         });
         window.KB.on("tasks", (event) => renderTasks(event.detail));
+        renderBoards(window.KB.boards);
+        window.KB.on("boards", (event) => renderBoards(event.detail));
     });
 })();
 </script>

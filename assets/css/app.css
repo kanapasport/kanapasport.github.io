@@ -1120,6 +1120,211 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .note__who { display: block; font-size: 10.5px; color: var(--dim); margin-top: 3px; }
 
+/* ============================================================= TABULE ====
+   Nekonečné plátno. Posun a přiblížení dělá jedna transformace na .board__world,
+   prvky uvnitř mají souřadnice v „papírovém" prostoru.
+   ------------------------------------------------------------------------ */
+
+.board { display: flex; flex-direction: column; }
+
+.board__bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+}
+.board__title {
+    min-width: 160px;
+    max-width: 260px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: transparent;
+    font-size: 15px;
+    font-weight: 900;
+    color: var(--text);
+}
+.board__title:hover { border-color: var(--line); }
+.board__title:focus { outline: none; border-color: var(--accent); background: var(--bg-soft); }
+
+.board__group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+}
+.board__group--end { margin-left: auto; gap: 10px; border: none; background: none; }
+.board__zoom { font-size: 12px; color: var(--muted); min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.btool {
+    width: 34px; height: 34px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-soft);
+    font-size: 16px;
+    cursor: pointer;
+}
+.btool svg { width: 19px; height: 19px; }
+.btool:hover { background: var(--accent-tint); color: var(--accent); }
+.btool.is-active { background: var(--accent); color: #fff; }
+.btool:disabled { opacity: .35; cursor: default; background: none; color: var(--dim); }
+.btool--danger:hover { background: #fdecec; color: var(--danger); }
+
+.board__colors button {
+    width: 26px; height: 26px;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    background: var(--c);
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
+}
+.board__colors button.is-active { border-color: var(--text); }
+
+.board__widths button {
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 5px; background: none; cursor: pointer;
+}
+.board__widths button i { display: block; width: 18px; border-radius: 4px; background: var(--text-soft); }
+.board__widths button:hover { background: var(--accent-tint); }
+.board__widths button.is-active { background: var(--accent); }
+.board__widths button.is-active i { background: #fff; }
+
+/* uzel myšlenkové mapy a jeho spojnice */
+.bel--mind {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(16, 20, 26, .16);
+    text-align: center;
+}
+.bel--mind .bel__text { display: flex; align-items: center; justify-content: center; text-align: center; }
+.blink { pointer-events: stroke; }
+
+/* plusko pro rozšíření mapy do stran */
+.bel__plus {
+    position: absolute;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+.bel__plus:hover { background: var(--accent); color: #fff; }
+.bel__plus--up    { left: 50%; top: -30px; transform: translateX(-50%); }
+.bel__plus--down  { left: 50%; bottom: -30px; transform: translateX(-50%); }
+.bel__plus--left  { top: 50%; left: -30px; transform: translateY(-50%); }
+.bel__plus--right { top: 50%; right: -30px; transform: translateY(-50%); }
+
+.board__stage {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-soft);
+    /* rastr, aby bylo poznat, že se plátno posouvá */
+    background-image: radial-gradient(var(--line) 1px, transparent 1px);
+    background-size: 24px 24px;
+    touch-action: none;          /* posun a zoom si řídíme sami */
+    cursor: default;
+    user-select: none;
+}
+.board__stage[data-tool="hand"] { cursor: grab; }
+.board__stage[data-tool="pen"],
+.board__stage[data-tool="note"],
+.board__stage[data-tool="text"],
+.board__stage[data-tool="rect"],
+.board__stage[data-tool="ellipse"],
+.board__stage[data-tool="arrow"] { cursor: crosshair; }
+
+.board__world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.board__svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.board__html { position: absolute; left: 0; top: 0; }
+
+.bsvg { pointer-events: stroke; }
+.bsvg.is-sel { filter: drop-shadow(0 0 0 var(--accent)); }
+
+/* prvky na plátně */
+.bel {
+    position: absolute;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+.bel--note {
+    box-shadow: 0 2px 6px rgba(16, 20, 26, .18);
+    padding: 10px 12px;
+}
+.bel--text { background: none; }
+.bel--image { overflow: hidden; }
+.bel--image img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+
+.bel__text {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    line-height: 1.35;
+    font-weight: 600;
+    color: #16191d;
+    white-space: pre-wrap;
+    word-break: break-word;
+    outline: none;
+    cursor: text;
+}
+.bel--text .bel__text { font-weight: 700; }
+.bel.is-sel { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bel__grip {
+    position: absolute;
+    right: -7px; bottom: -7px;
+    width: 14px; height: 14px;
+    border: 2px solid var(--accent);
+    border-radius: 3px;
+    background: #fff;
+    cursor: nwse-resize;
+}
+.bel__ghost {
+    position: absolute;
+    border: 2px dashed var(--accent);
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+.board__hint {
+    position: absolute;
+    left: 50%; bottom: 14px;
+    transform: translateX(-50%);
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    background: rgba(22, 25, 29, .82);
+    color: #fff;
+    font-size: 12px;
+    pointer-events: none;
+    transition: opacity .4s ease;
+}
+.board__hint.is-gone { opacity: 0; }
+
+@media (max-width: 700px) {
+    .board__bar { padding: 8px 12px; gap: 6px; }
+    .board__title { max-width: 100%; flex: 1 0 100%; }
+    .board__group--end { width: 100%; margin-left: 0; justify-content: space-between; }
+    .btool { width: 32px; height: 32px; }
+}
+
 /* ======================================================== A4 DOKUMENT ====
    Vše psáno v mm/pt čistým CSS (ne Tailwind), aby byl náhled na stránce
    PIXEL ZA PIXEL shodný s exportovaným PDF – PDF se generuje přímo z těchto

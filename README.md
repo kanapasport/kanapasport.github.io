@@ -13,6 +13,7 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `navod.html` | Čtení jednoho návodu (`?id=…`) – sazba A4 + export do PDF |
 | `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor (jde přiblížit), vpravo živý náhled |
 | `ukoly.html` | Úkolovník – úkoly seskupené podle zakázek, patra, procenta, poznámky |
+| `tabule.html` | Tabule na nápady – nekonečné plátno (`?id=…`), seznam tabulí bez parametru |
 | `barvy.html` | Zkoušení odstínů hlavní barvy na živé ukázce (odkaz je v patičce) |
 
 ## Sdílené soubory
@@ -200,6 +201,31 @@ vybírají ze seznamu, takže překlepem nevznikne nová. **+ Nová zakázka**
 zakládá jen názvy (klidně víc najednou, jeden na řádek), **+ Nový úkol do …**
 zakládá úkol do vybrané zakázky. Zakázka bez úkolů se v seznamu ukáže taky,
 aby do ní šlo rovnou přidat první úkol.
+
+## Tabule na nápady
+
+Nekonečné plátno pro myšlenkové mapy, poznámky a náčrtky – něco mezi
+OneNote a Miro. Tabulí může být kolik chceš, každý si může založit svou
+a všichni mohou psát do jedné (změny se propisují živě).
+
+**Nástroje:** myšlenková mapa, lepítko, text, kreslení, guma, obdélník,
+elipsa, šipka, obrázek. Deset barev, tři tloušťky čáry, zpět/znovu.
+
+**Myšlenková mapa:** vybraný uzel má na všech čtyřech stranách tlačítko `+`,
+které přidá navázané pole tím směrem (a uhne, kdyby na někoho sedlo).
+Spojnice se počítají z aktuální polohy uzlů, takže je drží při přesunu.
+
+**iPad:** jako ve Freeform – **Apple Pencil kreslí i bez přepínání nástroje**,
+prst posouvá plátno a vybírá, dva prsty přibližují. Ťuknutí do lepítka
+otevře klávesnici.
+
+Data: hlavička tabule je `boards/{id}` (název, kdo a kdy), prvky
+`boards/{id}/content/data`, obrázky `boards/{id}/images/{imgId}`.
+Ukládá se se zpožděním po poslední změně; cizí změny přitečou přes
+onSnapshot a nepřepíšou rozepsaný text ani rozdělané tažení.
+
+**Pozor:** Firestore neumí uložit pole v poli, proto jsou body kresby
+naplocho `[x1,y1,x2,y2,…]`.
 
 ## Role – dočasné řešení
 

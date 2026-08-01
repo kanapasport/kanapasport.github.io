@@ -35,6 +35,7 @@ const KB = {
     tasks: [],
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
     zakazkyClosed: [],      // uzavřené zakázky (v dlaždici zelené)
+    boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
     status: "connecting",   // connecting | online | offline
     ready: false
 };
@@ -52,6 +53,12 @@ const guideDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "guides"
 const tasksCol = () => collection(db, "artifacts", APP_ID, "public", "data", "tasks");
 const taskDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "tasks", id);
 const metaDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "meta", id);
+const boardsCol = () => collection(db, "artifacts", APP_ID, "public", "data", "boards");
+const boardDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id);
+/* obsah tabule je zvlášť, aby seznam tabulí zůstal lehký */
+const boardBody = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "content", "data");
+const boardImages = (id) => collection(db, "artifacts", APP_ID, "public", "data", "boards", id, "images");
+const boardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "images", imgId);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
 const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images", imgId);
 
@@ -89,6 +96,13 @@ try {
             KB.tasks.sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"));
             emit("tasks", KB.tasks);
         }, (err) => console.error("Chyba čtení úkolů:", err));
+
+        onSnapshot(boardsCol(), (snapshot) => {
+            KB.boards = [];
+            snapshot.forEach(d => KB.boards.push({ id: d.id, ...d.data() }));
+            KB.boards.sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0));
+            emit("boards", KB.boards);
+        }, (err) => console.error("Chyba čtení tabulí:", err));
 
         onSnapshot(metaDoc("zakazky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
@@ -245,6 +259,79 @@ KB.deleteTask = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(taskDoc(id));
+};
+
+/* ---------------------------------------------------------------- tabule --
+   Hlavička tabule (název, kdo a kdy naposledy kreslil) je samostatný malý
+   dokument, aby se seznam tabulí načítal rychle. Prvky jsou v podkolekci
+   `content/data` a obrázky zvlášť, stejně jako u návodů.               */
+
+KB.newBoardId = () => "board_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.saveBoardMeta = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(boardDoc(id), {
+        title: data.title || "Bez názvu",
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || "",
+        createdMs: data.createdMs || Date.now(),
+        createdBy: data.createdBy || window.KB_USER || ""
+    }, { merge: true });
+    return id;
+};
+
+/** Uloží prvky tabule. `stamp` pozná vlastní zápis od cizího při živé synchronizaci. */
+KB.saveBoard = async (id, elements, stamp) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(boardBody(id), {
+        elements: elements || [],
+        stamp: stamp || "",
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
+};
+
+KB.getBoard = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(boardBody(id));
+    return snap.exists() ? snap.data() : { elements: [] };
+};
+
+/** Živé sledování obsahu tabule – vrací funkci pro odhlášení. */
+KB.watchBoard = (id, handler) => {
+    if (!db) return () => {};
+    return onSnapshot(boardBody(id), (snap) => {
+        if (snap.exists()) handler(snap.data());
+    }, (err) => console.error("Chyba čtení tabule:", err));
+};
+
+KB.deleteBoard = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const imgs = await getDocs(boardImages(id));
+    await Promise.all(imgs.docs.map(d => deleteDoc(boardImage(id, d.id))));
+    await deleteDoc(boardBody(id)).catch(() => {});
+    await deleteDoc(boardDoc(id));
+};
+
+KB.saveBoardImage = async (boardId, imgId, dataUrl, meta = {}) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(boardImage(boardId, imgId), {
+        data: dataUrl, w: meta.w || 0, h: meta.h || 0, createdAt: serverTimestamp()
+    });
+};
+
+KB.loadBoardImages = async (boardId) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(boardImages(boardId));
+    const map = {};
+    snap.forEach(d => { map[d.id] = d.data().data; });
+    return map;
 };
 
 /* ------------------------------------------------------------------- logy */
