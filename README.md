@@ -69,6 +69,7 @@ licence SIL OFL) převedené z TTF do WOFF:
 |---|---|---|
 | `lato-semibold.woff` | 100–800 | běžný text i zvýraznění |
 | `lato-black.woff` | 900 | nadpisy |
+| `lato-italic.woff` | kurzíva | podtitul návodu, popisky obrázků |
 
 **Proč ne Google Fonts:** servírují Lato rozsekané na `latin` a `latin-ext`
 a ten druhý soubor se nenačítal – `č, ř, ž, ě, ů` se pak kreslily systémovým
