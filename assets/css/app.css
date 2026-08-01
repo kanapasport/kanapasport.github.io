@@ -1256,14 +1256,65 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     position: relative;
     overflow: hidden;
     background: var(--bg-soft);
-    /* rastr, aby bylo poznat, že se plátno posouvá */
-    background-image: radial-gradient(var(--line) 1px, transparent 1px);
-    background-size: 24px 24px;
+    /* rastr teček se posouvá a zvětšuje s plátnem – nastavuje ho JS */
+    background-repeat: repeat;
     touch-action: none;          /* posun a zoom si řídíme sami */
     cursor: default;
     user-select: none;
 }
-.board__stage[data-tool="hand"] { cursor: grab; }
+.board__stage[data-tool="hand"], .board__stage[data-space="1"] { cursor: grab; }
+
+/* rámeček výběru tažením přes plochu */
+.board__band {
+    position: absolute;
+    border: 1px solid var(--accent);
+    background: rgba(200, 16, 46, .08);
+    pointer-events: none;
+    z-index: 5;
+}
+.bpull { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 5; }
+
+/* volba tvaru buňky */
+.board__shapes button {
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 5px; background: none; cursor: pointer;
+}
+.board__shapes button:hover { background: var(--accent-tint); }
+.board__shapes button.is-active { background: var(--accent); }
+.board__shapes button.is-active .sh { border-color: #fff; }
+.sh { display: block; width: 20px; height: 13px; border: 2px solid var(--text-soft); }
+.sh--none { border-style: dashed; }
+.sh--pill { border-radius: 999px; }
+.sh--round { border-radius: 4px; }
+.sh--rect { border-radius: 0; }
+
+/* tabulka */
+.bel--table { padding: 0; overflow: hidden; }
+.btgrid { display: grid; width: 100%; height: 100%; }
+.btcell {
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 4px 7px;
+    font-size: 13px;
+    overflow: hidden;
+    outline: none;
+}
+.btcell:focus { background: var(--accent-tint); }
+
+.bel__minus {
+    position: absolute;
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--text-soft);
+    font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+}
+.bel__minus:hover { border-color: var(--danger); color: var(--danger); }
+.bel__minus--right { top: calc(50% + 26px); right: -28px; }
+.bel__minus--down { left: calc(50% + 26px); bottom: -28px; }
 .board__stage[data-tool="pen"],
 .board__stage[data-tool="note"],
 .board__stage[data-tool="text"],

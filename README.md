@@ -208,16 +208,38 @@ Nekonečné plátno pro myšlenkové mapy, poznámky a náčrtky – něco mezi
 OneNote a Miro. Tabulí může být kolik chceš, každý si může založit svou
 a všichni mohou psát do jedné (změny se propisují živě).
 
-**Nástroje:** myšlenková mapa, lepítko, text, kreslení, guma, obdélník,
-elipsa, šipka, obrázek. Deset barev, tři tloušťky čáry, zpět/znovu.
+**Ovládání je převzaté z Mira:**
 
-**Myšlenková mapa:** vybraný uzel má na všech čtyřech stranách tlačítko `+`,
-které přidá navázané pole tím směrem (a uhne, kdyby na někoho sedlo).
-Spojnice se počítají z aktuální polohy uzlů, takže je drží při přesunu.
+| | |
+|---|---|
+| levé tlačítko | výběr – tažením přes plochu rámečkem, tažením za prvek se posouvá (i více najednou, Shift přidává) |
+| prostřední tlačítko / mezerník | posun plátna |
+| kolečko | přiblížení k místu pod kurzorem |
+| dva prsty | posun a přiblížení na dotyku |
+| Ctrl+Z / Ctrl+Shift+Z | zpět a znovu, Ctrl+A vybere vše, Ctrl+D duplikuje |
+
+Rastr teček se posouvá a zvětšuje spolu s plátnem – podle něj se pozná,
+jestli se hýbe pohled, nebo jen prvek.
+
+**Nástroje:** myšlenková mapa, lepítko, text, tabulka, kreslení, guma,
+obdélník, elipsa, šipka, obrázek. Jedenáct barev zvlášť pro výplň a pro
+okraj, čtyři tvary buňky, tři tloušťky čáry.
+
+**Myšlenková mapa:** uzel je jednořádkový a hned se do něj píše. Vybraný
+uzel má na stranách tečky – **kliknutím** vznikne navázané pole tím směrem,
+**tažením** ho umístíš, kam chceš. Spojnice vycházejí kolmo z nejbližších
+stran a drží se uzlů při přesunu. Tlačítka v liště srovnají mapu shora dolů
+nebo zleva doprava.
+
+**Tabulka:** tažením určíš počet řádků a sloupců, pak se přidávají a ubírají
+tlačítky `+` a `−` na okrajích. Do buněk se píše po dvojkliku.
+
+**Šipky** se koncem přichytí k prvku, nad kterým je pustíš, a pak už ho
+následují. Prostředním úchytem se z rovné šipky udělá křivka.
 
 **iPad:** jako ve Freeform – **Apple Pencil kreslí i bez přepínání nástroje**,
-prst posouvá plátno a vybírá, dva prsty přibližují. Ťuknutí do lepítka
-otevře klávesnici.
+prst posouvá plátno a vybírá, dva prsty přibližují. Ťuknutí do buňky otevře
+klávesnici.
 
 Data: hlavička tabule je `boards/{id}` (název, kdo a kdy), prvky
 `boards/{id}/content/data`, obrázky `boards/{id}/images/{imgId}`.
