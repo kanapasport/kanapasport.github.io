@@ -34,6 +34,7 @@ const KB = {
     guides: [],
     tasks: [],
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
+    zakazkyClosed: [],      // uzavřené zakázky (v dlaždici zelené)
     status: "connecting",   // connecting | online | offline
     ready: false
 };
@@ -90,8 +91,9 @@ try {
         }, (err) => console.error("Chyba čtení úkolů:", err));
 
         onSnapshot(metaDoc("zakazky"), (snap) => {
-            const names = snap.exists() ? snap.data().names : null;
-            KB.zakazky = Array.isArray(names) ? names : [];
+            const data = snap.exists() ? snap.data() : {};
+            KB.zakazky = Array.isArray(data.names) ? data.names : [];
+            KB.zakazkyClosed = Array.isArray(data.closed) ? data.closed : [];
             emit("zakazky", KB.zakazky);
         }, (err) => console.error("Chyba čtení zakázek:", err));
     });
@@ -214,6 +216,8 @@ KB.saveTask = async (id, data) => {
         deadline: data.deadline || "",
         subtasks: data.subtasks || [],
         notes:    data.notes || [],
+        log:      data.log || [],          // kdo a kdy měnil procenta
+        done:     data.done || null,       // { by, ms } po potvrzení „úkol je hotov"
         createdBy: data.createdBy || window.KB_USER || "",
         createdMs: data.createdMs || Date.now(),
         updatedMs: Date.now(),
@@ -222,12 +226,16 @@ KB.saveTask = async (id, data) => {
     return id;
 };
 
-/** Uloží číselník zakázek (jeden dokument se seznamem názvů). */
-KB.saveZakazky = async (names) => {
+/**
+ * Uloží číselník zakázek – jeden dokument se seznamem názvů
+ * a seznamem těch uzavřených.
+ */
+KB.saveZakazky = async (names, closed) => {
     if (authReady) await authReady;
     requireDb();
     await setDoc(metaDoc("zakazky"), {
         names: names,
+        closed: closed || KB.zakazkyClosed || [],
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });

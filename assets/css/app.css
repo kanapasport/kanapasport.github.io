@@ -543,7 +543,8 @@ input, select, textarea, button { font-family: inherit; }
     box-shadow: var(--shadow-up);
 }
 
-/* hlavní prokliková plocha dlaždice (štítky uvnitř mají vlastní odkazy) */
+/* Hlavní odkaz se roztáhne přes celou dlaždici, takže je prokliková celá.
+   Štítky a řádky úkolů leží nad ním a mají vlastní odkazy. */
 .tile__main {
     display: flex;
     flex-direction: column;
@@ -554,6 +555,13 @@ input, select, textarea, button { font-family: inherit; }
     text-decoration: none;
     color: inherit;
 }
+.tile__main::after { content: ""; position: absolute; inset: 0; z-index: 0; }
+.tile__children, .tile__list { position: relative; z-index: 1; }
+
+/* uzavřená zakázka – zelená dlaždice */
+.tile--done { background: var(--ok); border-color: var(--ok); }
+.tile--done:hover { background: #12603a; border-color: #12603a; }
+.tile--done .tile__dot--done { background: #fff; }
 
 /* ikona + nadpis jako jeden celek */
 .tile__head {
@@ -838,7 +846,36 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 /* ========================================================= ÚKOLOVNÍK ==== */
 
 /* nadpis zakázky – úkoly jsou pod ním seskupené */
-[id^="zak-"] { scroll-margin-top: 74px; }   /* ať skok na zakázku neskončí pod lištou */
+[id^="zak-"], [id^="task-"] { scroll-margin-top: 84px; }   /* ať skok neskončí pod lištou */
+
+/* řádek v okně Správa zakázek */
+.zakrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    font-size: 13.5px;
+}
+.zakrow--closed { background: var(--ok-tint); border-color: #bfe3d0; }
+.zakrow--closed b { color: var(--ok); }
+
+.taskgroup__tag {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ok);
+    background: var(--ok-tint);
+    border-radius: 4px;
+    padding: 2px 7px;
+}
+.taskgroup__head--closed { border-bottom-color: var(--ok); }
+.taskgroup__head--closed .taskgroup__name { color: var(--ok); }
 .taskgroup__head {
     display: flex;
     align-items: baseline;
@@ -862,10 +899,15 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 3px 5px;
+    margin: 0 -5px;
+    border-radius: 4px;
     font-size: 12.5px;
     color: rgba(255, 255, 255, .92);
     line-height: 1.35;
+    text-decoration: none;
 }
+.tile__listrow:hover { background: rgba(255, 255, 255, .16); color: #fff; }
 .tile__listrow b { font-weight: 700; }
 .tile__dot {
     width: 7px; height: 7px;
@@ -981,6 +1023,50 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .subtask--done .subtask__pct { color: var(--ok); }
 .subtask__add { grid-area: note; min-height: 30px; padding: 0 10px; }
+
+/* pruh „úkol je hotov" pod posledním patrem */
+.taskdone {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    background: var(--ok-tint);
+    border-top: 2px solid var(--ok);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ok);
+}
+.taskdone--set { background: var(--ok); color: #fff; border-top-color: var(--ok); font-weight: 400; }
+.taskdone--set b { font-weight: 900; }
+.taskdone--set .btn--ghost {
+    background: rgba(255, 255, 255, .18);
+    border-color: rgba(255, 255, 255, .5);
+    color: #fff;
+}
+
+/* historie zápisů (jen správce) */
+.tasklog { border-top: 1px solid var(--line-soft); font-size: 12px; }
+.tasklog summary {
+    padding: 9px 14px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 700;
+}
+.tasklog__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--line-soft);
+    color: var(--text-soft);
+}
+.tasklog__row span:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; }
+.tasklog__row span:last-child { color: var(--dim); white-space: nowrap; }
+
+/* úkol, na který se přišlo prokliknutím z rozcestníku */
+.task--hl { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .note {
     font-size: 12.5px;

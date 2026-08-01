@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
-    <link rel="stylesheet" href="assets/css/app.css?v=10">
+    <link rel="stylesheet" href="assets/css/app.css?v=12">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -38,10 +38,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=10"></script>
-<script src="assets/js/doc.js?v=10"></script>
-<script src="assets/js/ui.js?v=10"></script>
-<script type="module" src="assets/js/store.js?v=10"></script>
+<script src="assets/js/taxonomy.js?v=12"></script>
+<script src="assets/js/doc.js?v=12"></script>
+<script src="assets/js/ui.js?v=12"></script>
+<script type="module" src="assets/js/store.js?v=12"></script>
 
 <script>
 (function () {
@@ -159,24 +159,30 @@
 
     /** Seskupí úkoly podle zakázky – z každé zakázky je jedna dlaždice se seznamem. */
     function taskTileHtml(name, tasks) {
+        const zak = encodeURIComponent(slug(name));
+
+        // každý řádek je proklik rovnou na ten konkrétní úkol
         const rows = tasks.map(task => {
             const percent = taskPercent(task);
-            const state = percent === 100 ? " tile__dot--done" : percent > 0 ? " tile__dot--run" : "";
-            return '<div class="tile__listrow">' +
+            const state = task.done || percent === 100 ? " tile__dot--done" : percent > 0 ? " tile__dot--run" : "";
+            return '<a class="tile__listrow" href="ukoly.html?zak=' + zak + "#task-" + encodeURIComponent(task.id) + '">' +
                 '<span class="tile__dot' + state + '"></span>' +
                 "<b>" + esc(task.title || "Bez názvu") + "</b>" +
                 '<span class="tile__listpct">' + percent + " %</span>" +
-            "</div>";
+            "</a>";
         }).join("");
 
         const deadlines = tasks.map(t => t.deadline).filter(Boolean).sort();
-        const sub = tasks.length + (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
-            (deadlines.length ? " · nejbližší termín " + czDate(deadlines[0]) : "");
+        const closed = (window.KB.zakazkyClosed || []).indexOf(name) !== -1;
+        const sub = closed
+            ? "Zakázka uzavřená"
+            : tasks.length + (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
+              (deadlines.length ? " · nejbližší termín " + czDate(deadlines[0]) : "");
 
-        return '<div class="tile">' +
-            '<a class="tile__main" href="ukoly.html?zak=' + encodeURIComponent(slug(name)) + '">' +
+        return '<div class="tile' + (closed ? " tile--done" : "") + '">' +
+            '<a class="tile__main" href="ukoly.html?zak=' + zak + '">' +
                 '<div class="tile__head">' +
-                    '<div class="tile__icon">' + icon("building") + "</div>" +
+                    '<div class="tile__icon">' + icon(closed ? "tasks" : "building") + "</div>" +
                     '<div class="tile__title">' + esc(name.toUpperCase()) + "</div>" +
                 "</div>" +
                 '<div class="tile__sub">' + esc(sub) + "</div>" +
