@@ -69,7 +69,7 @@ function convert(inPath, outPath, dropTables = []) {
     return { from: src.length, to: out.length, tables: numTables };
 }
 
-const jobs = [["C:/Users/Michal/Desktop/PRACE/CAD/_Standardizace/FONTY/lato.italic.ttf","assets/fonts/lato-italic.woff"]];
+const jobs = [["C:/Users/Michal/Desktop/PRACE/CAD/_Standardizace/FONTY/lato.regular.ttf","assets/fonts/lato-regular.woff"]];
 
 fs.mkdirSync("assets/fonts", { recursive: true });
 for (const [from, to] of jobs) {

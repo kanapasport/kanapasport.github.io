@@ -67,9 +67,14 @@ licence SIL OFL) převedené z TTF do WOFF:
 
 | Soubor | Váha v CSS | K čemu |
 |---|---|---|
-| `lato-semibold.woff` | 100–800 | běžný text i zvýraznění |
+| `lato-regular.woff` | 100–500 | odstavce, popisy, **celý tištěný dokument** |
+| `lato-semibold.woff` | 600–800 | lišta, tlačítka, štítky, zvýraznění |
 | `lato-black.woff` | 900 | nadpisy |
 | `lato-italic.woff` | kurzíva | podtitul návodu, popisky obrázků |
+
+Chceš text v rozhraní tučnější? Stačí u prvku napsat `font-weight: 700`
+(Semibold), nebo `900` (Black) – žádné dopočítávání, každá úroveň je
+samostatný řez.
 
 **Proč ne Google Fonts:** servírují Lato rozsekané na `latin` a `latin-ext`
 a ten druhý soubor se nenačítal – `č, ř, ž, ě, ů` se pak kreslily systémovým
