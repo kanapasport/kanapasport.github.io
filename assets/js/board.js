@@ -34,7 +34,8 @@
         images: {},
         view: { x: 0, y: 0, k: 1 },
         tool: "select",
-        color: "#ffd45e",
+        color: "#c8102e",
+        paint: "stroke",      // barva se nanáší na okraj, nebo na výplň
         width: 3,
         selected: "",
         editing: "",          // do kterého prvku se právě píše
@@ -50,7 +51,10 @@
 
     /* ====================================================== souřadnice ==== */
 
+    const ok = (v) => typeof v === "number" && isFinite(v);
+
     const toWorld = (clientX, clientY) => {
+        if (!ok(S.view.x) || !ok(S.view.y) || !ok(S.view.k) || S.view.k <= 0) applyView();   // srovná rozbitý pohled
         const rect = el.stage.getBoundingClientRect();
         return {
             x: (clientX - rect.left - S.view.x) / S.view.k,
@@ -58,7 +62,25 @@
         };
     };
 
+    /**
+     * Propustí jen prvky, které dávají smysl. Jediná souřadnice NaN by se
+     * jinak rozlezla do výpočtu pohledu a tabule by přestala reagovat.
+     */
+    function sanitize(list) {
+        return (list || []).filter(e => {
+            if (!e || !e.type) return false;
+            if (e.type === "link") return !!(e.from && e.to);
+            if (e.type === "ink")  return Array.isArray(e.points) && e.points.length >= 4 && e.points.every(ok);
+            if (e.type === "arrow") return ok(e.x) && ok(e.y) && ok(e.x2) && ok(e.y2);
+            return ok(e.x) && ok(e.y) && ok(e.w) && ok(e.h);
+        });
+    }
+
     function applyView() {
+        // pojistka: jediné NaN by shodilo posun i přiblížení celé tabule
+        if (!isFinite(S.view.x) || !isFinite(S.view.y) || !isFinite(S.view.k) || S.view.k <= 0) {
+            S.view = { x: el.stage.clientWidth / 2, y: el.stage.clientHeight / 2, k: 1 };
+        }
         el.world.style.transform =
             "translate(" + S.view.x + "px," + S.view.y + "px) scale(" + S.view.k + ")";
         if (el.zoomLabel) el.zoomLabel.textContent = Math.round(S.view.k * 100) + " %";
@@ -105,8 +127,14 @@
         save();
     }
 
-    /** Obálka prvku – kvůli výběru a doostření pohledu. */
+    /**
+     * Obálka prvku – kvůli výběru a doostření pohledu.
+     * Spojnice myšlenkové mapy vlastní rozměry nemají, ty se počítají
+     * z uzlů; kdyby se do výpočtu dostaly, vyšlo by NaN a rozbilo by to
+     * posun i přiblížení celé tabule.
+     */
     function bounds(e) {
+        if (e.type === "link") return null;
         if (e.type === "ink") {
             const xs = [], ys = [];
             for (let i = 0; i < e.points.length; i += 2) { xs.push(e.points[i]); ys.push(e.points[i + 1]); }
@@ -165,12 +193,18 @@
 
     const linksOf = (id) => S.elements.filter(e => e.type === "link" && (e.from === id || e.to === id));
 
+    /** Bod uprostřed šipky – tam sedí úchyt, kterým se z ní udělá křivka. */
+    function arrowMid(e) {
+        if (e.cx === undefined) return { x: (e.x + e.x2) / 2, y: (e.y + e.y2) / 2 };
+        return { x: (e.x + 2 * e.cx + e.x2) / 4, y: (e.y + 2 * e.cy + e.y2) / 4 };   // B(0,5) kvadratické křivky
+    }
+
     /** Založí navázaný uzel daným směrem a uhne, kdyby na někoho seděl. */
     function addChild(parentId, dir) {
         const parent = find(parentId);
         if (!parent) return;
 
-        const w = 170, h = 74;
+        const w = 180, h = 46;
         let x = parent.x, y = parent.y + (parent.h - h) / 2;
         if (dir === "right") x = parent.x + parent.w + GAP_X;
         if (dir === "left")  x = parent.x - w - GAP_X;
@@ -184,7 +218,8 @@
         }
 
         pushUndo();
-        const node = { id: newId(), type: "mind", x: x, y: y, w: w, h: h, text: "", color: parent.color || S.color };
+        const node = { id: newId(), type: "mind", x: x, y: y, w: w, h: h, text: "",
+                       fill: parent.fill || "#ffffff", stroke: parent.stroke || S.color };
         S.elements.push({ id: newId(), type: "link", from: parentId, to: node.id, color: "#94a0ad" });
         S.elements.push(node);
         S.selected = node.id;
@@ -207,8 +242,20 @@
                 ' stroke-linecap="round" stroke-linejoin="round" class="bsvg' + (sel ? " is-sel" : "") + '"/>';
         }
         if (e.type === "arrow") {
-            return '<line data-el="' + e.id + '" x1="' + e.x + '" y1="' + e.y + '" x2="' + e.x2 + '" y2="' + e.y2 + '" ' +
-                stroke + ' stroke-linecap="round" marker-end="url(#kbArrow)" class="bsvg' + (sel ? " is-sel" : "") + '"/>';
+            // s řídicím bodem uprostřed je z rovné šipky křivka
+            const d = (e.cx === undefined)
+                ? "M" + e.x + "," + e.y + " L" + e.x2 + "," + e.y2
+                : "M" + e.x + "," + e.y + " Q" + e.cx + "," + e.cy + " " + e.x2 + "," + e.y2;
+
+            const mid = arrowMid(e);
+            const grips = sel
+                ? '<circle class="bgrip" data-h="' + e.id + '|a" cx="' + e.x + '" cy="' + e.y + '" r="6"/>' +
+                  '<circle class="bgrip bgrip--mid" data-h="' + e.id + '|m" cx="' + mid.x + '" cy="' + mid.y + '" r="6"/>' +
+                  '<circle class="bgrip" data-h="' + e.id + '|b" cx="' + e.x2 + '" cy="' + e.y2 + '" r="6"/>'
+                : "";
+
+            return '<path data-el="' + e.id + '" d="' + d + '" fill="none" ' + stroke +
+                ' stroke-linecap="round" marker-end="url(#kbArrow)" class="bsvg' + (sel ? " is-sel" : "") + '"/>' + grips;
         }
         if (e.type === "rect") {
             return '<rect data-el="' + e.id + '" x="' + e.x + '" y="' + e.y + '" width="' + e.w + '" height="' + e.h +
@@ -233,10 +280,12 @@
             "</div>";
         }
 
-        const filled = e.type === "note" || e.type === "mind";
-        const back = filled ? "background:" + esc(e.color || "#ffd45e") + ";" : "";
-        const color = filled ? "" : "color:" + esc(e.color || "#16191d") + ";";
-        const size = "font-size:" + (e.size || (e.type === "text" ? 20 : 15)) + "px;";
+        /* Výplň a okraj jsou dvě samostatné barvy: základ je bílá dlaždice
+           s barevným rámečkem, u volného textu jen bílá výplň bez rámečku. */
+        const back = "background:" + esc(e.fill || "#ffffff") + ";";
+        const line = e.stroke ? "border:2px solid " + esc(e.stroke) + ";" : "border:2px solid transparent;";
+        const size = "font-size:" + (e.size || (e.type === "text" ? 18 : 15)) + "px;";
+        const color = "color:" + esc(e.text_color || "#16191d") + ";";
 
         // uzel mapy má na všech čtyřech stranách tlačítko, které přidá navázaný uzel
         const plus = (e.type === "mind" && sel)
@@ -246,7 +295,7 @@
             : "";
 
         return '<div class="bel bel--' + e.type + (sel ? " is-sel" : "") + '" data-el="' + e.id + '" ' +
-            'style="' + style + back + '">' +
+            'style="' + style + back + line + '">' +
             '<div class="bel__text" data-text="' + e.id + '" style="' + color + size + '"' +
                 (S.editing === e.id ? ' contenteditable="true"' : "") + ">" + esc(e.text || "") + "</div>" +
             (sel ? '<span class="bel__grip"></span>' : "") + plus +
@@ -268,8 +317,8 @@
 
         // rámeček výběru u kresby, šipek a tvarů (boxy si ho kreslí samy)
         const sel = find(S.selected);
-        if (sel && boxes.indexOf(sel) === -1) {
-            const b = bounds(sel);
+        const b = sel ? bounds(sel) : null;
+        if (sel && b && boxes.indexOf(sel) === -1 && sel.type !== "arrow") {
             const pad = 6;
             el.html.insertAdjacentHTML("beforeend",
                 '<div class="bel__ghost" style="left:' + (b.x - pad) + "px;top:" + (b.y - pad) +
@@ -289,6 +338,8 @@
             b.classList.toggle("is-active", b.dataset.color === S.color));
         document.querySelectorAll("[data-width]").forEach(b =>
             b.classList.toggle("is-active", +b.dataset.width === S.width));
+        document.querySelectorAll("[data-paint]").forEach(b =>
+            b.classList.toggle("is-active", b.dataset.paint === S.paint));
         if (el.selbar) el.selbar.hidden = !S.selected;
     }
 
@@ -299,6 +350,7 @@
         setStatus("Ukládám…");
         S.pending = setTimeout(async () => {
             try {
+                S.elements = sanitize(S.elements);
                 await window.KB.saveBoard(S.id, S.elements, S.stamp);
                 await window.KB.saveBoardMeta(S.id, { title: S.title });
                 setStatus("Uloženo");
@@ -322,7 +374,7 @@
 
         // první snímek po otevření je to, co jsme právě načetli – jen ho tiše přijmeme
         const same = JSON.stringify(data.elements || []) === JSON.stringify(S.elements);
-        S.elements = data.elements || [];
+        S.elements = sanitize(data.elements);
         S.selected = "";
         render();
         if (!same) setStatus("Aktualizováno od: " + (data.updatedBy || "kolega"));
@@ -338,9 +390,10 @@
         const id = newId();
         const base = { id: id, color: S.color };
 
-        if (S.tool === "mind")  Object.assign(base, { type: "mind", x: point.x - 85, y: point.y - 37, w: 170, h: 74, text: "" });
-        if (S.tool === "note")  Object.assign(base, { type: "note", x: point.x - 90, y: point.y - 60, w: 180, h: 120, text: "" });
-        if (S.tool === "text")  Object.assign(base, { type: "text", x: point.x, y: point.y - 16, w: 260, h: 44, text: "", color: "#16191d" });
+        // uzel mapy je na jeden řádek, volný text na dva; obojí bílé
+        if (S.tool === "mind")  Object.assign(base, { type: "mind", x: point.x - 90, y: point.y - 23, w: 180, h: 46, text: "", fill: "#ffffff", stroke: S.color });
+        if (S.tool === "note")  Object.assign(base, { type: "note", x: point.x - 90, y: point.y - 60, w: 180, h: 120, text: "", fill: "#ffffff", stroke: S.color });
+        if (S.tool === "text")  Object.assign(base, { type: "text", x: point.x, y: point.y - 26, w: 260, h: 56, text: "", fill: "#ffffff", stroke: "" });
         if (S.tool === "rect")  Object.assign(base, { type: "rect", x: point.x, y: point.y, w: 1, h: 1, color: S.color === "#ffd45e" ? "#16191d" : S.color });
         if (S.tool === "ellipse") Object.assign(base, { type: "ellipse", x: point.x, y: point.y, w: 1, h: 1, color: S.color === "#ffd45e" ? "#16191d" : S.color });
         if (S.tool === "arrow") Object.assign(base, { type: "arrow", x: point.x, y: point.y, x2: point.x, y2: point.y, color: S.color === "#ffd45e" ? "#16191d" : S.color });
@@ -372,6 +425,15 @@
         const point = toWorld(event.clientX, event.clientY);
         const hit = event.target.closest("[data-el]");
         const grip = event.target.classList && event.target.classList.contains("bel__grip");
+
+        // úchyty šipky: konce se posouvají, prostředním se šipka ohýbá
+        const handle = event.target.closest ? event.target.closest("[data-h]") : null;
+        if (handle) {
+            const [id, which] = handle.dataset.h.split("|");
+            pushUndo();
+            Object.assign(drag, { mode: "arrowpt", id: id, which: which, moved: false });
+            return;
+        }
 
         /* Jako ve Freeformu: Apple Pencil kreslí, prst posouvá a vybírá.
            Když je zvolený konkrétní nástroj (lepítko, tvar…), pero ho respektuje. */
@@ -469,6 +531,17 @@
             return renderLive(e);
         }
 
+        if (drag.mode === "arrowpt") {
+            if (drag.which === "a") { e.x = point.x; e.y = point.y; }
+            else if (drag.which === "b") { e.x2 = point.x; e.y2 = point.y; }
+            else {
+                // řídicí bod dopočítáme tak, aby křivka šla přesně pod prstem
+                e.cx = (4 * point.x - e.x - e.x2) / 2;
+                e.cy = (4 * point.y - e.y - e.y2) / 2;
+            }
+            return updateArrow(e);
+        }
+
         if (drag.mode === "resize") {
             e.w = Math.max(40, drag.ox + (point.x - drag.x0));
             e.h = Math.max(30, drag.oy + (point.y - drag.y0));
@@ -507,6 +580,24 @@
         render();
     }
 
+    /** Přepíše tvar šipky i její úchyty bez překreslení celé tabule. */
+    function updateArrow(e) {
+        const path = el.svg.querySelector('[data-el="' + e.id + '"]');
+        if (path) {
+            path.setAttribute("d", (e.cx === undefined)
+                ? "M" + e.x + "," + e.y + " L" + e.x2 + "," + e.y2
+                : "M" + e.x + "," + e.y + " Q" + e.cx + "," + e.cy + " " + e.x2 + "," + e.y2);
+        }
+        const mid = arrowMid(e);
+        const place = (key, x, y) => {
+            const g = el.svg.querySelector('[data-h="' + e.id + "|" + key + '"]');
+            if (g) { g.setAttribute("cx", x); g.setAttribute("cy", y); }
+        };
+        place("a", e.x, e.y);
+        place("m", mid.x, mid.y);
+        place("b", e.x2, e.y2);
+    }
+
     /** Během tažení překreslíme jen jeden prvek, ne celou tabuli. */
     function renderLive(e) {
         const node = el.stage.querySelector('[data-el="' + e.id + '"]');
@@ -523,11 +614,7 @@
             return;
         }
         if (e.type === "ink") return node.setAttribute("d", inkPath(e.points));
-        if (e.type === "arrow") {
-            node.setAttribute("x1", e.x); node.setAttribute("y1", e.y);
-            node.setAttribute("x2", e.x2); node.setAttribute("y2", e.y2);
-            return;
-        }
+        if (e.type === "arrow") return updateArrow(e);
         if (e.type === "rect") {
             node.setAttribute("x", e.x); node.setAttribute("y", e.y);
             node.setAttribute("width", Math.max(1, e.w)); node.setAttribute("height", Math.max(1, e.h));
@@ -554,6 +641,7 @@
             return;
         }
         if (mode === "pan") return;
+        if (mode === "arrowpt") { render(); return save(); }
 
         const e = find(id);
         if (!e) return;
@@ -626,10 +714,28 @@
         paintButtons();
     }
 
+    /**
+     * Barva se nanáší buď na výplň, nebo na okraj – podle přepínače v liště.
+     * U kresby, tvarů a šipek je to vždycky barva čáry.
+     */
     function setColor(color) {
         S.color = color;
         const e = find(S.selected);
-        if (e) { pushUndo(); e.color = color; render(); save(); }
+        if (e) {
+            pushUndo();
+            if (BOXES.indexOf(e.type) !== -1 && e.type !== "rect" && e.type !== "ellipse") {
+                if (S.paint === "fill") e.fill = color; else e.stroke = color;
+            } else {
+                e.color = color;
+            }
+            render();
+            save();
+        }
+        paintButtons();
+    }
+
+    function setPaintTarget(target) {
+        S.paint = target;
         paintButtons();
     }
 
@@ -670,16 +776,20 @@
 
     /** Doostří pohled tak, aby byly vidět všechny prvky. */
     function fitAll() {
-        if (!S.elements.length) {
+        const bs = S.elements.map(bounds).filter(b => b && isFinite(b.x) && isFinite(b.y));
+        if (!bs.length) {
             S.view = { x: el.stage.clientWidth / 2, y: el.stage.clientHeight / 2, k: 1 };
             return applyView();
         }
-        const bs = S.elements.map(bounds);
+
         const minX = Math.min(...bs.map(b => b.x)), minY = Math.min(...bs.map(b => b.y));
         const maxX = Math.max(...bs.map(b => b.x + b.w)), maxY = Math.max(...bs.map(b => b.y + b.h));
-        const pad = 60;
-        const k = Math.min(2, Math.max(0.15,
-            Math.min(el.stage.clientWidth / (maxX - minX + pad * 2), el.stage.clientHeight / (maxY - minY + pad * 2))));
+        const pad = 70;
+        const k = Math.min(1.3, Math.max(0.2, Math.min(
+            el.stage.clientWidth / Math.max(1, maxX - minX + pad * 2),
+            el.stage.clientHeight / Math.max(1, maxY - minY + pad * 2))));
+
+        if (!isFinite(k)) return;
         S.view.k = k;
         S.view.x = (el.stage.clientWidth - (maxX - minX) * k) / 2 - minX * k;
         S.view.y = (el.stage.clientHeight - (maxY - minY) * k) / 2 - minY * k;
@@ -730,8 +840,8 @@
         useMeta(window.KB.boards);
         window.KB.on("boards", (event) => useMeta(event.detail));
 
-        const data = await window.KB.getBoard(boardId);
-        S.elements = data.elements || [];
+        const data = await window.KB.getBoard(boardId).catch(() => ({ elements: [] }));
+        S.elements = sanitize(data.elements);
         S.images = await window.KB.loadBoardImages(boardId).catch(() => ({}));
 
         render();
@@ -820,6 +930,8 @@
             button.addEventListener("click", () => setTool(button.dataset.tool)));
         document.querySelectorAll("[data-color]").forEach(button =>
             button.addEventListener("click", () => setColor(button.dataset.color)));
+        document.querySelectorAll("[data-paint]").forEach(button =>
+            button.addEventListener("click", () => setPaintTarget(button.dataset.paint)));
         document.querySelectorAll("[data-width]").forEach(button =>
             button.addEventListener("click", () => {
                 S.width = +button.dataset.width;
