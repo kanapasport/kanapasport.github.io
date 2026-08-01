@@ -11,7 +11,7 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `index.html` | Rozcestník – logo, hledání v celé databázi, dlaždice sekcí |
 | `navody.html` | Výpis návodů – vlevo dlaždice, vpravo rovnou náhled (`?kat=…&sub=…&id=…`) |
 | `navod.html` | Čtení jednoho návodu (`?id=…`) – sazba A4 + export do PDF |
-| `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor, vpravo živý náhled |
+| `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor (jde přiblížit), vpravo živý náhled |
 | `ukoly.html` | Úkolovník – úkoly seskupené podle zakázek, patra, procenta, poznámky |
 | `barvy.html` | Zkoušení odstínů hlavní barvy na živé ukázce (odkaz je v patičce) |
 
@@ -105,9 +105,22 @@ obsah kategorie **vpravo vedle seznamu**, kliknutím se přejde na danou sekci.
 Pole hledání v liště obsluhuje stránka sama přes `KBUI.onSearch(handler)`.
 Kde handler není, odešle Enter dotaz na `navody.html?q=…`.
 
-Web je navržený pro PC, iPad i iPhone: pod 1024 px se lišta sbalí pod
-tlačítko, pod 820 px jdou ikony nástrojů pod logo, dlaždice jdou do jednoho
-sloupce a ovládací prvky mají minimálně 44 px pro pohodlné ťuknutí prstem.
+### Telefon a tablet
+
+Cílová zařízení jsou **iPhone 11 (414 px)** a **iPad Air (820 px na výšku,
+1180 px na šířku)** – iPad na šířku má proto ještě plný desktopový vzhled.
+
+Pod 1120 px (nebo na dotykovém displeji):
+
+- navigace **DOMŮ / NÁVODY / ÚKOLOVNÍK je vidět vždycky**, nikdy se neschovává
+  pod tlačítko; ustupuje jí hledání, ze kterého zbyde jen lupa a pole vyjede
+  přes celou lištu až po ťuknutí,
+- v červeném pruhu jde všechno pod sebe, ale drží se u pravého okraje
+  (přihlášení, barvy webu i ikony nástrojů), logo zůstává uprostřed,
+- roletka NÁVODŮ ukáže jen hlavní sekce a obsah se rozbalí až ťuknutím
+  na řádek (`isCompact()` v `ui.js` řídí i CSS pravidla).
+
+Vpravo dole se po odrolování objeví tlačítko **zpátky nahoru**.
 
 ## Jak vypadá dokument
 
@@ -158,9 +171,12 @@ Zakázka se vybírá v roletce ÚKOLOVNÍKU nebo ve druhém řádku lišty
 (`ukoly.html?zak=nazev-zakazky`); na rozcestníku má každá svou dlaždici se
 seznamem úkolů a procenty.
 
-Ve vybrané zakázce má správce vpravo v liště **+ Nová zakázka** a
-**+ Nový úkol do …** (druhé rovnou předvyplní zakázku). Když je seznam
-prázdný, nabídne se tlačítko na založení vzorových zakázek.
+Zakázky mají vlastní číselník ve Firestore
+(`artifacts/{APP_ID}/public/data/meta/zakazky`, pole `names`) – u úkolu se
+vybírají ze seznamu, takže překlepem nevznikne nová. **+ Nová zakázka**
+zakládá jen názvy (klidně víc najednou, jeden na řádek), **+ Nový úkol do …**
+zakládá úkol do vybrané zakázky. Zakázka bez úkolů se v seznamu ukáže taky,
+aby do ní šlo rovnou přidat první úkol.
 
 ## Role – dočasné řešení
 

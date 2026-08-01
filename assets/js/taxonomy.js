@@ -136,7 +136,9 @@ window.KB_CATEGORIES = [
 window.KB_SECTIONS = [
     {
         id: 'navody',
-        title: 'Návody',
+        title: 'Všechny návody',
+        href: 'navody.html',
+        icon: 'library',
         desc: 'Klikni na dlaždici a dostaneš se na výpis návodů dané oblasti.',
         tiles: window.KB_CATEGORIES.map(category => ({
             title: category.title,
@@ -167,14 +169,16 @@ window.KB_NAV = [
     { title: 'DOMŮ', href: 'index.html', icon: 'home' },
     {
         title: 'NÁVODY', href: 'navody.html',
-        menu: window.KB_CATEGORIES.map(category => ({
-            title: category.title,
-            href: 'navody.html?kat=' + category.id,
-            children: (category.children || []).map(child => ({
-                title: child.title,
-                href: 'navody.html?kat=' + category.id + '&sub=' + child.id
-            }))
-        }))
+        menu: [{ title: 'VŠECHNY NÁVODY', href: 'navody.html' }].concat(
+            window.KB_CATEGORIES.map(category => ({
+                title: category.title,
+                href: 'navody.html?kat=' + category.id,
+                children: [{ title: 'Vše v sekci', href: 'navody.html?kat=' + category.id }].concat(
+                    (category.children || []).map(child => ({
+                        title: child.title,
+                        href: 'navody.html?kat=' + category.id + '&sub=' + child.id
+                    })))
+            })))
     },
     // roletka se naplní zakázkami z databáze (viz taskMenu v ui.js)
     { title: 'ÚKOLOVNÍK', href: 'ukoly.html', tasks: true }

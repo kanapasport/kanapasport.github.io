@@ -33,6 +33,7 @@ const bus = new EventTarget();
 const KB = {
     guides: [],
     tasks: [],
+    zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
     status: "connecting",   // connecting | online | offline
     ready: false
 };
@@ -49,6 +50,7 @@ const guidesCol = () => collection(db, "artifacts", APP_ID, "public", "data", "g
 const guideDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "guides", id);
 const tasksCol = () => collection(db, "artifacts", APP_ID, "public", "data", "tasks");
 const taskDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "tasks", id);
+const metaDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "meta", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
 const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images", imgId);
 
@@ -86,6 +88,12 @@ try {
             KB.tasks.sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"));
             emit("tasks", KB.tasks);
         }, (err) => console.error("Chyba čtení úkolů:", err));
+
+        onSnapshot(metaDoc("zakazky"), (snap) => {
+            const names = snap.exists() ? snap.data().names : null;
+            KB.zakazky = Array.isArray(names) ? names : [];
+            emit("zakazky", KB.zakazky);
+        }, (err) => console.error("Chyba čtení zakázek:", err));
     });
 } catch (err) {
     console.warn("Firebase se nepodařilo spustit – offline režim.", err);
@@ -212,6 +220,17 @@ KB.saveTask = async (id, data) => {
         updatedBy: window.KB_USER || ""
     }, { merge: true });
     return id;
+};
+
+/** Uloží číselník zakázek (jeden dokument se seznamem názvů). */
+KB.saveZakazky = async (names) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(metaDoc("zakazky"), {
+        names: names,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
 };
 
 KB.deleteTask = async (id) => {

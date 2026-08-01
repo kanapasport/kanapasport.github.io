@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
-    <link rel="stylesheet" href="assets/css/app.css?v=9">
+    <link rel="stylesheet" href="assets/css/app.css?v=10">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -43,7 +43,11 @@
 
         <div>
             <label class="label" for="fZakazka">Zakázka</label>
-            <input type="text" id="fZakazka" class="field" placeholder="např. BioPharma">
+            <select id="fZakazka" class="field"></select>
+            <div class="tiny muted" style="margin-top:6px">
+                Vybírá se ze seznamu, ať nevznikají duplicity překlepem.
+                Novou založíš tlačítkem <b>+ Nová zakázka</b> v liště.
+            </div>
         </div>
         <div>
             <label class="label" for="fTitle">Název úkolu</label>
@@ -75,10 +79,32 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=9"></script>
-<script src="assets/js/doc.js?v=9"></script>
-<script src="assets/js/ui.js?v=9"></script>
-<script type="module" src="assets/js/store.js?v=9"></script>
+<!-- ===================================================== OKNO NOVÁ ZAKÁZKA -->
+<div id="zakOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:520px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b style="font-size:17px">Nové zakázky</b>
+        <p class="small muted" style="line-height:1.55">
+            Jedna zakázka na řádek – můžeš jich přidat víc najednou.
+            Zakázka je jen název, úkoly do ní přidáš potom.
+        </p>
+        <textarea id="fZakNew" rows="6" class="field" placeholder="C04&#10;B12&#10;Pasport Lednice"></textarea>
+
+        <div>
+            <span class="label">Zatím evidované</span>
+            <div id="zakList" class="row row--wrap" style="gap:6px"></div>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button id="btnZakCancel" class="btn btn--ghost">Zrušit</button>
+            <button id="btnZakSave" class="btn btn--primary">Přidat zakázky</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=10"></script>
+<script src="assets/js/doc.js?v=10"></script>
+<script src="assets/js/ui.js?v=10"></script>
+<script type="module" src="assets/js/store.js?v=10"></script>
 
 <script>
 (function () {
@@ -148,7 +174,7 @@
                 '<button class="subtask__pct" data-cycle="' + task.id + "|" + sub.id + '" ' +
                     'style="border:none;background:none;cursor:pointer" title="Klikni pro dílčí procenta">' +
                     percent + " %</button>" +
-                '<button class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 10px" ' +
+                '<button class="btn btn--sm btn--ghost subtask__add" ' +
                     'data-note="' + task.id + "|" + sub.id + '" title="Přidat poznámku">+</button>' +
             "</div>" +
             '<div style="padding:0 18px 0 56px">' +
@@ -176,24 +202,24 @@
 
         return '<article class="task" data-task="' + task.id + '">' +
             '<div class="task__head">' +
-                '<div class="grow" style="min-width:190px">' +
+                '<div class="task__info">' +
                     '<div class="task__title">' + esc(task.title || "Bez názvu") + "</div>" +
                     '<div class="task__meta">' +
-                        (task.owner ? "odpovídá <b>" + esc(task.owner) + "</b> · " : "") +
+                        (task.owner ? "zodpovídá <b>" + esc(task.owner) + "</b> · " : "") +
                         '<span style="color:' + due.color + ';font-weight:700">' + due.text + "</span>" +
                     "</div>" +
                 "</div>" +
                 '<div class="task__progress">' +
-                    '<div class="spread" style="margin-bottom:6px">' +
+                    '<div class="spread" style="margin-bottom:5px">' +
                         '<span class="tiny muted">hotovo</span>' +
-                        '<span style="font-size:15px;font-weight:900;color:' + (percent === 100 ? "var(--ok)" : "var(--text)") + '">' +
+                        '<span style="font-size:14px;font-weight:900;color:' + (percent === 100 ? "var(--ok)" : "var(--text)") + '">' +
                             percent + " %</span>" +
                     "</div>" +
                     '<div class="bar"><div class="bar__fill' + (percent === 100 ? " bar__fill--done" : "") +
                         '" style="width:' + percent + '%"></div></div>' +
                 "</div>" +
                 (admin
-                    ? '<div class="col" style="gap:6px;flex:none">' +
+                    ? '<div class="task__admin">' +
                         '<button class="btn btn--sm btn--ghost" data-edit="' + task.id + '">Upravit</button>' +
                         '<button class="btn btn--sm btn--ghost" style="color:var(--danger)" data-remove="' + task.id + '">Smazat</button>' +
                       "</div>"
@@ -205,13 +231,19 @@
 
     /* ------------------------------------------- druhý řádek lišty */
 
-    /** Zakázky se nabízejí v liště – ve vybrané se pak dá rovnou přidávat. */
-    function paintSubbar() {
-        const names = [];
+    /** Číselník zakázek + názvy, které se vyskytují u úkolů (starší data). */
+    function allZakazky() {
+        const names = (window.KB.zakazky || []).slice();
         (window.KB.tasks || []).forEach(task => {
             const name = zakName(task);
             if (names.indexOf(name) === -1) names.push(name);
         });
+        return names;
+    }
+
+    /** Zakázky se nabízejí v liště – ve vybrané se pak dá rovnou přidávat. */
+    function paintSubbar() {
+        const names = allZakazky();
 
         const chip = (label, active, zak) =>
             '<button type="button" class="chip' + (active ? " chip--active" : "") + '" ' +
@@ -246,14 +278,23 @@
     /** Nadpis zakázky – podle něj jsou úkoly rozdělené do skupin. */
     function groupHtml(name, tasks) {
         const done = tasks.filter(t => taskPercent(t) === 100).length;
+        const empty = '<div class="card small muted" style="padding:16px;text-align:center">' +
+            "V téhle zakázce zatím není žádný úkol." +
+            (window.KBUI.isAdmin()
+                ? ' <button type="button" class="btn btn--sm btn--ghost" style="margin-left:8px" ' +
+                  'data-newtask-in="' + esc(name) + '">+ Přidat úkol</button>'
+                : "") +
+            "</div>";
+
         return '<section id="zak-' + slug(name) + '" class="col" style="gap:12px">' +
             '<div class="taskgroup__head">' +
                 '<span class="taskgroup__name">' + esc(name) + "</span>" +
-                '<span class="taskgroup__meta">' + tasks.length +
-                    (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
-                    (done ? " · " + done + " hotovo" : "") + "</span>" +
+                '<span class="taskgroup__meta">' + (tasks.length
+                    ? tasks.length + (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
+                      (done ? " · " + done + " hotovo" : "")
+                    : "bez úkolů") + "</span>" +
             "</div>" +
-            tasks.map(taskHtml).join("") +
+            (tasks.length ? tasks.map(taskHtml).join("") : empty) +
         "</section>";
     }
 
@@ -271,7 +312,13 @@
 
         $("adminHint").hidden = window.KBUI.isAdmin() || !!tasks.length;
 
+        // bez hledání a bez filtru ukážeme i zakázky, které zatím nemají úkol
         const groups = new Map();
+        if (!query && !onlyOpen) {
+            allZakazky()
+                .filter(name => !activeZak || slug(name) === activeZak)
+                .forEach(name => groups.set(name, []));
+        }
         tasks.forEach(task => {
             const name = zakName(task);
             if (!groups.has(name)) groups.set(name, []);
@@ -420,22 +467,62 @@
     function openForm(taskId, presetZak) {
         editingId = taskId || null;
         const task = taskId ? findTask(taskId) : null;
+        const names = allZakazky();
+        const selected = task ? zakName(task) : (presetZak || names[0] || "");
+
+        $("fZakazka").innerHTML = names.length
+            ? names.map(name => '<option value="' + esc(name) + '"' +
+                (name === selected ? " selected" : "") + ">" + esc(name) + "</option>").join("")
+            : '<option value="">— nejdřív založ zakázku —</option>';
 
         $("taskFormTitle").textContent = task ? "Upravit úkol"
-            : presetZak ? "Nový úkol do zakázky " + presetZak
-            : "Nová zakázka";
-        $("fZakazka").value = task ? (task.zakazka || "") : (presetZak || "");
+            : "Nový úkol" + (selected ? " do zakázky " + selected : "");
         $("fTitle").value = task ? (task.title || "") : "";
         $("fOwner").value = task ? (task.owner || "") : "";
         $("fDeadline").value = task ? (task.deadline || "") : "";
         $("fSubs").value = task ? (task.subtasks || []).map(s => s.title).join("\n") : "3PP\n2PP\n1PP\n1NP\n2NP";
         $("taskOverlay").hidden = false;
-        (task || presetZak ? $("fTitle") : $("fZakazka")).focus();
+        $("fTitle").focus();
+    }
+
+    /* ------------------------------------------------------- zakázky */
+
+    function openZak() {
+        const names = allZakazky();
+        $("fZakNew").value = "";
+        $("zakList").innerHTML = names.length
+            ? names.map(name => '<span class="chip">' + esc(name) + "</span>").join("")
+            : '<span class="tiny muted">zatím žádná</span>';
+        $("zakOverlay").hidden = false;
+        $("fZakNew").focus();
+    }
+
+    async function saveZak() {
+        const added = $("fZakNew").value.split("\n").map(s => s.trim()).filter(Boolean);
+        if (!added.length) return window.KBUI.toast("Napiš aspoň jednu zakázku.", "warn");
+
+        const merged = allZakazky();
+        let count = 0;
+        added.forEach(name => {
+            const duplicate = merged.some(existing => window.KBUI.fold(existing) === window.KBUI.fold(name));
+            if (!duplicate) { merged.push(name); count++; }
+        });
+        if (!count) return window.KBUI.toast("Tyhle zakázky už v seznamu jsou.", "warn");
+
+        try {
+            await window.KB.saveZakazky(merged);
+            $("zakOverlay").hidden = true;
+            window.KBUI.toast(count === 1 ? "Zakázka přidána." : count + " zakázky přidány.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
     }
 
     async function saveForm() {
         const titles = $("fSubs").value.split("\n").map(t => t.trim()).filter(Boolean);
         if (!$("fTitle").value.trim()) return window.KBUI.toast("Doplň název úkolu.", "warn");
+        if (!$("fZakazka").value.trim()) return window.KBUI.toast("Nejdřív založ zakázku tlačítkem + Nová zakázka.", "warn");
 
         const existing = editingId ? findTask(editingId) : null;
         const previous = existing ? (existing.subtasks || []) : [];
@@ -552,8 +639,11 @@
             paintSubbar();
             return render();
         }
-        if (event.target.closest("[data-newzak]"))  return openForm(null, "");
+        if (event.target.closest("[data-newzak]"))  return openZak();
         if (event.target.closest("[data-newtask]")) return openForm(null, currentZak());
+
+        const inGroup = event.target.closest("[data-newtask-in]");
+        if (inGroup) return openForm(null, inGroup.dataset.newtaskIn);
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
@@ -563,8 +653,11 @@
         window.KBUI.onSearch(render);
         $("btnFormCancel").addEventListener("click", () => { $("taskOverlay").hidden = true; });
         $("btnFormSave").addEventListener("click", saveForm);
+        $("btnZakCancel").addEventListener("click", () => { $("zakOverlay").hidden = true; });
+        $("btnZakSave").addEventListener("click", saveZak);
 
         document.addEventListener("kb-role", () => { paintSubbar(); render(); });
+        window.KB.on("zakazky", () => { paintSubbar(); render(); });
 
         let jumped = false;
         window.KB.on("tasks", () => {

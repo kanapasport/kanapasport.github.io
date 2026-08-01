@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
-    <link rel="stylesheet" href="assets/css/app.css?v=9">
+    <link rel="stylesheet" href="assets/css/app.css?v=10">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -38,10 +38,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=9"></script>
-<script src="assets/js/doc.js?v=9"></script>
-<script src="assets/js/ui.js?v=9"></script>
-<script type="module" src="assets/js/store.js?v=9"></script>
+<script src="assets/js/taxonomy.js?v=10"></script>
+<script src="assets/js/doc.js?v=10"></script>
+<script src="assets/js/ui.js?v=10"></script>
+<script type="module" src="assets/js/store.js?v=10"></script>
 
 <script>
 (function () {
@@ -110,10 +110,15 @@
         return '<div class="tile">' + main + chips + "</div>";
     }
 
+    // nadpis sekce je rovnou proklik na její výpis (stejný princip jako
+    // tlačítka nad lištou); bez odkazu zůstává obyčejný nadpis
     const sectionHtml = (section, tiles) =>
         '<section id="sec-' + section.id + '">' +
             '<div class="section-head">' +
-                "<h2>" + esc(section.title) + "</h2>" +
+                (section.href
+                    ? '<a class="sectionbtn" href="' + section.href + '">' +
+                        icon(section.icon || "library") + esc(section.title) + "</a>"
+                    : "<h2>" + esc(section.title) + "</h2>") +
                 (section.desc ? "<p>" + esc(section.desc) + "</p>" : "") +
             "</div>" +
             '<div class="tilegrid">' + tiles + "</div>" +
@@ -182,7 +187,10 @@
 
     function renderTasks(tasks) {
         const host = document.getElementById("sec-ukolovnik");
-        const section = { id: "ukolovnik", title: "Úkolovník", desc: "Rozdělané zakázky a stav rozpracovanosti po patrech." };
+        const section = {
+            id: "ukolovnik", title: "Úkolovník", href: "ukoly.html", icon: "tasks",
+            desc: "Rozdělané zakázky a stav rozpracovanosti po patrech."
+        };
 
         const groups = new Map();
         (tasks || []).forEach(task => {

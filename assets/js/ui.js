@@ -191,6 +191,9 @@
 
     let lastNav = {};
 
+    /** Úzké okno nebo dotykový displej – roletky se ovládají ťuknutím. */
+    const isCompact = () => window.matchMedia("(max-width: 1120px), (hover: none)").matches;
+
     /** Seznam zakázek do roletky ÚKOLOVNÍKU – bere se živě z databáze. */
     function taskMenu() {
         const names = [];
@@ -265,25 +268,6 @@
         "</div>";
     }
 
-    function mobileNavHtml() {
-        return '<div class="mobilenav" id="mobileNav">' +
-            (window.KB_NAV || []).map((item, index) => {
-                const menu = menuOf(item);
-                if (!menu) {
-                    return '<a class="mobilenav__row" href="' + item.href + '">' + item.title + "</a>";
-                }
-                const links = menu.map(group =>
-                    (group.href ? '<a class="mobilenav__sublink" href="' + group.href + '"><b>' + group.title + "</b></a>" : "") +
-                    (group.children || []).map(child =>
-                        '<a class="mobilenav__sublink" href="' + child.href + '">' + child.title + "</a>").join("")
-                ).join("");
-                return '<button type="button" class="mobilenav__row" data-msub="' + index + '">' +
-                        item.title + "<span>+</span></button>" +
-                    '<div class="mobilenav__sub" data-msub-panel="' + index + '">' + links + "</div>";
-            }).join("") +
-        "</div>";
-    }
-
     /**
      * Vykreslí hlavičku do prvku #appHeader.
      * Nahoře vpravo přihlášený uživatel, pod ním vycentrované logo
@@ -316,18 +300,12 @@
                 "</div></div>" +
 
                 '<div class="appbar__bar"><div class="appbar__barin">' +
-                    '<button type="button" class="appbar__burger" id="navBurger" aria-label="Menu">' +
-                        '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
-                        '<path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/></svg>' +
-                    "</button>" +
                     navHtml(active) +
                     searchHtml() +
                 "</div></div>" +
 
                 // druhý řádek lišty – stránka si ho naplní sama (filtry kategorie)
                 (options.subbar ? '<div class="appbar__sub" id="appSubbar"></div>' : "") +
-
-                mobileNavHtml() +
             "</header>";
 
         bindNav();
@@ -336,6 +314,7 @@
         UI.paintUser();
         UI.bindCloudStatus("[data-cloud-status]");
         stickyOffset();
+        mountToTop();
 
         // v liště se nabízejí i jednotlivé zakázky – ty známe až z databáze
         if (window.KB) window.KB.on("tasks", refreshNav);
@@ -344,13 +323,32 @@
     /** Překreslí jen navigaci (lišta se mění podle zakázek v databázi). */
     function refreshNav() {
         const nav = document.querySelector(".appbar__nav");
-        const mobile = document.getElementById("mobileNav");
         if (!nav) return;
-
-        const active = lastNav.active || location.pathname.split("/").pop() || "index.html";
-        nav.outerHTML = navHtml(active);
-        if (mobile) mobile.outerHTML = mobileNavHtml();
+        nav.outerHTML = navHtml(lastNav.active || location.pathname.split("/").pop() || "index.html");
         bindNav();
+    }
+
+    /** Tlačítko „nahoru" – ukáže se, až je stránka o dost delší než okno. */
+    function mountToTop() {
+        if (document.getElementById("kbToTop")) return;
+
+        const button = document.createElement("button");
+        button.id = "kbToTop";
+        button.type = "button";
+        button.className = "totop no-print";
+        button.setAttribute("aria-label", "Nahoru na začátek stránky");
+        button.innerHTML = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/></svg>';
+        button.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+        document.body.appendChild(button);
+
+        const check = () => {
+            const tall = document.documentElement.scrollHeight > window.innerHeight * 1.6;
+            button.classList.toggle("is-visible", tall && window.scrollY > 400);
+        };
+        window.addEventListener("scroll", check, { passive: true });
+        window.addEventListener("resize", check);
+        check();
     }
 
     /**
@@ -381,24 +379,25 @@
                 if (!wasOpen) item.classList.add("is-open");
             });
         });
-        document.querySelectorAll("[data-msub]").forEach(button => {
-            button.addEventListener("click", () => {
-                const target = document.querySelector('[data-msub-panel="' + button.dataset.msub + '"]');
-                if (target) target.classList.toggle("is-open");
+        // na dotyku se obsah kategorie rozbalí až ťuknutím na její řádek
+        document.querySelectorAll(".dropdown__group").forEach(group => {
+            const title = group.querySelector(".dropdown__title");
+            if (!title || !group.querySelector(".dropdown__sub")) return;
+
+            title.addEventListener("click", (event) => {
+                if (!isCompact()) return;   // na širokém okně s myší stačí najet
+                event.preventDefault();
+                event.stopPropagation();
+                const wasOpen = group.classList.contains("is-open");
+                group.parentElement.querySelectorAll(".dropdown__group.is-open")
+                    .forEach(other => other.classList.remove("is-open"));
+                if (!wasOpen) group.classList.add("is-open");
             });
         });
     }
 
     /** Prvky, které vzniknou jen jednou při vykreslení hlavičky. */
     function bindHeader() {
-        const burger = document.getElementById("navBurger");
-        if (burger) {
-            burger.addEventListener("click", (event) => {
-                event.stopPropagation();
-                const panel = document.getElementById("mobileNav");
-                if (panel) panel.classList.toggle("is-open");
-            });
-        }
         // ikony nástrojů s akcí (zatím jen pokyn pro AI)
         document.querySelectorAll(".toolrail [data-action='ai-prompt']").forEach(button => {
             button.addEventListener("click", () => UI.copyAiPrompt());
@@ -446,6 +445,26 @@
 
         const preset = new URLSearchParams(location.search).get("q");
         if (preset) input.value = preset;
+
+        // na úzkých displejích je z hledání jen lupa – pole vyjede po ťuknutí
+        const box = input.closest(".searchbox");
+        const collapsed = () => window.matchMedia("(max-width: 1120px)").matches;
+        // hledání má být "pod" navigací – při otevření ji nepřekrývá zbytečně dlouho
+
+        if (preset && collapsed()) box.classList.add("is-open");
+
+        box.addEventListener("click", (event) => {
+            if (!collapsed()) return;
+            if (!box.classList.contains("is-open")) {
+                box.classList.add("is-open");
+                input.focus();
+            } else if (event.target !== input) {
+                box.classList.remove("is-open");
+            }
+        });
+        input.addEventListener("blur", () => {
+            if (collapsed() && !input.value.trim()) box.classList.remove("is-open");
+        });
 
         input.addEventListener("input", () => {
             if (searchHandler) searchHandler(input.value.trim());

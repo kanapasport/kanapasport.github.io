@@ -11,23 +11,47 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&display=swap">
-    <link rel="stylesheet" href="assets/css/app.css?v=9">
+    <link rel="stylesheet" href="assets/css/app.css?v=10">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* vlevo úprava návodu, vpravo živý náhled – bez ničeho dalšího */
+        /* vlevo úprava návodu, vpravo živý náhled – bez ničeho dalšího.
+           --pz je přiblížení panelu, mění se tlačítky + / − nahoře. */
         .editor-layout { display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
-        .editor-panel { width: 100%; }
+        .editor-panel { width: 100%; --pz: 1; }
         /* POZOR: tohle pravidlo musí zůstat AŽ ZA .editor-panel nahoře,
            jinak by ho přebilo a náhled by se srazil na nulovou šířku. */
         @media (min-width: 1080px) {
             .editor-layout { flex-direction: row; }
-            .editor-panel { width: 500px; flex: none; position: sticky; top: 74px; }
+            .editor-panel { width: calc(600px * var(--pz)); flex: none; position: sticky; top: 74px; }
         }
         .panel-scroll { max-height: calc(100vh - 150px); overflow-y: auto; }
         @media (max-width: 1079px) { .panel-scroll { max-height: none; } }
-        .stepcard { background: var(--bg-soft); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
-        .stepcard textarea, .stepcard input { font-size: 13px; }
+
+        /* pole se přiblížením zvětšují spolu s panelem */
+        .editor-panel .field { font-size: calc(13.5px * var(--pz)); min-height: calc(38px * var(--pz)); }
+        .editor-panel textarea.field { min-height: calc(52px * var(--pz)); }
+        .editor-panel .label { font-size: calc(11.5px * var(--pz)); }
+
+        /* krok je červený, ať jsou jednotlivé kroky na první pohled oddělené */
+        .stepcard {
+            background: var(--accent);
+            border: 1px solid var(--accent-dark);
+            border-radius: var(--radius);
+            padding: 12px;
+            color: #fff;
+        }
+        .stepcard .field { background: #fff; }
+        .stepcard__title { min-height: calc(34px * var(--pz)) !important; font-weight: 800; }
+        .stepcard .btn--ghost {
+            background: rgba(255, 255, 255, .16);
+            border-color: rgba(255, 255, 255, .45);
+            color: #fff;
+        }
+        .stepcard .btn--ghost:hover { background: #fff; color: var(--accent); border-color: #fff; }
+        .stepcard .thumb-add { border-color: rgba(255, 255, 255, .5); color: #fff; }
+        .stepcard .thumb-add:hover { border-color: #fff; color: #fff; background: rgba(255, 255, 255, .12); }
+        .stepcard__no { font-size: calc(11px * var(--pz)); font-weight: 900; letter-spacing: .08em; }
     </style>
 </head>
 <body>
@@ -45,6 +69,11 @@
             <div class="spread">
                 <b style="font-size:15px">Úprava návodu</b>
                 <div class="row" style="gap:8px">
+                    <div class="zoomctl">
+                        <button type="button" id="panelOut" title="Zmenšit panel">−</button>
+                        <span id="panelLabel">100 %</span>
+                        <button type="button" id="panelIn" title="Zvětšit panel">+</button>
+                    </div>
                     <button id="btnClear" class="btn btn--sm btn--ghost">Nový prázdný</button>
                     <button id="btnDelete" class="btn btn--sm btn--ghost" style="color:var(--danger)" hidden>Smazat</button>
                 </div>
@@ -83,8 +112,8 @@
                     <label class="label" for="docSub">Téma</label>
                     <select id="docSub" class="field"></select>
                 </div>
-                <div class="row" style="gap:12px">
-                    <div class="grow">
+                <div class="row" style="gap:12px;align-items:flex-end">
+                    <div style="width:96px;flex:none">
                         <label class="label" for="docVersion">Verze</label>
                         <input type="text" id="docVersion" value="v1.0" class="field">
                     </div>
@@ -160,10 +189,10 @@
 
 <input type="file" id="filePicker" accept="image/*" multiple hidden>
 
-<script src="assets/js/taxonomy.js?v=9"></script>
-<script src="assets/js/doc.js?v=9"></script>
-<script src="assets/js/ui.js?v=9"></script>
-<script type="module" src="assets/js/store.js?v=9"></script>
+<script src="assets/js/taxonomy.js?v=10"></script>
+<script src="assets/js/doc.js?v=10"></script>
+<script src="assets/js/ui.js?v=10"></script>
+<script type="module" src="assets/js/store.js?v=10"></script>
 
 <script>
 (function () {
@@ -179,7 +208,8 @@
         savedImages: new Set(),   // co už je zapsané ve Firestore
         legacyCategory: "",
         activeStep: 0,
-        zoom: null
+        zoom: null,
+        panelZoom: 1
     };
 
     /* =============================================================== KROKY */
@@ -315,16 +345,16 @@
 
             return '<div class="stepcard" data-step="' + index + '">' +
                 '<div class="spread" style="margin-bottom:8px">' +
-                    '<span class="tiny" style="font-weight:900;color:var(--accent)">KROK ' + (index + 1) + "</span>" +
+                    '<span class="stepcard__no">KROK ' + (index + 1) + "</span>" +
                     '<span class="row" style="gap:4px">' +
                         (index > 0 ? '<button class="btn btn--sm btn--ghost" style="min-height:28px;padding:0 8px" data-move="' + index + ':-1">▲</button>' : "") +
                         (index < state.steps.length - 1 ? '<button class="btn btn--sm btn--ghost" style="min-height:28px;padding:0 8px" data-move="' + index + ':1">▼</button>' : "") +
                         '<button class="btn btn--sm btn--ghost" style="min-height:28px;padding:0 8px;color:var(--danger)" data-del="' + index + '">Odstranit</button>' +
                     "</span>" +
                 "</div>" +
-                '<input type="text" class="field" style="margin-bottom:8px" value="' + esc(step.title) + '" data-field="' + index + ':title" placeholder="Nadpis kroku">' +
-                '<textarea class="field" style="margin-bottom:8px" data-field="' + index + ':content" rows="4" placeholder="Popis postupu…">' + esc(step.content) + "</textarea>" +
-                '<textarea class="field" style="margin-bottom:10px;font-family:ui-monospace,Consolas,monospace;font-size:12px" data-field="' + index + ':code" rows="1" placeholder="Volitelně: kód, cesta, příkaz">' + esc(step.code || "") + "</textarea>" +
+                '<input type="text" class="field stepcard__title" style="margin-bottom:8px" value="' + esc(step.title) + '" data-field="' + index + ':title" placeholder="Nadpis kroku">' +
+                '<textarea class="field" style="margin-bottom:8px" data-field="' + index + ':content" rows="5" placeholder="Popis postupu…">' + esc(step.content) + "</textarea>" +
+                '<textarea class="field" style="margin-bottom:10px;font-family:ui-monospace,Consolas,monospace;font-size:calc(12px * var(--pz))" data-field="' + index + ':code" rows="1" placeholder="Volitelně: kód, cesta, příkaz">' + esc(step.code || "") + "</textarea>" +
                 '<div class="thumbs">' + thumbs +
                     '<button class="thumb-add" data-addimg="' + index + '">+ obrázek<br><span style="font-size:9px">nebo Ctrl+V</span></button>' +
                 "</div>" +
@@ -454,6 +484,18 @@
         const current = parseFloat(($("stage").style.transform.match(/[\d.]+/) || [1])[0]) || 1;
         state.zoom = Math.min(2, Math.max(0.3, Math.round((current + delta) * 20) / 20));
         applyZoom();
+    }
+
+    /* ------------------------------------------- přiblížení panelu úprav */
+
+    const PANEL_KEY = "company_kb_panel_zoom";
+
+    function setPanelZoom(value) {
+        state.panelZoom = Math.min(1.5, Math.max(0.85, Math.round(value * 20) / 20));
+        document.querySelector(".editor-panel").style.setProperty("--pz", state.panelZoom);
+        $("panelLabel").textContent = Math.round(state.panelZoom * 100) + " %";
+        localStorage.setItem(PANEL_KEY, state.panelZoom);
+        if (state.zoom === null) applyZoom();   // náhledu se změnila dostupná šířka
     }
 
     /* ============================================================ UKLÁDÁNÍ */
@@ -599,6 +641,9 @@
         });
         $("btnSave").addEventListener("click", save);
         $("btnDelete").addEventListener("click", removeGuide);
+        $("panelIn").addEventListener("click", () => setPanelZoom(state.panelZoom + 0.1));
+        $("panelOut").addEventListener("click", () => setPanelZoom(state.panelZoom - 0.1));
+        setPanelZoom(parseFloat(localStorage.getItem(PANEL_KEY)) || 1);
         $("zoomIn").addEventListener("click", () => stepZoom(0.1));
         $("zoomOut").addEventListener("click", () => stepZoom(-0.1));
         window.KBDoc.watchFit($("stageWrap"), () => { if (state.zoom === null) applyZoom(); });

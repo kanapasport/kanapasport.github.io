@@ -54,7 +54,12 @@
 
 html { -webkit-text-size-adjust: 100%; }
 
+/* Šířka prvku včetně rámečku a odsazení. Bez tohohle vylézají pole
+   s vlastním paddingem z panelu ven a nesedí zarovnání zprava. */
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
+    margin: 0;                 /* bez tohohle nesahá červený pruh do krajů */
     background: var(--bg);
     color: var(--text);
     font-family: var(--font);
@@ -330,13 +335,24 @@ input, select, textarea, button { font-family: inherit; }
 }
 .dropdown__link:hover { background: var(--bg); color: var(--accent); }
 
-/* na dotyku není kam najet myší – obsah kategorií je rovnou pod nimi */
-@media (hover: none) {
-    .dropdown__sub { position: static; display: block; width: auto; padding: 0 0 6px 14px; }
+/* Na dotyku (a v úzkém okně) není kam najet myší: v seznamu jsou nejdřív
+   jen hlavní sekce a obsah se rozbalí pod nimi až po ťuknutí. */
+@media (max-width: 1120px), (hover: none) {
+    .navitem:hover .dropdown { display: none; }
+    .navitem.is-open .dropdown { display: block; }
+    .dropdown { width: min(340px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto; }
+    .dropdown__sub,
+    .dropdown__group:hover .dropdown__sub { position: static; display: none; width: auto; padding: 0 0 6px 14px; }
+    .dropdown__group.is-open .dropdown__sub { display: block; }
     .dropdown__subin { border: none; box-shadow: none; padding: 0; background: none; }
+    .dropdown__group.is-open .dropdown__title { background: var(--accent-tint); color: var(--accent); }
+    .dropdown__group.is-open .dropdown__more { transform: rotate(90deg); }
+    .dropdown__more { transition: transform .18s ease; }
+    .dropdown__title { min-height: 46px; }
+    .dropdown__link { min-height: 42px; display: flex; align-items: center; }
 }
 
-/* hledání v liště – vpravo */
+/* hledání v liště – vpravo; na dotyku je z něj jen lupa, pole vyjede po ťuknutí */
 .searchbox {
     position: absolute;
     right: 20px;
@@ -351,6 +367,7 @@ input, select, textarea, button { font-family: inherit; }
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--bg-soft);
+    z-index: 5;
 }
 .searchbox svg { width: 17px; height: 17px; color: var(--dim); flex: none; }
 .searchbox input {
@@ -361,8 +378,31 @@ input, select, textarea, button { font-family: inherit; }
     outline: none;
     font-size: 13.5px;
     color: var(--text);
+    padding: 0;
 }
 .searchbox:focus-within { border-color: var(--accent); background: var(--surface); }
+.searchbox__close { display: none; }
+
+/* ------------------------------------------------------- nahoru na stránku */
+.totop {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: 46px; height: 46px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    box-shadow: var(--shadow-up);
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+}
+.totop svg { width: 22px; height: 22px; }
+.totop.is-visible { display: flex; }
+.totop:hover { background: var(--accent-dark); }
 
 .rolepill {
     border: 1px solid var(--line);
@@ -379,22 +419,6 @@ input, select, textarea, button { font-family: inherit; }
 .rolepill:hover { border-color: var(--accent); color: var(--accent); }
 .rolepill--admin { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.appbar__burger {
-    display: none;
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 42px; height: 42px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text);
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-}
-.appbar__burger svg { width: 22px; height: 22px; }
 
 /* ---- 4. patro (jen kde je potřeba): filtry kategorie ----
    Lišta se tím jakoby roztáhne o druhý řádek. Vlevo je barevně označená
@@ -439,6 +463,10 @@ input, select, textarea, button { font-family: inherit; }
 }
 .subbar__cat:hover { background: var(--accent-dark); }
 .subbar__cat svg { width: 17px; height: 17px; }
+
+/* nadřazená úroveň (VŠECHNY NÁVODY) – tmavá, ať se plete s kategorií */
+.subbar__cat--up { background: var(--text); }
+.subbar__cat--up:hover { background: #000; }
 .subbar__sep { width: 1px; height: 24px; background: var(--line); flex: none; }
 
 /* ================================================== VÝPIS NÁVODŮ ==== */
@@ -488,46 +516,6 @@ input, select, textarea, button { font-family: inherit; }
 .gtile mark { background: #ffe9a8; color: #6b4b00; }
 
 @media (hover: none) { .gtile:hover { transform: none; } }
-
-/* mobilní panel */
-.mobilenav {
-    display: none;
-    border-top: 1px solid var(--line);
-    background: var(--surface);
-    padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
-    max-height: 78vh;
-    overflow-y: auto;
-}
-.mobilenav.is-open { display: block; }
-.mobilenav__row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    padding: 13px 6px;
-    border: none;
-    border-bottom: 1px solid var(--line-soft);
-    background: none;
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: .04em;
-    text-decoration: none;
-    text-align: left;
-    cursor: pointer;
-}
-.mobilenav__sub { display: none; padding: 2px 0 10px 12px; }
-.mobilenav__sub.is-open { display: block; }
-.mobilenav__sublink {
-    display: block;
-    padding: 11px 8px;
-    font-size: 14px;
-    color: var(--text-soft);
-    text-decoration: none;
-    border-radius: 9px;
-}
-.mobilenav__sublink:hover, .mobilenav__sublink:active { background: var(--accent-tint); color: var(--accent); }
 
 /* =========================================================== DLAŽDICE ==== */
 
@@ -697,6 +685,26 @@ input, select, textarea, button { font-family: inherit; }
     border-radius: 999px;
     background: var(--accent);
 }
+/* nadpis sekce jako proklikové tlačítko */
+.sectionbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    height: 42px;
+    padding: 0 18px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: background .15s;
+}
+.sectionbtn svg { width: 18px; height: 18px; }
+.sectionbtn:hover { background: var(--accent-dark); }
+
 .section-head p {
     font-size: 15.5px;
     color: var(--muted);
@@ -781,6 +789,40 @@ input, select, textarea, button { font-family: inherit; }
 .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 .field::placeholder { color: var(--dim); }
 
+/* textová pole jde tahat jen dolů, ne do šířky – jinak by vylezla z panelu */
+textarea.field { resize: vertical; }
+
+/* ovladač přiblížení (náhled i panel editoru) */
+.zoomctl {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+.zoomctl button {
+    min-width: 30px;
+    height: 30px;
+    border: none;
+    background: none;
+    color: var(--text-soft);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.zoomctl button:hover { background: var(--accent-tint); color: var(--accent); }
+.zoomctl span {
+    min-width: 46px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
 .label {
     display: block;
     font-size: 11.5px;
@@ -848,25 +890,26 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     box-shadow: var(--shadow);
     overflow: hidden;
 }
+/* hlavička úkolu: název | postup | tlačítka správce – na telefonu pod sebe */
 .task__head {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 12px;
-    padding: 16px 18px;
+    gap: 10px 14px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--line-soft);
 }
-.task__zak {
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--accent);
-}
-.task__title { font-size: 17px; font-weight: 900; line-height: 1.25; }
-.task__meta { font-size: 12.5px; color: var(--muted); }
+.task__title { font-size: 15.5px; font-weight: 900; line-height: 1.25; }
+.task__meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
-.task__progress { flex: none; width: 168px; }
+.task__progress { width: 150px; }
+.task__admin { display: flex; gap: 6px; }
+
+@media (max-width: 820px) {
+    .task__head { grid-template-columns: minmax(0, 1fr); }
+    .task__info, .task__progress, .task__admin { grid-column: 1 / -1; }
+    .task__progress { width: 100%; }
+}
 .bar {
     height: 9px;
     border-radius: 999px;
@@ -882,18 +925,34 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .bar__fill--done { background: var(--ok); }
 
+/* Řádek patra: zaškrtnutí | název | kdo a kdy | procenta | poznámka.
+   Mřížka drží sloupce zarovnané ve všech řádcích – vlevo i vpravo stejně. */
 .subtask {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(52px, max-content) minmax(0, 1fr) auto auto;
+    grid-template-areas: "check name info pct note";
     align-items: center;
-    gap: 12px;
-    padding: 12px 18px;
+    gap: 10px;
+    padding: 8px 14px;
     border-bottom: 1px solid var(--line-soft);
     transition: background .15s;
 }
 .subtask:last-child { border-bottom: none; }
 .subtask--done { background: var(--ok-tint); }
 
+@media (max-width: 820px) {
+    .subtask {
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "check name pct note"
+            "info  info info info";
+        row-gap: 2px;
+    }
+    .subtask__info { padding-left: 36px; }
+}
+
 .subtask__check {
+    grid-area: check;
     width: 26px; height: 26px;
     flex: none;
     border-radius: var(--radius);
@@ -908,17 +967,20 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .subtask__check:hover { border-color: var(--ok); }
 .subtask--done .subtask__check { background: var(--ok); border-color: var(--ok); color: #fff; }
 
-.subtask__name { font-size: 15px; font-weight: 800; flex: none; min-width: 62px; }
-.subtask__info { font-size: 11.5px; color: var(--muted); flex: 1; min-width: 0; line-height: 1.4; }
+.subtask__name { grid-area: name; font-size: 14px; font-weight: 800; }
+.subtask__info { grid-area: info; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
 .subtask__pct {
+    grid-area: pct;
     font-size: 13px;
     font-weight: 900;
     font-variant-numeric: tabular-nums;
-    min-width: 48px;
+    width: 52px;
     text-align: right;
     color: var(--muted);
+    padding: 0;
 }
 .subtask--done .subtask__pct { color: var(--ok); }
+.subtask__add { grid-area: note; min-height: 30px; padding: 0 10px; }
 
 .note {
     font-size: 12.5px;
@@ -1145,53 +1207,75 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .thumb-add:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ====================================================== RESPONZIVITA ====
-   Tablet a telefon: lišta se sbalí pod tlačítko, dlaždice do jednoho
-   sloupce, ovládací prvky mají min. 44px pro pohodlné ťuknutí prstem.
+   Cílová zařízení: iPhone 11 (414 px) a iPad Air (820 px na výšku,
+   1180 px na šířku). iPad na šířku má proto ještě plný desktopový vzhled.
+
+   Navigace DOMŮ / NÁVODY / ÚKOLOVNÍK je vidět v každé šířce – nikdy se
+   neschovává pod tlačítko. Ustupuje jí hledání, které se sbalí do lupy.
    ------------------------------------------------------------------------ */
 
-@media (max-width: 1024px) {
-    /* lišta se sbalí pod tlačítko, hledání zabere zbytek řádku */
-    .appbar__nav { display: none; }
-    .appbar__burger { display: flex; position: static; transform: none; }
-    .appbar__barin { justify-content: flex-start; gap: 10px; }
-    .searchbox { position: static; transform: none; width: auto; flex: 1; }
+@media (max-width: 1120px) {
+    /* v pruhu jde všechno pod sebe, ale drží se u pravého okraje */
+    .appbar__bandin {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        min-height: 0;
+        padding: 10px 16px;
+    }
+    .appbar__userbox { position: static; order: 1; width: 100%; }
+    .appbar__logo { order: 2; width: 100%; justify-content: center; }
+    .appbar__theme { position: static; order: 3; }
+    .toolrail { position: static; order: 4; }
+    .appbar__logo img,
+    .appbar--big .appbar__logo img { height: 96px; }
+
+    /* hledání je jen lupa; pole vyjede přes celou lištu až po ťuknutí */
+    .searchbox { right: 16px; width: 40px; padding: 0; justify-content: center; cursor: pointer; }
+    .searchbox input { display: none; }
+    .searchbox.is-open {
+        left: 16px; right: 16px;
+        width: auto;
+        padding: 0 11px;
+        justify-content: flex-start;
+        background: var(--surface);
+        border-color: var(--accent);
+    }
+    .searchbox.is-open input { display: block; }
+
+    .subbar__in { padding: 8px 16px; }
+    .subbar__right { margin-left: auto; }
     .section-head h2 { font-size: 24px; }
     .section-head p { font-size: 15px; }
 }
 
-/* úzká okna – všechno v pruhu pod sebe, ať se nic nepřekrývá */
-@media (max-width: 820px) {
-    .appbar__bandin { flex-direction: column; gap: 12px; min-height: 0; }
-    .appbar__userbox { position: static; text-align: center; }
-    .appbar__theme { position: static; order: 5; }
-    .appbar__user { justify-content: center; }
-    .toolrail { position: static; flex-wrap: wrap; justify-content: center; }
-    .appbar__logo img,
-    .appbar--big .appbar__logo img { height: 96px; }
-}
-
-@media (max-width: 640px) {
+@media (max-width: 700px) {
     .wrap { padding-inline: 14px; }
-    .appbar__bandin { padding: 12px 14px; }
+    .appbar__bandin { padding: 10px 14px; }
     .appbar__barin { padding: 0 14px; height: 50px; }
-    .appbar__user { font-size: 14px; }
+    .appbar__user { font-size: 13.5px; }
     .appbar__logo img,
     .appbar--big .appbar__logo img { height: 68px; }
-    .subbar__in { padding: 8px 14px; }
-    .subbar__right { width: 100%; }
+
+    /* užší tlačítka, ať se všechna tři vejdou vedle lupy */
+    .appbar__barin { padding-right: 58px; }
+    .appbar__nav { gap: 3px; }
+    .navbtn { height: 36px; padding: 0 9px; font-size: 12px; letter-spacing: .02em; gap: 5px; }
+    .navbtn svg { width: 15px; height: 15px; }
+    .navbtn__caret { width: 10px; height: 10px; }
+
+    .searchbox { right: 14px; width: 38px; }
+    .searchbox.is-open { left: 14px; right: 14px; }
+
+    .subbar__in { padding: 8px 14px; gap: 8px; }
+    .subbar__cat { height: 32px; padding: 0 11px; font-size: 12px; }
+    .subbar__right { width: 100%; justify-content: flex-end; }
 
     .tile { min-height: 0; padding: 14px; }
     .tile__title { font-size: 14px; }
 
     .section-head h2 { font-size: 21px; }
     .section-head p { font-size: 14.5px; margin-top: 10px; }
-    .hero__title { font-size: 23px; margin-top: 18px; }
-    .hero__lead { font-size: 14.5px; }
-
-    .task__head { padding: 14px; }
-    .task__progress { width: 100%; }
-    .subtask { padding: 12px 14px; flex-wrap: wrap; }
-    .subtask__info { flex-basis: 100%; order: 5; padding-left: 38px; }
 
     .taskgroup__name { font-size: 15px; }
 }
