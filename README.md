@@ -231,8 +231,20 @@ uzel má na stranách tečky – **kliknutím** vznikne navázané pole tím sm�
 stran a drží se uzlů při přesunu. Tlačítka v liště srovnají mapu shora dolů
 nebo zleva doprava.
 
-**Tabulka:** tažením určíš počet řádků a sloupců, pak se přidávají a ubírají
-tlačítky `+` a `−` na okrajích. Do buněk se píše po dvojkliku.
+**Tabulka:** tažením určíš počet řádků a sloupců, pak `+` na kterékoliv ze
+čtyř stran přidá řádek nebo sloupec právě tam (obsah se posune, ne přepíše).
+Do buněk se píše po dvojkliku, první řádek se sází jako hlavička.
+
+**Lepítko vs. text:** lepítko je ohraničené pole pevné velikosti (drží se
+tam, kde ho necháš, hodí se na nápady a komentáře), text je volný popisek
+bez rámečku, který se sám roztahuje podle množství písmen.
+
+**Guma** funguje jako na papíře – v kresbě ubere jen to, přes co přejede,
+a tah se v tom místě rozdělí na dva. Lepítka a tvary maže celé.
+
+**Vlastnosti vybraného prvku** (barvy, tvar, písmo, zarovnání) jsou ve druhé
+liště pod nástroji. Když není nic vybráno, nastavuje se tím vzhled nově
+vytvářených prvků.
 
 **Šipky** se koncem přichytí k prvku, nad kterým je pustíš, a pak už ho
 následují. Prostředním úchytem se z rovné šipky udělá křivka.

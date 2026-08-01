@@ -180,11 +180,29 @@
             " " + p2.x + "," + p2.y;
     }
 
+    /**
+     * Spojnice mapy: z rodiče vychází vždy ze středu té strany, kterou
+     * potomek leží – všechny větve tak vyjíždějí z jednoho místa a teprve
+     * pak se rozbíhají, jako v myšlenkových mapách.
+     */
     function linkPath(link) {
         const a = find(link.from), b = find(link.to);
         if (!a || !b) return "";
-        const sides = pickSides(a, b);
-        return sides ? curve(sides.p1, sides.p2) : "";
+        const A = anchors(a), Bn = anchors(b);
+        if (!A || !Bn) return "";
+
+        const dx = (b.x + b.w / 2) - (a.x + a.w / 2);
+        const dy = (b.y + b.h / 2) - (a.y + a.h / 2);
+
+        let p1, p2;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            p1 = dx >= 0 ? A.right : A.left;
+            p2 = dx >= 0 ? Bn.left : Bn.right;
+        } else {
+            p1 = dy >= 0 ? A.down : A.up;
+            p2 = dy >= 0 ? Bn.up : Bn.down;
+        }
+        return curve(p1, p2);
     }
 
     const linksOf = (id) => S.elements.filter(e =>
@@ -311,11 +329,17 @@
     function tableHtml(e) {
         const rows = Math.max(1, e.rows || 2), cols = Math.max(1, e.cols || 2);
         const cells = e.cells || {};
+        const style = "font-size:" + (e.size || 13) + "px;text-align:" + (e.align || "left") +
+            ";color:" + esc(e.tcolor || "#16191d") + ";";
+
         let out = "";
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 const key = r + "_" + c;
-                out += '<div class="btcell" data-cell="' + e.id + "|" + key + '">' + esc(cells[key] || "") + "</div>";
+                // první řádek bereme jako hlavičku
+                const head = r === 0 ? "font-weight:900;background:rgba(0,0,0,.035);" : "font-weight:" + (e.bold === false ? 400 : 400) + ";";
+                out += '<div class="btcell" data-cell="' + e.id + "|" + key + '" style="' + style + head + '">' +
+                    esc(cells[key] || "") + "</div>";
             }
         }
         return '<div class="btgrid" style="grid-template-columns:repeat(' + cols + ',1fr);' +
@@ -341,14 +365,19 @@
             return '<div class="bel bel--table' + (sel ? " is-sel" : "") + '" data-el="' + e.id + '" ' +
                 'style="' + style + back + line + radius + '">' + tableHtml(e) +
                 (sel ? '<span class="bel__grip"></span>' +
-                       '<button type="button" class="bel__plus bel__plus--right" data-tadd="' + e.id + '|col" title="Přidat sloupec">+</button>' +
-                       '<button type="button" class="bel__plus bel__plus--down" data-tadd="' + e.id + '|row" title="Přidat řádek">+</button>' +
+                       // + na všech čtyřech stranách: přidá řádek/sloupec právě tam
+                       ["up", "right", "down", "left"].map(side =>
+                           '<button type="button" class="bel__plus bel__plus--' + side + '" data-tadd="' + e.id + "|" + side +
+                           '" title="Přidat ' + (side === "up" || side === "down" ? "řádek" : "sloupec") + '">+</button>').join("") +
                        '<button type="button" class="bel__minus bel__minus--right" data-tdel="' + e.id + '|col" title="Ubrat sloupec">−</button>' +
                        '<button type="button" class="bel__minus bel__minus--down" data-tdel="' + e.id + '|row" title="Ubrat řádek">−</button>' : "") +
             "</div>";
         }
 
-        const size = "font-size:" + (e.size || (e.type === "text" ? 18 : 15)) + "px;";
+        const size = "font-size:" + (e.size || (e.type === "text" ? 18 : 15)) + "px;" +
+            "font-weight:" + (e.bold === false ? 400 : 700) + ";" +
+            "text-align:" + (e.align || "center") + ";" +
+            "color:" + esc(e.tcolor || "#16191d") + ";";
 
         // uzel mapy: tečky na stranách – kliknutím vznikne navázané pole,
         // tažením se dá umístit kam chceš (jako v Miru)
@@ -405,7 +434,20 @@
             b.classList.toggle("is-active", b.dataset.paint === S.paint));
         document.querySelectorAll("[data-shape]").forEach(b =>
             b.classList.toggle("is-active", b.dataset.shape === S.shape));
-        if (el.selbar) el.selbar.hidden = !S.sel.length;
+        document.querySelectorAll("[data-align]").forEach(b =>
+            b.classList.toggle("is-active", b.dataset.align === (S.align || "center")));
+        document.querySelectorAll("[data-size]").forEach(b =>
+            b.classList.toggle("is-active", +b.dataset.size === (S.size || 15)));
+        document.querySelectorAll("[data-tcolor]").forEach(b =>
+            b.classList.toggle("is-active", b.dataset.tcolor === (S.tcolor || "#16191d")));
+
+        // kontextová lišta říká, čeho se nastavení týká
+        if (el.selinfo) {
+            const n = S.sel.length;
+            el.selinfo.textContent = n === 0 ? "Nastavení pro nové prvky"
+                : n === 1 ? "Vybraný prvek" : "Vybráno " + n + " prvků";
+        }
+        document.querySelectorAll("[data-needsel]").forEach(b => { b.disabled = !S.sel.length; });
     }
 
     /* ======================================================== ukládání ==== */
@@ -736,14 +778,57 @@
         });
     }
 
+    /**
+     * Guma jako na papíře: v kresbě ubírá jen to, přes co přejede, a tah
+     * se v tom místě rozdělí. Ostatní prvky (lepítka, tvary) maže celé.
+     */
     function eraseAt(event) {
+        const point = toWorld(event.clientX, event.clientY);
+        const radius = 11 / S.view.k;
+        let changed = false;
+        const out = [];
+
+        S.elements.forEach(e => {
+            if (e.type !== "ink") { out.push(e); return; }
+
+            const runs = [];
+            let run = [];
+            for (let i = 0; i < e.points.length; i += 2) {
+                const hit = Math.hypot(e.points[i] - point.x, e.points[i + 1] - point.y) <= radius;
+                if (hit) {
+                    changed = true;
+                    if (run.length >= 4) runs.push(run);
+                    run = [];
+                } else {
+                    run.push(e.points[i], e.points[i + 1]);
+                }
+            }
+            if (run.length >= 4) runs.push(run);
+
+            runs.forEach((points, index) => {
+                out.push(index === 0
+                    ? Object.assign({}, e, { points: points })
+                    : Object.assign({}, e, { id: newId(), points: points }));
+            });
+        });
+
+        // co není kresba, se maže celé
         const target = document.elementFromPoint(event.clientX, event.clientY);
         const hit = target && target.closest ? target.closest("[data-el]") : null;
-        if (!hit) return;
-        const id = hit.dataset.el;
+        const id = hit && hit.dataset.el;
+        const box = id ? find(id) : null;
+
+        if (box && box.type !== "ink") {
+            changed = true;
+            const keep = out.filter(e => e.id !== id &&
+                !((e.type === "link" || e.type === "arrow") && (e.from === id || e.to === id)));
+            out.length = 0;
+            keep.forEach(e => out.push(e));
+        }
+
+        if (!changed) return;
         if (!drag.erased) { pushUndo(); drag.erased = true; }
-        S.elements = S.elements.filter(e => e.id !== id &&
-            !((e.type === "link" || e.type === "arrow") && (e.from === id || e.to === id)));
+        S.elements = out;
         render();
     }
 
@@ -774,12 +859,34 @@
         if (mode === "pull") {
             const path = el.svg.querySelector("#kbPull");
             if (path) path.setAttribute("d", "");
+
+            // pustím-li čáru nad jiným polem, jen se k němu připojí
+            const over = (moved && drag.at) ? elementAt(drag.at, drag.id) : null;
+            if (over && TEXTY.indexOf(over.type) !== -1) {
+                const exists = S.elements.some(e => e.type === "link" &&
+                    ((e.from === drag.id && e.to === over.id) || (e.from === over.id && e.to === drag.id)));
+                if (!exists) {
+                    pushUndo();
+                    S.elements.push({ id: newId(), type: "link", from: drag.id, to: over.id, color: "#8a95a3" });
+                    S.sel = [over.id];
+                    render(); save();
+                }
+                return;
+            }
             if (moved && drag.at) addChild(drag.id, drag.which, drag.at);
             else addChild(drag.id, drag.which);
             return;
         }
 
-        if (mode === "move") { render(); return save(); }
+        if (mode === "move") {
+            // ťuknutí bez tažení = rovnou psát (i do prázdného pole)
+            if (!moved && S.sel.length === 1) {
+                const one = find(S.sel[0]);
+                if (one && TEXTY.indexOf(one.type) !== -1) { render(); return startEditing(one.id); }
+            }
+            render();
+            return save();
+        }
         if (mode === "arrowpt") {
             const e = find(id);
             if (e && drag.which !== "m") {
@@ -841,15 +948,58 @@
         const node = el.html.querySelector('[data-text="' + S.editing + '"]');
         const e = find(S.editing);
         if (node && e) {
-            const text = node.innerText.replace(/ /g, " ").trim();
-            if (text !== (e.text || "")) { pushUndo(); e.text = text; save(); }
-            if (!text && e.type === "mind" && !linksOf(e.id).length) {
-                S.elements = S.elements.filter(x => x.id !== e.id);
-            }
+            const text = node.innerText.replace(/ /g, ' ').trim();
+            if (text !== (e.text || '')) { pushUndo(); e.text = text; save(); }
+            autoSize(e);       // pole se přizpůsobí množství textu
         }
-        S.editing = "";
+        S.editing = '';
         if (S.remote) { const r = S.remote; S.remote = null; return applyRemote(r); }
         render();
+    }
+
+    /**
+     * Přizpůsobí velikost pole textu. Uzel mapy roste do šířky, dokud se
+     * text vejde na řádek; delší text se zalomí a pole povyroste do výšky.
+     * Prázdný uzel zůstane – jde do něj kdykoliv kliknout a dopsat.
+     */
+    function autoSize(e) {
+        if (!e || (e.type !== 'mind' && e.type !== 'text')) return;
+
+        const size = e.size || (e.type === 'text' ? 18 : 15);
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:pre;visibility:hidden;' +
+            'font-family:var(--font);font-size:' + size + 'px;font-weight:' + (e.bold === false ? 400 : 700) + ';';
+        probe.textContent = e.text || ' ';
+        document.body.appendChild(probe);
+        const textWidth = probe.getBoundingClientRect().width;
+
+        const pad = 34;
+        const maxW = e.type === 'mind' ? 420 : 520;
+        const minW = e.type === 'mind' ? 120 : 180;
+        const wanted = Math.min(maxW, Math.max(minW, Math.ceil(textWidth) + pad));
+
+        probe.style.whiteSpace = 'normal';
+        probe.style.width = (wanted - pad) + 'px';
+        const lines = Math.max(1, Math.round(probe.getBoundingClientRect().height / (size * 1.35)));
+        document.body.removeChild(probe);
+
+        const oldW = e.w, oldH = e.h;
+        e.w = wanted;
+        e.h = Math.max(e.type === 'mind' ? 46 : 56, Math.ceil(lines * size * 1.35) + 22);
+
+        // uzel vlevo od rodiče musí růst doleva, uzel nad ním nahoru –
+        // jinak by se odsazení postupně sjedlo
+        const parent = parentOf(e.id);
+        if (parent) {
+            if (e.x + oldW < parent.x) e.x -= (e.w - oldW);
+            if (e.y + oldH < parent.y) e.y -= (e.h - oldH);
+        }
+    }
+
+    /** Uzel, ze kterého tenhle vzešel (první spojnice, která do něj vede). */
+    function parentOf(id) {
+        const link = S.elements.find(e => e.type === "link" && e.to === id);
+        return link ? find(link.from) : null;
     }
 
     function editCell(key) {
@@ -893,6 +1043,16 @@
     function setShape(shape) {
         S.shape = shape;
         eachSelected(e => { e.shape = shape; });
+        paintButtons();
+    }
+
+    /** Vzhled textu ve vybraných polích (i v buňkách tabulky). */
+    function setText(prop, value) {
+        S[prop] = value;
+        eachSelected(e => {
+            e[prop] = value;
+            if (prop === "size" || prop === "bold") autoSize(e);
+        });
         paintButtons();
     }
 
@@ -1090,11 +1250,31 @@
         el.html.addEventListener("click", (event) => {
             const add = event.target.closest("[data-tadd]");
             if (add) {
-                const [id, what] = add.dataset.tadd.split("|");
+                const [id, side] = add.dataset.tadd.split("|");
                 const e = find(id);
                 if (!e) return;
                 pushUndo();
-                if (what === "col") { e.cols++; e.w += 120; } else { e.rows++; e.h += 44; }
+                const cells = e.cells || {};
+                const moved = {};
+
+                if (side === "right") { e.cols++; e.w += 120; Object.assign(moved, cells); }
+                if (side === "down")  { e.rows++; e.h += 44; Object.assign(moved, cells); }
+                if (side === "left") {
+                    // nový sloupec vlevo – obsah se posune o jeden doprava
+                    Object.keys(cells).forEach(k => {
+                        const [r, c] = k.split("_").map(Number);
+                        moved[r + "_" + (c + 1)] = cells[k];
+                    });
+                    e.cols++; e.w += 120; e.x -= 120;
+                }
+                if (side === "up") {
+                    Object.keys(cells).forEach(k => {
+                        const [r, c] = k.split("_").map(Number);
+                        moved[(r + 1) + "_" + c] = cells[k];
+                    });
+                    e.rows++; e.h += 44; e.y -= 44;
+                }
+                e.cells = moved;
                 return render(), save();
             }
             const del = event.target.closest("[data-tdel]");
@@ -1154,6 +1334,14 @@
             button.addEventListener("click", () => { S.paint = button.dataset.paint; paintButtons(); }));
         document.querySelectorAll("[data-shape]").forEach(button =>
             button.addEventListener("click", () => setShape(button.dataset.shape)));
+        document.querySelectorAll("[data-align]").forEach(button =>
+            button.addEventListener("click", () => setText("align", button.dataset.align)));
+        document.querySelectorAll("[data-size]").forEach(button =>
+            button.addEventListener("click", () => setText("size", +button.dataset.size)));
+        document.querySelectorAll("[data-bold]").forEach(button =>
+            button.addEventListener("click", () => setText("bold", button.dataset.bold === "1")));
+        document.querySelectorAll("[data-tcolor]").forEach(button =>
+            button.addEventListener("click", () => setText("tcolor", button.dataset.tcolor)));
         document.querySelectorAll("[data-layout]").forEach(button =>
             button.addEventListener("click", () => layout(button.dataset.layout)));
         document.querySelectorAll("[data-width]").forEach(button =>
