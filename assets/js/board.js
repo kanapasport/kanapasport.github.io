@@ -665,10 +665,20 @@
                 const cell = event.target.closest("[data-cell]");
                 if (!isSel(e.id)) select([e.id], event.shiftKey);
                 pushUndo();
+
+                // s uzlem mapy se veze celá jeho větev
+                const moving = S.sel.slice();
+                S.sel.forEach(id => {
+                    const one = find(id);
+                    if (one && one.type === "mind") {
+                        descendantsOf(id).forEach(kid => { if (moving.indexOf(kid) === -1) moving.push(kid); });
+                    }
+                });
+
                 Object.assign(drag, {
                     mode: "move", x0: point.x, y0: point.y, moved: false,
                     cell: cell ? cell.dataset.cell : "",
-                    start: S.sel.map(id => ({ id: id, snap: JSON.stringify(find(id)) }))
+                    start: moving.map(id => ({ id: id, snap: JSON.stringify(find(id)) }))
                 });
                 return;
             }
@@ -746,6 +756,24 @@
 
         if (drag.mode === "move") {
             const dx = point.x - drag.x0, dy = point.y - drag.y0;
+            drag.last = point;
+
+            // pole, ke kterému se uzel přiváže, když ho tu pustím
+            if (S.sel.length === 1) {
+                const dragged = find(S.sel[0]);
+                if (dragged && dragged.type === "mind") {
+                    const family = descendantsOf(dragged.id).concat([dragged.id]);
+                    const over = elementAt(point, dragged.id);
+                    const id = (over && over.type === "mind" && family.indexOf(over.id) === -1) ? over.id : "";
+                    if (id !== drag.over) {
+                        el.html.querySelectorAll(".is-drop").forEach(n => n.classList.remove("is-drop"));
+                        const node = id ? el.html.querySelector('[data-el="' + id + '"]') : null;
+                        if (node) node.classList.add("is-drop");
+                        drag.over = id;
+                    }
+                }
+            }
+
             drag.start.forEach(item => {
                 const e = find(item.id);
                 const was = JSON.parse(item.snap);
@@ -936,7 +964,15 @@
                 if (drag.cell) { render(); return editCell(drag.cell); }
                 if (one && TEXTY.indexOf(one.type) !== -1) { render(); return startEditing(one.id); }
             }
-            render();     // ručně posunutý uzel zůstane, kde ho člověk nechal
+
+            // uzel puštěný nad jiným polem se k němu přiváže,
+            // jinak se jen přepočítá strana u vlastního rodiče
+            drag.over = "";
+            if (moved && S.sel.length === 1 && drag.last) {
+                const one = find(S.sel[0]);
+                if (one && one.type === "mind") reparent(one, drag.last);
+            }
+            render();
             return save();
         }
         if (mode === "arrowpt") {
@@ -1053,6 +1089,62 @@
     function parentOf(id) {
         const link = S.elements.find(e => e.type === "link" && e.to === id);
         return link ? find(link.from) : null;
+    }
+
+    /** Všechno, co pod uzlem visí – aby se větev posouvala jako celek. */
+    function descendantsOf(id) {
+        const out = [];
+        const queue = [id];
+        const seen = { [id]: true };
+        while (queue.length) {
+            const current = queue.shift();
+            S.elements.filter(e => e.type === "link" && e.from === current).forEach(link => {
+                if (seen[link.to]) return;
+                seen[link.to] = true;
+                out.push(link.to);
+                queue.push(link.to);
+            });
+        }
+        return out;
+    }
+
+    /** Na které straně rodiče uzel leží. */
+    function sideOf(parent, node) {
+        const dx = (node.x + node.w / 2) - (parent.x + parent.w / 2);
+        const dy = (node.y + node.h / 2) - (parent.y + parent.h / 2);
+        return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? "right" : "left") : (dy >= 0 ? "down" : "up");
+    }
+
+    /**
+     * Po přetažení uzel přepojí: pustí-li se nad jiným polem, přiváže se
+     * k němu; jinak se jen přepočítá, na které straně svého rodiče leží.
+     * Tím se dá větev přehodit třeba zespodu doprava.
+     */
+    function reparent(node, point) {
+        const family = descendantsOf(node.id).concat([node.id]);
+        const target = elementAt(point, node.id);
+        const link = S.elements.find(e => e.type === "link" && e.to === node.id);
+
+        if (target && target.type === "mind" && family.indexOf(target.id) === -1) {
+            if (link && link.from === target.id) {
+                link.dir = sideOf(target, node);
+            } else {
+                S.elements = S.elements.filter(e => !(e.type === "link" && e.to === node.id));
+                S.elements.push({ id: newId(), type: "link", from: target.id, to: node.id,
+                                  dir: sideOf(target, node), color: "#8a95a3" });
+            }
+            arrangeChildren(target.id);
+            return true;
+        }
+
+        if (link) {
+            const parent = find(link.from);
+            if (parent) {
+                const dir = sideOf(parent, node);
+                if (dir !== link.dir) { link.dir = dir; arrangeChildren(parent.id); return true; }
+            }
+        }
+        return false;
     }
 
     function editCell(key) {

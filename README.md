@@ -236,6 +236,11 @@ vystředění na rodiče – s přibývajícími uzly se větev roztahuje nahoru
 ne jen pod sebe. Strana je uložená u spojnice; **kliknutím na čáru** se
 ukážou čtyři tečky, kterými se přehodí, ze které strany vychází.
 
+**Přepojování:** uzel se dá přetáhnout — když ho pustíš **nad jiným polem**
+(to se zeleně orámuje), přiváže se k němu; když ho pustíš jinam, jen se
+přepočítá, na které straně svého rodiče leží, takže se dá větev přehodit
+třeba zespodu doprava. Větev se veze i se všemi svými potomky.
+
 **Tabulka:** tažením určíš počet řádků a sloupců, pak `+` na kterékoliv ze
 čtyř stran přidá řádek nebo sloupec právě tam (obsah se posune, ne přepíše).
 Do buněk se píše po dvojkliku, první řádek se sází jako hlavička.
