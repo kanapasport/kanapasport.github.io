@@ -90,10 +90,12 @@ Chceš jinou váhu (např. Regular na text v dokumentu)? Přidej soubor do
 ### Zkoušení jiné červené
 
 Na `barvy.html` se dá barva namíchat posuvníky nebo vybrat z hotových odstínů;
-mění se rovnou celá stránka včetně lišty. **Použít na celý web** si volbu
-zapamatuje v prohlížeči (klíč `company_kb_accent`), takže se dá proklikat celý
-web – ostatním se nic nemění. Trvale se barva nastaví přepsáním `--accent`
-v `:root` v `app.css`; ostatní odstíny (`--accent-dark`, `--accent-lt`,
+mění se rovnou celá stránka včetně lišty. **Míchání ale platí jen na téhle
+stránce a jen do jejího zavření** – firemní červená je daná a nikdo si ji
+nemůže přepsat natrvalo ani sobě.
+
+Trvale se barva mění jediným způsobem: přepsat `--accent` v `:root`
+v `app.css` a nasadit. Ostatní odstíny (`--accent-dark`, `--accent-lt`,
 `--accent-tint`) se z ní dopočítávají v `UI.accentVars()`, takže je stačí
 zkopírovat tlačítkem **Zkopírovat CSS**.
 
@@ -201,6 +203,30 @@ vybírají ze seznamu, takže překlepem nevznikne nová. **+ Nová zakázka**
 zakládá jen názvy (klidně víc najednou, jeden na řádek), **+ Nový úkol do …**
 zakládá úkol do vybrané zakázky. Zakázka bez úkolů se v seznamu ukáže taky,
 aby do ní šlo rovnou přidat první úkol.
+
+### Skupiny uvnitř zakázky
+
+Každá zakázka je rozdělená na **skupiny** – výchozí jsou `ARCGIS`, `SKENY`
+a `FOCENÍ`, další se přidávají ve **Správě zakázek** nebo tlačítkem **+ Nová**
+přímo u formuláře úkolu. Seznam je společný pro všechny zakázky a leží
+v tomtéž dokumentu (`meta/zakazky`, pole `groups`).
+
+Úkol si skupinu nese v poli `skupina`. Úkoly bez ní spadnou do **Nezařazeno**
+– nic se nikdy neztratí, ani když se skupina z číselníku odebere. Rozdělení
+do skupin je vidět i v dlaždici zakázky na rozcestníku.
+
+### Sbalování a historie
+
+Úkoly jsou v seznamu **sbalené**; kliknutím na hlavičku vyjedou patra,
+poznámky i historie. Stav rozbalení se drží jen v paměti stránky.
+
+**Historie zápisů** (vidí ji správce) ukazuje posun procent, ne jen výslednou
+hodnotu: `50 % → 75 %`, kdo a v kolik. Záznamy jsou seskupené po dnech
+a řadí se podle času. Doklikání 0 → 100 během chvilky je jeden řádek
+„0 → 100"; když se ale stejné patro posouvá s odstupem (pondělí 0 → 50,
+středa 50 → 75, za týden 75 → 100), jsou to tři samostatné záznamy.
+Slučují se jen zápisy téhož člověka k témuž patru **do deseti minut**
+(`LOG_WINDOW` v `ukoly.html`).
 
 ## Tabule na nápady
 

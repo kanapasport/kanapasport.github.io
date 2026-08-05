@@ -20,12 +20,16 @@
     UI.esc = esc;
 
     /* -------------------------------------------------------------- barvy ---
-       Zkoušení odstínů na stránce barvy.html. Vybraná barva se drží
-       v prohlížeči, takže se dá proklikat celý web a teprve pak ji zapsat
-       natvrdo do app.css. */
+       Zkoušení odstínů na stránce barvy.html. Barva se mění POUZE na té
+       stránce a jen dokud se nezavře – firemní červená je daná a nikdo si
+       ji nemůže přepsat natrvalo. Trvalá změna = přepsat --accent
+       v :root v app.css a nasadit. */
 
     const ACCENT_KEY = "company_kb_accent";
     const ACCENT_VARS = ["--accent", "--accent-dark", "--accent-lt", "--accent-tint", "--doc-accent"];
+
+    // úklid po starší verzi, kde si šla barva uložit do prohlížeče
+    try { localStorage.removeItem(ACCENT_KEY); } catch (err) { /* soukromý režim */ }
 
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -76,19 +80,9 @@
         Object.keys(vars).forEach(name => document.documentElement.style.setProperty(name, vars[name]));
     };
 
-    UI.saveAccent = (hex) => {
-        localStorage.setItem(ACCENT_KEY, hex);
-        UI.applyAccent(hex);
-    };
-
-    UI.savedAccent = () => localStorage.getItem(ACCENT_KEY) || "";
-
     UI.resetAccent = () => {
-        localStorage.removeItem(ACCENT_KEY);
         ACCENT_VARS.forEach(name => document.documentElement.style.removeProperty(name));
     };
-
-    if (UI.savedAccent()) UI.applyAccent(UI.savedAccent());
 
     /* ------------------------------------------------------------- toast */
 

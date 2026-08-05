@@ -29,12 +29,17 @@ const FIREBASE_CONFIG = {
 };
 const APP_ID = "firemni-kb-app";
 
+/** Výchozí rozdělení úkolů uvnitř zakázky, dokud si ho nikdo neupraví. */
+const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ"];
+
 const bus = new EventTarget();
 const KB = {
+    DEFAULT_SKUPINY: DEFAULT_SKUPINY,
     guides: [],
     tasks: [],
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
     zakazkyClosed: [],      // uzavřené zakázky (v dlaždici zelené)
+    skupiny: DEFAULT_SKUPINY.slice(),   // skupiny úkolů uvnitř zakázky
     boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
     status: "connecting",   // connecting | online | offline
     ready: false
@@ -108,6 +113,9 @@ try {
             const data = snap.exists() ? snap.data() : {};
             KB.zakazky = Array.isArray(data.names) ? data.names : [];
             KB.zakazkyClosed = Array.isArray(data.closed) ? data.closed : [];
+            // dokud si skupiny nikdo neupravil, platí výchozí trojice
+            KB.skupiny = (Array.isArray(data.groups) && data.groups.length)
+                ? data.groups : KB.DEFAULT_SKUPINY.slice();
             emit("zakazky", KB.zakazky);
         }, (err) => console.error("Chyba čtení zakázek:", err));
     });
@@ -215,16 +223,19 @@ KB.newTaskId = () => "task_" + Date.now() + "_" + Math.floor(Math.random() * 100
 
 /**
  * Uloží úkol. Struktura:
- *   { zakazka, title, owner, deadline: "2026-07-31",
+ *   { zakazka, skupina, title, owner, deadline: "2026-07-31",
  *     subtasks: [{ id, title, percent, by, ms }],
- *     notes:    [{ id, subtaskId, text, author, ms }] }
- * Poznámky jsou uvnitř dokumentu – je jich málo a načtou se rovnou se seznamem.
+ *     notes:    [{ id, subtaskId, text, author, ms }],
+ *     log:      [{ subtaskId, sub, from, percent, by, ms }] }
+ * Poznámky i historie jsou uvnitř dokumentu – je jich málo a načtou se
+ * rovnou se seznamem.
  */
 KB.saveTask = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
     await setDoc(taskDoc(id), {
         zakazka:  data.zakazka || "",
+        skupina:  data.skupina || "",      // ARCGIS / SKENY / FOCENÍ, prázdné = nezařazeno
         title:    data.title || "Bez názvu",
         owner:    data.owner || "",
         deadline: data.deadline || "",
@@ -241,18 +252,24 @@ KB.saveTask = async (id, data) => {
 };
 
 /**
- * Uloží číselník zakázek – jeden dokument se seznamem názvů
- * a seznamem těch uzavřených.
+ * Uloží číselník zakázek – jeden dokument se seznamem názvů, seznamem
+ * uzavřených a se skupinami, na které se úkoly uvnitř zakázky dělí.
+ * Skupiny se zapíšou jen tehdy, když je volající opravdu předá; jinak
+ * zůstanou v databázi ty stávající.
  */
-KB.saveZakazky = async (names, closed) => {
+KB.saveZakazky = async (names, closed, groups) => {
     if (authReady) await authReady;
     requireDb();
-    await setDoc(metaDoc("zakazky"), {
+
+    const payload = {
         names: names,
         closed: closed || KB.zakazkyClosed || [],
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
-    }, { merge: true });
+    };
+    if (Array.isArray(groups)) payload.groups = groups;
+
+    await setDoc(metaDoc("zakazky"), payload, { merge: true });
 };
 
 KB.deleteTask = async (id) => {

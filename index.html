@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=25">
+    <link rel="stylesheet" href="assets/css/app.css?v=26">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -35,10 +35,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=25"></script>
-<script src="assets/js/doc.js?v=25"></script>
-<script src="assets/js/ui.js?v=25"></script>
-<script type="module" src="assets/js/store.js?v=25"></script>
+<script src="assets/js/taxonomy.js?v=26"></script>
+<script src="assets/js/doc.js?v=26"></script>
+<script src="assets/js/ui.js?v=26"></script>
+<script type="module" src="assets/js/store.js?v=26"></script>
 
 <script>
 (function () {
@@ -154,19 +154,42 @@
         return d.replace(/^0/, "") + ". " + m.replace(/^0/, "") + ". " + y;
     };
 
+    const NEZARAZENO = "Nezařazeno";
+    const skupName = (task) => (task.skupina || "").trim() || NEZARAZENO;
+
     /** Seskupí úkoly podle zakázky – z každé zakázky je jedna dlaždice se seznamem. */
     function taskTileHtml(name, tasks) {
         const zak = encodeURIComponent(slug(name));
 
-        // každý řádek je proklik rovnou na ten konkrétní úkol
-        const rows = tasks.map(task => {
+        const rowHtml = (task) => {
             const percent = taskPercent(task);
             const state = task.done || percent === 100 ? " tile__dot--done" : percent > 0 ? " tile__dot--run" : "";
+            // každý řádek je proklik rovnou na ten konkrétní úkol
             return '<a class="tile__listrow" href="ukoly.html?zak=' + zak + "#task-" + encodeURIComponent(task.id) + '">' +
                 '<span class="tile__dot' + state + '"></span>' +
                 "<b>" + esc(task.title || "Bez názvu") + "</b>" +
                 '<span class="tile__listpct">' + percent + " %</span>" +
             "</a>";
+        };
+
+        // pořadí skupin drží číselník, cokoliv navíc se přidá za něj,
+        // aby se v dlaždici neztratil ani úkol bez zařazení
+        const order = ((window.KB.skupiny || []).length
+            ? window.KB.skupiny : (window.KB.DEFAULT_SKUPINY || [])).slice();
+        tasks.forEach(task => {
+            const s = skupName(task);
+            if (order.indexOf(s) === -1) order.push(s);
+        });
+
+        const rows = order.map(skup => {
+            const inSkup = tasks.filter(t => skupName(t) === skup);
+            if (!inSkup.length) return "";
+            const percent = Math.round(inSkup.reduce((sum, t) => sum + taskPercent(t), 0) / inSkup.length);
+            return '<div class="tile__skup">' +
+                    "<span>" + esc(skup) + "</span>" +
+                    '<span class="tile__skuppct">' + percent + " %</span>" +
+                   "</div>" +
+                   inSkup.map(rowHtml).join("");
         }).join("");
 
         const deadlines = tasks.map(t => t.deadline).filter(Boolean).sort();
