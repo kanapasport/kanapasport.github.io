@@ -193,7 +193,10 @@ window.KB_TOOLS = [
     { title: 'Nový návod',     icon: 'plus',     href: 'editor.html' },
     { title: 'Pokyn pro AI',   icon: 'sparkles', action: 'ai-prompt' },
     { title: 'Import od AI',   icon: 'download', href: 'editor.html#import' },
-    { title: 'Všechny návody', icon: 'library',  href: 'navody.html' }
+    { title: 'Všechny návody', icon: 'library',  href: 'navody.html' },
+    // jen pro hlavního správce – `need` řídí, komu se ikona vůbec ukáže
+    { title: 'Uživatelé',   icon: 'users',   href: 'uzivatele.html', need: 'users.manage' },
+    { title: 'Barvy webu',  icon: 'palette', href: 'barvy.html',     need: 'web.design' }
 ];
 
 /* --------------------------------------------------------------- pomocné */

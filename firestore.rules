@@ -1,0 +1,97 @@
+rules_version = '2';
+
+// ============================================================================
+// Pravidla pro Firestore – Pasport Kaňa
+//
+// TENHLE SOUBOR SE SÁM NIKAM NENASADÍ. Je to předloha, kterou je potřeba
+// vložit ve Firebase Console → Firestore Database → Rules → Publish.
+//
+// Nasadit ho ale dává smysl AŽ VE CHVÍLI, kdy web přejde z anonymního
+// přihlášení na Firebase Auth (e-mail + heslo). Do té doby by pravidla
+// zamkla i běžné uživatele, protože všichni jedou pod anonymním účtem.
+//
+// Postup, jak se k tomu dostat:
+//   1. Firebase Console → Authentication → Sign-in method → povolit
+//      „Email/Password".
+//   2. Každému člověku ze seznamu založit účet (e-mail = ten ze Seznam.xlsx,
+//      heslo = to vygenerované).
+//   3. K účtu vytvořit dokument users/{uid} s polem `role`, kde uid je
+//      Firebase UID daného účtu.
+//   4. Web přepnout ze `signInAnonymously` na `signInWithEmailAndPassword`
+//      (assets/js/store.js) a přihlašovací okno napojit na Firebase Auth
+//      (assets/js/ui.js, funkce UI.login).
+//   5. Teprve pak vložit tahle pravidla.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function prihlasen() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return get(/databases/$(database)/documents/artifacts/firemni-kb-app/public/data/users/$(request.auth.uid)).data.role;
+    }
+
+    function spravce() {
+      return prihlasen() && role() in ['hlavni-spravce', 'spravce'];
+    }
+
+    function hlavniSpravce() {
+      return prihlasen() && role() == 'hlavni-spravce';
+    }
+
+    match /artifacts/firemni-kb-app/public/data/{document=**} {
+      // číst smí každý přihlášený člověk z firmy
+      allow read: if prihlasen();
+    }
+
+    // --- návody: tvořit a upravovat může každý, mazat jen správce ---
+    match /artifacts/firemni-kb-app/public/data/guides/{guideId} {
+      allow create, update: if prihlasen();
+      allow delete: if spravce();
+
+      match /images/{imageId} {
+        allow create, update: if prihlasen();
+        allow delete: if spravce();
+      }
+    }
+
+    // --- úkoly: zakládat a mazat správce a zaměstnanci, zapisovat všichni ---
+    match /artifacts/firemni-kb-app/public/data/tasks/{taskId} {
+      allow update: if prihlasen();
+      allow create: if prihlasen() && role() != 'student';
+      allow delete: if spravce();
+    }
+
+    // --- číselníky (zakázky, skupiny) jen správci ---
+    match /artifacts/firemni-kb-app/public/data/meta/{docId} {
+      allow write: if spravce();
+    }
+
+    // --- seznam lidí spravuje jen hlavní správce ---
+    match /artifacts/firemni-kb-app/public/data/users/{userId} {
+      allow write: if hlavniSpravce();
+    }
+
+    // --- tabule: kdo je přihlášený, může kreslit ---
+    match /artifacts/firemni-kb-app/public/data/boards/{boardId} {
+      allow write: if prihlasen();
+      match /{sub=**} {
+        allow write: if prihlasen();
+      }
+    }
+
+    // --- záznamy přihlášení: zapsat smí každý, mazat nikdo ---
+    match /artifacts/firemni-kb-app/public/data/logs/{logId} {
+      allow create: if prihlasen();
+      allow update, delete: if false;
+    }
+
+    // všechno ostatní zavřené
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

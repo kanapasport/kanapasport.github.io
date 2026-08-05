@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#c8102e">
     <title>Barvy webu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=26">
+    <link rel="stylesheet" href="assets/css/app.css?v=27">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -44,6 +44,14 @@
 <div id="appHeader"></div>
 
 <main class="wrap" style="padding-top:18px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
+
+    <!-- vzhled webu ladí jen hlavní správce -->
+    <div id="denied" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        Vzhled webu ladí jen <b>hlavní správce</b>.
+        <div style="margin-top:14px"><button id="btnLogin" class="btn btn--primary btn--sm">Přihlásit se</button></div>
+    </div>
+
+    <div id="app" hidden class="col" style="gap:14px">
 
     <div>
         <h2 style="font-size:20px;font-weight:900">Barvy webu</h2>
@@ -181,12 +189,13 @@
             </div>
         </section>
     </div>
+    </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=26"></script>
-<script src="assets/js/doc.js?v=26"></script>
-<script src="assets/js/ui.js?v=26"></script>
-<script type="module" src="assets/js/store.js?v=26"></script>
+<script src="assets/js/taxonomy.js?v=27"></script>
+<script src="assets/js/doc.js?v=27"></script>
+<script src="assets/js/ui.js?v=27"></script>
+<script type="module" src="assets/js/store.js?v=27"></script>
 
 <script>
 (function () {
@@ -271,8 +280,22 @@
 
     /* ------------------------------------------------------------ start */
 
-    document.addEventListener("DOMContentLoaded", () => {
+    /** Míchat barvy smí jen hlavní správce. */
+    function gate() {
+        const allowed = window.KBUI.can("web.design");
+        $("denied").hidden = allowed;
+        $("app").hidden = !allowed;
+        if (!allowed) window.KBUI.resetAccent();
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
         window.KBUI.mountNav({ active: "barvy.html" });
+
+        $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
+        document.addEventListener("kb-role", gate);
+        window.KB.on("users", () => { window.KBUI.syncRole(); gate(); });
+        gate();
+        window.KB.whenReady().then(() => { window.KBUI.syncRole(); gate(); });
 
         $("ico1").innerHTML = window.KB_ICONS.map;
         $("ico2").innerHTML = window.KB_ICONS.building;

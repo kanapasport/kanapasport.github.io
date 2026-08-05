@@ -8,7 +8,7 @@
     <title>Návod – Pasport Kaňa</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="assets/css/app.css?v=26">
+    <link rel="stylesheet" href="assets/css/app.css?v=27">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -38,7 +38,7 @@
                     <button id="zoomIn" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">+</button>
                 </div>
                 <a id="btnEdit" href="#" class="btn btn--ghost btn--sm">Upravit</a>
-                <button id="btnPdf" class="btn btn--primary btn--sm">
+                <button id="btnPdf" class="btn btn--primary btn--sm" data-need="navod.pdf" hidden>
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/>
@@ -64,10 +64,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=26"></script>
-<script src="assets/js/doc.js?v=26"></script>
-<script src="assets/js/ui.js?v=26"></script>
-<script type="module" src="assets/js/store.js?v=26"></script>
+<script src="assets/js/taxonomy.js?v=27"></script>
+<script src="assets/js/doc.js?v=27"></script>
+<script src="assets/js/ui.js?v=27"></script>
+<script type="module" src="assets/js/store.js?v=27"></script>
 
 <script>
 (function () {
@@ -133,7 +133,14 @@
         document.getElementById("zoomIn").addEventListener("click", () => stepZoom(0.1));
         document.getElementById("zoomOut").addEventListener("click", () => stepZoom(-0.1));
 
+        // role může dorazit až s daty – tlačítko se pak samo odkryje
+        window.KB.on("users", () => { window.KBUI.syncRole(); window.KBUI.paintUser(); });
+        document.addEventListener("kb-role", () => window.KBUI.paintUser());
+
         document.getElementById("btnPdf").addEventListener("click", async (event) => {
+            if (!window.KBUI.can("navod.pdf")) {
+                return window.KBUI.toast("Stahovat návody do PDF můžou jen správci.", "warn");
+            }
             const button = event.currentTarget;
             const original = button.innerHTML;
             button.disabled = true;

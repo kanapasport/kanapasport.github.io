@@ -30,7 +30,7 @@ const FIREBASE_CONFIG = {
 const APP_ID = "firemni-kb-app";
 
 /** Výchozí rozdělení úkolů uvnitř zakázky, dokud si ho nikdo neupraví. */
-const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ"];
+const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ", "TABULKY"];
 
 const bus = new EventTarget();
 const KB = {
@@ -40,6 +40,7 @@ const KB = {
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
     zakazkyClosed: [],      // uzavřené zakázky (v dlaždici zelené)
     skupiny: DEFAULT_SKUPINY.slice(),   // skupiny úkolů uvnitř zakázky
+    users: [],              // lidé, kteří mají na web přístup, a jejich role
     boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
     status: "connecting",   // connecting | online | offline
     ready: false
@@ -64,6 +65,8 @@ const boardDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards"
 const boardBody = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "content", "data");
 const boardImages = (id) => collection(db, "artifacts", APP_ID, "public", "data", "boards", id, "images");
 const boardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "images", imgId);
+const usersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "users");
+const userDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "users", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
 const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images", imgId);
 
@@ -108,6 +111,13 @@ try {
             KB.boards.sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0));
             emit("boards", KB.boards);
         }, (err) => console.error("Chyba čtení tabulí:", err));
+
+        onSnapshot(usersCol(), (snapshot) => {
+            KB.users = [];
+            snapshot.forEach(d => KB.users.push({ id: d.id, ...d.data() }));
+            KB.users.sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+            emit("users", KB.users);
+        }, (err) => console.error("Chyba čtení uživatelů:", err));
 
         onSnapshot(metaDoc("zakazky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
@@ -276,6 +286,44 @@ KB.deleteTask = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(taskDoc(id));
+};
+
+/* ------------------------------------------------------------- uživatelé --
+   Seznam lidí, kteří mají na web přístup, a jejich role. Spravuje ho hlavní
+   správce. Heslo se ukládá jen jako otisk (SHA-256 se solí), nikdy v čitelné
+   podobě – i tak ale platí, že dokud běží anonymní přihlášení k Firebase
+   a otevřená pravidla, je to zámek na skleněných dveřích. Skutečné oddělení
+   přijde s Firebase Auth; poznámky k tomu jsou v README. */
+
+KB.userId = (email) => String(email || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+KB.saveUser = async (data) => {
+    if (authReady) await authReady;
+    requireDb();
+
+    const id = KB.userId(data.email);
+    const payload = {
+        email: String(data.email || "").trim().toLowerCase(),
+        first: data.first || "",
+        last:  data.last || "",
+        role:  data.role || "zamestnanec",
+        active: data.active !== false,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    };
+    // otisk hesla se přepisuje jen tehdy, když se heslo opravdu mění
+    if (data.salt) payload.salt = data.salt;
+    if (data.hash) payload.hash = data.hash;
+    if (data.createdMs) payload.createdMs = data.createdMs;
+
+    await setDoc(userDoc(id), payload, { merge: true });
+    return id;
+};
+
+KB.deleteUser = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(userDoc(id));
 };
 
 /* ---------------------------------------------------------------- tabule --

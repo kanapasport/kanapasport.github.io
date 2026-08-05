@@ -68,6 +68,14 @@
     --warn:    #b45309;
     --danger:  #b91c1c;
 
+    /* --- stupnice rozpracovanosti úkolů ---
+       0 % šedá · 25 a 50 % žlutá · 75 % oranžová · 95 % slabší zelená · 100 % zelená */
+    --p0-bg:   #eef0f3;  --p0-fg:   #737c88;
+    --p50-bg:  #fff3c9;  --p50-fg:  #8a6200;
+    --p75-bg:  #ffe1c2;  --p75-fg:  #a24e00;
+    --p95-bg:  #ddf0d2;  --p95-fg:  #5a9a3d;
+    --p100-bg: #d8f0e2;  --p100-fg: #16794a;
+
     /* --- písmo ---
        Lato ve váhách 300/400/700/900. Chceš jiné písmo? Změň tenhle řádek
        a odkaz na Google Fonts v hlavičkách HTML. */
@@ -1028,6 +1036,36 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     .task__progress { width: 100%; }
 }
 
+/* rychlé odkazy na skupiny nad zakázkou – kliknutím to sjede na skupinu níž */
+.skupnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: -2px 0 4px;
+}
+.skupnav__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 12.5px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: border-color .14s, color .14s, background .14s;
+}
+.skupnav__item:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-tint); }
+.skupnav__pct { letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 900; }
+
+/* aby se po prokliku skupina nezasekla pod lepivou lištou */
+.skup { scroll-margin-top: 120px; }
+
 /* ---- skupiny uvnitř zakázky (ARCGIS / SKENY / FOCENÍ) ---- */
 
 .skup { display: flex; flex-direction: column; gap: 8px; }
@@ -1080,7 +1118,34 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     transition: background .15s;
 }
 .subtask:last-child { border-bottom: none; }
-.subtask--done { background: var(--ok-tint); }
+
+/* ---- barvy podle rozpracovanosti ----
+   0 % šedá · 25 a 50 % žlutá · 75 % oranžová · 95 % slabší zelená · 100 % zelená.
+   Stejná stupnice se používá u patra, u celkových procent úkolu i u proužku. */
+.subtask--p0   { background: var(--p0-bg); }
+.subtask--p50  { background: var(--p50-bg); }
+.subtask--p75  { background: var(--p75-bg); }
+.subtask--p95  { background: var(--p95-bg); }
+.subtask--p100 { background: var(--p100-bg); }
+
+.subtask--p0   .subtask__pct { color: var(--p0-fg); }
+.subtask--p50  .subtask__pct { color: var(--p50-fg); }
+.subtask--p75  .subtask__pct { color: var(--p75-fg); }
+.subtask--p95  .subtask__pct { color: var(--p95-fg); }
+.subtask--p100 .subtask__pct { color: var(--p100-fg); }
+
+/* celková procenta úkolu – stejná stupnice */
+.pctval--p0   { color: var(--p0-fg); }
+.pctval--p50  { color: var(--p50-fg); }
+.pctval--p75  { color: var(--p75-fg); }
+.pctval--p95  { color: var(--p95-fg); }
+.pctval--p100 { color: var(--p100-fg); }
+
+.bar__fill--p0   { background: var(--p0-fg); }
+.bar__fill--p50  { background: var(--p50-fg); }
+.bar__fill--p75  { background: var(--p75-fg); }
+.bar__fill--p95  { background: var(--p95-fg); }
+.bar__fill--p100 { background: var(--p100-fg); }
 
 @media (max-width: 820px) {
     .subtask {
@@ -1661,6 +1726,56 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     background: #fff; color: #16191d;
     font-family: var(--font);   /* musí sedět s .a4-page, jinak se rozejde stránkování */
 }
+
+/* ======================================================= PŘIHLÁŠENÍ ==== */
+
+.loginbox {
+    position: fixed;
+    inset: 0;
+    z-index: 220;
+    background: rgba(11, 13, 16, .55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+}
+.loginbox.is-open { display: flex; }
+.loginbox__card { padding: 26px; max-width: 380px; width: 100%; }
+
+.rolepill--off { opacity: .65; }
+
+/* účet, kterému je pozastavený přístup */
+.zakrow--off { opacity: .6; }
+.zakrow--off b { text-decoration: line-through; }
+
+/* ---- tabulka „co která role smí" ---- */
+
+.permtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 560px;
+}
+.permtable th, .permtable td {
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    text-align: center;
+}
+.permtable th {
+    background: var(--bg-soft);
+    font-size: 11.5px;
+    font-weight: 900;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+.permtable td:first-child, .permtable th:first-child {
+    text-align: left;
+    background: var(--bg-soft);
+    font-weight: 700;
+    white-space: nowrap;
+}
+.permtable td.yes { color: var(--ok); font-weight: 900; }
+.permtable td.no  { color: var(--dim); }
 
 /* ========================================================== LIGHTBOX ==== */
 

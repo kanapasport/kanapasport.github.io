@@ -8,7 +8,7 @@
     <title>Editor návodu – Pasport Kaňa</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="assets/css/app.css?v=26">
+    <link rel="stylesheet" href="assets/css/app.css?v=27">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -186,10 +186,10 @@
 
 <input type="file" id="filePicker" accept="image/*" multiple hidden>
 
-<script src="assets/js/taxonomy.js?v=26"></script>
-<script src="assets/js/doc.js?v=26"></script>
-<script src="assets/js/ui.js?v=26"></script>
-<script type="module" src="assets/js/store.js?v=26"></script>
+<script src="assets/js/taxonomy.js?v=27"></script>
+<script src="assets/js/doc.js?v=27"></script>
+<script src="assets/js/ui.js?v=27"></script>
+<script type="module" src="assets/js/store.js?v=27"></script>
 
 <script>
 (function () {
@@ -545,10 +545,11 @@
 
     /* ====================================================== NAČTENÍ A MAZÁNÍ */
 
-    /** Tlačítko Smazat dává smysl jen u návodu, který v databázi opravdu je. */
+    /** Smazat dává smysl jen u uloženého návodu – a smí to jen správce. */
     function paintDelete() {
         const exists = (window.KB.guides || []).some(g => g.id === state.docId);
-        $("btnDelete").hidden = !exists;
+        $("btnDelete").hidden = !exists || !window.KBUI.can("navod.delete");
+        $("btnPdf").hidden = !window.KBUI.can("navod.pdf");
     }
 
     async function loadGuide(id) {
@@ -645,7 +646,14 @@
         $("zoomOut").addEventListener("click", () => stepZoom(-0.1));
         window.KBDoc.watchFit($("stageWrap"), () => { if (state.zoom === null) applyZoom(); });
 
+        // role dorazí až se seznamem lidí – tlačítka se pak přepočítají
+        window.KB.on("users", () => { window.KBUI.syncRole(); paintDelete(); });
+        document.addEventListener("kb-role", paintDelete);
+
         $("btnPdf").addEventListener("click", async (event) => {
+            if (!window.KBUI.can("navod.pdf")) {
+                return window.KBUI.toast("Stahovat návody do PDF můžou jen správci.", "warn");
+            }
             const button = event.currentTarget;
             const original = button.textContent;
             button.disabled = true;

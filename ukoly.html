@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Úkolovník – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=26">
+    <link rel="stylesheet" href="assets/css/app.css?v=27">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -26,8 +26,8 @@
     </div>
 
     <div id="adminHint" class="card small" style="padding:14px 16px;color:var(--muted);line-height:1.6" hidden>
-        Zakládat a mazat úkoly může jen <b>správce</b>. Přepni si režim tlačítkem vpravo nahoře
-        (dočasné řešení, než bude hotové přihlašování účtem).
+        Zakládat úkoly a spravovat zakázky můžou jen <b>zaměstnanci a správci</b>.
+        Přihlas se tlačítkem vpravo nahoře – co kdo smí, se řídí tvou rolí.
     </div>
 
     <div id="list" class="col" style="gap:16px"></div>
@@ -121,10 +121,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=26"></script>
-<script src="assets/js/doc.js?v=26"></script>
-<script src="assets/js/ui.js?v=26"></script>
-<script type="module" src="assets/js/store.js?v=26"></script>
+<script src="assets/js/taxonomy.js?v=27"></script>
+<script src="assets/js/doc.js?v=27"></script>
+<script src="assets/js/ui.js?v=27"></script>
+<script type="module" src="assets/js/store.js?v=27"></script>
 
 <script>
 (function () {
@@ -153,6 +153,19 @@
 
     const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
         '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M5 13l4 4L19 7"/></svg>';
+
+    /* Kroky rozpracovanosti a barevná stupnice k nim.
+       Stejné rozdělení se používá u patra i u celkových procent úkolu. */
+    const STEPS = [0, 25, 50, 75, 95, 100];
+
+    function pctLevel(percent) {
+        const value = percent || 0;
+        if (value >= 100) return "p100";   // zelená
+        if (value >= 95)  return "p95";    // slabší zelená
+        if (value >= 75)  return "p75";    // oranžová
+        if (value > 0)    return "p50";    // žlutá (25 a 50 %)
+        return "p0";                       // šedá
+    }
 
     /* ------------------------------------------------------------ výpočty */
 
@@ -195,7 +208,7 @@
         const notes = (task.notes || []).filter(n => n.subtaskId === sub.id);
 
         return '<div>' +
-            '<div class="subtask' + (done ? " subtask--done" : "") + '">' +
+            '<div class="subtask subtask--' + pctLevel(percent) + (done ? " subtask--done" : "") + '">' +
                 '<button class="subtask__check" data-toggle="' + task.id + "|" + sub.id + '" ' +
                     'title="Označit jako hotové">' + CHECK + "</button>" +
                 '<span class="subtask__name">' + esc(sub.title) + "</span>" +
@@ -228,7 +241,7 @@
 
     /** Zelený pruh pod úkolem – objeví se, až jsou všechna patra na 100 %. */
     function doneHtml(task, percent) {
-        const admin = window.KBUI.isAdmin();
+        const admin = window.KBUI.can("ukol.delete");   // vrátit hotový úkol smí správce
 
         if (task.done) {
             return '<div class="taskdone taskdone--set">' +
@@ -254,7 +267,7 @@
         const entries = (task.log || []).slice()
             .sort((a, b) => (b.ms || 0) - (a.ms || 0))
             .slice(0, 60);
-        if (!window.KBUI.isAdmin() || !entries.length) return "";
+        if (!window.KBUI.can("historie.view") || !entries.length) return "";
 
         const time = (ms) => new Date(ms).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
         const day = (ms) => new Date(ms).toLocaleDateString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric", year: "numeric" });
@@ -287,7 +300,6 @@
     function taskHtml(task) {
         const percent = taskPercent(task);
         const due = deadlineStyle(task);
-        const admin = window.KBUI.isAdmin();
         const open = expanded.has(task.id);
         const subs = task.subtasks || [];
         const doneSubs = subs.filter(s => (s.percent || 0) === 100).length;
@@ -320,16 +332,18 @@
                 '<div class="task__progress">' +
                     '<div class="spread" style="margin-bottom:5px">' +
                         '<span class="tiny muted">hotovo</span>' +
-                        '<span style="font-size:14px;font-weight:900;color:' + (percent === 100 ? "var(--ok)" : "var(--text)") + '">' +
-                            percent + " %</span>" +
+                        '<span class="pctval pctval--' + pctLevel(percent) + '" ' +
+                            'style="font-size:14px;font-weight:900">' + percent + " %</span>" +
                     "</div>" +
-                    '<div class="bar"><div class="bar__fill' + (percent === 100 ? " bar__fill--done" : "") +
+                    '<div class="bar"><div class="bar__fill bar__fill--' + pctLevel(percent) +
                         '" style="width:' + percent + '%"></div></div>' +
                 "</div>" +
-                (admin
+                (window.KBUI.can("ukol.edit") || window.KBUI.can("ukol.delete")
                     ? '<div class="task__admin">' +
-                        '<button class="btn btn--sm btn--ghost" data-edit="' + task.id + '">Upravit</button>' +
-                        '<button class="btn btn--sm btn--ghost" style="color:var(--danger)" data-remove="' + task.id + '">Smazat</button>' +
+                        (window.KBUI.can("ukol.edit")
+                            ? '<button class="btn btn--sm btn--ghost" data-edit="' + task.id + '">Upravit</button>' : "") +
+                        (window.KBUI.can("ukol.delete")
+                            ? '<button class="btn btn--sm btn--ghost" style="color:var(--danger)" data-remove="' + task.id + '">Smazat</button>' : "") +
                       "</div>"
                     : "") +
             "</div>" +
@@ -357,7 +371,6 @@
             '<button type="button" class="chip' + (active ? " chip--active" : "") + '" ' +
             'data-zak="' + esc(zak) + '">' + esc(label) + "</button>";
 
-        const admin = window.KBUI.isAdmin();
         const current = names.find(n => slug(n) === activeZak) || "";
 
         $("appSubbar").innerHTML =
@@ -372,30 +385,51 @@
                 "</div>" +
                 '<div class="subbar__right">' +
                     '<button type="button" class="btn btn--sm ' + (onlyOpen ? "btn--primary" : "btn--ghost") + '" data-onlyopen>Jen rozdělané</button>' +
-                    (admin
-                        ? '<button type="button" class="btn btn--ghost btn--sm" data-newzak>Správa zakázek</button>' +
-                          '<button type="button" class="btn btn--primary btn--sm" data-newtask>+ Nový úkol' +
-                              (current ? " do " + esc(current) : "") + "</button>"
-                        : "") +
+                    (window.KBUI.can("zakazky.manage")
+                        ? '<button type="button" class="btn btn--ghost btn--sm" data-newzak>Správa zakázek</button>' : "") +
+                    (window.KBUI.can("ukol.create")
+                        ? '<button type="button" class="btn btn--primary btn--sm" data-newtask>+ Nový úkol' +
+                              (current ? " do " + esc(current) : "") + "</button>" : "") +
                 "</div>" +
             "</div>";
 
         $("pageTitle").textContent = current || "Úkolovník";
     }
 
-    /** Jedna skupina uvnitř zakázky (ARCGIS / SKENY / FOCENÍ / Nezařazeno). */
+    /** Kotva skupiny v adrese – ať se dá na skupinu odkázat i prokliknout. */
+    const skupAnchor = (zak, skup) => "skup-" + slug(zak) + "-" + slug(skup);
+
+    /**
+     * Rychlé odkazy na skupiny nad zakázkou. Kliknutím to sjede na tu
+     * správnou skupinu níž na stránce.
+     */
+    function skupNavHtml(zak, order, tasks) {
+        const links = order.map(skup => {
+            const inSkup = tasks.filter(t => skupName(t) === skup);
+            if (!inSkup.length) return "";
+            const percent = Math.round(inSkup.reduce((sum, t) => sum + taskPercent(t), 0) / inSkup.length);
+            return '<a class="skupnav__item" href="#' + skupAnchor(zak, skup) + '">' +
+                    "<span>" + esc(skup) + "</span>" +
+                    '<span class="skupnav__pct pctval--' + pctLevel(percent) + '">' + percent + " %</span>" +
+                   "</a>";
+        }).join("");
+
+        return links ? '<nav class="skupnav">' + links + "</nav>" : "";
+    }
+
+    /** Jedna skupina uvnitř zakázky (ARCGIS / SKENY / FOCENÍ / TABULKY / Nezařazeno). */
     function skupinaHtml(zak, name, tasks) {
         const percent = tasks.length
             ? Math.round(tasks.reduce((sum, t) => sum + taskPercent(t), 0) / tasks.length) : 0;
 
-        return '<div class="skup">' +
+        return '<div class="skup" id="' + skupAnchor(zak, name) + '">' +
             '<div class="skup__head">' +
                 '<span class="skup__name' + (name === NEZARAZENO ? " skup__name--none" : "") + '">' +
                     esc(name) + "</span>" +
                 '<span class="skup__meta">' + tasks.length +
                     (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
-                    " · " + percent + " %</span>" +
-                (window.KBUI.isAdmin()
+                    ' · <b class="pctval--' + pctLevel(percent) + '">' + percent + " %</b></span>" +
+                (window.KBUI.can("ukol.create")
                     ? '<button type="button" class="btn btn--sm btn--ghost skup__add" ' +
                       'data-newtask-in="' + esc(zak) + '" data-newtask-skup="' + esc(name) + '">+ Úkol</button>'
                     : "") +
@@ -421,12 +455,12 @@
             ? order.map(skup => {
                 const inSkup = tasks.filter(t => skupName(t) === skup);
                 // prázdné skupiny ukazujeme jen správci, ať má kam přidávat
-                if (!inSkup.length && (!window.KBUI.isAdmin() || skup === NEZARAZENO)) return "";
+                if (!inSkup.length && (!window.KBUI.can("ukol.create") || skup === NEZARAZENO)) return "";
                 return skupinaHtml(name, skup, inSkup);
               }).join("")
             : '<div class="card small muted" style="padding:16px;text-align:center">' +
               "V téhle zakázce zatím není žádný úkol." +
-              (window.KBUI.isAdmin()
+              (window.KBUI.can("ukol.create")
                   ? ' <button type="button" class="btn btn--sm btn--ghost" style="margin-left:8px" ' +
                     'data-newtask-in="' + esc(name) + '">+ Přidat úkol</button>'
                   : "") +
@@ -441,6 +475,7 @@
                       (done ? " · " + done + " hotovo" : "")
                     : "bez úkolů") + "</span>" +
             "</div>" +
+            skupNavHtml(name, order, tasks) +
             body +
         "</section>";
     }
@@ -457,7 +492,7 @@
         if (onlyOpen) tasks = tasks.filter(task => taskPercent(task) < 100);
         if (activeZak) tasks = tasks.filter(task => slug(zakName(task)) === activeZak);
 
-        $("adminHint").hidden = window.KBUI.isAdmin() || !!tasks.length;
+        $("adminHint").hidden = window.KBUI.can("ukol.create") || !!tasks.length;
 
         // bez hledání a bez filtru ukážeme i zakázky, které zatím nemají úkol
         const groups = new Map();
@@ -609,8 +644,12 @@
             const [taskId, subId] = button.dataset.cycle.split("|");
             const task = findTask(taskId);
             const sub = task && (task.subtasks || []).find(s => s.id === subId);
-            const steps = [0, 25, 50, 75, 100];
-            const next = steps[(steps.indexOf(sub ? (sub.percent || 0) : 0) + 1) % steps.length];
+            const current = sub ? (sub.percent || 0) : 0;
+            // hodnota mimo stupnici (ze starších dat) skočí na nejbližší vyšší krok
+            const index = STEPS.indexOf(current);
+            const next = index === -1
+                ? (STEPS.find(s => s > current) || 0)
+                : STEPS[(index + 1) % STEPS.length];
             return setPercent(taskId, subId, next);
         }
 
@@ -1049,6 +1088,8 @@
 
         document.addEventListener("kb-role", () => { paintSubbar(); render(); });
         window.KB.on("zakazky", () => { paintSubbar(); render(); });
+        // role se bere ze seznamu lidí – změna se projeví bez odhlášení
+        window.KB.on("users", () => { window.KBUI.syncRole(); paintSubbar(); render(); });
 
         let jumped = false;
         window.KB.on("tasks", () => {
@@ -1063,7 +1104,7 @@
         render();
         jumpToHash();
 
-        if (location.hash === "#novy" && window.KBUI.isAdmin()) openForm(null, currentZak());
+        if (location.hash === "#novy" && window.KBUI.can("ukol.create")) openForm(null, currentZak());
     });
 })();
 </script>

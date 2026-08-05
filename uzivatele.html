@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Uživatelé – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=27">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:20px">
+
+    <!-- sem se nedostane nikdo kromě hlavního správce -->
+    <div id="denied" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        Tuhle stránku spravuje jen <b>hlavní správce</b>.
+        <div style="margin-top:14px"><button id="btnLogin" class="btn btn--primary btn--sm">Přihlásit se</button></div>
+    </div>
+
+    <div id="app" hidden class="col" style="gap:20px">
+
+        <div class="spread">
+            <div>
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Uživatelé</h2>
+                <p class="small muted" style="margin-top:3px">
+                    Kdo má na web přístup a co smí. Změna role se lidem projeví sama, bez odhlášení.
+                </p>
+            </div>
+            <button id="btnNew" class="btn btn--primary btn--sm">+ Přidat člověka</button>
+        </div>
+
+        <div class="card" style="padding:14px 16px;font-size:12.5px;line-height:1.6;color:var(--warn);background:#fff8ed;border-color:#f6dcb4">
+            <b>Než tomu začneš věřit:</b> tohle rozhoduje o tom, co je na webu vidět a co jde odkliknout –
+            není to zabezpečení. Dokud běží anonymní přihlášení k Firebase a otevřená pravidla databáze,
+            dostane se k datům kdokoliv, kdo zná adresu. Skutečné oddělení práv je Firebase Auth
+            + Firestore Rules, postup je popsaný v <code>README.md</code>.
+        </div>
+
+        <div id="list" class="col" style="gap:8px"></div>
+
+        <!-- ------------------------------------------------ přehled pravomocí -->
+        <div>
+            <h3 style="font-size:15px;font-weight:900;margin-bottom:10px">Co která role smí</h3>
+            <div style="overflow-x:auto">
+                <table id="matrix" class="permtable"></table>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- ====================================================== OKNO UŽIVATELE -->
+<div id="userOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:520px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b id="userFormTitle" style="font-size:17px">Přidat člověka</b>
+
+        <div class="row" style="gap:12px">
+            <div class="grow">
+                <label class="label" for="fFirst">Jméno</label>
+                <input type="text" id="fFirst" class="field">
+            </div>
+            <div class="grow">
+                <label class="label" for="fLast">Příjmení</label>
+                <input type="text" id="fLast" class="field">
+            </div>
+        </div>
+        <div>
+            <label class="label" for="fEmail">E-mail (slouží jako přihlašovací jméno)</label>
+            <input type="email" id="fEmail" class="field" placeholder="jmeno@pasport.eu">
+        </div>
+        <div>
+            <label class="label" for="fRole">Role</label>
+            <select id="fRole" class="field"></select>
+        </div>
+        <div>
+            <label class="label" for="fPass">Heslo</label>
+            <div class="row" style="gap:8px">
+                <input type="text" id="fPass" class="field grow" placeholder="nechat prázdné = ponechat stávající">
+                <button type="button" id="btnGen" class="btn btn--ghost btn--sm">Vygenerovat</button>
+            </div>
+            <div class="tiny muted" style="margin-top:6px">
+                Do databáze se ukládá jen otisk hesla, ne heslo samotné – proto si ho po vygenerování
+                <b>zkopíruj a předej</b>, zpětně už se nikde nepřečte.
+            </div>
+        </div>
+        <label class="row" style="gap:8px;cursor:pointer">
+            <input type="checkbox" id="fActive" checked style="width:18px;height:18px">
+            <span class="small">Účet je aktivní</span>
+        </label>
+
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button id="btnFormCancel" class="btn btn--ghost">Zrušit</button>
+            <button id="btnFormSave" class="btn btn--primary">Uložit</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=27"></script>
+<script src="assets/js/doc.js?v=27"></script>
+<script src="assets/js/ui.js?v=27"></script>
+<script type="module" src="assets/js/store.js?v=27"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    let editingId = null;
+
+    /* --------------------------------------------------- generování hesel --
+       Skládá se jméno z e-mailu + firemní slovo + tři číslice + znaménko.
+       Stejné pravidlo jako u prvního rozdání hesel, ať jsou konzistentní. */
+
+    const BRAND = ["Kana", "Pasport", "Psprt", "Kn", "PasportKana"];
+
+    const bezDiakritiky = (text) => String(text || "")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z]/g, "");
+
+    function generatePassword(email) {
+        const rnd = (max) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
+        const pick = (list) => list[rnd(list.length)];
+
+        // základ ze jména v e-mailu (stohr@pasport.eu -> Stohr)
+        const local = String(email || "").split("@")[0].replace(/[._-]/g, " ").trim();
+        const parts = local.split(/\s+/).filter(Boolean).map(bezDiakritiky).filter(Boolean);
+        let base = parts.length ? parts[parts.length - 1] : "Pasport";
+        base = base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
+
+        const digits = String(rnd(1000)).padStart(3, "0");
+        const sign = pick(["+", "-", ""]);
+        const brand = pick(BRAND);
+
+        return (rnd(2) ? base + brand : brand + base) + digits + sign;
+    }
+
+    /* ------------------------------------------------------------ seznam */
+
+    function rowHtml(user) {
+        const role = window.KBUI.ROLES.find(r => r.id === user.role) || window.KBUI.ROLES[3];
+        const me = (window.KB_EMAIL || "").toLowerCase() === (user.email || "").toLowerCase();
+
+        return '<div class="zakrow' + (user.active === false ? " zakrow--off" : "") + '">' +
+            "<div><b>" + esc(((user.first || "") + " " + (user.last || "")).trim() || user.email) + "</b>" +
+                (me ? ' <span class="tiny" style="color:var(--accent);font-weight:800">(to jsi ty)</span>' : "") +
+                '<div class="tiny muted">' + esc(user.email) + " · " + esc(role.title) +
+                (user.active === false ? " · pozastavený" : "") +
+                (user.hash ? "" : ' · <span style="color:var(--warn)">bez hesla</span>') + "</div></div>" +
+            '<div class="row" style="gap:6px">' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
+                (me ? "" : '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
+                    'data-del="' + esc(user.id) + '">Odebrat</button>') +
+            "</div>" +
+        "</div>";
+    }
+
+    function render() {
+        const owner = window.KBUI.isOwner();
+        $("denied").hidden = owner;
+        $("app").hidden = !owner;
+        if (!owner) return;
+
+        const users = window.KB.users || [];
+        $("list").innerHTML = users.length
+            ? users.map(rowHtml).join("")
+            : '<div class="card center small muted" style="padding:30px">Zatím tu nikdo není.</div>';
+
+        paintMatrix();
+    }
+
+    /** Tabulka „co která role smí" – čte se přímo z pravidel v ui.js. */
+    function paintMatrix() {
+        const actions = Object.keys(window.KBUI.PERMISSION_LABELS);
+        const roles = window.KBUI.ROLES;
+
+        $("matrix").innerHTML =
+            "<thead><tr><th></th>" +
+                roles.map(r => "<th>" + esc(r.title) + "</th>").join("") +
+            "</tr></thead><tbody>" +
+            actions.map(action =>
+                "<tr><td>" + esc(window.KBUI.PERMISSION_LABELS[action]) + "</td>" +
+                roles.map(r => '<td class="' + (window.KBUI.canAs(r.id, action) ? "yes" : "no") + '">' +
+                    (window.KBUI.canAs(r.id, action) ? "✓" : "–") + "</td>").join("") +
+                "</tr>").join("") +
+            "</tbody>";
+    }
+
+    /* ---------------------------------------------------------- formulář */
+
+    function openForm(id) {
+        editingId = id || null;
+        const user = id ? (window.KB.users || []).find(u => u.id === id) : null;
+
+        $("userFormTitle").textContent = user ? "Upravit člověka" : "Přidat člověka";
+        $("fFirst").value = user ? (user.first || "") : "";
+        $("fLast").value  = user ? (user.last || "") : "";
+        $("fEmail").value = user ? (user.email || "") : "";
+        $("fEmail").disabled = !!user;   // e-mail je klíč záznamu, ten se nemění
+        $("fActive").checked = user ? user.active !== false : true;
+        $("fPass").value = "";
+        $("fPass").placeholder = user ? "nechat prázdné = ponechat stávající" : "vygeneruj nebo napiš";
+
+        $("fRole").innerHTML = window.KBUI.ROLES.map(r =>
+            '<option value="' + r.id + '"' +
+            ((user ? user.role : "zamestnanec") === r.id ? " selected" : "") + ">" + esc(r.title) + "</option>").join("");
+
+        $("userOverlay").hidden = false;
+        $(user ? "fRole" : "fFirst").focus();
+    }
+
+    async function saveForm() {
+        const email = $("fEmail").value.trim().toLowerCase();
+        if (!email || email.indexOf("@") === -1) return window.KBUI.toast("Doplň platný e-mail.", "warn");
+
+        const data = {
+            email: email,
+            first: $("fFirst").value.trim(),
+            last:  $("fLast").value.trim(),
+            role:  $("fRole").value,
+            active: $("fActive").checked
+        };
+
+        const password = $("fPass").value.trim();
+        if (password) {
+            data.salt = window.KBUI.newSalt();
+            data.hash = await window.KBUI.hashPassword(password, data.salt);
+        }
+        if (!editingId) data.createdMs = Date.now();
+
+        try {
+            await window.KB.saveUser(data);
+            $("userOverlay").hidden = true;
+            window.KBUI.toast(password
+                ? "Uloženo. Heslo předej osobně – zpětně se nepřečte."
+                : "Uloženo.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    /* ------------------------------------------------------------- start */
+
+    $("list").addEventListener("click", async (event) => {
+        const edit = event.target.closest("[data-edit]");
+        if (edit) return openForm(edit.dataset.edit);
+
+        const del = event.target.closest("[data-del]");
+        if (!del) return;
+
+        const user = (window.KB.users || []).find(u => u.id === del.dataset.del);
+        if (!user) return;
+        if (!confirm('Opravdu odebrat přístup pro „' + (user.first + " " + user.last).trim() + '"?')) return;
+
+        try {
+            await window.KB.deleteUser(user.id);
+            window.KBUI.toast("Přístup odebrán.");
+        } catch (err) {
+            window.KBUI.toast("Odebrání selhalo.", "error");
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountNav({ active: "uzivatele.html" });
+
+        $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
+        $("btnFormCancel").addEventListener("click", () => { $("userOverlay").hidden = true; });
+        $("btnFormSave").addEventListener("click", saveForm);
+        $("btnGen").addEventListener("click", () => {
+            $("fPass").value = generatePassword($("fEmail").value);
+        });
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("users", () => { window.KBUI.syncRole(); render(); });
+
+        render();
+        await window.KB.whenReady();
+        window.KBUI.syncRole();
+        render();
+    });
+})();
+</script>
+</body>
+</html>

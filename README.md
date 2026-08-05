@@ -297,13 +297,45 @@ onSnapshot a nepřepíšou rozepsaný text ani rozdělané tažení.
 **Pozor:** Firestore neumí uložit pole v poli, proto jsou body kresby
 naplocho `[x1,y1,x2,y2,…]`.
 
-## Role – dočasné řešení
+## Účty a role
 
-Úkolovník rozlišuje **správce** (zakládá a maže úkoly) a **zaměstnance**
-(zaškrtává hotovo a píše poznámky). Role se přepíná tlačítkem nad seznamem
-úkolů a drží se v prohlížeči – **není to zabezpečení**. V hlavičce je proto
-jen „Přihlášen jako …"; skutečné oddělení práv přijde s přihlašováním účtem
-a heslem.
+Lidé, kteří mají na web přístup, jsou v databázi v kolekci `users`; spravuje je
+hlavní správce na `uzivatele.html` (ikona **Uživatelé** nad lištou – vidí ji jen
+on). Přihlašuje se e-mailem a heslem, role se bere ze seznamu, takže když ji
+hlavní správce změní, projeví se to i lidem, kteří jsou zrovna přihlášení.
+
+| Akce | Hlavní správce | Správce | Zaměstnanec | Student |
+|---|:--:|:--:|:--:|:--:|
+| zakládat úkoly | ✓ | ✓ | ✓ | – |
+| zapisovat procenta a poznámky | ✓ | ✓ | ✓ | ✓ |
+| mazat úkoly | ✓ | ✓ | – | – |
+| spravovat zakázky a skupiny | ✓ | ✓ | – | – |
+| vidět historii zápisů | ✓ | ✓ | – | – |
+| tvořit návody | ✓ | ✓ | ✓ | ✓ |
+| mazat návody | ✓ | ✓ | – | – |
+| stahovat návody do PDF | ✓ | ✓ | – | – |
+| spravovat uživatele | ✓ | – | – | – |
+| měnit vzhled webu | ✓ | – | – | – |
+
+Pravomoci jsou na jednom místě v `assets/js/ui.js` (`PERMISSIONS`); stránky se
+ptají přes `KBUI.can("ukol.create")`. Přidat pravomoc znamená doplnit řádek
+tam a použít ho – tabulka na `uzivatele.html` se dopočítá sama.
+
+Hesla se do databáze ukládají jen jako **otisk SHA-256 se solí**, nikdy čitelně.
+Vygenerovaná hesla jsou v `Seznam.xlsx` vedle jmen – ten soubor je v
+`.gitignore`, protože **repozitář je veřejný**, a nikdy se nesmí commitnout.
+
+### Tohle ještě není zabezpečení
+
+Role řídí, co je na webu vidět a co jde odkliknout. Neřídí ale přístup
+k datům: web se pořád přihlašuje k Firebase anonymně a pravidla databáze jsou
+otevřená, takže kdokoliv, kdo zná adresu, si data může přečíst i přepsat mimo
+web. Přihlašovací okno je zámek na skleněných dveřích.
+
+Skutečné oddělení práv je Firebase Auth (e-mail + heslo) plus pravidla
+Firestore. Předloha pravidel včetně postupu je v [firestore.rules](firestore.rules)
+– dokud web nepřejde na Firebase Auth, nasazovat je nemá smysl, zamkla by i
+vlastní lidi.
 
 ## Co je hotové a co ne
 

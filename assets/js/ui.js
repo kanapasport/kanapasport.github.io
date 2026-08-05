@@ -111,9 +111,64 @@
         }, 3400);
     };
 
-    /* ------------------------------------------------------ uživatel a role */
+    /* ------------------------------------------------------ uživatel a role --
 
-    UI.isAdmin = () => window.KB_ROLE === "spravce";
+       Čtyři role a k nim pevně dané pravomoci. Kdo co smí, se řeší JEN tady –
+       stránky se ptají přes UI.can("neco"), takže se pravidlo mění na jednom
+       místě.
+
+       POZOR: tohle rozhoduje o tom, co je vidět a co jde odkliknout, ale není
+       to zabezpečení. Dokud běží anonymní přihlášení k Firebase a otevřená
+       pravidla databáze, dostane se ke všem datům kdokoliv, kdo zná adresu.
+       Skutečné oddělení práv je až Firebase Auth + Firestore Rules (README). */
+
+    UI.ROLES = [
+        { id: "hlavni-spravce", title: "Hlavní správce", short: "HL. SPRÁVCE" },
+        { id: "spravce",        title: "Správce",        short: "SPRÁVCE" },
+        { id: "zamestnanec",    title: "Zaměstnanec",    short: "ZAMĚSTNANEC" },
+        { id: "student",        title: "Student",        short: "STUDENT" }
+    ];
+
+    const PERMISSIONS = {
+        "hlavni-spravce": ["*"],
+        "spravce": [
+            "ukol.create", "ukol.edit", "ukol.delete",
+            "zakazky.manage", "historie.view",
+            "navod.create", "navod.delete", "navod.pdf"
+        ],
+        "zamestnanec": ["ukol.create", "ukol.edit", "navod.create"],
+        "student":     ["ukol.edit", "navod.create"]
+    };
+
+    /** Souhrn pro obrazovku správy – co která role smí. */
+    UI.PERMISSION_LABELS = {
+        "ukol.create":    "zakládat úkoly",
+        "ukol.edit":      "zapisovat procenta a poznámky",
+        "ukol.delete":    "mazat úkoly",
+        "zakazky.manage": "spravovat zakázky a skupiny",
+        "historie.view":  "vidět historii zápisů",
+        "navod.create":   "tvořit návody",
+        "navod.delete":   "mazat návody",
+        "navod.pdf":      "stahovat návody do PDF",
+        "users.manage":   "spravovat uživatele",
+        "web.design":     "měnit vzhled webu"
+    };
+
+    UI.role = () => window.KB_ROLE || "student";
+    UI.roleTitle = (id) => (UI.ROLES.find(r => r.id === (id || UI.role())) || {}).title || "Student";
+
+    /** Smí daná role tuhle věc? Hlavní správce smí všechno. */
+    UI.canAs = (role, action) => {
+        const allowed = PERMISSIONS[role] || [];
+        return allowed.indexOf("*") !== -1 || allowed.indexOf(action) !== -1;
+    };
+
+    /** Smí to přihlášený? */
+    UI.can = (action) => UI.canAs(UI.role(), action);
+
+    UI.isOwner = () => UI.role() === "hlavni-spravce";
+    /** „Správce" v původním smyslu – hlavní správce i běžný správce. */
+    UI.isAdmin = () => UI.isOwner() || UI.role() === "spravce";
 
     UI.setUser = (name) => {
         window.KB_USER = name;
@@ -140,39 +195,129 @@
             el.textContent = window.KB_USER || "nepřihlášen";
         });
         document.querySelectorAll("[data-role-pill]").forEach(el => {
-            const admin = UI.isAdmin();
-            el.textContent = admin ? "REŽIM SPRÁVCE" : "REŽIM ZAMĚSTNANCE";
-            el.className = "rolepill" + (admin ? " rolepill--admin" : "");
+            const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES[3];
+            el.textContent = window.KB_USER ? role.short : "NEPŘIHLÁŠEN";
+            el.className = "rolepill" + (UI.isAdmin() ? " rolepill--admin" : "") +
+                           (window.KB_USER ? "" : " rolepill--off");
+        });
+        // prvky, které smí vidět jen někdo – data-need="ukol.create"
+        document.querySelectorAll("[data-need]").forEach(el => {
+            el.hidden = !UI.can(el.dataset.need);
         });
     };
 
-    /** Odhlášení – zatím jen zapomene jméno v prohlížeči. */
+    /* ---------------------------------------------------------- přihlášení */
+
+    const EMAIL_KEY = "company_kb_email";
+    window.KB_EMAIL = localStorage.getItem(EMAIL_KEY) || "";
+
+    /** Otisk hesla. Sůl je u každého jiná, ať se stejná hesla neprozradí. */
+    UI.hashPassword = async (password, salt) => {
+        const data = new TextEncoder().encode(String(salt || "") + ":" + String(password || ""));
+        const buffer = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    };
+
+    UI.newSalt = () => Array.from(crypto.getRandomValues(new Uint8Array(12)))
+        .map(b => b.toString(16).padStart(2, "0")).join("");
+
+    const findUser = (email) => (window.KB.users || [])
+        .find(u => (u.email || "").toLowerCase() === String(email || "").trim().toLowerCase());
+
+    UI.me = () => findUser(window.KB_EMAIL) || null;
+
+    /** Přihlášení proti seznamu lidí v databázi. */
+    UI.login = async (email, password) => {
+        const user = findUser(email);
+        if (!user)         return { ok: false, error: "Takový e-mail v seznamu není." };
+        if (!user.active)  return { ok: false, error: "Účet je pozastavený. Ozvi se hlavnímu správci." };
+        if (!user.hash)    return { ok: false, error: "Účet zatím nemá nastavené heslo." };
+
+        const hash = await UI.hashPassword(password, user.salt);
+        if (hash !== user.hash) return { ok: false, error: "Nesprávné heslo." };
+
+        window.KB_EMAIL = user.email;
+        localStorage.setItem(EMAIL_KEY, user.email);
+        UI.setRole(user.role || "zamestnanec");
+        UI.setUser(((user.first || "") + " " + (user.last || "")).trim() || user.email);
+        return { ok: true, user: user };
+    };
+
     UI.logout = () => {
         localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(EMAIL_KEY);
         window.KB_USER = "";
-        UI.setRole("zamestnanec");
+        window.KB_EMAIL = "";
+        UI.setRole("student");
         UI.paintUser();
         UI.toast("Odhlášeno.");
     };
 
-    /** Přepnutí role – dočasné, než bude přihlašování účtem. */
-    UI.toggleRole = () => {
-        if (UI.isAdmin()) {
-            UI.setRole("zamestnanec");
-            UI.toast("Přepnuto na zaměstnance.");
-        } else {
-            if (!window.KB_USER) UI.requireUser();
-            UI.setRole("spravce");
-            UI.toast("Přepnuto na správce. Po zavedení přihlašování to bude podle účtu.");
-        }
+    /** Role se bere ze seznamu – když ji správce změní, projeví se sama. */
+    UI.syncRole = () => {
+        if (!window.KB_EMAIL) return;
+        const user = UI.me();
+        if (!user || user.active === false) return UI.logout();
+        if (user.role && user.role !== window.KB_ROLE) UI.setRole(user.role);
+        const name = ((user.first || "") + " " + (user.last || "")).trim();
+        if (name && name !== window.KB_USER) UI.setUser(name);
     };
 
-    /** Vyžádá jméno, pokud ještě není známé (dočasná identifikace autora). */
+    /* ------------------------------------------------------- okno přihlášení */
+
+    UI.openLogin = () => {
+        let box = document.getElementById("kbLogin");
+        if (!box) {
+            box = document.createElement("div");
+            box.id = "kbLogin";
+            box.className = "loginbox no-print";
+            box.innerHTML =
+                '<form class="loginbox__card card col" style="gap:14px">' +
+                    '<img src="Pasport_Kana_black.png" alt="Pasport Kaňa" style="height:52px;object-fit:contain;margin:0 auto">' +
+                    '<b style="font-size:17px;text-align:center">Přihlášení</b>' +
+                    '<div><label class="label" for="kbLoginEmail">E-mail</label>' +
+                        '<input id="kbLoginEmail" type="email" class="field" autocomplete="username" placeholder="jmeno@pasport.eu"></div>' +
+                    '<div><label class="label" for="kbLoginPass">Heslo</label>' +
+                        '<input id="kbLoginPass" type="password" class="field" autocomplete="current-password"></div>' +
+                    '<div id="kbLoginErr" class="tiny" style="color:var(--danger);min-height:16px"></div>' +
+                    '<button type="submit" class="btn btn--primary" style="width:100%">Přihlásit se</button>' +
+                    '<button type="button" class="linkbtn" style="margin:0 auto" data-login-close>Zavřít</button>' +
+                    '<div class="tiny muted" style="text-align:center;line-height:1.5">' +
+                        "Heslo ti přidělí hlavní správce.</div>" +
+                "</form>";
+            document.body.appendChild(box);
+
+            box.querySelector("[data-login-close]").addEventListener("click", () => box.classList.remove("is-open"));
+            box.addEventListener("click", (event) => {
+                if (event.target === box) box.classList.remove("is-open");
+            });
+
+            box.querySelector("form").addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const err = document.getElementById("kbLoginErr");
+                err.textContent = "";
+
+                const result = await UI.login(
+                    document.getElementById("kbLoginEmail").value,
+                    document.getElementById("kbLoginPass").value);
+
+                if (!result.ok) return void (err.textContent = result.error);
+
+                box.classList.remove("is-open");
+                document.getElementById("kbLoginPass").value = "";
+                UI.toast("Vítej, " + window.KB_USER + " · " + UI.roleTitle());
+                document.dispatchEvent(new CustomEvent("kb-role"));
+            });
+        }
+        box.classList.add("is-open");
+        setTimeout(() => document.getElementById("kbLoginEmail").focus(), 50);
+    };
+
+    /** Kde se bez přihlášení nedá pokračovat – otevře rovnou přihlašovací okno. */
     UI.requireUser = () => {
         if (window.KB_USER) return window.KB_USER;
-        const name = (prompt("Zadejte své jméno – podepíše se pod vaše zápisy:") || "").trim();
-        if (name) UI.setUser(name);
-        return window.KB_USER;
+        UI.openLogin();
+        return "";
     };
 
     /* ---------------------------------------------------------- horní lišta */
@@ -247,9 +392,13 @@
     function toolsHtml() {
         const tools = (window.KB_TOOLS || []).map(tool => {
             const inner = icon(tool.icon) + "<span>" + tool.title + "</span>";
+            // nástroj s `need` se ukáže jen tomu, kdo na něj má právo
+            const gate = tool.need ? ' data-need="' + tool.need + '" hidden' : "";
             return tool.action
-                ? '<button type="button" class="toolbtn" data-action="' + tool.action + '" title="' + tool.title + '">' + inner + "</button>"
-                : '<a class="toolbtn" href="' + tool.href + '" title="' + tool.title + '">' + inner + "</a>";
+                ? '<button type="button" class="toolbtn" data-action="' + tool.action + '"' + gate +
+                  ' title="' + tool.title + '">' + inner + "</button>"
+                : '<a class="toolbtn" href="' + tool.href + '"' + gate +
+                  ' title="' + tool.title + '">' + inner + "</a>";
         }).join("");
         return '<div class="toolrail">' + tools + "</div>";
     }
@@ -408,13 +557,14 @@
         }
     });
 
-    // přihlášení / odhlášení a přepínač role – kdekoliv na stránce
+    // přihlášení a odhlášení – kdekoliv na stránce
     document.addEventListener("click", (event) => {
         const target = event.target.closest("[data-logout],[data-login],[data-role-pill]");
         if (!target) return;
         if (target.hasAttribute("data-logout")) return UI.logout();
-        if (target.hasAttribute("data-login")) return void UI.requireUser();
-        UI.toggleRole();
+        // odznak role slouží k přihlášení; roli si nikdo nepřepíná sám
+        if (window.KB_USER) return;
+        UI.openLogin();
     });
 
     /* ------------------------------------------------ hledání v liště */

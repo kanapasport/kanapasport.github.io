@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=26">
+    <link rel="stylesheet" href="assets/css/app.css?v=27">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -35,10 +35,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=26"></script>
-<script src="assets/js/doc.js?v=26"></script>
-<script src="assets/js/ui.js?v=26"></script>
-<script type="module" src="assets/js/store.js?v=26"></script>
+<script src="assets/js/taxonomy.js?v=27"></script>
+<script src="assets/js/doc.js?v=27"></script>
+<script src="assets/js/ui.js?v=27"></script>
+<script type="module" src="assets/js/store.js?v=27"></script>
 
 <script>
 (function () {
@@ -225,8 +225,28 @@
             groups.get(name).push(task);
         });
 
+        /* Pořadí dlaždic: napřed hlavní zakázky (PINNED), pak otevřené
+           podle nejbližšího termínu a nakonec uzavřené. Ať je to, na čem
+           se zrovna dělá, hned vlevo nahoře. */
+        const PINNED = ["BioPharma"];
+        const closedNames = window.KB.zakazkyClosed || [];
+        const nearest = (list) => {
+            const dates = list.map(t => t.deadline).filter(Boolean).sort();
+            return dates.length ? dates[0] : "9999";
+        };
+        const rank = (name) => {
+            const pin = PINNED.findIndex(p => window.KBUI.fold(p) === window.KBUI.fold(name));
+            if (pin !== -1) return "0" + pin;
+            return (closedNames.indexOf(name) !== -1 ? "2" : "1");
+        };
+
+        const ordered = Array.from(groups.entries()).sort((a, b) => {
+            const byRank = rank(a[0]).localeCompare(rank(b[0]));
+            return byRank || nearest(a[1]).localeCompare(nearest(b[1]));
+        });
+
         const tiles = groups.size
-            ? Array.from(groups.entries()).map(([name, list]) => taskTileHtml(name, list)).join("")
+            ? ordered.map(([name, list]) => taskTileHtml(name, list)).join("")
             : '<div class="tile"><a class="tile__main" href="ukoly.html">' +
                 '<div class="tile__head"><div class="tile__icon">' + icon("tasks") + "</div>" +
                 '<div class="tile__title">ÚKOLOVNÍK</div></div>' +
