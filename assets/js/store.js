@@ -12,7 +12,13 @@
    ========================================================================== */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import {
+    getAuth, onAuthStateChanged,
+    signInWithEmailAndPassword, signOut, sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { initializeApp as initializeSecondaryApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as signOutSecondary }
+    from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc,
     onSnapshot, serverTimestamp, addDoc
@@ -72,20 +78,35 @@ const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "dat
 
 /* ------------------------------------------------------------------ start */
 
+/* Odběry se navazují až po přihlášení a při odhlášení se zase ruší,
+   aby po člověku nezůstal otevřený poslech dat. */
+let odbery = [];
+const zrusOdbery = () => { odbery.forEach(stop => { try { stop(); } catch (e) {} }); odbery = []; };
+
 try {
     const app = initializeApp(FIREBASE_CONFIG);
     auth = getAuth(app);
     db = getFirestore(app);
+    KB.auth = auth;
 
-    authReady = signInAnonymously(auth).catch(err => {
-        console.error("Anonymní přihlášení k Firebase selhalo:", err);
-        setStatus("offline");
-        throw err;
+    // Přihlašuje se e-mailem a heslem. Dokud se nikdo nepřihlásí, web žádná
+    // data nenačte – to je záměr, ne chyba.
+    authReady = new Promise(resolve => {
+        onAuthStateChanged(auth, (user) => { if (user) resolve(user); });
     });
 
     onAuthStateChanged(auth, (user) => {
-        if (!user) return;
-        onSnapshot(guidesCol(), (snapshot) => {
+        if (!user) {
+            zrusOdbery();
+            KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
+            KB.ready = true;
+            setStatus("odhlasen");
+            emit("guides", KB.guides);
+            emit("users", KB.users);
+            return;
+        }
+        zrusOdbery();
+        odbery.push(onSnapshot(guidesCol(), (snapshot) => {
             KB.guides = [];
             snapshot.forEach(d => KB.guides.push({ id: d.id, ...d.data() }));
             KB.guides.sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0));
@@ -95,31 +116,31 @@ try {
         }, (err) => {
             console.error("Chyba čtení databáze:", err);
             setStatus("offline");
-        });
+        }));
 
-        onSnapshot(tasksCol(), (snapshot) => {
+        odbery.push(onSnapshot(tasksCol(), (snapshot) => {
             KB.tasks = [];
             snapshot.forEach(d => KB.tasks.push({ id: d.id, ...d.data() }));
             // nejbližší termín nahoře, úkoly bez termínu na konec
             KB.tasks.sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"));
             emit("tasks", KB.tasks);
-        }, (err) => console.error("Chyba čtení úkolů:", err));
+        }, (err) => console.error("Chyba čtení úkolů:", err)));
 
-        onSnapshot(boardsCol(), (snapshot) => {
+        odbery.push(onSnapshot(boardsCol(), (snapshot) => {
             KB.boards = [];
             snapshot.forEach(d => KB.boards.push({ id: d.id, ...d.data() }));
             KB.boards.sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0));
             emit("boards", KB.boards);
-        }, (err) => console.error("Chyba čtení tabulí:", err));
+        }, (err) => console.error("Chyba čtení tabulí:", err)));
 
-        onSnapshot(usersCol(), (snapshot) => {
+        odbery.push(onSnapshot(usersCol(), (snapshot) => {
             KB.users = [];
             snapshot.forEach(d => KB.users.push({ id: d.id, ...d.data() }));
             KB.users.sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
             emit("users", KB.users);
-        }, (err) => console.error("Chyba čtení uživatelů:", err));
+        }, (err) => console.error("Chyba čtení uživatelů:", err)));
 
-        onSnapshot(metaDoc("zakazky"), (snap) => {
+        odbery.push(onSnapshot(metaDoc("zakazky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
             KB.zakazky = Array.isArray(data.names) ? data.names : [];
             KB.zakazkyClosed = Array.isArray(data.closed) ? data.closed : [];
@@ -127,7 +148,7 @@ try {
             KB.skupiny = (Array.isArray(data.groups) && data.groups.length)
                 ? data.groups : KB.DEFAULT_SKUPINY.slice();
             emit("zakazky", KB.zakazky);
-        }, (err) => console.error("Chyba čtení zakázek:", err));
+        }, (err) => console.error("Chyba čtení zakázek:", err)));
     });
 } catch (err) {
     console.warn("Firebase se nepodařilo spustit – offline režim.", err);
@@ -329,6 +350,40 @@ KB.deleteUser = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(userDoc(id));
+};
+
+/* ------------------------------------------------------- přihlašování ----
+   Firebase Auth, e-mail a heslo. Role se pak čte z users/{uid}. */
+
+KB.signIn = (email, password) => signInWithEmailAndPassword(auth, String(email).trim(), password);
+KB.signOut = () => signOut(auth);
+KB.currentUid = () => (auth && auth.currentUser) ? auth.currentUser.uid : "";
+
+/**
+ * Pošle člověku odkaz na změnu hesla.
+ *
+ * POZOR: cizí heslo nedokáže z webu změnit ani hlavní správce – Firebase to
+ * z prohlížeče nedovolí nikomu kromě vlastníka účtu. Nastavit heslo jde jen
+ * při zakládání účtu; potom už jen tímhle odkazem. Kdyby měl správce potřebu
+ * hesla přepisovat i později, musela by k tomu vzniknout serverová funkce
+ * s Admin SDK (a k ní placený tarif Blaze).
+ */
+KB.sendPasswordReset = (email) => sendPasswordResetEmail(auth, String(email).trim());
+
+/**
+ * Založí účet novému člověku. Dělá se to přes DRUHOU instanci Firebase –
+ * kdyby se použila ta hlavní, prohlížeč by přihlášeného správce odhlásil
+ * a přihlásil jako toho nově založeného.
+ */
+KB.createAccount = async (email, password) => {
+    const app2 = initializeSecondaryApp(FIREBASE_CONFIG, "zakladani-" + Date.now());
+    const auth2 = getSecondaryAuth(app2);
+    try {
+        const cred = await createUserWithEmailAndPassword(auth2, String(email).trim(), password);
+        return cred.user.uid;
+    } finally {
+        await signOutSecondary(auth2).catch(() => {});
+    }
 };
 
 /* ------------------------------------------------------------- záloha ----

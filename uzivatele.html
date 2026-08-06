@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Uživatelé – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=29">
+    <link rel="stylesheet" href="assets/css/app.css?v=31">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -117,10 +117,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=29"></script>
-<script src="assets/js/doc.js?v=29"></script>
-<script src="assets/js/ui.js?v=29"></script>
-<script type="module" src="assets/js/store.js?v=29"></script>
+<script src="assets/js/taxonomy.js?v=31"></script>
+<script src="assets/js/doc.js?v=31"></script>
+<script src="assets/js/ui.js?v=31"></script>
+<script type="module" src="assets/js/store.js?v=31"></script>
 
 <script>
 (function () {
@@ -183,7 +183,8 @@
                 (pwdCell ? '<div class="pwdrow">' + pwdCell + "</div>" : "") +
             "</div>" +
             '<div class="row" style="gap:6px">' +
-                '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '">Změnit heslo</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '" ' +
+                    'title="Pošle odkaz na e-mail – heslo si nastaví sám">Reset hesla</button>' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
                 (me ? "" : '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
                     'data-del="' + esc(user.id) + '">Odebrat</button>') +
@@ -390,32 +391,33 @@
 
     /* ------------------------------------------------------ změna hesla */
 
+    /**
+     * Změna hesla. Firebase z prohlížeče nedovolí přepsat cizí heslo nikomu
+     * kromě vlastníka účtu – ani hlavnímu správci. Proto se posílá odkaz
+     * na e-mail a člověk si heslo nastaví sám.
+     */
     async function changePassword(id) {
         const user = findUser(id);
         if (!user) return;
 
         const jmeno = ((user.first || "") + " " + (user.last || "")).trim() || user.email;
-        const navrh = generatePassword(user.email);
-        const heslo = prompt("Nové heslo pro " + jmeno + ":\n\n" +
-            "(návrh můžeš nechat, nebo přepsat vlastním)", navrh);
-        if (heslo === null) return;
-        if (!heslo.trim()) return window.KBUI.toast("Heslo nesmí být prázdné.", "warn");
-
-        const data = { id: user.id,
-                       email: user.email, first: user.first, last: user.last,
-                       role: user.role, active: user.active !== false };
-        data.salt = window.KBUI.newSalt();
-        data.hash = await window.KBUI.hashPassword(heslo, data.salt);
-        if (vaultKey) data.enc = await window.KBUI.vaultEncrypt(vaultKey, heslo);
+        if (!confirm("Poslat " + jmeno + " odkaz na změnu hesla?\n\n" +
+                     "Přijde mu e-mail na " + user.email + " a heslo si nastaví sám.\n" +
+                     "Od té chvíle už jeho heslo neuvidíš ani v trezoru.")) return;
 
         try {
-            await window.KB.saveUser(data);
-            window.KBUI.toast(vaultKey
-                ? "Heslo změněno a uloženo do trezoru."
-                : "Heslo změněno. Trezor je zamčený, takže se nepůjde zobrazit – zapiš si ho.");
+            await window.KB.sendPasswordReset(user.email);
+            // v trezoru už bychom měli neplatné heslo – radši ho zahodíme
+            if (user.enc) {
+                await window.KB.saveUser({
+                    id: user.id, email: user.email, first: user.first, last: user.last,
+                    role: user.role, active: user.active !== false, enc: null
+                });
+            }
+            window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Změna hesla selhala.", "error");
+            window.KBUI.toast("Odkaz se nepodařilo odeslat: " + (err.code || err.message), "error");
         }
     }
 
@@ -431,8 +433,14 @@
         $("fEmail").value = user ? (user.email || "") : "";
         $("fEmail").disabled = !!user;   // e-mail je klíč záznamu, ten se nemění
         $("fActive").checked = user ? user.active !== false : true;
+        // heslo se zadává jen při zakládání účtu – měnit ho pak jde už
+        // jen odkazem na e-mail (Firebase cizí heslo přepsat nedovolí)
         $("fPass").value = "";
-        $("fPass").placeholder = user ? "nechat prázdné = ponechat stávající" : "vygeneruj nebo napiš";
+        $("fPass").disabled = !!user;
+        $("btnGen").disabled = !!user;
+        $("fPass").placeholder = user
+            ? "u existujícího účtu použij Reset hesla"
+            : "vygeneruj nebo napiš";
 
         $("fRole").innerHTML = window.KBUI.ROLES.map(r =>
             '<option value="' + r.id + '"' +
@@ -456,18 +464,37 @@
         };
 
         const password = $("fPass").value.trim();
+
+        // U nového člověka je potřeba nejdřív účet ve Firebase – jeho UID
+        // se pak stane názvem záznamu, protože jen podle něj si člověka
+        // umí najít i pravidla databáze.
+        if (!editingId) {
+            if (!password) return window.KBUI.toast("Novému člověku zadej heslo.", "warn");
+            try {
+                data.id = await window.KB.createAccount(email, password);
+            } catch (err) {
+                console.error(err);
+                const hlaska = err.code === "auth/email-already-in-use"
+                    ? "Účet s tímhle e-mailem už existuje."
+                    : err.code === "auth/weak-password"
+                        ? "Heslo je moc krátké, dej aspoň 6 znaků."
+                        : "Účet se nepodařilo založit: " + (err.code || err.message);
+                return window.KBUI.toast(hlaska, "error");
+            }
+            data.createdMs = Date.now();
+        }
+
         if (password) {
             data.salt = window.KBUI.newSalt();
             data.hash = await window.KBUI.hashPassword(password, data.salt);
             if (vaultKey) data.enc = await window.KBUI.vaultEncrypt(vaultKey, password);
         }
-        if (!editingId) data.createdMs = Date.now();
 
         try {
             await window.KB.saveUser(data);
             $("userOverlay").hidden = true;
             window.KBUI.toast(password
-                ? "Uloženo. Heslo předej osobně – zpětně se nepřečte."
+                ? "Účet založen. Heslo předej osobně."
                 : "Uloženo.");
         } catch (err) {
             console.error(err);

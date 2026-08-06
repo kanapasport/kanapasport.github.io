@@ -154,7 +154,22 @@
         "web.design":     "měnit vzhled webu"
     };
 
-    UI.role = () => window.KB_ROLE || "student";
+    /**
+     * Role se bere ze záznamu v databázi, ne z prohlížeče. Hodnota uložená
+     * v prohlížeči slouží jen k tomu, aby stránka po načtení chvíli nebliklá,
+     * než dorazí data – jakmile je seznam lidí k dispozici, rozhoduje on.
+     * Kdo v seznamu není (třeba starým anonymním přihlášením), je student.
+     */
+    UI.role = () => {
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        const users = (window.KB && window.KB.users) || [];
+
+        if (users.length) {
+            const zaznam = uid ? users.find(u => u.id === uid) : null;
+            return (zaznam && zaznam.active !== false && zaznam.role) ? zaznam.role : "student";
+        }
+        return window.KB_ROLE || "student";
+    };
     UI.roleTitle = (id) => (UI.ROLES.find(r => r.id === (id || UI.role())) || {}).title || "Student";
 
     /** Smí daná role tuhle věc? Hlavní správce smí všechno. */
@@ -261,50 +276,87 @@
     /** Kontrolní věta – ověří, že zadané heslo k trezoru je to správné. */
     UI.VAULT_CHECK = "PASPORT-KANA-TREZOR";
 
-    const findUser = (email) => (window.KB.users || [])
-        .find(u => (u.email || "").toLowerCase() === String(email || "").trim().toLowerCase());
+    /* Záznam přihlášeného se hledá podle UID účtu – dokument v `users` se tak
+       jmenuje, protože jen podle cesty si ho umí přečíst i pravidla databáze. */
+    UI.me = () => {
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        if (!uid) return null;
+        return (window.KB.users || []).find(u => u.id === uid) || null;
+    };
 
-    UI.me = () => findUser(window.KB_EMAIL) || null;
+    /** Chyby z Firebase přeložené do lidské řeči. */
+    const chybaPrihlaseni = (code) => ({
+        "auth/invalid-email":        "Tohle není platný e-mail.",
+        "auth/user-disabled":        "Účet je zablokovaný. Ozvi se hlavnímu správci.",
+        "auth/user-not-found":       "Takový účet neexistuje.",
+        "auth/wrong-password":       "Nesprávné heslo.",
+        "auth/invalid-credential":   "Nesprávný e-mail nebo heslo.",
+        "auth/too-many-requests":    "Moc pokusů po sobě. Zkus to za chvíli.",
+        "auth/network-request-failed": "Nejde se spojit se serverem."
+    })[code] || "Přihlášení se nezdařilo.";
 
-    /** Přihlášení proti seznamu lidí v databázi. */
+    /** Přihlášení přes Firebase Auth. */
     UI.login = async (email, password) => {
-        const user = findUser(email);
-        if (!user)         return { ok: false, error: "Takový e-mail v seznamu není." };
-        if (!user.active)  return { ok: false, error: "Účet je pozastavený. Ozvi se hlavnímu správci." };
-        if (!user.hash)    return { ok: false, error: "Účet zatím nemá nastavené heslo." };
+        try {
+            await window.KB.signIn(email, password);
+        } catch (err) {
+            return { ok: false, error: chybaPrihlaseni(err && err.code) };
+        }
 
-        const hash = await UI.hashPassword(password, user.salt);
-        if (hash !== user.hash) return { ok: false, error: "Nesprávné heslo." };
+        // seznam lidí dorazí až po přihlášení – počkáme na svůj záznam
+        const user = await new Promise(resolve => {
+            if (UI.me()) return resolve(UI.me());
+            const hotovo = setTimeout(() => resolve(UI.me()), 8000);
+            window.KB.on("users", () => {
+                if (UI.me()) { clearTimeout(hotovo); resolve(UI.me()); }
+            });
+        });
 
-        window.KB_EMAIL = user.email;
-        localStorage.setItem(EMAIL_KEY, user.email);
-        UI.setRole(user.role || "zamestnanec");
-        UI.setUser(((user.first || "") + " " + (user.last || "")).trim() || user.email);
+        if (!user) {
+            await window.KB.signOut().catch(() => {});
+            return { ok: false, error: "Účet není v seznamu lidí. Ozvi se hlavnímu správci." };
+        }
+        if (user.active === false) {
+            await window.KB.signOut().catch(() => {});
+            return { ok: false, error: "Účet je pozastavený. Ozvi se hlavnímu správci." };
+        }
+
+        window.KB_EMAIL = user.email || String(email).trim().toLowerCase();
+        localStorage.setItem(EMAIL_KEY, window.KB_EMAIL);
+        UI.setRole(user.role || "student");
+        UI.setUser(((user.first || "") + " " + (user.last || "")).trim() || window.KB_EMAIL);
         return { ok: true, user: user };
     };
 
-    UI.logout = () => {
+    UI.logout = async () => {
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(EMAIL_KEY);
         window.KB_USER = "";
         window.KB_EMAIL = "";
         UI.setRole("student");
         UI.paintUser();
+        await window.KB.signOut().catch(() => {});
         UI.toast("Odhlášeno.");
     };
 
     /** Role se bere ze seznamu – když ji správce změní, projeví se sama. */
     UI.syncRole = () => {
-        if (!window.KB_EMAIL) return;
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        if (!uid) return;
         // dokud seznam lidí nedorazí z databáze, nemáme co porovnávat –
         // jinak by se člověk při každém načtení stránky sám odhlásil
         if (!((window.KB && window.KB.users) || []).length) return;
 
         const user = UI.me();
-        if (!user || user.active === false) return UI.logout();
+        if (!user || user.active === false) return void UI.logout();
         if (user.role && user.role !== window.KB_ROLE) UI.setRole(user.role);
+
         const name = ((user.first || "") + " " + (user.last || "")).trim();
         if (name && name !== window.KB_USER) UI.setUser(name);
+        if (user.email && user.email !== window.KB_EMAIL) {
+            window.KB_EMAIL = user.email;
+            localStorage.setItem(EMAIL_KEY, user.email);
+        }
     };
 
     /* ------------------------------------------------------- okno přihlášení */
@@ -781,5 +833,16 @@
         reader.readAsDataURL(file);
     });
 
-    document.addEventListener("DOMContentLoaded", UI.paintUser);
+    /* Dorovnání role řešíme na jednom místě pro celý web – kdyby si to měla
+       hlídat každá stránka zvlášť, dřív nebo později se na to někde zapomene
+       a zůstane platit role uložená v prohlížeči. */
+    document.addEventListener("DOMContentLoaded", () => {
+        UI.paintUser();
+        if (!window.KB || !window.KB.on) return;
+        window.KB.on("users", () => {
+            UI.syncRole();
+            UI.paintUser();
+            document.dispatchEvent(new CustomEvent("kb-role"));
+        });
+    });
 })();

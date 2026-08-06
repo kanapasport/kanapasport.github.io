@@ -343,6 +343,16 @@ Vygenerovaná hesla jsou i v `Seznam.xlsx` vedle jmen – ten soubor je
 v `.gitignore`, protože **repozitář je veřejný**, a nikdy se nesmí commitnout.
 Přepsání hesla v Excelu se na web **nepropíše**; mění se na `uzivatele.html`.
 
+### Změna hesla má jedno omezení
+
+Heslo se dá **nastavit jen při zakládání účtu**. Potom už ho z webu nepřepíše
+nikdo – ani hlavní správce. Firebase to z prohlížeče nedovolí, měnit cizí
+heslo umí jen server s Admin SDK (a ten potřebuje placený tarif Blaze).
+
+Místo toho je u každého člověka **Reset hesla**: přijde mu e-mail s odkazem
+a heslo si nastaví sám. Zároveň se z trezoru smaže jeho staré heslo, protože
+by už stejně neplatilo.
+
 ### Tohle ještě není zabezpečení
 
 Role řídí, co je na webu vidět a co jde odkliknout. Neřídí ale přístup
