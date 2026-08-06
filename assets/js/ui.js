@@ -221,6 +221,46 @@
     UI.newSalt = () => Array.from(crypto.getRandomValues(new Uint8Array(12)))
         .map(b => b.toString(16).padStart(2, "0")).join("");
 
+    /* ------------------------------------------------- trezor na hesla ---
+
+       Otisk hesla se zpětně přečíst nedá – to je jeho smysl. Aby si hlavní
+       správce mohl heslo i zobrazit, ukládá se vedle otisku ještě zašifrovaná
+       podoba. Klíč se odvozuje z hesla k trezoru, které zná jen on, a nikdy
+       neopouští prohlížeč; v databázi leží pouze šifrovaný text.
+
+       Kdyby se tedy někdo k databázi dostal (dokud běží otevřená pravidla,
+       je to reálné), hesla lidí z ní nevyčte. */
+
+    const toHex = (buffer) => Array.from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2, "0")).join("");
+    const fromHex = (hex) => new Uint8Array(
+        (String(hex || "").match(/.{1,2}/g) || []).map(byte => parseInt(byte, 16)));
+
+    UI.deriveVaultKey = async (passphrase, saltHex) => {
+        const base = await crypto.subtle.importKey(
+            "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+        return crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: fromHex(saltHex), iterations: 150000, hash: "SHA-256" },
+            base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    };
+
+    UI.vaultEncrypt = async (key, text) => {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const data = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv }, key, new TextEncoder().encode(String(text)));
+        return { iv: toHex(iv), data: toHex(data) };
+    };
+
+    UI.vaultDecrypt = async (key, blob) => {
+        if (!blob || !blob.iv || !blob.data) return "";
+        const plain = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: fromHex(blob.iv) }, key, fromHex(blob.data));
+        return new TextDecoder().decode(plain);
+    };
+
+    /** Kontrolní věta – ověří, že zadané heslo k trezoru je to správné. */
+    UI.VAULT_CHECK = "PASPORT-KANA-TREZOR";
+
     const findUser = (email) => (window.KB.users || [])
         .find(u => (u.email || "").toLowerCase() === String(email || "").trim().toLowerCase());
 
@@ -256,6 +296,10 @@
     /** Role se bere ze seznamu – když ji správce změní, projeví se sama. */
     UI.syncRole = () => {
         if (!window.KB_EMAIL) return;
+        // dokud seznam lidí nedorazí z databáze, nemáme co porovnávat –
+        // jinak by se člověk při každém načtení stránky sám odhlásil
+        if (!((window.KB && window.KB.users) || []).length) return;
+
         const user = UI.me();
         if (!user || user.active === false) return UI.logout();
         if (user.role && user.role !== window.KB_ROLE) UI.setRole(user.role);

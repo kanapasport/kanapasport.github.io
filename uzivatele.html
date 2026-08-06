@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Uživatelé – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=27">
+    <link rel="stylesheet" href="assets/css/app.css?v=28">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -39,6 +39,21 @@
             není to zabezpečení. Dokud běží anonymní přihlášení k Firebase a otevřená pravidla databáze,
             dostane se k datům kdokoliv, kdo zná adresu. Skutečné oddělení práv je Firebase Auth
             + Firestore Rules, postup je popsaný v <code>README.md</code>.
+        </div>
+
+        <!-- ------------------------------------------------------- trezor -->
+        <div id="vaultBar" class="card row" style="padding:12px 16px;gap:12px;flex-wrap:wrap">
+            <div class="grow" style="min-width:220px">
+                <b style="font-size:13.5px">Trezor na hesla</b>
+                <div id="vaultInfo" class="tiny muted" style="margin-top:2px"></div>
+            </div>
+            <div class="row" style="gap:8px">
+                <input type="password" id="fVault" class="field" style="width:210px"
+                       placeholder="heslo k trezoru" autocomplete="off">
+                <button type="button" id="btnVault" class="btn btn--primary btn--sm">Odemknout</button>
+                <button type="button" id="btnVaultPass" class="btn btn--ghost btn--sm" hidden>Změnit heslo trezoru</button>
+                <button type="button" id="btnVaultLock" class="btn btn--ghost btn--sm" hidden>Zamknout</button>
+            </div>
         </div>
 
         <div id="list" class="col" style="gap:8px"></div>
@@ -99,10 +114,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=27"></script>
-<script src="assets/js/doc.js?v=27"></script>
-<script src="assets/js/ui.js?v=27"></script>
-<script type="module" src="assets/js/store.js?v=27"></script>
+<script src="assets/js/taxonomy.js?v=28"></script>
+<script src="assets/js/doc.js?v=28"></script>
+<script src="assets/js/ui.js?v=28"></script>
+<script type="module" src="assets/js/store.js?v=28"></script>
 
 <script>
 (function () {
@@ -112,6 +127,8 @@
     const esc = (value) => window.KBUI.esc(value);
 
     let editingId = null;
+    let vaultKey = null;      // odvozený klíč trezoru, drží se jen v paměti stránky
+    let vaultMeta = null;     // { salt, check } z databáze
 
     /* --------------------------------------------------- generování hesel --
        Skládá se jméno z e-mailu + firemní slovo + tři číslice + znaménko.
@@ -145,13 +162,25 @@
         const role = window.KBUI.ROLES.find(r => r.id === user.role) || window.KBUI.ROLES[3];
         const me = (window.KB_EMAIL || "").toLowerCase() === (user.email || "").toLowerCase();
 
+        // heslo se ukáže jen po odemčení trezoru a jen když je uložené šifrovaně
+        const pwdCell = vaultKey
+            ? (user.enc
+                ? '<code class="pwd" data-pwd="' + esc(user.id) + '">••••••••</code>' +
+                  '<button type="button" class="linkbtn" data-show="' + esc(user.id) + '">zobrazit</button>' +
+                  '<button type="button" class="linkbtn" data-copy="' + esc(user.id) + '">kopírovat</button>'
+                : '<span class="tiny muted">heslo uložené jen jako otisk – zobrazit nelze, nastav nové</span>')
+            : "";
+
         return '<div class="zakrow' + (user.active === false ? " zakrow--off" : "") + '">' +
             "<div><b>" + esc(((user.first || "") + " " + (user.last || "")).trim() || user.email) + "</b>" +
                 (me ? ' <span class="tiny" style="color:var(--accent);font-weight:800">(to jsi ty)</span>' : "") +
                 '<div class="tiny muted">' + esc(user.email) + " · " + esc(role.title) +
                 (user.active === false ? " · pozastavený" : "") +
-                (user.hash ? "" : ' · <span style="color:var(--warn)">bez hesla</span>') + "</div></div>" +
+                (user.hash ? "" : ' · <span style="color:var(--warn)">bez hesla</span>') + "</div>" +
+                (pwdCell ? '<div class="pwdrow">' + pwdCell + "</div>" : "") +
+            "</div>" +
             '<div class="row" style="gap:6px">' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '">Změnit heslo</button>' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
                 (me ? "" : '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
                     'data-del="' + esc(user.id) + '">Odebrat</button>') +
@@ -163,7 +192,7 @@
         const owner = window.KBUI.isOwner();
         $("denied").hidden = owner;
         $("app").hidden = !owner;
-        if (!owner) return;
+        if (!owner) { vaultKey = null; return; }
 
         const users = window.KB.users || [];
         $("list").innerHTML = users.length
@@ -188,6 +217,170 @@
                     (window.KBUI.canAs(r.id, action) ? "✓" : "–") + "</td>").join("") +
                 "</tr>").join("") +
             "</tbody>";
+    }
+
+    /* ------------------------------------------------------------ trezor */
+
+    function paintVault() {
+        const zamceno = !vaultKey;
+        $("vaultInfo").innerHTML = vaultMeta
+            ? (zamceno
+                ? "Zadej heslo k trezoru a uvidíš hesla lidí. Klíč se nikam neukládá – po zavření stránky se zamkne sám."
+                : '<span style="color:var(--ok);font-weight:700">Odemčeno.</span> Hesla jdou zobrazit a kopírovat.')
+            : "Trezor ještě nemá heslo. Zadej si ho – jím se hesla lidí zašifrují, " +
+              "aby si je z databáze nikdo cizí nepřečetl. <b>Zapiš si ho, zpětně se nedá obnovit.</b>";
+
+        $("btnVault").textContent = vaultMeta ? "Odemknout" : "Nastavit heslo trezoru";
+        $("btnVault").hidden = !zamceno;
+        $("fVault").hidden = !zamceno;
+        $("btnVaultLock").hidden = zamceno;
+        $("btnVaultPass").hidden = zamceno;
+    }
+
+    /** Načte nastavení trezoru z databáze (jen pro hlavního správce). */
+    async function loadVaultMeta() {
+        if (!window.KBUI.isOwner()) return;
+        vaultMeta = await window.KB.loadVault().catch(() => null);
+        paintVault();
+    }
+
+    async function unlockVault() {
+        const passphrase = $("fVault").value;
+        if (!passphrase) return window.KBUI.toast("Zadej heslo k trezoru.", "warn");
+
+        // POJISTKA: než prohlásíme trezor za nenastavený, ověříme to v databázi.
+        // Bez toho by se dal existující trezor přepsat novým klíčem a už uložená
+        // hesla by se nedala rozšifrovat.
+        if (!vaultMeta) await loadVaultMeta();
+
+        try {
+            if (!vaultMeta) {
+                if (!confirm("Trezor ještě není nastavený a tímhle heslem se založí.\n\n" +
+                             "Pokud už nastavený být měl, zavři to a načti stránku znovu.\n\nPokračovat?")) return;
+            }
+            if (!vaultMeta) {
+                // první nastavení – vyrobíme sůl a kontrolní blok
+                const salt = window.KBUI.newSalt();
+                const key = await window.KBUI.deriveVaultKey(passphrase, salt);
+                const check = await window.KBUI.vaultEncrypt(key, window.KBUI.VAULT_CHECK);
+                await window.KB.saveVault(salt, check);
+                vaultMeta = { salt: salt, check: check };
+                vaultKey = key;
+                window.KBUI.toast("Trezor nastaven. Heslo si dobře zapiš.");
+            } else {
+                const key = await window.KBUI.deriveVaultKey(passphrase, vaultMeta.salt);
+                const text = await window.KBUI.vaultDecrypt(key, vaultMeta.check).catch(() => "");
+                if (text !== window.KBUI.VAULT_CHECK) {
+                    return window.KBUI.toast("Nesprávné heslo k trezoru.", "error");
+                }
+                vaultKey = key;
+                window.KBUI.toast("Trezor odemčen.");
+            }
+            $("fVault").value = "";
+            paintVault();
+            render();
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Trezor se nepodařilo otevřít.", "error");
+        }
+    }
+
+    function lockVault() {
+        vaultKey = null;
+        paintVault();
+        render();
+        window.KBUI.toast("Trezor zamčen.");
+    }
+
+    /**
+     * Změna hesla k trezoru. Musí se přešifrovat všechna uložená hesla –
+     * starým klíčem se rozšifrují, novým zase zašifrují. Proto to jde jen
+     * z odemčeného trezoru.
+     */
+    async function changeVaultPassphrase() {
+        if (!vaultKey) return window.KBUI.toast("Nejdřív trezor odemkni.", "warn");
+
+        const nove = prompt("Nové heslo k trezoru:\n\nZapiš si ho – zpětně se nedá obnovit.");
+        if (nove === null) return;
+        if (nove.trim().length < 6) return window.KBUI.toast("Zvol aspoň 6 znaků.", "warn");
+        if (prompt("Pro jistotu ho napiš ještě jednou:") !== nove) {
+            return window.KBUI.toast("Hesla se neshodují, nic se nezměnilo.", "warn");
+        }
+
+        const uzivatele = (window.KB.users || []).filter(u => u.enc);
+        try {
+            // napřed všechno rozšifrujeme starým klíčem – kdyby to selhalo,
+            // ještě jsme nic nepřepsali
+            const hesla = [];
+            for (const user of uzivatele) {
+                hesla.push({ user: user, heslo: await window.KBUI.vaultDecrypt(vaultKey, user.enc) });
+            }
+
+            const salt = window.KBUI.newSalt();
+            const key = await window.KBUI.deriveVaultKey(nove, salt);
+            const check = await window.KBUI.vaultEncrypt(key, window.KBUI.VAULT_CHECK);
+
+            for (const item of hesla) {
+                await window.KB.saveUser({
+                    email: item.user.email, first: item.user.first, last: item.user.last,
+                    role: item.user.role, active: item.user.active !== false,
+                    enc: await window.KBUI.vaultEncrypt(key, item.heslo)
+                });
+            }
+            await window.KB.saveVault(salt, check);
+
+            vaultMeta = { salt: salt, check: check };
+            vaultKey = key;
+            paintVault();
+            render();
+            window.KBUI.toast("Heslo k trezoru změněno, " + hesla.length + " hesel přešifrováno.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Změna se nezdařila, staré heslo dál platí.", "error");
+        }
+    }
+
+    const findUser = (id) => (window.KB.users || []).find(u => u.id === id);
+
+    async function revealPassword(id) {
+        const user = findUser(id);
+        if (!user || !user.enc || !vaultKey) return "";
+        try {
+            return await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+        } catch (err) {
+            window.KBUI.toast("Heslo se nepodařilo rozšifrovat.", "error");
+            return "";
+        }
+    }
+
+    /* ------------------------------------------------------ změna hesla */
+
+    async function changePassword(id) {
+        const user = findUser(id);
+        if (!user) return;
+
+        const jmeno = ((user.first || "") + " " + (user.last || "")).trim() || user.email;
+        const navrh = generatePassword(user.email);
+        const heslo = prompt("Nové heslo pro " + jmeno + ":\n\n" +
+            "(návrh můžeš nechat, nebo přepsat vlastním)", navrh);
+        if (heslo === null) return;
+        if (!heslo.trim()) return window.KBUI.toast("Heslo nesmí být prázdné.", "warn");
+
+        const data = { email: user.email, first: user.first, last: user.last,
+                       role: user.role, active: user.active !== false };
+        data.salt = window.KBUI.newSalt();
+        data.hash = await window.KBUI.hashPassword(heslo, data.salt);
+        if (vaultKey) data.enc = await window.KBUI.vaultEncrypt(vaultKey, heslo);
+
+        try {
+            await window.KB.saveUser(data);
+            window.KBUI.toast(vaultKey
+                ? "Heslo změněno a uloženo do trezoru."
+                : "Heslo změněno. Trezor je zamčený, takže se nepůjde zobrazit – zapiš si ho.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Změna hesla selhala.", "error");
+        }
     }
 
     /* ---------------------------------------------------------- formulář */
@@ -229,6 +422,7 @@
         if (password) {
             data.salt = window.KBUI.newSalt();
             data.hash = await window.KBUI.hashPassword(password, data.salt);
+            if (vaultKey) data.enc = await window.KBUI.vaultEncrypt(vaultKey, password);
         }
         if (!editingId) data.createdMs = Date.now();
 
@@ -249,6 +443,40 @@
     $("list").addEventListener("click", async (event) => {
         const edit = event.target.closest("[data-edit]");
         if (edit) return openForm(edit.dataset.edit);
+
+        const pass = event.target.closest("[data-pass]");
+        if (pass) return changePassword(pass.dataset.pass);
+
+        const show = event.target.closest("[data-show]");
+        if (show) {
+            const cell = document.querySelector('[data-pwd="' + show.dataset.show + '"]');
+            if (!cell) return;
+            if (cell.dataset.open === "1") {          // druhé kliknutí zase schová
+                cell.textContent = "••••••••";
+                cell.dataset.open = "";
+                show.textContent = "zobrazit";
+                return;
+            }
+            const heslo = await revealPassword(show.dataset.show);
+            if (!heslo) return;
+            cell.textContent = heslo;
+            cell.dataset.open = "1";
+            show.textContent = "skrýt";
+            return;
+        }
+
+        const copy = event.target.closest("[data-copy]");
+        if (copy) {
+            const heslo = await revealPassword(copy.dataset.copy);
+            if (!heslo) return;
+            try {
+                await navigator.clipboard.writeText(heslo);
+                window.KBUI.toast("Heslo zkopírováno do schránky.");
+            } catch (err) {
+                window.KBUI.toast("Kopírování se nezdařilo.", "error");
+            }
+            return;
+        }
 
         const del = event.target.closest("[data-del]");
         if (!del) return;
@@ -276,12 +504,23 @@
             $("fPass").value = generatePassword($("fEmail").value);
         });
 
-        document.addEventListener("kb-role", render);
+        $("btnVault").addEventListener("click", unlockVault);
+        $("btnVaultLock").addEventListener("click", lockVault);
+        $("btnVaultPass").addEventListener("click", changeVaultPassphrase);
+        $("fVault").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); unlockVault(); }
+        });
+
+        // po přihlášení je potřeba nastavení trezoru dotáhnout znovu –
+        // při načtení stránky ještě nemusí být jasné, kdo je přihlášený
+        document.addEventListener("kb-role", () => { loadVaultMeta(); render(); });
         window.KB.on("users", () => { window.KBUI.syncRole(); render(); });
 
+        paintVault();
         render();
         await window.KB.whenReady();
         window.KBUI.syncRole();
+        await loadVaultMeta();
         render();
     });
 })();

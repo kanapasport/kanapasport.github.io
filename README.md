@@ -321,9 +321,27 @@ Pravomoci jsou na jednom místě v `assets/js/ui.js` (`PERMISSIONS`); stránky s
 ptají přes `KBUI.can("ukol.create")`. Přidat pravomoc znamená doplnit řádek
 tam a použít ho – tabulka na `uzivatele.html` se dopočítá sama.
 
-Hesla se do databáze ukládají jen jako **otisk SHA-256 se solí**, nikdy čitelně.
-Vygenerovaná hesla jsou v `Seznam.xlsx` vedle jmen – ten soubor je v
-`.gitignore`, protože **repozitář je veřejný**, a nikdy se nesmí commitnout.
+### Hesla a trezor
+
+Přihlášení se ověřuje proti **otisku SHA-256 se solí** – z otisku heslo přečíst
+nejde, to je jeho smysl.
+
+Aby si hlavní správce mohl heslo i **zobrazit**, ukládá se vedle otisku ještě
+zašifrovaná podoba (AES-GCM, klíč z hesla k trezoru přes PBKDF2). Heslo
+k trezoru nikde uložené není a z prohlížeče neodchází; v databázi leží jen
+šifrovaný text. Kdyby se tedy někdo k databázi dostal, hesla lidí z ní nevyčte.
+
+Na `uzivatele.html` je pruh **Trezor na hesla**: odemkne se heslem k trezoru
+a pak jde u každého člověka heslo zobrazit, zkopírovat nebo změnit. Zamkne se
+tlačítkem nebo zavřením stránky. **Heslo k trezoru se nedá obnovit** – když se
+ztratí, hesla lidí se už nezobrazí (dají se ale nastavit nová).
+
+Změna hesla k trezoru přešifruje všechna uložená hesla naráz, takže jde jen
+z odemčeného trezoru.
+
+Vygenerovaná hesla jsou i v `Seznam.xlsx` vedle jmen – ten soubor je
+v `.gitignore`, protože **repozitář je veřejný**, a nikdy se nesmí commitnout.
+Přepsání hesla v Excelu se na web **nepropíše**; mění se na `uzivatele.html`.
 
 ### Tohle ještě není zabezpečení
 

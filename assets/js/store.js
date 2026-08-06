@@ -314,6 +314,8 @@ KB.saveUser = async (data) => {
     // otisk hesla se přepisuje jen tehdy, když se heslo opravdu mění
     if (data.salt) payload.salt = data.salt;
     if (data.hash) payload.hash = data.hash;
+    // zašifrovaná podoba hesla pro trezor hlavního správce (viz ui.js)
+    if (data.enc) payload.enc = data.enc;
     if (data.createdMs) payload.createdMs = data.createdMs;
 
     await setDoc(userDoc(id), payload, { merge: true });
@@ -324,6 +326,28 @@ KB.deleteUser = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(userDoc(id));
+};
+
+/**
+ * Nastavení trezoru na hesla – sůl pro odvození klíče a kontrolní blok,
+ * podle kterého se pozná, že zadané heslo k trezoru je správné.
+ * Samotné heslo k trezoru se nikam neukládá.
+ */
+KB.loadVault = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(metaDoc("vault"));
+    return snap.exists() ? snap.data() : null;
+};
+
+KB.saveVault = async (salt, check) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(metaDoc("vault"), {
+        salt: salt, check: check,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
 };
 
 /* ---------------------------------------------------------------- tabule --
