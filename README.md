@@ -14,6 +14,7 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor (jde přiblížit), vpravo živý náhled |
 | `ukoly.html` | Úkolovník – úkoly seskupené podle zakázek, patra, procenta, poznámky |
 | `tabule.html` | Tabule na nápady – nekonečné plátno (`?id=…`), seznam tabulí bez parametru |
+| `milniky.html` | Milníky – termíny odevzdání po činnostech, řazené podle data |
 | `barvy.html` | Zkoušení odstínů hlavní barvy na živé ukázce (odkaz je v patičce) |
 
 ## Sdílené soubory
@@ -240,6 +241,23 @@ a řadí se podle času. Doklikání 0 → 100 během chvilky je jeden řádek
 středa 50 → 75, za týden 75 → 100), jsou to tři samostatné záznamy.
 Slučují se jen zápisy téhož člověka k témuž patru **do deseti minut**
 (`LOG_WINDOW` v `ukoly.html`).
+
+## Milníky
+
+`milniky.html` – tabulka termínů odevzdání po činnostech (STAVBA, CHLAD, VZT…).
+Sloupce: **činnost · zpracovatel · náplň milníku · datum dodání**.
+
+Řadí se **podle data, nejbližší nahoře**; milníky bez data jdou na konec jako
+„bez termínu". Řádek se barví podle toho, jak je termín blízko – po termínu
+červeně, dnes a do týdne oranžově.
+
+Zapisovat je **můžou jen správci**; ostatní je vidí, ale needitují. Není to jen
+skryté tlačítko: milníky leží v dokumentu `meta/milniky` a do `meta` smí podle
+pravidel Firestore zapisovat jedině správce, takže zápis odmítne i databáze.
+Díky tomu k nim nebylo potřeba přidávat žádné nové pravidlo.
+
+Zpracovatelé se vybírají ze seznamu lidí stejně jako u úkolů a milník se dá
+přiřadit k zakázce.
 
 ## Tabule na nápady
 

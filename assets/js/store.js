@@ -47,6 +47,7 @@ const KB = {
     zakazkyClosed: [],      // uzavřené zakázky (v dlaždici zelené)
     skupiny: DEFAULT_SKUPINY.slice(),   // skupiny úkolů uvnitř zakázky
     users: [],              // lidé, kteří mají na web přístup, a jejich role
+    milniky: [],            // termíny odevzdání po činnostech
     boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
     status: "connecting",   // connecting | online | offline
     ready: false
@@ -139,6 +140,15 @@ try {
             KB.users.sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
             emit("users", KB.users);
         }, (err) => console.error("Chyba čtení uživatelů:", err)));
+
+        /* Milníky leží v jednom dokumentu jako pole. Je jich pár desítek
+           a hlavně: `meta/…` smí zapisovat jen správce, takže se tím rovnou
+           řeší i to, kdo je může měnit – bez dalších pravidel v databázi. */
+        odbery.push(onSnapshot(metaDoc("milniky"), (snap) => {
+            const data = snap.exists() ? snap.data() : {};
+            KB.milniky = Array.isArray(data.items) ? data.items : [];
+            emit("milniky", KB.milniky);
+        }, (err) => console.error("Chyba čtení milníků:", err)));
 
         odbery.push(onSnapshot(metaDoc("zakazky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
@@ -308,6 +318,25 @@ KB.deleteTask = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(taskDoc(id));
+};
+
+/* ----------------------------------------------------------- milníky ----
+   Termíny odevzdání po činnostech (STAVBA, CHLAD, VZT…). Ukládají se jako
+   pole v jednom dokumentu `meta/milniky` – je jich málo a zápis do `meta`
+   mají povolený jen správci, takže se tím řeší i oprávnění.
+
+   Položka: { id, cinnost, owners:[uid], owner, napln, datum:"2026-08-31", zakazka } */
+
+KB.newMilnikId = () => "mil_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.saveMilniky = async (items) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(metaDoc("milniky"), {
+        items: items,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
 };
 
 /* ------------------------------------------------------------- uživatelé --

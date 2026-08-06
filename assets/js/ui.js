@@ -133,7 +133,7 @@
         "hlavni-spravce": ["*"],
         "spravce": [
             "ukol.create", "ukol.edit", "ukol.delete",
-            "zakazky.manage", "historie.view",
+            "zakazky.manage", "historie.view", "milnik.manage",
             "navod.create", "navod.delete", "navod.pdf"
         ],
         "zamestnanec": ["ukol.create", "ukol.edit", "navod.create"],
@@ -147,6 +147,7 @@
         "ukol.delete":    "mazat úkoly",
         "zakazky.manage": "spravovat zakázky a skupiny",
         "historie.view":  "vidět historii zápisů",
+        "milnik.manage":  "zapisovat milníky",
         "navod.create":   "tvořit návody",
         "navod.delete":   "mazat návody",
         "navod.pdf":      "stahovat návody do PDF",
@@ -493,9 +494,11 @@
             const isActive = active && item.href && item.href.split(/[?#]/)[0] === active;
             const cls = "navbtn" + (isActive ? " navbtn--active" : "");
             const menu = menuOf(item);
+            // položka s `need` se ukáže jen tomu, kdo na ni má právo
+            const gate = item.need ? ' data-need="' + item.need + '" hidden' : "";
 
             if (!menu) {
-                return '<div class="navitem"><a class="' + cls + '" href="' + item.href + '">' +
+                return '<div class="navitem"' + gate + '><a class="' + cls + '" href="' + item.href + '">' +
                     (item.icon ? icon(item.icon) : "") + item.title + "</a></div>";
             }
 
