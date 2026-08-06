@@ -215,6 +215,19 @@ v tomtéž dokumentu (`meta/zakazky`, pole `groups`).
 – nic se nikdy neztratí, ani když se skupina z číselníku odebere. Rozdělení
 do skupin je vidět i v dlaždici zakázky na rozcestníku.
 
+### Odpovědní lidé a „Moje úkoly"
+
+U úkolu se odpovědní **vybírají ze seznamu lidí** (pole `owners` – UID),
+a může jich být víc najednou. Starší úkoly měly jen volný text v `owner`;
+ten se pořád zobrazuje, dokud se úkol nepřepíše, a při otevření úpravy se
+podle něj lidé **předzaškrtnou**. Podle příjmení se tipuje jen tehdy, když je
+ve firmě jediné – u dvou Pelikánů musí sedět i křestní jméno, jinak by se
+zaškrtli oba.
+
+V liště je přepínač **Moje úkoly**. Komu není správce a má přiřazený aspoň
+jeden úkol, zapne se mu sám, aby se v cizích zakázkách neztratil; jakmile
+s ním jednou pohne, respektuje se jeho volba.
+
 ### Sbalování a historie
 
 Úkoly jsou v seznamu **sbalené**; kliknutím na hlavičku vyjedou patra,

@@ -268,7 +268,8 @@ KB.saveTask = async (id, data) => {
         zakazka:  data.zakazka || "",
         skupina:  data.skupina || "",      // ARCGIS / SKENY / FOCENÍ, prázdné = nezařazeno
         title:    data.title || "Bez názvu",
-        owner:    data.owner || "",
+        owner:    data.owner || "",        // původní volný text (starší úkoly)
+        owners:   data.owners || [],       // UID lidí, kterým úkol patří
         deadline: data.deadline || "",
         subtasks: data.subtasks || [],
         notes:    data.notes || [],

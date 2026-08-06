@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Úkolovník – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=32">
+    <link rel="stylesheet" href="assets/css/app.css?v=33">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -60,15 +60,17 @@
                 Podle skupiny se úkoly řadí v zakázce i na hlavní stránce.
             </div>
         </div>
-        <div class="row" style="gap:12px">
-            <div class="grow">
-                <label class="label" for="fOwner">Odpovědný</label>
-                <input type="text" id="fOwner" class="field" placeholder="např. Filip">
+        <div>
+            <span class="label">Odpovědní lidé</span>
+            <div id="fOwners" class="people"></div>
+            <div class="tiny muted" style="margin-top:6px">
+                Vybraných může být víc. Každý si pak v úkolovníku přepne na
+                <b>Moje úkoly</b> a uvidí jen to svoje.
             </div>
-            <div class="grow">
-                <label class="label" for="fDeadline">Termín</label>
-                <input type="date" id="fDeadline" class="field">
-            </div>
+        </div>
+        <div style="max-width:220px">
+            <label class="label" for="fDeadline">Termín</label>
+            <input type="date" id="fDeadline" class="field">
         </div>
         <div>
             <label class="label" for="fSubs">Podúkoly (jeden na řádek)</label>
@@ -121,10 +123,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=32"></script>
-<script src="assets/js/doc.js?v=32"></script>
-<script src="assets/js/ui.js?v=32"></script>
-<script type="module" src="assets/js/store.js?v=32"></script>
+<script src="assets/js/taxonomy.js?v=33"></script>
+<script src="assets/js/doc.js?v=33"></script>
+<script src="assets/js/ui.js?v=33"></script>
+<script type="module" src="assets/js/store.js?v=33"></script>
 
 <script>
 (function () {
@@ -145,9 +147,42 @@
     const slug = (value) => window.KBUI.slug(value);
     const zakName = (task) => (task.zakazka || "").trim() || "Bez zakázky";
 
+    let onlyMine = false;   // „Moje úkoly" – přepíná se v liště
+    let mineTouched = false;   // uživatel si filtr přepnul sám, nepřenastavovat
+
     const NEZARAZENO = "Nezařazeno";
     const skupinyList = () => (window.KB.skupiny && window.KB.skupiny.length)
         ? window.KB.skupiny : (window.KB.DEFAULT_SKUPINY || []);
+
+    /* ------------------------------------------------ odpovědní lidé ----
+       Úkol nese `owners` – pole UID. Starší úkoly mají jen volný text
+       v `owner`, ten se pořád zobrazuje, dokud se nepřepíšou. */
+
+    const jmeno = (user) => ((user.first || "") + " " + (user.last || "")).trim() || user.email;
+
+    const ownersOf = (task) => (task.owners || [])
+        .map(uid => (window.KB.users || []).find(u => u.id === uid))
+        .filter(Boolean);
+
+    /** Text s odpovědnými – nové UID mají přednost, jinak starý volný text. */
+    function ownersText(task) {
+        const lide = ownersOf(task);
+        if (lide.length) return lide.map(jmeno).join(", ");
+        return (task.owner || "").trim();
+    }
+
+    /** Patří úkol přihlášenému? Zkouší i shodu se starým textovým zápisem. */
+    function isMine(task) {
+        const uid = window.KB.currentUid();
+        if (uid && (task.owners || []).indexOf(uid) !== -1) return true;
+        if ((task.owners || []).length) return false;
+
+        // starší úkoly: porovnáme podle příjmení ve volném textu
+        const me = window.KBUI.me();
+        if (!me || !task.owner) return false;
+        const text = window.KBUI.fold(task.owner);
+        return !!(me.last && text.includes(window.KBUI.fold(me.last)));
+    }
     /** Skupina úkolu; starší úkoly ji nemají a spadnou do „Nezařazeno". */
     const skupName = (task) => (task.skupina || "").trim() || NEZARAZENO;
 
@@ -328,7 +363,7 @@
                 '<div class="task__info">' +
                     '<div class="task__title">' + esc(task.title || "Bez názvu") + "</div>" +
                     '<div class="task__meta">' +
-                        (task.owner ? "zodpovídá <b>" + esc(task.owner) + "</b> · " : "") +
+                        (ownersText(task) ? "zodpovídá <b>" + esc(ownersText(task)) + "</b> · " : "") +
                         '<span style="color:' + due.color + ';font-weight:700">' + due.text + "</span>" +
                         (subs.length ? ' · <span class="muted">' + doneSubs + "/" + subs.length + " hotovo</span>" : "") +
                     "</div>" +
@@ -388,6 +423,7 @@
                     names.map(n => chip(n, slug(n) === activeZak, slug(n))).join("") +
                 "</div>" +
                 '<div class="subbar__right">' +
+                    '<button type="button" class="btn btn--sm ' + (onlyMine ? "btn--primary" : "btn--ghost") + '" data-onlymine>Moje úkoly</button>' +
                     '<button type="button" class="btn btn--sm ' + (onlyOpen ? "btn--primary" : "btn--ghost") + '" data-onlyopen>Jen rozdělané</button>' +
                     (window.KBUI.can("zakazky.manage")
                         ? '<button type="button" class="btn btn--ghost btn--sm" data-newzak>Správa zakázek</button>' : "") +
@@ -490,9 +526,10 @@
 
         if (query) {
             tasks = tasks.filter(task => window.KBUI.fold(
-                [task.zakazka, task.title, task.owner,
+                [task.zakazka, task.title, ownersText(task),
                  (task.subtasks || []).map(s => s.title).join(" ")].join(" ")).includes(query));
         }
+        if (onlyMine) tasks = tasks.filter(isMine);
         if (onlyOpen) tasks = tasks.filter(task => taskPercent(task) < 100);
         if (activeZak) tasks = tasks.filter(task => slug(zakName(task)) === activeZak);
 
@@ -500,7 +537,7 @@
 
         // bez hledání a bez filtru ukážeme i zakázky, které zatím nemají úkol
         const groups = new Map();
-        if (!query && !onlyOpen) {
+        if (!query && !onlyOpen && !onlyMine) {
             allZakazky()
                 .filter(name => !activeZak || slug(name) === activeZak)
                 .forEach(name => groups.set(name, []));
@@ -756,6 +793,45 @@
 
     /* ------------------------------------------------------- formulář */
 
+    /**
+     * Vykreslí zaškrtávací seznam lidí. U staršího úkolu, který má jen volný
+     * text, předzaškrtne ty, jejichž příjmení se v textu objevuje – ušetří to
+     * ruční přepisování a dá se to opravit.
+     */
+    function paintOwners(task) {
+        const vybrani = task ? (task.owners || []).slice() : [];
+        const text = task && !vybrani.length ? window.KBUI.fold(task.owner || "") : "";
+        const lide = (window.KB.users || []).filter(u => u.active !== false);
+
+        /* Podle příjmení se tipuje jen tehdy, když je ve firmě jediné –
+           u dvou Pelikánů by se jinak zaškrtli oba. Jinak musí sedět
+           i křestní jméno. */
+        const tipni = (u) => {
+            if (!text || !u.last) return false;
+            const prijmeni = window.KBUI.fold(u.last);
+            if (!text.includes(prijmeni)) return false;
+
+            const stejnePrijmeni = lide.filter(x => window.KBUI.fold(x.last || "") === prijmeni).length;
+            if (stejnePrijmeni === 1) return true;
+            return !!(u.first && text.includes(window.KBUI.fold(u.first)));
+        };
+
+        $("fOwners").innerHTML = lide
+            .map(u => {
+                const zaskrtnuto = vybrani.indexOf(u.id) !== -1 || tipni(u);
+                return '<label class="person' + (zaskrtnuto ? " person--on" : "") + '">' +
+                    '<input type="checkbox" value="' + esc(u.id) + '"' + (zaskrtnuto ? " checked" : "") + ">" +
+                    "<span>" + esc(jmeno(u)) + "</span>" +
+                "</label>";
+            }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+    }
+
+    // zvýraznění zaškrtnutého člověka
+    $("fOwners").addEventListener("change", (event) => {
+        const label = event.target.closest(".person");
+        if (label) label.classList.toggle("person--on", event.target.checked);
+    });
+
     /** Naplní roletku skupin – vždy i s tou, kterou má úkol zapsanou. */
     function paintSkupSelect(selected) {
         const names = skupinyList().slice();
@@ -790,7 +866,7 @@
         paintSkupSelect(task ? (task.skupina || "")
             : (presetSkup && presetSkup !== NEZARAZENO ? presetSkup : ""));
         $("fTitle").value = task ? (task.title || "") : "";
-        $("fOwner").value = task ? (task.owner || "") : "";
+        paintOwners(task);
         $("fDeadline").value = task ? (task.deadline || "") : "";
         $("fSubs").value = task ? (task.subtasks || []).map(s => s.title).join("\n") : "3PP\n2PP\n1PP\n1NP\n2NP";
         $("taskOverlay").hidden = false;
@@ -970,7 +1046,9 @@
             zakazka: $("fZakazka").value.trim(),
             skupina: $("fSkupina").value.trim(),
             title: $("fTitle").value.trim(),
-            owner: $("fOwner").value.trim(),
+            owners: Array.from($("fOwners").querySelectorAll("input:checked")).map(i => i.value),
+            // volný text se přestane používat, jakmile jsou vybraní lidé
+            owner: $("fOwners").querySelector("input:checked") ? "" : (existing ? existing.owner : ""),
             deadline: $("fDeadline").value,
             subtasks: subtasks,
             notes: existing ? (existing.notes || []) : [],
@@ -1074,6 +1152,12 @@
             paintSubbar();
             return render();
         }
+        if (event.target.closest("[data-onlymine]")) {
+            onlyMine = !onlyMine;
+            mineTouched = true;
+            paintSubbar();
+            return render();
+        }
         const zakToggle = event.target.closest("[data-zak-toggle]");
         if (zakToggle) return toggleZak(zakToggle.dataset.zakToggle);
         const zakDel = event.target.closest("[data-zak-del]");
@@ -1111,15 +1195,35 @@
             if (name) paintSkupSelect(name);
         });
 
-        document.addEventListener("kb-role", () => { paintSubbar(); render(); });
+        /* Kdo není správce a má přiřazené úkoly, uvidí rovnou jen svoje –
+           jinak by se v cizích zakázkách ztratil. Přepínač zůstává vidět
+           a jakmile s ním jednou pohne, respektuje se jeho volba. */
+        const nastavVychoziFiltr = () => {
+            if (mineTouched || !window.KB.currentUid()) return;
+            if (!(window.KB.users || []).length || !(window.KB.tasks || []).length) return;
+            if (window.KBUI.isAdmin()) return;
+            if (!(window.KB.tasks || []).some(isMine)) return;
+            onlyMine = true;
+            mineTouched = true;
+            paintSubbar();
+            render();
+        };
+
+        document.addEventListener("kb-role", () => { paintSubbar(); render(); nastavVychoziFiltr(); });
         window.KB.on("zakazky", () => { paintSubbar(); render(); });
         // role se bere ze seznamu lidí – změna se projeví bez odhlášení
-        window.KB.on("users", () => { window.KBUI.syncRole(); paintSubbar(); render(); });
+        window.KB.on("users", () => {
+            window.KBUI.syncRole();
+            paintSubbar();
+            render();
+            nastavVychoziFiltr();
+        });
 
         let jumped = false;
         window.KB.on("tasks", () => {
             paintSubbar();
             render();
+            nastavVychoziFiltr();
             if (!jumped) { jumped = true; jumpToHash(); }   // po doručení dat skoč na zakázku
         });
 
