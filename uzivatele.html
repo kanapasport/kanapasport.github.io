@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Uživatelé – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=37">
+    <link rel="stylesheet" href="assets/css/app.css?v=38">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -69,6 +69,39 @@
         </div>
     </div>
 </main>
+
+<!-- ================================================= OKNO S E-MAILEM ===== -->
+<div id="mailOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:620px;width:100%;gap:14px;max-height:92vh;overflow-y:auto">
+        <b style="font-size:17px">Přihlašovací údaje e-mailem</b>
+
+        <div class="tiny muted" style="line-height:1.6">
+            Text je připravený. <b>Odeslat ho musíš ty</b> ze své schránky – do webmailu
+            se za tebe přihlásit nemůžu a ani bych neměl znát heslo k poště.
+        </div>
+
+        <div class="row" style="gap:16px;flex-wrap:wrap">
+            <div><span class="label">Komu</span><code id="mailTo" class="pwd"></code></div>
+            <div class="grow"><span class="label">Předmět</span><code id="mailSubject" class="pwd"></code></div>
+        </div>
+
+        <div>
+            <span class="label">Text zprávy</span>
+            <textarea id="mailBody" rows="14" class="field" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px"></textarea>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+            <button id="btnMailCopy" class="btn btn--primary">Zkopírovat text</button>
+            <a id="mailLink" class="btn btn--ghost" href="#">Otevřít v poštovním programu</a>
+            <button id="btnMailClose" class="btn btn--ghost" style="margin-left:auto">Zavřít</button>
+        </div>
+
+        <div class="tiny muted" style="line-height:1.6">
+            Ve <b>Vedos webmailu</b> to je nejrychleji takhle: <i>Zkopírovat text</i>,
+            pak nová zpráva, vložit a odeslat. Adresu i předmět máš nahoře.
+        </div>
+    </div>
+</div>
 
 <!-- ======================================================== OKNO NA HESLO -->
 <div id="passOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
@@ -148,10 +181,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=37"></script>
-<script src="assets/js/doc.js?v=37"></script>
-<script src="assets/js/ui.js?v=37"></script>
-<script type="module" src="assets/js/store.js?v=37"></script>
+<script src="assets/js/taxonomy.js?v=38"></script>
+<script src="assets/js/doc.js?v=38"></script>
+<script src="assets/js/ui.js?v=38"></script>
+<script type="module" src="assets/js/store.js?v=38"></script>
 
 <script>
 (function () {
@@ -164,6 +197,8 @@
     let vaultKey = null;      // odvozený klíč trezoru, drží se jen v paměti stránky
     let vaultMeta = null;     // { salt, check } z databáze
     let passUserId = null;    // komu se právě mění heslo
+    let mailUser = null;      // komu se chystá e-mail
+    let mailBody = "";
 
     /* --------------------------------------------------- generování hesel --
        Skládá se jméno z e-mailu + firemní slovo + tři číslice + znaménko.
@@ -217,6 +252,8 @@
             '<div class="row" style="gap:6px">' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '" ' +
                     'title="Nastaví nové heslo (potřebuje odemčený trezor)">Změnit heslo</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-send="' + esc(user.id) + '" ' +
+                    'title="Připraví e-mail s přihlašovacími údaji">Poslat údaje</button>' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-reset="' + esc(user.id) + '" ' +
                     'title="Pošle odkaz na e-mail – použij, když heslo v trezoru není">Odkaz e-mailem</button>' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
@@ -390,6 +427,61 @@
             window.KBUI.toast("Heslo se nepodařilo rozšifrovat.", "error");
             return "";
         }
+    }
+
+    /* ------------------------------------------- e-mail s přihlašováním --
+       Text se jen připraví; odeslání zůstává na správci, aby šel z firemní
+       schránky a bylo vidět, komu se co poslalo. */
+
+    const WEB_URL = "https://kanapasport.github.io";
+
+    function mailText(user, heslo) {
+        const jmeno = (user.first || "").trim() || user.email;
+        return [
+            "Ahoj " + jmeno + ",",
+            "",
+            "spustili jsme firemní web Pasport Kaňa – najdeš na něm návody,",
+            "úkolovník se zakázkami a termíny milníků.",
+            "",
+            "Odkaz:  " + WEB_URL,
+            "Přihlašovací jméno:  " + user.email,
+            "Heslo:  " + heslo,
+            "",
+            "Přihlásíš se tlačítkem na úvodní stránce. Bez přihlášení web nic neukáže.",
+            "Heslo si nikam nepřeposílej; kdyby ti nefungovalo, napiš mi a nastavím nové.",
+            "",
+            "Díky,",
+            "Michal"
+        ].join("\n");
+    }
+
+    async function sendCredentials(id) {
+        const user = findUser(id);
+        if (!user) return;
+
+        if (!vaultKey) {
+            window.KBUI.toast("Nejdřív odemkni trezor – bez něj heslo do e-mailu nedostanu.", "warn");
+            $("fVault").focus();
+            return;
+        }
+        if (!user.enc) {
+            window.KBUI.toast("U tohohle účtu není v trezoru heslo. Nastav mu nové přes Změnit heslo.", "warn");
+            return;
+        }
+
+        const heslo = await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+        const telo = mailText(user, heslo);
+        const predmet = "Přístup na firemní web Pasport Kaňa";
+
+        mailUser = user;
+        mailBody = telo;
+        $("mailTo").textContent = user.email;
+        $("mailSubject").textContent = predmet;
+        $("mailBody").value = telo;
+        $("mailLink").href = "mailto:" + encodeURIComponent(user.email) +
+            "?subject=" + encodeURIComponent(predmet) +
+            "&body=" + encodeURIComponent(telo);
+        $("mailOverlay").hidden = false;
     }
 
     /* ------------------------------------------------------------ záloha */
@@ -584,6 +676,9 @@
         const pass = event.target.closest("[data-pass]");
         if (pass) return changePassword(pass.dataset.pass);
 
+        const send = event.target.closest("[data-send]");
+        if (send) return sendCredentials(send.dataset.send);
+
         const reset = event.target.closest("[data-reset]");
         if (reset) {
             const user = findUser(reset.dataset.reset);
@@ -655,6 +750,17 @@
         $("btnFormSave").addEventListener("click", saveForm);
         $("btnGen").addEventListener("click", () => {
             $("fPass").value = generatePassword($("fEmail").value);
+        });
+
+        $("btnMailClose").addEventListener("click", () => { $("mailOverlay").hidden = true; });
+        $("btnMailCopy").addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText($("mailBody").value);
+                window.KBUI.toast("Text zkopírován – vlož ho do nové zprávy ve webmailu.");
+            } catch (err) {
+                $("mailBody").select();
+                window.KBUI.toast("Zkopíruj text ručně (Ctrl+C) – je označený.", "warn");
+            }
         });
 
         $("btnPassCancel").addEventListener("click", () => { $("passOverlay").hidden = true; });
