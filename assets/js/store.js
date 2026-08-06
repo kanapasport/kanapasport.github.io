@@ -14,7 +14,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
     getAuth, onAuthStateChanged,
-    signInWithEmailAndPassword, signOut, sendPasswordResetEmail
+    signInWithEmailAndPassword, signOut, sendPasswordResetEmail, updatePassword
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { initializeApp as initializeSecondaryApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as signOutSecondary }
@@ -359,16 +359,30 @@ KB.signIn = (email, password) => signInWithEmailAndPassword(auth, String(email).
 KB.signOut = () => signOut(auth);
 KB.currentUid = () => (auth && auth.currentUser) ? auth.currentUser.uid : "";
 
-/**
- * Pošle člověku odkaz na změnu hesla.
- *
- * POZOR: cizí heslo nedokáže z webu změnit ani hlavní správce – Firebase to
- * z prohlížeče nedovolí nikomu kromě vlastníka účtu. Nastavit heslo jde jen
- * při zakládání účtu; potom už jen tímhle odkazem. Kdyby měl správce potřebu
- * hesla přepisovat i později, musela by k tomu vzniknout serverová funkce
- * s Admin SDK (a k ní placený tarif Blaze).
- */
+/** Záložní cesta – pošle člověku odkaz, kterým si heslo nastaví sám. */
 KB.sendPasswordReset = (email) => sendPasswordResetEmail(auth, String(email).trim());
+
+/**
+ * Přepíše člověku heslo za správce.
+ *
+ * Firebase nedovolí měnit cizí heslo „shora" – umí to jen vlastník účtu.
+ * Jde to ale obejít poctivě: trezor zná stávající heslo, takže se v druhé
+ * instanci Firebase pod tím účtem přihlásíme a heslo změníme jeho vlastním
+ * jménem. Hlavní přihlášení správce zůstane nedotčené.
+ *
+ * Podmínka je tedy odemčený trezor se známým starým heslem; když ho nemáme,
+ * zbývá odkaz na e-mail.
+ */
+KB.changeUserPassword = async (email, stareHeslo, noveHeslo) => {
+    const app2 = initializeSecondaryApp(FIREBASE_CONFIG, "zmena-" + Date.now());
+    const auth2 = getSecondaryAuth(app2);
+    try {
+        const cred = await signInWithEmailAndPassword(auth2, String(email).trim(), stareHeslo);
+        await updatePassword(cred.user, noveHeslo);
+    } finally {
+        await signOutSecondary(auth2).catch(() => {});
+    }
+};
 
 /**
  * Založí účet novému člověku. Dělá se to přes DRUHOU instanci Firebase –

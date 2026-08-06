@@ -409,6 +409,46 @@
         setTimeout(() => document.getElementById("kbLoginEmail").focus(), 50);
     };
 
+    /* ------------------------------------------------------ brána webu ----
+
+       Nepřihlášený člověk nemá vidět vůbec nic – ani prázdné výpisy, ze
+       kterých se dá klikat dál. Místo obsahu stránky se mu ukáže jediná
+       výzva k přihlášení. Řeší se to centrálně, aby to platilo na všech
+       stránkách včetně těch, které teprve přibudou. */
+
+    function gateHtml() {
+        return '<div class="gate">' +
+            '<button type="button" class="gate__btn" data-login>' +
+                '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+                    ((window.KB_ICONS || {}).lock || "") + "</svg>" +
+                "<span>Pro náhled na webu je nutné přihlášení</span>" +
+            "</button>" +
+        "</div>";
+    }
+
+    /** Podle stavu přihlášení schová nebo ukáže obsah stránky. */
+    UI.paintGate = () => {
+        const stav = (window.KB && window.KB.status) || "connecting";
+        if (stav === "connecting") return;          // ještě nevíme, nic neblikáme
+
+        const prihlasen = !!(window.KB.currentUid && window.KB.currentUid());
+        document.querySelectorAll("main").forEach(m => { m.hidden = !prihlasen; });
+
+        let gate = document.getElementById("kbGate");
+        if (prihlasen) {
+            if (gate) gate.remove();
+            return;
+        }
+        if (!gate) {
+            gate = document.createElement("div");
+            gate.id = "kbGate";
+            gate.innerHTML = gateHtml();
+            const header = document.querySelector(".appbar");
+            if (header && header.parentNode) header.parentNode.insertBefore(gate, header.nextSibling);
+            else document.body.appendChild(gate);
+        }
+    };
+
     /** Kde se bez přihlášení nedá pokračovat – otevře rovnou přihlašovací okno. */
     UI.requireUser = () => {
         if (window.KB_USER) return window.KB_USER;
@@ -526,8 +566,8 @@
                 // červený pruh: uživatel vpravo nahoře, logo uprostřed,
                 // ikony nástrojů vpravo dole – tedy přímo nad lištou
                 '<div class="appbar__band"><div class="appbar__bandin">' +
-                    '<a class="appbar__theme" href="barvy.html" title="Zkusit jinou barvu webu">' +
-                        icon("palette") + "<span>Barvy webu</span></a>" +
+                    // barvy webu jsou jen mezi ikonami nástrojů a jen pro
+                    // hlavního správce – v pruhu je to zbytečně na očích
                     '<div class="appbar__userbox">' +
                         '<div class="appbar__user" data-userbox></div>' +
                         '<div class="appbar__status" data-cloud-status>Připojuji…</div>' +
@@ -838,10 +878,14 @@
        a zůstane platit role uložená v prohlížeči. */
     document.addEventListener("DOMContentLoaded", () => {
         UI.paintUser();
+        UI.paintGate();
         if (!window.KB || !window.KB.on) return;
+
+        window.KB.on("status", UI.paintGate);
         window.KB.on("users", () => {
             UI.syncRole();
             UI.paintUser();
+            UI.paintGate();
             document.dispatchEvent(new CustomEvent("kb-role"));
         });
     });

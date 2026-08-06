@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Uživatelé – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=31">
+    <link rel="stylesheet" href="assets/css/app.css?v=32">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -37,11 +37,10 @@
             </div>
         </div>
 
-        <div class="card" style="padding:14px 16px;font-size:12.5px;line-height:1.6;color:var(--warn);background:#fff8ed;border-color:#f6dcb4">
-            <b>Než tomu začneš věřit:</b> tohle rozhoduje o tom, co je na webu vidět a co jde odkliknout –
-            není to zabezpečení. Dokud běží anonymní přihlášení k Firebase a otevřená pravidla databáze,
-            dostane se k datům kdokoliv, kdo zná adresu. Skutečné oddělení práv je Firebase Auth
-            + Firestore Rules, postup je popsaný v <code>README.md</code>.
+        <div class="card" style="padding:14px 16px;font-size:12.5px;line-height:1.6;color:var(--ok);background:var(--ok-tint);border-color:#bfe3d0">
+            <b>Přístup je hlídaný i v databázi.</b> Přihlašuje se přes Firebase Auth a pravidla
+            Firestore pouštějí k datům jen člověka, který je v tomhle seznamu a má aktivní účet.
+            Role tedy neřídí jen to, co je vidět, ale i to, co kdo smí uložit.
         </div>
 
         <!-- ------------------------------------------------------- trezor -->
@@ -117,10 +116,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=31"></script>
-<script src="assets/js/doc.js?v=31"></script>
-<script src="assets/js/ui.js?v=31"></script>
-<script type="module" src="assets/js/store.js?v=31"></script>
+<script src="assets/js/taxonomy.js?v=32"></script>
+<script src="assets/js/doc.js?v=32"></script>
+<script src="assets/js/ui.js?v=32"></script>
+<script type="module" src="assets/js/store.js?v=32"></script>
 
 <script>
 (function () {
@@ -184,7 +183,7 @@
             "</div>" +
             '<div class="row" style="gap:6px">' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '" ' +
-                    'title="Pošle odkaz na e-mail – heslo si nastaví sám">Reset hesla</button>' +
+                    'title="Nastaví nové heslo (potřebuje odemčený trezor)">Změnit heslo</button>' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
                 (me ? "" : '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
                     'data-del="' + esc(user.id) + '">Odebrat</button>') +
@@ -392,32 +391,50 @@
     /* ------------------------------------------------------ změna hesla */
 
     /**
-     * Změna hesla. Firebase z prohlížeče nedovolí přepsat cizí heslo nikomu
-     * kromě vlastníka účtu – ani hlavnímu správci. Proto se posílá odkaz
-     * na e-mail a člověk si heslo nastaví sám.
+     * Změna hesla za správce. Jde to díky trezoru: známe stávající heslo,
+     * takže se pod tím účtem v druhé instanci Firebase přihlásíme a heslo
+     * změníme. Bez odemčeného trezoru zbývá jen odkaz na e-mail.
      */
     async function changePassword(id) {
         const user = findUser(id);
         if (!user) return;
 
         const jmeno = ((user.first || "") + " " + (user.last || "")).trim() || user.email;
-        if (!confirm("Poslat " + jmeno + " odkaz na změnu hesla?\n\n" +
-                     "Přijde mu e-mail na " + user.email + " a heslo si nastaví sám.\n" +
-                     "Od té chvíle už jeho heslo neuvidíš ani v trezoru.")) return;
+
+        if (!vaultKey || !user.enc) {
+            if (!confirm("Bez odemčeného trezoru heslo přepsat nejde.\n\n" +
+                         "Poslat " + jmeno + " odkaz na e-mail, aby si ho nastavil sám?")) return;
+            try {
+                await window.KB.sendPasswordReset(user.email);
+                window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
+            } catch (err) {
+                window.KBUI.toast("Odkaz se nepodařilo odeslat: " + (err.code || err.message), "error");
+            }
+            return;
+        }
+
+        const nove = prompt("Nové heslo pro " + jmeno + ":\n\n" +
+            "(návrh můžeš nechat, nebo přepsat vlastním)", generatePassword(user.email));
+        if (nove === null) return;
+        if (nove.trim().length < 6) return window.KBUI.toast("Heslo musí mít aspoň 6 znaků.", "warn");
 
         try {
-            await window.KB.sendPasswordReset(user.email);
-            // v trezoru už bychom měli neplatné heslo – radši ho zahodíme
-            if (user.enc) {
-                await window.KB.saveUser({
-                    id: user.id, email: user.email, first: user.first, last: user.last,
-                    role: user.role, active: user.active !== false, enc: null
-                });
-            }
-            window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
+            const stare = await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+            await window.KB.changeUserPassword(user.email, stare, nove);
+
+            await window.KB.saveUser({
+                id: user.id, email: user.email, first: user.first, last: user.last,
+                role: user.role, active: user.active !== false,
+                salt: window.KBUI.newSalt(),
+                enc: await window.KBUI.vaultEncrypt(vaultKey, nove)
+            });
+            window.KBUI.toast("Heslo pro " + jmeno + " změněno.");
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Odkaz se nepodařilo odeslat: " + (err.code || err.message), "error");
+            const hlaska = err.code === "auth/invalid-credential" || err.code === "auth/wrong-password"
+                ? "Heslo v trezoru už neplatí – člověk si ho nejspíš změnil sám. Použij odkaz na e-mail."
+                : "Změna se nezdařila: " + (err.code || err.message);
+            window.KBUI.toast(hlaska, "error");
         }
     }
 

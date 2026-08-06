@@ -343,27 +343,33 @@ Vygenerovaná hesla jsou i v `Seznam.xlsx` vedle jmen – ten soubor je
 v `.gitignore`, protože **repozitář je veřejný**, a nikdy se nesmí commitnout.
 Přepsání hesla v Excelu se na web **nepropíše**; mění se na `uzivatele.html`.
 
-### Změna hesla má jedno omezení
+### Změna hesla
 
-Heslo se dá **nastavit jen při zakládání účtu**. Potom už ho z webu nepřepíše
-nikdo – ani hlavní správce. Firebase to z prohlížeče nedovolí, měnit cizí
-heslo umí jen server s Admin SDK (a ten potřebuje placený tarif Blaze).
+Hlavní správce může komukoliv heslo přepsat přímo na `uzivatele.html`
+tlačítkem **Změnit heslo** – potřebuje k tomu **odemčený trezor**.
 
-Místo toho je u každého člověka **Reset hesla**: přijde mu e-mail s odkazem
-a heslo si nastaví sám. Zároveň se z trezoru smaže jeho staré heslo, protože
-by už stejně neplatilo.
+Firebase totiž nedovolí měnit cizí heslo „shora"; umí to jen vlastník účtu.
+Obchází se to poctivě: trezor zná stávající heslo, takže se web pod tím účtem
+v druhé instanci Firebase přihlásí a heslo změní jeho vlastním jménem. Hlavní
+přihlášení správce přitom zůstane nedotčené.
 
-### Tohle ještě není zabezpečení
+Když heslo v trezoru není (nebo už neplatí, protože si ho člověk změnil sám),
+nabídne se místo toho **odkaz na e-mail** a heslo si nastaví sám.
 
-Role řídí, co je na webu vidět a co jde odkliknout. Neřídí ale přístup
-k datům: web se pořád přihlašuje k Firebase anonymně a pravidla databáze jsou
-otevřená, takže kdokoliv, kdo zná adresu, si data může přečíst i přepsat mimo
-web. Přihlašovací okno je zámek na skleněných dveřích.
+### Přístup je hlídaný i v databázi
 
-Skutečné oddělení práv je Firebase Auth (e-mail + heslo) plus pravidla
-Firestore. Předloha pravidel včetně postupu je v [firestore.rules](firestore.rules)
-– dokud web nepřejde na Firebase Auth, nasazovat je nemá smysl, zamkla by i
-vlastní lidi.
+Přihlašuje se přes **Firebase Auth** (e-mail a heslo) a pravidla Firestore
+pouštějí k datům jen člověka, který má **záznam v `users` pod svým UID**
+a aktivní účet. Role tedy neřídí jen to, co je vidět, ale i to, co kdo smí
+uložit – ověřeno: student zapíše procenta u úkolu, ale do číselníku zakázek
+ho databáze nepustí.
+
+Anonymní přihlášení je vypnuté, takže bez účtu se nenačte vůbec nic.
+Nepřihlášenému se místo obsahu webu ukáže jen výzva k přihlášení
+(`UI.paintGate()` v `ui.js`) – nedá se proklikat ani prázdný výpis.
+
+Platná pravidla jsou v [firestore.rules](firestore.rules). Když se budou
+měnit, nasazují se ručně ve Firebase Console → Firestore Database → Rules.
 
 ## Co je hotové a co ne
 

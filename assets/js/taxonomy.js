@@ -35,6 +35,39 @@ window.KB_ICONS = {
 
 window.KB_CATEGORIES = [
     {
+        id: 'skripty',
+        title: 'SKRIPTY',
+        sub: 'Naše nástroje v ArcGIS Pro a tvorba nových',
+        icon: 'code',
+        main: 'skript-ai',
+        children: [
+            {
+                id: 'skripty-obecne', title: 'OBECNÉ', children: [
+                    { id: 'skript-instalace',  title: 'Instalace a spouštění' },
+                    { id: 'skript-body',       title: 'Body v polygonu' },
+                    { id: 'skript-cistic',     title: 'Čistič polygonů' },
+                    { id: 'skript-ftp',        title: 'FeatureToPolygon Upgrade' },
+                    { id: 'skript-kopie',      title: 'Kopie polygonů' },
+                    { id: 'skript-symbolika',  title: 'Hromadná symbolika' },
+                    { id: 'skript-ai',         title: 'Jak si nechat skript napsat od AI' }
+                ]
+            },
+            {
+                id: 'skripty-stavba', title: 'STAVBA', children: [
+                    { id: 'skript-mistnosti', title: 'Generování místností' },
+                    { id: 'skript-dvere',     title: 'Dveře – automatizace' },
+                    { id: 'skript-plocha',    title: 'Zápis plochy a obvodu' }
+                ]
+            },
+            {
+                id: 'skripty-technologie', title: 'TECHNOLOGIE', children: [
+                    { id: 'skript-kontrola', title: 'Kontrola polohových kódů' },
+                    { id: 'skript-atributy', title: 'Hromadný zápis atributů' }
+                ]
+            }
+        ]
+    },
+    {
         id: 'pasportizace',
         title: 'PASPORTIZAČNÍ POSTUPY',
         sub: 'Pracovní postupy u jednotlivých profesí',
@@ -77,39 +110,6 @@ window.KB_CATEGORIES = [
         ]
     },
     {
-        id: 'skripty',
-        title: 'SKRIPTY',
-        sub: 'Naše nástroje v ArcGIS Pro a tvorba nových',
-        icon: 'code',
-        main: 'skript-ai',
-        children: [
-            {
-                id: 'skripty-obecne', title: 'OBECNÉ', children: [
-                    { id: 'skript-instalace',  title: 'Instalace a spouštění' },
-                    { id: 'skript-body',       title: 'Body v polygonu' },
-                    { id: 'skript-cistic',     title: 'Čistič polygonů' },
-                    { id: 'skript-ftp',        title: 'FeatureToPolygon Upgrade' },
-                    { id: 'skript-kopie',      title: 'Kopie polygonů' },
-                    { id: 'skript-symbolika',  title: 'Hromadná symbolika' },
-                    { id: 'skript-ai',         title: 'Jak si nechat skript napsat od AI' }
-                ]
-            },
-            {
-                id: 'skripty-stavba', title: 'STAVBA', children: [
-                    { id: 'skript-mistnosti', title: 'Generování místností' },
-                    { id: 'skript-dvere',     title: 'Dveře – automatizace' },
-                    { id: 'skript-plocha',    title: 'Zápis plochy a obvodu' }
-                ]
-            },
-            {
-                id: 'skripty-technologie', title: 'TECHNOLOGIE', children: [
-                    { id: 'skript-kontrola', title: 'Kontrola polohových kódů' },
-                    { id: 'skript-atributy', title: 'Hromadný zápis atributů' }
-                ]
-            }
-        ]
-    },
-    {
         id: 'skenovani',
         title: 'SKENOVÁNÍ',
         sub: 'Sběr dat v terénu a mračna bodů',
@@ -149,16 +149,6 @@ window.KB_SECTIONS = [
             cat: category.id,
             children: category.children
         }))
-    },
-    {
-        id: 'pripravujeme',
-        title: 'Připravujeme',
-        desc: 'Zprovozníme, až bude hotový obsah.',
-        tiles: [
-            { title: 'PŘIHLAŠOVÁNÍ',     sub: 'Účet a heslo vygeneruje správce', icon: 'lock',   soon: true },
-            { title: 'SPRÁVA UŽIVATELŮ', sub: 'Přehled, kdo a kdy se přihlásil', icon: 'users',  soon: true },
-            { title: 'OCHRANA DAT',      sub: 'Vodoznak a omezené stahování',    icon: 'shield', soon: true }
-        ]
     }
 ];
 

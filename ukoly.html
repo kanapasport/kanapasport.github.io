@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Úkolovník – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=31">
+    <link rel="stylesheet" href="assets/css/app.css?v=32">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -121,10 +121,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=31"></script>
-<script src="assets/js/doc.js?v=31"></script>
-<script src="assets/js/ui.js?v=31"></script>
-<script type="module" src="assets/js/store.js?v=31"></script>
+<script src="assets/js/taxonomy.js?v=32"></script>
+<script src="assets/js/doc.js?v=32"></script>
+<script src="assets/js/ui.js?v=32"></script>
+<script type="module" src="assets/js/store.js?v=32"></script>
 
 <script>
 (function () {
@@ -218,6 +218,10 @@
                 '<button class="subtask__pct" data-cycle="' + task.id + "|" + sub.id + '" ' +
                     'style="border:none;background:none;cursor:pointer" title="Klikni pro dílčí procenta">' +
                     percent + " %</button>" +
+                // posuvník na libovolnou hodnotu; klikání po krocích zůstává
+                '<input type="range" class="subtask__slider" min="0" max="100" step="5" ' +
+                    'value="' + percent + '" data-slider="' + task.id + "|" + sub.id + '" ' +
+                    'title="Přetažením nastavíš přesná procenta" aria-label="Procenta hotovo">' +
                 '<button class="btn btn--sm btn--ghost subtask__add" ' +
                     'data-note="' + task.id + "|" + sub.id + '" title="Přidat poznámku">+</button>' +
             "</div>" +
@@ -707,6 +711,27 @@
                 window.KBUI.toast("Smazání selhalo.", "error");
             }
         }
+    });
+
+    /* Posuvník: během tažení jen přebarvíme číslo, do databáze se zapíše
+       až po puštění – jinak by každý pixel znamenal jeden zápis. */
+    $("list").addEventListener("input", (event) => {
+        const slider = event.target.closest("[data-slider]");
+        if (!slider) return;
+        const radek = slider.closest(".subtask");
+        const cislo = radek && radek.querySelector(".subtask__pct");
+        if (cislo) cislo.textContent = slider.value + " %";
+        if (radek) {
+            radek.className = "subtask subtask--" + pctLevel(+slider.value) +
+                              (+slider.value === 100 ? " subtask--done" : "");
+        }
+    });
+
+    $("list").addEventListener("change", (event) => {
+        const slider = event.target.closest("[data-slider]");
+        if (!slider) return;
+        const [taskId, subId] = slider.dataset.slider.split("|");
+        setPercent(taskId, subId, +slider.value);
     });
 
     $("list").addEventListener("keydown", (event) => {
