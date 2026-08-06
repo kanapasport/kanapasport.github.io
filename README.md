@@ -1,6 +1,6 @@
 # Pasport Kaňa – firemní knowledge base
 
-Statický web na GitHub Pages: <https://kocismichal.github.io/pasportkana_navody/>
+Statický web na GitHub Pages: <https://kanapasport.github.io/>
 Data (návody, obrázky, úkoly) žijí ve Firebase Firestore, projekt `pasportkana`.
 Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklikem.
 

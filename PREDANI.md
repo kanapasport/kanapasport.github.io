@@ -3,8 +3,8 @@
 Shrnutí stavu k **5. 8. 2026**, aby se dalo plynule pokračovat na jiném počítači
 nebo v novém sezení. Poslední commit: `720ad51`.
 
-- **Živý web:** <https://kocismichal.github.io/pasportkana_navody/>
-- **Repozitář:** <https://github.com/kocismichal/pasportkana_navody> (veřejný)
+- **Živý web:** <https://kanapasport.github.io/>
+- **Repozitář:** <https://github.com/kanapasport/kanapasport.github.io> (veřejný)
 - **Data:** Firebase Firestore, projekt `pasportkana`, kolekce pod
   `artifacts/firemni-kb-app/public/data/…`
 
@@ -16,7 +16,7 @@ Technický popis webu je v [README.md](README.md) – tenhle soubor je navíc:
 ## Jak to rozjet na druhém počítači
 
 ```bash
-git clone https://github.com/kocismichal/pasportkana_navody.git
+git clone https://github.com/kanapasport/kanapasport.github.io.git
 ```
 
 Web je bez buildu – otevře se i dvojklikem, ale kvůli Firebase je lepší
