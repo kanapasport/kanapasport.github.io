@@ -13,6 +13,69 @@ Technický popis webu je v [README.md](README.md) – tenhle soubor je navíc:
 
 ---
 
+## Kde jsme skončili (6. 8. 2026, odpoledne)
+
+Všechno je **zacommitované a nahrané na GitHub**, v pracovní kopii nic nezůstalo.
+Doma stačí `git pull` (nebo čerstvý `git clone`) a jede se dál.
+
+### 1. Nasazení Pages vázne – zkontrolovat jako první
+
+Web pořád servíruje **starou verzi `?v=37`**, i když v repu je už `?v=38`.
+Není to chyba v kódu: krok `build` projde za 22 s, padá až `deploy`.
+Na GitHubu se zasekla fronta nasazení – pokusy končily buď
+`Timeout reached, aborting!` ve stavu `deployment_queued`, nebo
+`Deployment cancelled.`
+
+Co už jsem zkusil:
+
+1. zrušil zaseknuté nasazení přes API (`pages/deployments/{sha}/cancel`) – fronta se uvolnila,
+2. poslal prázdný commit `4313bb9`, aby se spustil čerstvý build – ten **na rozdíl od
+   předchozích nezůstal viset ve frontě a rozjel se**. Jak dopadl, jsem už nestihl ověřit.
+
+Doma:
+
+```bash
+gh run list -L 3
+curl -s https://kanapasport.github.io/index.html | grep -o "app.css?v=[0-9]*"
+```
+
+Až se objeví `app.css?v=38`, je hotovo – lišta bude zarovnaná **zleva** a roletka
+milníků ukáže rovnou nejbližší termíny bez zanořené tabulky.
+
+Kdyby to pořád padalo, nejsilnější páka je v repu **Settings → Pages**: přepnout
+zdroj na jinou větev, uložit, přepnout zpět na `main`, uložit. Tím se stav
+nasazení resetuje úplně.
+
+**Nastavení jsem prošel a nikde není chyba** – Actions zapnuté a plně povolené,
+prostředí `github-pages` má povolenou větev `main` bez schvalovatele, zdroj Pages
+je `main` / kořen, vlastní doména prázdná, HTTPS vynucené, GitHub Status bez
+výpadku. Není tedy co přenastavovat.
+
+### 2. E-maily s přístupy – rozpracované
+
+Na `uzivatele.html` je u každého člověka tlačítko **Poslat údaje**. Otevře
+připravený text e-mailu (odkaz na web, přihlašovací jméno, heslo z trezoru)
+k zkopírování do vlastní schránky. **Text jsi zatím neviděl a neodzkoušel.**
+
+Postup doma:
+
+1. odemknout trezor heslem `Trezor-Kana-2026`,
+2. u **sebe** dát *Poslat údaje*, text zkopírovat a poslat si ho z Vedosu **na sebe**,
+3. ověřit, že odkaz i heslo fungují, a případně říct, co ve znění změnit,
+4. teprve pak rozeslat ostatním – po jednom, ne hromadně přes kopii.
+
+Odeslat je za tebe nedokážu: do tvé schránky se nepřihlašuji a heslo k poště
+znát nemám. Text připravím, odeslání zůstává na tobě.
+
+### 3. Ostatní drobnosti, které čekají
+
+- změnit heslo k trezoru z `Trezor-Kana-2026` na vlastní,
+- doplnit odpovědné u dvou úkolů – *Zpracování tabulek místností* („Ondra, Amálka")
+  a *Focení – světla, nouzáky, zásuvky* („Elda Kaňa"),
+- ověřit, že milníky sedí pod správné zakázky (teď jsou všechny pod BioPharma).
+
+---
+
 ## Jak to rozjet na druhém počítači
 
 ```bash
