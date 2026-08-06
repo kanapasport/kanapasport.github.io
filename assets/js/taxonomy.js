@@ -174,10 +174,10 @@ window.KB_NAV = [
     },
     // roletka se naplní zakázkami z databáze (viz taskMenu v ui.js)
     { title: 'ÚKOLOVNÍK', href: 'ukoly.html', tasks: true },
-    { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag' },
     { title: 'TABULE', href: 'tabule.html', icon: 'board' },
-    // v liště jen pro toho, kdo na ně má právo (`need` řídí viditelnost)
-    { title: 'UŽIVATELÉ', href: 'uzivatele.html', icon: 'users', need: 'users.manage' }
+    /* `side: true` = odsazené doprava vedle hledání, ne do středu lišty.
+       Roletka se plní nejbližšími milníky (viz milnikMenu v ui.js). */
+    { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true, side: true }
 ];
 
 /* ------------------------------------------------- nástroje (ikony) -----

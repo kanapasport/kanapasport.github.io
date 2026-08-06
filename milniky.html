@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=34">
+    <link rel="stylesheet" href="assets/css/app.css?v=36">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -18,15 +18,18 @@
 
     <div class="spread">
         <div>
-            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Milníky</h2>
+            <h2 id="pageTitle" style="font-size:20px;font-weight:900;line-height:1.2">Milníky</h2>
             <p class="small muted" style="margin-top:3px">
                 Termíny odevzdání po činnostech, seřazené tak, jak půjdou za sebou.
             </p>
         </div>
         <div class="row" style="gap:8px">
+            <button id="btnHotove" class="btn btn--ghost btn--sm">Skrýt splněné</button>
             <button id="btnNew" class="btn btn--primary btn--sm" data-need="milnik.manage" hidden>+ Nový milník</button>
         </div>
     </div>
+
+    <div id="zakRow" class="row row--wrap" style="gap:8px"></div>
 
     <div id="hint" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
         Zapisovat a měnit milníky můžou jen <b>správci</b>. Ostatní je vidí, ale needitují.
@@ -85,10 +88,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=34"></script>
-<script src="assets/js/doc.js?v=34"></script>
-<script src="assets/js/ui.js?v=34"></script>
-<script type="module" src="assets/js/store.js?v=34"></script>
+<script src="assets/js/taxonomy.js?v=36"></script>
+<script src="assets/js/doc.js?v=36"></script>
+<script src="assets/js/ui.js?v=36"></script>
+<script type="module" src="assets/js/store.js?v=36"></script>
 
 <script>
 (function () {
@@ -98,6 +101,11 @@
     const esc = (value) => window.KBUI.esc(value);
 
     let editingId = null;
+    let activeZak = new URLSearchParams(location.search).get("zak") || "";   // slug zakázky
+    let skryjHotove = false;
+
+    const slug = (value) => window.KBUI.slug(value);
+    const zakName = (item) => (item.zakazka || "").trim() || "Bez zakázky";
 
     const jmeno = (user) => ((user.first || "") + " " + (user.last || "")).trim() || user.email;
 
@@ -116,9 +124,15 @@
         return d + ". " + m + ". " + y;
     };
 
-    /** Barva termínu podle toho, jak je blízko – stejná logika jako u úkolů. */
-    function stavTerminu(iso) {
+    /** Barva termínu podle toho, jak je blízko – splněný je vždycky zelený. */
+    function stavTerminu(item) {
+        const iso = item.datum;
+        if (item.hotovo) {
+            return { text: iso ? czDate(iso) : "bez termínu", trida: "milnik--hotovo",
+                     pozn: "splněno" + (item.hotovoKdo ? " · " + item.hotovoKdo : "") };
+        }
         if (!iso) return { text: "bez termínu", trida: "milnik--zadny" };
+
         const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
         const dny = Math.round((new Date(iso + "T00:00:00") - dnes) / 86400000);
 
@@ -134,32 +148,83 @@
     const serazene = () => (window.KB.milniky || []).slice()
         .sort((a, b) => (a.datum || "9999-99-99").localeCompare(b.datum || "9999-99-99"));
 
+    /** Pruh se zakázkami – stejný princip jako filtr v úkolovníku. */
+    function paintZakRow() {
+        const jmena = [];
+        (window.KB.milniky || []).forEach(m => {
+            const n = zakName(m);
+            if (jmena.indexOf(n) === -1) jmena.push(n);
+        });
+
+        const chip = (label, aktivni, zak) =>
+            '<button type="button" class="chip' + (aktivni ? " chip--active" : "") + '" ' +
+            'data-zak="' + esc(zak) + '">' + esc(label) + "</button>";
+
+        $("zakRow").innerHTML = jmena.length > 1
+            ? chip("VŠE", !activeZak, "") + jmena.map(n => chip(n, slug(n) === activeZak, slug(n))).join("")
+            : "";
+
+        const vybrana = jmena.find(n => slug(n) === activeZak);
+        $("pageTitle").textContent = vybrana ? "Milníky · " + vybrana : "Milníky";
+    }
+
     function render() {
         const muzeMenit = window.KBUI.can("milnik.manage");
         $("hint").hidden = muzeMenit;
+        $("btnHotove").textContent = skryjHotove ? "Zobrazit splněné" : "Skrýt splněné";
+        $("btnHotove").className = "btn btn--sm " + (skryjHotove ? "btn--primary" : "btn--ghost");
+        paintZakRow();
 
-        const items = serazene();
+        let items = serazene();
+        if (activeZak) items = items.filter(m => slug(zakName(m)) === activeZak);
+        if (skryjHotove) items = items.filter(m => !m.hotovo);
+
         $("empty").hidden = !!items.length;
         $("tableWrap").hidden = !items.length;
         if (!items.length) return;
 
+        // rozdělení podle zakázek – uvnitř každé zůstává řazení podle data
+        const skupiny = new Map();
+        items.forEach(m => {
+            const n = zakName(m);
+            if (!skupiny.has(n)) skupiny.set(n, []);
+            skupiny.get(n).push(m);
+        });
+        const sloupcu = muzeMenit ? 5 : 4;
+
         $("table").innerHTML =
             "<thead><tr>" +
                 "<th>Činnost</th><th>Zpracovatel</th><th>Náplň milníku</th><th>Datum dodání</th>" +
+                (muzeMenit ? "<th></th>" : "") +
             "</tr></thead><tbody>" +
-            items.map(item => {
-                const t = stavTerminu(item.datum);
-                return '<tr class="' + t.trida + '"' +
-                        (muzeMenit ? ' data-edit="' + esc(item.id) + '" style="cursor:pointer"' : "") + ">" +
-                    '<td class="milniky__cinnost">' + esc(item.cinnost || "") +
-                        (item.zakazka ? '<span class="milniky__zak">' + esc(item.zakazka) + "</span>" : "") + "</td>" +
+            Array.from(skupiny.entries()).map(([nazev, radky]) => {
+                const hotovych = radky.filter(m => m.hotovo).length;
+                const hlavicka = '<tr class="milniky__skupina"><td colspan="' + sloupcu + '">' +
+                    "<b>" + esc(nazev) + "</b>" +
+                    '<span>' + radky.length + " milníků · " + hotovych + " splněno</span>" +
+                "</td></tr>";
+                return hlavicka + radky.map(radek).join("");
+            }).join("") +
+            "</tbody>";
+
+        function radek(item) {
+                const t = stavTerminu(item);
+                return '<tr class="' + t.trida + '">' +
+                    '<td class="milniky__cinnost">' + esc(item.cinnost || "") + "</td>" +
                     "<td>" + esc(ownersText(item)) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum"><b>' + t.text + "</b>" +
-                        (t.pozn ? '<span class="milniky__pozn">' + t.pozn + "</span>" : "") + "</td>" +
+                        (t.pozn ? '<span class="milniky__pozn">' + esc(t.pozn) + "</span>" : "") + "</td>" +
+                    (muzeMenit
+                        ? '<td class="milniky__akce">' +
+                            '<button type="button" class="btn btn--sm ' +
+                                (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
+                                (item.hotovo ? "Vrátit" : "Splněno") + "</button>" +
+                            '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(item.id) + '">Upravit</button>' +
+                          "</td>"
+                        : "") +
                 "</tr>";
-            }).join("") +
-            "</tbody>";
+        }
     }
 
     /* --------------------------------------------------------- formulář */
@@ -216,6 +281,7 @@
         const cinnost = $("fCinnost").value.trim();
         if (!cinnost) return window.KBUI.toast("Doplň činnost.", "warn");
 
+        const puvodni = (window.KB.milniky || []).find(m => m.id === editingId) || {};
         const zaznam = {
             id: editingId || window.KB.newMilnikId(),
             cinnost: cinnost,
@@ -223,7 +289,11 @@
             owner: "",
             napln: $("fNapln").value.trim(),
             datum: $("fDatum").value,
-            zakazka: $("fZakazka").value
+            zakazka: $("fZakazka").value,
+            // úprava milníku nesmí shodit značku „splněno"
+            hotovo: !!puvodni.hotovo,
+            hotovoKdo: puvodni.hotovoKdo || "",
+            hotovoMs: puvodni.hotovoMs || 0
         };
 
         const items = (window.KB.milniky || []).slice();
@@ -242,15 +312,46 @@
 
     /* ------------------------------------------------------------- start */
 
+    /** Označení splněno / vrácení zpět – zapisuje kdo a kdy. */
+    async function prepniHotovo(id) {
+        const items = (window.KB.milniky || []).map(m => {
+            if (m.id !== id) return m;
+            return m.hotovo
+                ? Object.assign({}, m, { hotovo: false, hotovoKdo: "", hotovoMs: 0 })
+                : Object.assign({}, m, {
+                    hotovo: true,
+                    hotovoKdo: window.KB_USER || "",
+                    hotovoMs: Date.now()
+                  });
+        });
+        const byl = (window.KB.milniky || []).find(m => m.id === id);
+        await ulozSeznam(items, byl && byl.hotovo ? "Milník vrácen mezi rozdělané." : "Milník označen jako splněný.");
+    }
+
     document.addEventListener("click", (event) => {
-        const row = event.target.closest("[data-edit]");
-        if (row && window.KBUI.can("milnik.manage")) openForm(row.dataset.edit);
+        if (!window.KBUI.can("milnik.manage")) return;
+
+        const hotovo = event.target.closest("[data-done]");
+        if (hotovo) return prepniHotovo(hotovo.dataset.done);
+
+        const uprav = event.target.closest("[data-edit]");
+        if (uprav) openForm(uprav.dataset.edit);
+    });
+
+    // přepínače v hlavičce a filtr zakázek
+    $("zakRow").addEventListener("click", (event) => {
+        const chip = event.target.closest("[data-zak]");
+        if (!chip) return;
+        activeZak = chip.dataset.zak;
+        history.replaceState(null, "", location.pathname + (activeZak ? "?zak=" + encodeURIComponent(activeZak) : ""));
+        render();
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
         window.KBUI.mountNav({ active: "milniky.html" });
 
         $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnHotove").addEventListener("click", () => { skryjHotove = !skryjHotove; render(); });
         $("btnCancel").addEventListener("click", () => { $("milnikOverlay").hidden = true; });
         $("btnSave").addEventListener("click", save);
         $("btnDelete").addEventListener("click", remove);

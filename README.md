@@ -256,8 +256,18 @@ skryté tlačítko: milníky leží v dokumentu `meta/milniky` a do `meta` smí 
 pravidel Firestore zapisovat jedině správce, takže zápis odmítne i databáze.
 Díky tomu k nim nebylo potřeba přidávat žádné nové pravidlo.
 
-Zpracovatelé se vybírají ze seznamu lidí stejně jako u úkolů a milník se dá
-přiřadit k zakázce.
+Milníky jsou v tabulce **rozdělené podle zakázek**; nad tabulkou je filtr
+(objeví se, jakmile jsou zakázky aspoň dvě) a tlačítko **Skrýt splněné**.
+Zpracovatelé se vybírají ze seznamu lidí stejně jako u úkolů.
+
+Správce má u každého řádku **Splněno** a **Upravit**. Splněný milník
+zezelená, připíše se ke komu a kdy, a dá se **Vrátit**. Úprava milníku
+značku „splněno" neshodí.
+
+V liště jsou MILNÍKY odsazené doprava vedle hledání (`side: true`
+v `KB_NAV`); po najetí vyjede roletka se **třemi nejbližšími termíny**
+(činnost, náplň, datum) a pod nimi rozdělení podle zakázek. Do nejbližších
+se počítají jen milníky s datem, které ještě nejsou splněné.
 
 ## Tabule na nápady
 

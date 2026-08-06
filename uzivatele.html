@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Uživatelé – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=34">
+    <link rel="stylesheet" href="assets/css/app.css?v=36">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -116,10 +116,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=34"></script>
-<script src="assets/js/doc.js?v=34"></script>
-<script src="assets/js/ui.js?v=34"></script>
-<script type="module" src="assets/js/store.js?v=34"></script>
+<script src="assets/js/taxonomy.js?v=36"></script>
+<script src="assets/js/doc.js?v=36"></script>
+<script src="assets/js/ui.js?v=36"></script>
+<script type="module" src="assets/js/store.js?v=36"></script>
 
 <script>
 (function () {
@@ -184,6 +184,8 @@
             '<div class="row" style="gap:6px">' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '" ' +
                     'title="Nastaví nové heslo (potřebuje odemčený trezor)">Změnit heslo</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-reset="' + esc(user.id) + '" ' +
+                    'title="Pošle odkaz na e-mail – použij, když heslo v trezoru není">Odkaz e-mailem</button>' +
                 '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
                 (me ? "" : '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
                     'data-del="' + esc(user.id) + '">Odebrat</button>') +
@@ -401,15 +403,15 @@
 
         const jmeno = ((user.first || "") + " " + (user.last || "")).trim() || user.email;
 
-        if (!vaultKey || !user.enc) {
-            if (!confirm("Bez odemčeného trezoru heslo přepsat nejde.\n\n" +
-                         "Poslat " + jmeno + " odkaz na e-mail, aby si ho nastavil sám?")) return;
-            try {
-                await window.KB.sendPasswordReset(user.email);
-                window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
-            } catch (err) {
-                window.KBUI.toast("Odkaz se nepodařilo odeslat: " + (err.code || err.message), "error");
-            }
+        // Zamčený trezor neznamená e-mail – jen se musí odemknout.
+        if (!vaultKey) {
+            window.KBUI.toast("Nejdřív odemkni trezor nahoře, pak heslo změníš rovnou tady.", "warn");
+            $("fVault").focus();
+            return;
+        }
+        if (!user.enc) {
+            window.KBUI.toast("U tohohle účtu není v trezoru uložené heslo, " +
+                              "takže ho nejde přepsat. Použij Poslat odkaz na e-mail.", "warn");
             return;
         }
 
@@ -527,6 +529,21 @@
 
         const pass = event.target.closest("[data-pass]");
         if (pass) return changePassword(pass.dataset.pass);
+
+        const reset = event.target.closest("[data-reset]");
+        if (reset) {
+            const user = findUser(reset.dataset.reset);
+            if (!user) return;
+            if (!confirm("Poslat " + user.email + " odkaz na změnu hesla?\n\n" +
+                         "Heslo si nastaví sám a ty ho pak neuvidíš ani v trezoru.")) return;
+            try {
+                await window.KB.sendPasswordReset(user.email);
+                window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
+            } catch (err) {
+                window.KBUI.toast("Odkaz se nepodařilo odeslat: " + (err.code || err.message), "error");
+            }
+            return;
+        }
 
         const show = event.target.closest("[data-show]");
         if (show) {

@@ -483,14 +483,61 @@
             names.map(name => ({ title: name, href: "ukoly.html?zak=" + encodeURIComponent(UI.slug(name)) })));
     }
 
-    const menuOf = (item) => item.menu || (item.tasks ? taskMenu() : null);
+    /**
+     * Roletka u MILNÍKŮ: nahoře tři nejbližší termíny (činnost, náplň, datum),
+     * pod nimi rozdělení podle zakázek. Milníky bez data a hotové se nepočítají –
+     * jde o to, co přijde na řadu.
+     */
+    function milnikMenu() {
+        const vsechny = (window.KB && window.KB.milniky) || [];
+        if (!vsechny.length) return null;
+
+        const czDatum = (iso) => {
+            if (!iso) return "";
+            const [, m, d] = iso.split("-");
+            return d.replace(/^0/, "") + ". " + m.replace(/^0/, "") + ".";
+        };
+
+        const nejblizsi = vsechny
+            .filter(m => m.datum && !m.hotovo)
+            .sort((a, b) => a.datum.localeCompare(b.datum))
+            .slice(0, 3)
+            .map(m => ({
+                title: m.cinnost + " · " + czDatum(m.datum) +
+                       (m.napln ? " — " + m.napln : ""),
+                href: "milniky.html?zak=" + encodeURIComponent(UI.slug(m.zakazka || ""))
+            }));
+
+        const zakazky = [];
+        vsechny.forEach(m => {
+            const name = (m.zakazka || "").trim() || "Bez zakázky";
+            if (zakazky.indexOf(name) === -1) zakazky.push(name);
+        });
+
+        const skupiny = [{ title: "VŠECHNY MILNÍKY", href: "milniky.html" }];
+        if (nejblizsi.length) skupiny.push({ title: "NEJBLIŽŠÍ", children: nejblizsi });
+        skupiny.push({
+            title: "PODLE ZAKÁZKY",
+            children: zakazky.map(name => ({
+                title: name,
+                href: "milniky.html?zak=" + encodeURIComponent(UI.slug(name))
+            }))
+        });
+        return skupiny;
+    }
+
+    const menuOf = (item) => item.menu
+        || (item.tasks ? taskMenu() : null)
+        || (item.milniky ? milnikMenu() : null);
 
     /**
      * Roletka u NÁVODŮ: svislý seznam kategorií pod sebou. Najetím myší na
      * řádek se rozbalí jeho obsah, kliknutím se přejde na danou sekci.
      */
-    function navHtml(active) {
+    function navHtml(active, side) {
         const items = (window.KB_NAV || []).map((item, index) => {
+            // položky s `side` patří doprava vedle hledání, ostatní doprostřed
+            if (!!item.side !== !!side) return "";
             const isActive = active && item.href && item.href.split(/[?#]/)[0] === active;
             const cls = "navbtn" + (isActive ? " navbtn--active" : "");
             const menu = menuOf(item);
@@ -524,7 +571,7 @@
             "</div>";
         }).join("");
 
-        return '<nav class="appbar__nav">' + items + "</nav>";
+        return '<nav class="appbar__nav' + (side ? " appbar__nav--side" : "") + '">' + items + "</nav>";
     }
 
     /** Nástroje vpravo nad lištou – vidět je ikona, popis vyjede po najetí. */
@@ -583,7 +630,7 @@
 
                 '<div class="appbar__bar"><div class="appbar__barin">' +
                     navHtml(active) +
-                    searchHtml() +
+                    '<div class="appbar__right2">' + navHtml(active, true) + searchHtml() + "</div>" +
                 "</div></div>" +
 
                 // druhý řádek lišty – stránka si ho naplní sama (filtry kategorie)
@@ -598,16 +645,22 @@
         stickyOffset();
         mountToTop();
 
-        // v liště se nabízejí i jednotlivé zakázky – ty známe až z databáze
-        if (window.KB) window.KB.on("tasks", refreshNav);
+        // roletky se plní z databáze – po doručení dat se lišta překreslí
+        if (window.KB) {
+            window.KB.on("tasks", refreshNav);
+            window.KB.on("milniky", refreshNav);
+        }
     };
 
-    /** Překreslí jen navigaci (lišta se mění podle zakázek v databázi). */
+    /** Překreslí navigaci (obsah roletek se bere z databáze). */
     function refreshNav() {
-        const nav = document.querySelector(".appbar__nav");
-        if (!nav) return;
-        nav.outerHTML = navHtml(lastNav.active || location.pathname.split("/").pop() || "index.html");
-        bindNav();
+        const active = lastNav.active || location.pathname.split("/").pop() || "index.html";
+        const stred = document.querySelector(".appbar__nav:not(.appbar__nav--side)");
+        const strana = document.querySelector(".appbar__nav--side");
+
+        if (stred) stred.outerHTML = navHtml(active);
+        if (strana) strana.outerHTML = navHtml(active, true);
+        if (stred || strana) { bindNav(); UI.paintUser(); }
     }
 
     /** Tlačítko „nahoru" – ukáže se, až je stránka o dost delší než okno. */
