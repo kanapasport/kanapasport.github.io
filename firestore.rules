@@ -26,42 +26,52 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function prihlasen() {
-      return request.auth != null;
+    function zaznam() {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/public/data/users/$(request.auth.uid);
+    }
+
+    // Samotné přihlášení nestačí. Firebase nikomu nebrání si účet vytvořit
+    // (klíč je ve zdroji stránky), takže se musí ověřit, že je člověk
+    // opravdu v seznamu a že mu účet není pozastavený. Bez záznamu se
+    // nedostane ani ke čtení.
+    function clen() {
+      return request.auth != null
+        && exists(zaznam())
+        && get(zaznam()).data.active != false;
     }
 
     function role() {
-      return get(/databases/$(database)/documents/artifacts/firemni-kb-app/public/data/users/$(request.auth.uid)).data.role;
+      return get(zaznam()).data.role;
     }
 
     function spravce() {
-      return prihlasen() && role() in ['hlavni-spravce', 'spravce'];
+      return clen() && role() in ['hlavni-spravce', 'spravce'];
     }
 
     function hlavniSpravce() {
-      return prihlasen() && role() == 'hlavni-spravce';
+      return clen() && role() == 'hlavni-spravce';
     }
 
     match /artifacts/firemni-kb-app/public/data/{document=**} {
-      // číst smí každý přihlášený člověk z firmy
-      allow read: if prihlasen();
+      // číst smí každý, kdo je v seznamu lidí
+      allow read: if clen();
     }
 
     // --- návody: tvořit a upravovat může každý, mazat jen správce ---
     match /artifacts/firemni-kb-app/public/data/guides/{guideId} {
-      allow create, update: if prihlasen();
+      allow create, update: if clen();
       allow delete: if spravce();
 
       match /images/{imageId} {
-        allow create, update: if prihlasen();
+        allow create, update: if clen();
         allow delete: if spravce();
       }
     }
 
     // --- úkoly: zakládat a mazat správce a zaměstnanci, zapisovat všichni ---
     match /artifacts/firemni-kb-app/public/data/tasks/{taskId} {
-      allow update: if prihlasen();
-      allow create: if prihlasen() && role() != 'student';
+      allow update: if clen();
+      allow create: if clen() && role() != 'student';
       allow delete: if spravce();
     }
 
@@ -77,15 +87,15 @@ service cloud.firestore {
 
     // --- tabule: kdo je přihlášený, může kreslit ---
     match /artifacts/firemni-kb-app/public/data/boards/{boardId} {
-      allow write: if prihlasen();
+      allow write: if clen();
       match /{sub=**} {
-        allow write: if prihlasen();
+        allow write: if clen();
       }
     }
 
     // --- záznamy přihlášení: zapsat smí každý, mazat nikdo ---
     match /artifacts/firemni-kb-app/public/data/logs/{logId} {
-      allow create: if prihlasen();
+      allow create: if clen();
       allow update, delete: if false;
     }
 

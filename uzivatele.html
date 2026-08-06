@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Uživatelé – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=28">
+    <link rel="stylesheet" href="assets/css/app.css?v=29">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -31,7 +31,10 @@
                     Kdo má na web přístup a co smí. Změna role se lidem projeví sama, bez odhlášení.
                 </p>
             </div>
-            <button id="btnNew" class="btn btn--primary btn--sm">+ Přidat člověka</button>
+            <div class="row" style="gap:8px">
+                <button id="btnBackup" class="btn btn--ghost btn--sm">Stáhnout zálohu</button>
+                <button id="btnNew" class="btn btn--primary btn--sm">+ Přidat člověka</button>
+            </div>
         </div>
 
         <div class="card" style="padding:14px 16px;font-size:12.5px;line-height:1.6;color:var(--warn);background:#fff8ed;border-color:#f6dcb4">
@@ -114,10 +117,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=28"></script>
-<script src="assets/js/doc.js?v=28"></script>
-<script src="assets/js/ui.js?v=28"></script>
-<script type="module" src="assets/js/store.js?v=28"></script>
+<script src="assets/js/taxonomy.js?v=29"></script>
+<script src="assets/js/doc.js?v=29"></script>
+<script src="assets/js/ui.js?v=29"></script>
+<script type="module" src="assets/js/store.js?v=29"></script>
 
 <script>
 (function () {
@@ -322,6 +325,7 @@
 
             for (const item of hesla) {
                 await window.KB.saveUser({
+                    id: item.user.id,
                     email: item.user.email, first: item.user.first, last: item.user.last,
                     role: item.user.role, active: item.user.active !== false,
                     enc: await window.KBUI.vaultEncrypt(key, item.heslo)
@@ -353,6 +357,37 @@
         }
     }
 
+    /* ------------------------------------------------------------ záloha */
+
+    async function stahnoutZalohu() {
+        const button = $("btnBackup");
+        const puvodni = button.textContent;
+        button.disabled = true;
+
+        try {
+            const data = await window.KB.exportAll(text => { button.textContent = "Stahuji " + text + "…"; });
+            const blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
+
+            const dnes = new Date().toISOString().slice(0, 10);
+            const odkaz = document.createElement("a");
+            odkaz.href = URL.createObjectURL(blob);
+            odkaz.download = "pasport-kana-zaloha-" + dnes + ".json";
+            odkaz.click();
+            setTimeout(() => URL.revokeObjectURL(odkaz.href), 5000);
+
+            const mb = (blob.size / 1048576).toFixed(1);
+            window.KBUI.toast("Záloha stažena (" + mb + " MB) – " +
+                data.guides.length + " návodů, " + data.tasks.length + " úkolů, " +
+                data.boards.length + " tabulí.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zálohu se nepodařilo vytvořit.", "error");
+        } finally {
+            button.disabled = false;
+            button.textContent = puvodni;
+        }
+    }
+
     /* ------------------------------------------------------ změna hesla */
 
     async function changePassword(id) {
@@ -366,7 +401,8 @@
         if (heslo === null) return;
         if (!heslo.trim()) return window.KBUI.toast("Heslo nesmí být prázdné.", "warn");
 
-        const data = { email: user.email, first: user.first, last: user.last,
+        const data = { id: user.id,
+                       email: user.email, first: user.first, last: user.last,
                        role: user.role, active: user.active !== false };
         data.salt = window.KBUI.newSalt();
         data.hash = await window.KBUI.hashPassword(heslo, data.salt);
@@ -411,6 +447,7 @@
         if (!email || email.indexOf("@") === -1) return window.KBUI.toast("Doplň platný e-mail.", "warn");
 
         const data = {
+            id: editingId || "",
             email: email,
             first: $("fFirst").value.trim(),
             last:  $("fLast").value.trim(),
@@ -497,6 +534,7 @@
         window.KBUI.mountNav({ active: "uzivatele.html" });
 
         $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnBackup").addEventListener("click", stahnoutZalohu);
         $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
         $("btnFormCancel").addEventListener("click", () => { $("userOverlay").hidden = true; });
         $("btnFormSave").addEventListener("click", saveForm);

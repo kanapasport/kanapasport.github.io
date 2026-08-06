@@ -301,7 +301,10 @@ KB.saveUser = async (data) => {
     if (authReady) await authReady;
     requireDb();
 
-    const id = KB.userId(data.email);
+    /* Dokument se pojmenovává podle e-mailu, ale po přechodu na Firebase Auth
+       podle UID účtu (pravidla si ho umí přečíst jen tak). Proto se dá id
+       předat – u úpravy existujícího člověka se použije to jeho. */
+    const id = data.id || KB.userId(data.email);
     const payload = {
         email: String(data.email || "").trim().toLowerCase(),
         first: data.first || "",
@@ -326,6 +329,61 @@ KB.deleteUser = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(userDoc(id));
+};
+
+/* ------------------------------------------------------------- záloha ----
+   Firestore na free tarifu nezálohuje. Tohle vysype celý obsah databáze
+   do jednoho JSON souboru, včetně obrázků u návodů a obsahu tabulí.
+   Otisky ani šifrovaná hesla se do zálohy nedávají – záloha se ukládá
+   na disk a neměla by to být kopie přihlašovacích údajů. */
+
+KB.exportAll = async (onProgress) => {
+    if (authReady) await authReady;
+    requireDb();
+
+    const krok = (text) => { if (onProgress) onProgress(text); };
+
+    krok("návody");
+    const guides = [];
+    for (const guide of KB.guides) {
+        const images = await KB.loadImages(guide.id).catch(() => ({}));
+        guides.push(Object.assign({}, guide, { _images: images }));
+    }
+
+    krok("tabule");
+    const boards = [];
+    for (const board of KB.boards) {
+        const body = await getDoc(boardBody(board.id)).catch(() => null);
+        const imgs = await getDocs(boardImages(board.id)).catch(() => null);
+        const images = {};
+        if (imgs) imgs.forEach(d => { images[d.id] = d.data(); });
+        boards.push(Object.assign({}, board, {
+            _content: body && body.exists() ? body.data() : null,
+            _images: images
+        }));
+    }
+
+    krok("úkoly a číselníky");
+    // u lidí schválně bez salt/hash/enc – ať záloha není seznam hesel
+    const users = KB.users.map(u => ({
+        id: u.id, email: u.email, first: u.first, last: u.last,
+        role: u.role, active: u.active !== false
+    }));
+
+    return {
+        _info: "Záloha Pasport Kaňa – hesla ani jejich otisky záloha neobsahuje.",
+        _vytvoreno: new Date().toISOString(),
+        _kdo: window.KB_USER || "",
+        guides: guides,
+        tasks: KB.tasks,
+        users: users,
+        boards: boards,
+        meta: {
+            zakazky: KB.zakazky,
+            zakazkyClosed: KB.zakazkyClosed,
+            skupiny: KB.skupiny
+        }
+    };
 };
 
 /**
