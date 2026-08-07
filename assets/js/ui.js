@@ -729,9 +729,12 @@
 
     /** Prvky, které vzniknou jen jednou při vykreslení hlavičky. */
     function bindHeader() {
-        // ikony nástrojů s akcí (zatím jen pokyn pro AI)
+        // ikony nástrojů s akcí – oba pokyny pro AI
         document.querySelectorAll(".toolrail [data-action='ai-prompt']").forEach(button => {
             button.addEventListener("click", () => UI.copyAiPrompt());
+        });
+        document.querySelectorAll(".toolrail [data-action='script-prompt']").forEach(button => {
+            button.addEventListener("click", () => UI.copyAiPrompt(null, null, "skript"));
         });
     }
 
@@ -862,35 +865,113 @@
 
     /* ------------------------------------------------------- pokyn pro AI */
 
+    /** Seznam povolených `cat` / `subcat` – ať si je AI nevymýšlí. */
+    function catNabidka() {
+        return (window.KB_CATEGORIES || []).map(category => {
+            const listy = [];
+            const walk = (nodes, cesta) => (nodes || []).forEach(node => {
+                const dal = cesta.concat([node.title]);
+                if (node.children && node.children.length) walk(node.children, dal);
+                else listy.push('"' + node.id + '" = ' + dal.join(" / "));
+            });
+            walk(category.children, []);
+            return "  cat \"" + category.id + "\" (" + category.title + "), subcat: " +
+                   (listy.length ? listy.join(", ") : "nech prázdné");
+        }).join("\n");
+    }
+
     UI.aiPrompt = (catId, subId) => {
         const category = window.KB_findCategory ? window.KB_findCategory(catId) : null;
         const hit = window.KB_findNode ? window.KB_findNode(catId, subId) : null;
-        const catLine = category
-            ? '"cat": "' + category.id + '"' + (hit ? ', "subcat": "' + hit.node.id + '"' : "")
-            : '"cat": "" (nech prázdné, doplním ručně)';
+
+        // Zařazení: buď je vybrané z lišty, nebo AI dostane celou nabídku.
+        const zarazeni = category
+            ? ['  "cat": "' + category.id + '", "subcat": "' + (hit ? hit.node.id + '"' : '" – vyber nejbližší téma z nabídky:'),
+               hit ? "" : catNabidka()].filter(Boolean)
+            : ['  "cat" a "subcat" – vyber přesně jednu dvojici z tohoto seznamu:', catNabidka()];
 
         return [
-            "Z naší konverzace vytvoř technický návod pro firemní databázi Pasport Kaňa.",
+            "Z naší konverzace vytvoř technický návod pro firemní web Pasport Kaňa.",
             "Výsledek vrať STRIKTNĚ jako jeden JSON objekt (žádný jiný text, žádné ```) s klíči:",
-            '  "title"    – krátký výstižný název',
-            '  "desc"     – jedna věta, co návod řeší',
-            '  "category" – lidský popis kategorie',
-            "  " + catLine,
-            '  "version"  – např. "v1.0"',
-            '  "steps"    – pole kroků, každý krok má:',
+            '  "title"   – krátký výstižný název',
+            '  "desc"    – jedna věta, co návod řeší',
+            '  "version" – např. "v1.0"'
+        ].concat(zarazeni).concat([
+            '  "steps"   – pole kroků, každý krok má:',
             '        "title"   – název kroku',
             '        "content" – popis; nové řádky jako \\n, odrážky začni "- ",',
             "                    tučně **takto**, název tlačítka nebo cesty `takto`,",
             "                    na obrázek odkazuj zápisem [obr 1], [obr 2] …",
             '        "code"    – volitelný kód, cesta nebo příkaz (jinak "")',
             "Piš česky, stručně, v rozkazovacím způsobu (Otevři…, Klikni…, Nastav…).",
+            'Klíč "author" nevyplňuj – doplní se sám podle přihlášeného člověka.',
             "Obrázky do JSONu nevkládej – ty doplním ve webovém editoru na místa [obr N]."
-        ].join("\n");
+        ]).join("\n");
     };
 
-    UI.copyAiPrompt = async (catId, subId) => {
+    /* ----------------------------------------------- pokyn pro ArcPy skript ---
+       Popisuje, jak u nás skripty vypadají a co od nich čekáme. Záměrně
+       neobsahuje postup pro člověka – ten se vkládá do chatu s AI tak, jak je. */
+
+    UI.scriptPrompt = () => [
+        "Píšeš skript pro naši firmu, která dělá pasportizaci budov v ArcGIS Pro.",
+        "Než začneš psát, drž se těchhle pravidel – takhle u nás skripty vypadají.",
+        "",
+        "PROSTŘEDÍ",
+        "- ArcGIS Pro, Python 3 z prostředí arcgispro-py3. Používej jen `arcpy`",
+        "  a standardní knihovnu, nic se nedoinstalovává.",
+        "- Skript se zapojuje jako Script Tool do našeho toolboxu, nespouští se v Notebooku.",
+        "",
+        "NAŠE DATA",
+        "- Každé patro budovy je vlastní File Geodatabase (např. P01 = přízemí,",
+        "  N01 = 1. patro, N02 = 2. patro).",
+        "- Feature classy mají tvar Q<číslo>_<oblast>_<název>: Q3 = konstrukce,",
+        "  Q4 = technologie, Q5 = zařízení, Q6 = facility management (místnosti).",
+        "- Prvky se propojují přes polohový kód místnosti.",
+        "- Technologie (chlazení, vzduchotechnika, voda, požární …) mají vlastní složky.",
+        "",
+        "JAK MÁ SKRIPT VYPADAT",
+        "- Jeden samostatný .py soubor, nic víc.",
+        "- Nahoře `import arcpy` a `arcpy.env.overwriteOutput = True`.",
+        "- Vstupy ber výhradně přes `arcpy.GetParameterAsText(0)`, `(1)`, … hned na",
+        "  začátku a pod sebe. Žádné natvrdo zapsané cesty k datům.",
+        "- Názvy polí dej jako konstanty pod parametry (velkými písmeny), ať se dá",
+        "  jediné místo přepsat, když se pole v geodatabázi jmenuje jinak.",
+        "- Zaškrtávátko z toolboxu se čte jako `arcpy.GetParameterAsText(n).lower() == 'true'`.",
+        "- Mezivýsledky dělej ve workspace `memory` s časovým razítkem v názvu",
+        "  (`f\"memory\\\\neco_{int(time.time())}\"`), pak je `Append`ni do cílové vrstvy.",
+        "  Do mapy nesmí přibýt žádná odpadní vrstva.",
+        "- Celý běh obal do `try` / `except` / `finally`; ve `finally` ukliď dočasná data.",
+        "- Komentáře česky, jednoduché a k věci. Kód rozděl očíslovanými bloky.",
+        "- Ošetři prázdný vstup, chybějící pole a to, že v mapě může být aktivní výběr.",
+        "",
+        "JAK MÁ SKRIPT VYPISOVAT",
+        "- Všechno přes `arcpy.AddMessage()`, varování `arcpy.AddWarning()`,",
+        "  chyby `arcpy.AddError()`. Žádný `print()`.",
+        "- Hlášky česky a pro člověka, ne pro programátora.",
+        "- Na začátku napiš, co se bude dít; kroky číslovaně ve tvaru „1/4 …“, „2/4 …“.",
+        "- Oddělovač mezi fázemi: `arcpy.AddMessage(\"-\" * 40)`.",
+        "- Na konci shrnutí s počty: kolik prvků se zpracovalo, kolik přeskočilo, kolik chyb.",
+        "- U chyby napiš i tip, co s tím (uložit editaci, zrušit výběr, zkontrolovat pole).",
+        "",
+        "CO ODEVZDAT",
+        "1. Celý skript v jednom bloku kódu.",
+        "2. „Jak skript funguje pod kapotou“ – číslovaný přehled hlavních kroků logiky.",
+        "3. „Nastavení nástroje v Toolboxu“ – tabulka se sloupci Label (popisek v okně),",
+        "   Data Type (typ dat) a Direction/Type (Input/Required, Output/Required),",
+        "   jeden řádek na každý `GetParameterAsText` v pořadí, jak jdou ve skriptu.",
+        "4. „Malý tip před spuštěním“ – krátké odrážky s tím, na co si dát pozor,",
+        "   a výpis názvů polí, které skript očekává.",
+        "",
+        "Když ti k zadání něco chybí (název vrstvy, pole, chování v hraničním případě),",
+        "nejdřív se zeptej a teprve pak piš – nevymýšlej si názvy polí."
+    ].join("\n");
+
+    /** Zkopíruje pokyn do schránky. `druh`: "navod" (výchozí) nebo "skript". */
+    UI.copyAiPrompt = async (catId, subId, druh) => {
+        const text = druh === "skript" ? UI.scriptPrompt() : UI.aiPrompt(catId, subId);
         try {
-            await navigator.clipboard.writeText(UI.aiPrompt(catId, subId));
+            await navigator.clipboard.writeText(text);
             UI.toast("Pokyn zkopírován – vlož ho do chatu s AI.");
         } catch (err) {
             UI.toast("Kopírování se nezdařilo, zkuste to ručně.", "error");

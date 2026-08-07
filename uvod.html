@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Pasport Kaňa – úvod do firemního webu</title>
+<!-- ==========================================================================
+     Jednorázový tištěný leták, který se přikládá k rozeslaným heslům.
+     Není součástí navigace webu – otevírá se přímo a tiskne do PDF:
+
+         chrome --headless --disable-gpu --no-pdf-header-footer \
+                --print-to-pdf=Pasport_Kana_uvod.pdf uvod.html
+
+     Styly jsou schválně vlastní a nesahají na app.css: ten je stavěný pro
+     obrazovku, tady jde o papír (A4, černé logo, bez interaktivních prvků).
+     ========================================================================== -->
+<style>
+@font-face { font-family:"Lato"; font-weight:100 500; src:url("assets/fonts/lato-regular.woff") format("woff"); }
+@font-face { font-family:"Lato"; font-weight:600 800; src:url("assets/fonts/lato-semibold.woff") format("woff"); }
+@font-face { font-family:"Lato"; font-weight:900;     src:url("assets/fonts/lato-black.woff") format("woff"); }
+
+:root {
+    --accent:    #c8102e;
+    --text:      #16191d;
+    --text-soft: #3f4650;
+    --muted:     #6b7480;
+    --line:      #dfe3e8;
+    --line-soft: #eaedf1;
+    --bg-soft:   #f7f8fa;
+}
+
+@page { size: A4; margin: 16mm 15mm 14mm; }
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: "Lato", Arial, sans-serif;
+    font-size: 10.4pt;
+    line-height: 1.55;
+    color: var(--text-soft);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+h1, h2, h3 { color: var(--text); margin: 0; }
+
+/* ------------------------------------------------------------- hlavička */
+
+.hlava {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 11px;
+    border-bottom: 3px solid var(--accent);
+}
+.hlava img { height: 21mm; }
+.hlava__text { text-align: right; padding-bottom: 3px; }
+.hlava__text h1 { font-size: 19pt; font-weight: 900; letter-spacing: -.01em; }
+.hlava__text p  { margin: 3px 0 0; font-size: 9.6pt; color: var(--muted); }
+
+.perex {
+    margin: 13px 0 0;
+    font-size: 10.8pt;
+    line-height: 1.58;
+    color: var(--text);
+}
+.perex strong { font-weight: 900; }
+
+.adresa {
+    margin-top: 13px;
+    padding: 10px 14px;
+    background: var(--bg-soft);
+    border-left: 3px solid var(--accent);
+    font-size: 10.4pt;
+}
+.adresa b { font-weight: 900; color: var(--accent); font-size: 12pt; letter-spacing: .01em; }
+
+/* --------------------------------------------------------------- sekce */
+
+h2 {
+    margin: 17px 0 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12.4pt;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+h2 .znak {
+    display: inline-block;
+    min-width: 20px;
+    margin-right: 8px;
+    color: var(--accent);
+}
+
+h3 {
+    margin: 13px 0 4px;
+    font-size: 10.6pt;
+    font-weight: 900;
+}
+
+p { margin: 0 0 7px; }
+
+ul { margin: 0 0 7px; padding-left: 17px; }
+li { margin-bottom: 3px; }
+
+strong { font-weight: 800; color: var(--text); }
+.cerv  { color: var(--accent); font-weight: 900; }
+
+/* ------------------------------------------------------------- tabulka */
+
+table { width: 100%; border-collapse: collapse; margin: 4px 0 9px; font-size: 9.9pt; }
+th, td { padding: 6px 9px; border: 1px solid var(--line); vertical-align: top; text-align: left; }
+th {
+    background: var(--bg-soft);
+    font-weight: 900;
+    font-size: 8.9pt;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+td:first-child { width: 27mm; font-weight: 900; color: var(--accent); white-space: nowrap; }
+
+/* --------------------------------------------------------------- rámeček */
+
+.ram {
+    margin: 10px 0;
+    padding: 10px 14px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+}
+.ram p:last-child { margin-bottom: 0; }
+.ram h3 { margin-top: 0; }
+
+/* ---------------------------------------------------- ukázka rozpisu úkolu */
+
+.ukazka {
+    margin: 6px 0 9px;
+    border: 1px solid var(--line);
+    font-size: 9.6pt;
+}
+.ukazka__hlava {
+    padding: 6px 11px;
+    background: var(--bg-soft);
+    border-bottom: 1px solid var(--line);
+    font-weight: 900;
+    color: var(--text);
+}
+.radek {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 4px 11px;
+    border-bottom: 1px solid var(--line-soft);
+}
+.radek:last-child { border-bottom: none; }
+.radek span:first-child { flex: 1; }
+.pct {
+    min-width: 42px;
+    padding: 1px 0;
+    text-align: center;
+    font-weight: 900;
+    font-size: 9pt;
+    border-radius: 3px;
+}
+.p0   { background: #eef0f3; color: #6b7480; }
+.p50  { background: #fff3c9; color: #7a5c00; }
+.p75  { background: #ffe1c2; color: #8a4a00; }
+.p100 { background: #b9e8cd; color: #14622f; }
+
+/* --------------------------------------------------------------- patička */
+
+.paticka {
+    margin-top: 22px;
+    padding-top: 9px;
+    border-top: 1px solid var(--line);
+    font-size: 8.9pt;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+/* Zlomy stran jsou schválně ručně: každá strana má uzavřené téma a vlastní
+   patičku, ať se leták nerozpadne někde uprostřed odstavce. */
+.strana2, .strana3 { break-before: page; }
+h2, h3 { break-after: avoid; }
+table, .ram, .ukazka { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<div class="hlava">
+    <img src="Pasport_Kana_black.png" alt="Pasport Kaňa">
+    <div class="hlava__text">
+        <h1>Náš firemní web</h1>
+        <p>Návody, úkolovník a termíny na jednom místě</p>
+    </div>
+</div>
+
+<p class="perex">
+    Spustili jsme firemní web, na kterém najdeš <strong>návody k naší práci</strong>,
+    <strong>úkolovník se zakázkami</strong>, <strong>termíny odevzdání</strong> a
+    <strong>tabuli na poznámky</strong>. Cílem je, abychom měli postupy na jednom
+    místě a všichni viděli, jak práce postupuje – místo obvolávání a dohledávání
+    v e-mailech.
+</p>
+
+<div class="adresa">
+    Web najdeš na adrese <b>kanapasport.github.io</b><br>
+    Přihlašuješ se pod svým jménem heslem, které máš v e-mailu s tímto letákem.
+    Bez přihlášení web nic neukáže.
+</div>
+
+<h2><span class="znak">1</span>Jak se web ovládá</h2>
+
+<p>
+    Nahoře je <strong>lišta s pěti prokliky</strong>. Klikneš na název a jsi na
+    stránce; když na název jen najedeš myší, rozbalí se ti <strong>roletka</strong> –
+    rychlá zkratka rovnou dovnitř, bez zbytečného hledání.
+</p>
+
+<table>
+    <tr><th>Proklik</th><th>K čemu slouží</th></tr>
+    <tr><td>DOMŮ</td><td>Rozcestník. Dlaždice všech oblastí návodů a pod nimi rozdělané zakázky.</td></tr>
+    <tr><td>NÁVODY</td><td>Naše pracovní postupy. V roletce jsou rovnou jednotlivé oblasti a témata.</td></tr>
+    <tr><td>ÚKOLOVNÍK</td><td>Zakázky a postup prací. V roletce máš seznam zakázek.</td></tr>
+    <tr><td>MILNÍKY</td><td>Termíny odevzdání. V roletce se ti ukážou rovnou ty nejbližší.</td></tr>
+    <tr><td>TABULE</td><td>Myšlenkové mapy a poznámky.</td></tr>
+</table>
+
+<p>
+    <strong>Úplně nahoře nad lištou</strong> je řádek malých ikon – to jsou
+    <strong>zkrácené prokliky</strong> na věci, které používáme často: nový návod,
+    pokyn pro AI na sepsání návodu, pokyn pro AI na napsání skriptu do ArcGISu,
+    import hotového návodu od AI, všechny návody a milníky. Vidět je jen ikona;
+    <strong>když na ni najedeš myší, vyjede popis</strong>, co dělá. Některé ikony
+    uvidíš podle svých práv – ne každý má na všechno přístup.
+</p>
+
+<p>
+    Vpravo v liště je <strong>vyhledávání</strong>. Napiš, co hledáš, a web ti
+    profiltruje návody. Na mobilu a tabletu se lišta zalomí do dvou řádků, jinak
+    funguje stejně – jen roletku otevřeš prvním ťuknutím a druhým se přesuneš dál.
+</p>
+
+<h2><span class="znak">2</span>Návody</h2>
+
+<p>
+    Sbírka našich postupů – jak pracujeme v ArcGIS Pro, jak připravujeme podklady
+    z AutoCADu, jak se skenuje, jak se dělají výkresy a zprávy. Návody jsou psané
+    krok za krokem, s obrázky, a dají se číst přesně v té podobě, v jaké by se
+    vytiskly.
+</p>
+
+<div class="ram">
+    <p>
+        <strong>Jsme teprve na začátku.</strong> Návodů je zatím málo a postupně
+        budou přibývat, až to celé pořádně nabobtná. Když ti nějaký chybí nebo
+        v něm najdeš nepřesnost, řekni – doplníme ho. Nový návod si může založit
+        každý.
+    </p>
+</div>
+
+<div class="paticka">
+    <span>Pasport Kaňa &middot; úvod do firemního webu</span>
+    <span>kanapasport.github.io</span>
+</div>
+
+<!-- ==================================================== strana 2 ==== -->
+<div class="strana2">
+
+<h2><span class="znak">3</span>Úkolovník</h2>
+
+<p>
+    Úkolovník má <strong>zpřehlednit práci</strong> – ať je vidět, na čem se dělá,
+    kdo to má na starosti a jestli postupujeme dost rychle na to, abychom stihli
+    termín. Není to kontrola kvůli kontrole, je to náhrada za neustálé dotazování,
+    jak jsme na tom.
+</p>
+
+<h3>Kdo co zakládá</h3>
+<ul>
+    <li><strong>Zakázky zakládají správci.</strong> Ti také určují, jaké skupiny prací zakázka má – ARCGIS, SKENY, FOCENÍ, TABULKY.</li>
+    <li><strong>Úkoly si zakládají zaměstnanci sami</strong> uvnitř zakázky. Nemusíš čekat, až ti někdo úkol nachystá.</li>
+    <li><strong>Studenti postup zapisují</strong>, ale nové úkoly nezakládají.</li>
+</ul>
+
+<h3>Jak to má fungovat v praxi</h3>
+<p>
+    <strong>Jednou za den nebo dva otevřeš stránku, zaklikáš svůj postup a máš hotovo.</strong>
+    Procenta se nastavují kliknutím nebo posuvníkem v krocích
+    <strong>0 – 25 – 50 – 75 – 95 – 100 %</strong> a rovnou se obarví, takže je na první
+    pohled vidět, co stojí a co je dojeté. Je to práce na minutu – a přesně tak je
+    to myšlené.
+</p>
+
+<h3>Přiřazení ke jménu</h3>
+<p>
+    U úkolu se dá vybrat <strong>jeden nebo víc lidí</strong>. Když potřebuješ třeba
+    roztřídit fotografie a bude to dělat student, přiřadíš k úkolu <strong>sebe
+    i jeho</strong> – on pak zapisuje svůj postup a ty vidíš, jak mu to jde.
+    Přepínačem <span class="cerv">Moje úkoly</span> si kdykoliv necháš zobrazit jen to, co je na tobě.
+</p>
+
+<h3>Rozepiš si úkol na řádky</h3>
+<p>
+    Tohle je nejužitečnější věc na celém úkolovníku. Když víš, že na jednom patře
+    děláš víc věcí, <strong>nachystej si v úkolu řádek pro každou z nich</strong> –
+    dveře, okna, stěny, místnosti, schodiště. Pak jen doplníš procenta u té
+    položky, kterou máš hotovou, a je jasně vidět, kde přesně jsi.
+</p>
+
+<div class="ukazka">
+    <div class="ukazka__hlava">BioPharma &middot; ARCGIS &middot; 2. NP – zákres konstrukcí</div>
+    <div class="radek"><span>Stěny</span><span class="pct p100">100 %</span></div>
+    <div class="radek"><span>Dveře</span><span class="pct p100">100 %</span></div>
+    <div class="radek"><span>Okna</span><span class="pct p75">75 %</span></div>
+    <div class="radek"><span>Místnosti</span><span class="pct p50">50 %</span></div>
+    <div class="radek"><span>Schodiště</span><span class="pct p0">0 %</span></div>
+</div>
+
+<p>
+    <strong>Čím větší přehlednost, tím lépe</strong> – ale nezapomeň, že to má
+    zůstat jednoduché. Nedělej z toho slohovku. Pár řádků, které něco říkají, je
+    lepší než dvacet, které se nikomu nechce vyplňovat.
+</p>
+
+<div class="paticka">
+    <span>Pasport Kaňa &middot; úvod do firemního webu</span>
+    <span>kanapasport.github.io</span>
+</div>
+
+</div>
+
+<!-- ==================================================== strana 3 ==== -->
+<div class="strana3">
+
+<h2><span class="znak">4</span>Milníky</h2>
+
+<p>
+    Přehled <strong>termínů odevzdání</strong> rozdělený podle zakázek. Nejbližší
+    termíny jsou nahoře a uvidíš je i bez otevírání stránky – stačí najet na
+    MILNÍKY v liště. Hotové milníky se dají odškrtnout a zezelenají.
+    Seznam se bude <strong>postupně doplňovat</strong>, jak budou termíny přibývat.
+</p>
+
+<h2><span class="znak">5</span>Tabule</h2>
+
+<p>
+    Nekonečné plátno na <strong>myšlenkové mapy a poznámky</strong> – hodí se
+    například na rozmyšlení skriptu, na rozkreslení postupu nebo na zapsání
+    nápadů, které jinak zapadnou. Dají se sem <strong>vkládat obrázky, tvořit
+    tabulky</strong> a kreslit.
+</p>
+
+<div class="ram">
+    <h3>Prosba – zkuste to a ozvěte se</h3>
+    <p>
+        Miro a podobné nástroje jsou drahé, tak jsem zkusil vyrobit vlastní
+        obdobu. <strong>Zatím je to beta verze</strong> a určitě na něco narazíte.
+        Budu rád, když si to <strong>vyzkoušíte a dáte mi zpětnou vazbu</strong> –
+        co chybí, co zlobí, co by se hodilo jinak.
+    </p>
+</div>
+
+<h2><span class="znak">6</span>Přihlášení</h2>
+
+<ul>
+    <li>Na web se vždycky přihlašuješ <strong>pod svým jménem</strong> – ať je poznat, kdo co zapsal.</li>
+    <li>Heslo máš <strong>vygenerované</strong> a najdeš ho v e-mailu, ke kterému je přiložený tento leták.</li>
+    <li>Heslo nikam nepřeposílej. Když ti nefunguje nebo ho chceš změnit, <strong>přijď za mnou</strong> a nastavím ti nové.</li>
+    <li>Kdyby cokoliv nešlo nebo ti něco nedávalo smysl, taky se ozvi – radši jednou zbytečně než dva dny bádat.</li>
+</ul>
+
+<div class="paticka">
+    <span>Pasport Kaňa &middot; úvod do firemního webu</span>
+    <span>kanapasport.github.io</span>
+</div>
+
+</div>
+</body>
+</html>

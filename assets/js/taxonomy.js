@@ -184,7 +184,8 @@ window.KB_NAV = [
 
 window.KB_TOOLS = [
     { title: 'Nový návod',     icon: 'plus',     href: 'editor.html' },
-    { title: 'Pokyn pro AI',   icon: 'sparkles', action: 'ai-prompt' },
+    { title: 'Pokyn pro AI – návod',  icon: 'sparkles', action: 'ai-prompt' },
+    { title: 'Pokyn pro AI – skript', icon: 'code',     action: 'script-prompt' },
     { title: 'Import od AI',   icon: 'download', href: 'editor.html#import' },
     { title: 'Všechny návody', icon: 'library',  href: 'navody.html' },
     { title: 'Milníky',        icon: 'flag',     href: 'milniky.html' },
