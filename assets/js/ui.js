@@ -547,9 +547,15 @@
                 "</div>"
             ).join("");
 
-            return '<div class="navitem" data-menu="' + index + '">' +
-                '<button type="button" class="' + cls + '" data-menu-toggle="' + index + '">' +
-                    item.title + CARET + "</button>" +
+            // Položka s roletkou i vlastní stránkou je odkaz: najetím se roletka
+            // rozbalí, kliknutím na název se přejde rovnou na tu stránku.
+            const head = item.href
+                ? '<a class="' + cls + '" href="' + item.href + '" data-menu-toggle="' + index + '">' +
+                      item.title + CARET + "</a>"
+                : '<button type="button" class="' + cls + '" data-menu-toggle="' + index + '">' +
+                      item.title + CARET + "</button>";
+
+            return '<div class="navitem" data-menu="' + index + '">' + head +
                 '<div class="dropdown">' + groups + "</div>" +
             "</div>";
         }).join("");
@@ -686,12 +692,20 @@
 
     /** Naváže prvky, které se při překreslení navigace vytvářejí znovu. */
     function bindNav() {
-        // roletka: na myši se otevírá najetím (CSS), klikem kvůli dotyku
+        // Roletka se na myši otevírá najetím (CSS). Klik řešíme kvůli dotyku:
+        // na úzkém okně první ťuknutí roletku rozbalí, druhé teprve přejde na
+        // stránku. S myší odkaz rovnou proklikne, roletka je vidět při najetí.
         document.querySelectorAll("[data-menu-toggle]").forEach(button => {
             button.addEventListener("click", (event) => {
-                event.stopPropagation();
                 const item = button.closest(".navitem");
                 const wasOpen = item.classList.contains("is-open");
+                const jeOdkaz = button.tagName === "A";
+
+                if (jeOdkaz && !isCompact()) return;   // myš: nech proklik na stránku
+                if (jeOdkaz && wasOpen) return;        // dotyk: podruhé už na stránku
+
+                event.preventDefault();
+                event.stopPropagation();
                 document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
                 if (!wasOpen) item.classList.add("is-open");
             });
