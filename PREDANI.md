@@ -18,38 +18,34 @@ Technický popis webu je v [README.md](README.md) – tenhle soubor je navíc:
 Všechno je **zacommitované a nahrané na GitHub**, v pracovní kopii nic nezůstalo.
 Doma stačí `git pull` (nebo čerstvý `git clone`) a jede se dál.
 
-### 1. Nasazení Pages vázne – zkontrolovat jako první
+### 1. Nasazení Pages – workflow padá, buildí se přes API
 
-Web pořád servíruje **starou verzi `?v=37`**, i když v repu je už `?v=38`.
-Není to chyba v kódu: krok `build` projde za 22 s, padá až `deploy`.
-Na GitHubu se zasekla fronta nasazení – pokusy končily buď
-`Timeout reached, aborting!` ve stavu `deployment_queued`, nebo
-`Deployment cancelled.`
+**Workflow *pages build and deployment* v Actions nefunguje.** Krok `build`
+projde za 22 s, ale `deploy` skončí na `Timeout reached, aborting!` ve stavu
+`deployment_queued` (nebo `Deployment cancelled.`). Není to chyba v kódu ani
+v nastavení – Actions jsou zapnuté a plně povolené, prostředí `github-pages`
+má povolenou větev `main` bez schvalovatele, zdroj Pages je `main` / kořen,
+vlastní doména prázdná, GitHub Status bez výpadku.
 
-Co už jsem zkusil:
-
-1. zrušil zaseknuté nasazení přes API (`pages/deployments/{sha}/cancel`) – fronta se uvolnila,
-2. poslal prázdný commit `4313bb9`, aby se spustil čerstvý build – ten **na rozdíl od
-   předchozích nezůstal viset ve frontě a rozjel se**. Jak dopadl, jsem už nestihl ověřit.
-
-Doma:
+**Řešení:** repozitář má režim Pages `legacy`, takže se dá build vyžádat
+rovnou přes API, mimo tu zaseknutou frontu. Po každém pushi tedy spusť:
 
 ```bash
-gh run list -L 3
+gh api --method POST repos/kanapasport/kanapasport.github.io/pages/builds
+```
+
+Proběhne za necelou minutu. Ověření, co je opravdu venku:
+
+```bash
 curl -s https://kanapasport.github.io/index.html | grep -o "app.css?v=[0-9]*"
 ```
 
-Až se objeví `app.css?v=38`, je hotovo – lišta bude zarovnaná **zleva** a roletka
-milníků ukáže rovnou nejbližší termíny bez zanořené tabulky.
+Kdyby ani to nešlo, poslední páka je v repu **Settings → Pages**: přepnout
+zdroj na jinou větev, uložit, přepnout zpět na `main`, uložit.
 
-Kdyby to pořád padalo, nejsilnější páka je v repu **Settings → Pages**: přepnout
-zdroj na jinou větev, uložit, přepnout zpět na `main`, uložit. Tím se stav
-nasazení resetuje úplně.
-
-**Nastavení jsem prošel a nikde není chyba** – Actions zapnuté a plně povolené,
-prostředí `github-pages` má povolenou větev `main` bez schvalovatele, zdroj Pages
-je `main` / kořen, vlastní doména prázdná, HTTPS vynucené, GitHub Status bez
-výpadku. Není tedy co přenastavovat.
+**Pozor na vlastní pushe.** Pages mají skupinu souběžnosti – nový push zabije
+rozdělaný běh. Když čekáš na nasazení, nepushuj mezitím dál, jinak si ho sám
+shodíš a vypadá to jako porucha GitHubu.
 
 ### 2. E-maily s přístupy – rozpracované
 
@@ -66,6 +62,21 @@ Postup doma:
 
 Odeslat je za tebe nedokážu: do tvé schránky se nepřihlašuji a heslo k poště
 znát nemám. Text připravím, odeslání zůstává na tobě.
+
+### 2b. Úvodní leták k webu
+
+`uvod.html` je jednorázová tištěná stránka, která se přikládá k rozesílaným
+heslům – popisuje prokliky v liště, ikony nad ní, úkolovník, milníky, tabuli
+a přihlašování. Není v navigaci webu, otevírá se přímo. Hotové PDF leží
+v repu jako `Pasport_Kana_uvod.pdf`; po úpravě `uvod.html` se přegeneruje:
+
+```bash
+chrome --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Pasport_Kana_uvod.pdf uvod.html
+```
+
+Zlomy stran jsou ruční (`.strana2`, `.strana3`), aby každá strana měla
+uzavřené téma a vlastní patičku. Na A4 se vejde 267 mm obsahu na stranu –
+po přidání textu to překontroluj, jinak se leták rozjede na čtyři strany.
 
 ### 3. Ostatní drobnosti, které čekají
 
