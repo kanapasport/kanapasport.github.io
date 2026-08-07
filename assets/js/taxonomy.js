@@ -189,7 +189,9 @@ window.KB_TOOLS = [
     { title: 'Import od AI',   icon: 'download', href: 'editor.html#import' },
     { title: 'Všechny návody', icon: 'library',  href: 'navody.html' },
     { title: 'Milníky',        icon: 'flag',     href: 'milniky.html' },
-    // jen pro hlavního správce – `need` řídí, komu se ikona vůbec ukáže
+    // `need` řídí, komu se ikona vůbec ukáže
+    { title: 'Historie úprav', icon: 'tasks', href: 'historie.html', need: 'historie.view' },
+    // jen pro hlavního správce
     { title: 'Uživatelé',   icon: 'users',   href: 'uzivatele.html', need: 'users.manage' },
     { title: 'Barvy webu',  icon: 'palette', href: 'barvy.html',     need: 'web.design' }
 ];

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Historie úprav – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=42">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Jeden řádek zápisu – stejný vzhled jako historie u úkolu, ale
+           navíc se ukazuje zakázka a úkol, ze kterého záznam je. */
+        .hrow {
+            display: grid;
+            grid-template-columns: 92px 1fr 1fr 110px 70px;
+            gap: 10px;
+            align-items: center;
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--line-soft);
+            font-size: 13px;
+        }
+        .hrow:last-child { border-bottom: none; }
+        .hrow__time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+        .hrow__who { font-weight: 800; }
+        .hrow__where { color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hrow__where b { color: var(--text); font-weight: 800; }
+        .hrow__what { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hrow__pct { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .hrow__pct .from { color: var(--dim); }
+        .hrow__pct .to { font-weight: 900; }
+        .hrow__done { text-align: right; }
+        .hday {
+            padding: 9px 14px 5px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: var(--bg-soft);
+        }
+        @media (max-width: 720px) {
+            .hrow { grid-template-columns: 1fr auto; grid-template-areas: "who pct" "where where" "time what"; row-gap: 3px; }
+            .hrow__time { grid-area: time; }
+            .hrow__who  { grid-area: who; }
+            .hrow__where{ grid-area: where; white-space: normal; }
+            .hrow__what { grid-area: what; text-align: right; }
+            .hrow__pct  { grid-area: pct; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:20px">
+
+    <!-- sem se nedostane nikdo bez práva historie.view -->
+    <div id="denied" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        Historii úprav vidí jen <b>správci</b>.
+        <div style="margin-top:14px"><button id="btnLogin" class="btn btn--primary btn--sm">Přihlásit se</button></div>
+    </div>
+
+    <div id="app" hidden class="col" style="gap:18px">
+
+        <div class="spread">
+            <div>
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Historie úprav</h2>
+                <p class="small muted" style="margin-top:3px">
+                    Všechny zápisy postupu ze všech zakázek na jednom místě – ať se nemusí proklikávat úkol po úkolu.
+                </p>
+            </div>
+            <div id="listCount" class="tiny" style="font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)"></div>
+        </div>
+
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+            <select id="filterZakazka" class="field" style="max-width:260px"></select>
+            <select id="filterKdo" class="field" style="max-width:220px"></select>
+            <button id="btnReset" type="button" class="btn btn--ghost btn--sm">Zrušit filtr</button>
+        </div>
+
+        <div id="list" class="card" style="padding:0;overflow:hidden"></div>
+        <div id="empty" hidden class="card center small muted" style="padding:34px">Zatím žádné zápisy.</div>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=42"></script>
+<script src="assets/js/ui.js?v=42"></script>
+<script type="module" src="assets/js/store.js?v=42"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    let filterZakazka = "";
+    let filterKdo = "";
+
+    /** Posbírá záznamy ze všech úkolů do jednoho plochého seznamu. */
+    function allEntries() {
+        const rows = [];
+        (window.KB.tasks || []).forEach(task => {
+            (task.log || []).forEach(entry => {
+                rows.push({
+                    ms: entry.ms || 0,
+                    by: entry.by || "",
+                    sub: entry.sub || "",
+                    from: (typeof entry.from === "number") ? entry.from : null,
+                    percent: entry.percent || 0,
+                    zakazka: task.zakazka || "Bez zakázky",
+                    skupina: task.skupina || "",
+                    title: task.title || "Bez názvu"
+                });
+            });
+            // i potvrzení "úkol je hotov" je zápis do historie, jen bez procent
+            if (task.done && task.done.ms) {
+                rows.push({
+                    ms: task.done.ms, by: task.done.by || "", sub: "",
+                    hotovo: true,
+                    zakazka: task.zakazka || "Bez zakázky", skupina: task.skupina || "", title: task.title || "Bez názvu"
+                });
+            }
+        });
+        return rows.sort((a, b) => b.ms - a.ms);
+    }
+
+    function fillFilters(rows) {
+        const zakazky = Array.from(new Set(rows.map(r => r.zakazka))).sort();
+        const lide = Array.from(new Set(rows.map(r => r.by).filter(Boolean))).sort((a, b) => a.localeCompare(b, "cs"));
+
+        const keepZ = filterZakazka, keepK = filterKdo;
+        $("filterZakazka").innerHTML = '<option value="">Všechny zakázky</option>' +
+            zakazky.map(z => '<option value="' + esc(z) + '"' + (z === keepZ ? " selected" : "") + '>' + esc(z) + "</option>").join("");
+        $("filterKdo").innerHTML = '<option value="">Všichni</option>' +
+            lide.map(l => '<option value="' + esc(l) + '"' + (l === keepK ? " selected" : "") + '>' + esc(l) + "</option>").join("");
+    }
+
+    const time = (ms) => new Date(ms).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+    const day = (ms) => new Date(ms).toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+    function rowHtml(entry) {
+        const where = '<b>' + esc(entry.zakazka) + '</b>' +
+            (entry.skupina ? " · " + esc(entry.skupina) : "") + " · " + esc(entry.title);
+
+        const pct = entry.hotovo
+            ? '<span class="to" style="color:var(--ok,#14622f)">HOTOVO</span>'
+            : (entry.from === null ? "" : '<span class="from">' + entry.from + " %</span> → ") +
+              '<span class="to">' + entry.percent + " %</span>";
+
+        return '<div class="hrow">' +
+            '<span class="hrow__time">' + time(entry.ms) + "</span>" +
+            '<span class="hrow__who">' + esc(entry.by || "?") + "</span>" +
+            '<span class="hrow__where" title="' + esc(where.replace(/<[^>]+>/g, "")) + '">' + where + "</span>" +
+            '<span class="hrow__what">' + esc(entry.sub) + "</span>" +
+            '<span class="hrow__pct">' + pct + "</span>" +
+        "</div>";
+    }
+
+    function paint() {
+        const owner = window.KBUI.can("historie.view");
+        $("denied").hidden = owner;
+        $("app").hidden = !owner;
+        if (!owner) return;
+
+        let rows = allEntries();
+        fillFilters(rows);
+
+        if (filterZakazka) rows = rows.filter(r => r.zakazka === filterZakazka);
+        if (filterKdo) rows = rows.filter(r => r.by === filterKdo);
+
+        $("listCount").textContent = rows.length
+            ? rows.length + (rows.length === 1 ? " zápis" : rows.length < 5 ? " zápisy" : " zápisů")
+            : "";
+
+        $("empty").hidden = rows.length > 0;
+        $("list").hidden = rows.length === 0;
+
+        let html = "";
+        let lastDay = "";
+        rows.slice(0, 400).forEach(entry => {
+            const label = day(entry.ms);
+            if (label !== lastDay) {
+                lastDay = label;
+                html += '<div class="hday">' + esc(label) + "</div>";
+            }
+            html += rowHtml(entry);
+        });
+        $("list").innerHTML = html;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "historie.html" });
+
+        $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
+        $("filterZakazka").addEventListener("change", (e) => { filterZakazka = e.target.value; paint(); });
+        $("filterKdo").addEventListener("change", (e) => { filterKdo = e.target.value; paint(); });
+        $("btnReset").addEventListener("click", () => {
+            filterZakazka = ""; filterKdo = "";
+            $("filterZakazka").value = ""; $("filterKdo").value = "";
+            paint();
+        });
+
+        window.KB.on("tasks", paint);
+        window.KB.on("users", () => { window.KBUI.syncRole(); paint(); });
+        document.addEventListener("kb-role", paint);
+
+        window.KB.whenReady().then(paint);
+    });
+})();
+</script>
+</body>
+</html>
