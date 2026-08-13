@@ -58,6 +58,58 @@
                "-" + String(d.getDate()).padStart(2, "0");
     };
 
+    /* --------------------------------------------------------------- čas --
+       Zapisuje se po čtvrthodinách – přesnější údaj nikdo nezná a při zpětném
+       vyplňování se stejně zaokrouhluje. Nabídka je proto pevná: 00:00–23:45
+       po 15 minutách, jedna pro celou stránku (odkazuje se na ni `list=`). */
+
+    V.CASY = (() => {
+        const out = [];
+        for (let m = 0; m < 24 * 60; m += 15) {
+            out.push(String(Math.floor(m / 60)).padStart(2, "0") + ":" +
+                     String(m % 60).padStart(2, "0"));
+        }
+        return out;
+    })();
+
+    V.CAS_LIST_ID = "casy15";
+
+    V.casDatalist = () => '<datalist id="' + V.CAS_LIST_ID + '">' +
+        V.CASY.map(c => '<option value="' + c + '">').join("") + "</datalist>";
+
+    /**
+     * Srovná napsaný čas na nejbližší čtvrthodinu.
+     * Lidi píšou zkratkovitě, tak to bereme, jak to přijde:
+     *   "8" → 08:00 · "830" nebo "8:3" → 08:30 · "8:07" → 08:00 · "1745" → 17:45
+     * Vrací "" u nesmyslu, ať se nezapíše rozbitý čas.
+     */
+    V.normalizujCas = (text) => {
+        const t = String(text || "").trim().replace(/\s|\./g, ":");
+        if (!t) return "";
+
+        let h, m;
+        if (t.indexOf(":") !== -1) {
+            const [a, b] = t.split(":");
+            h = Number(a);
+            // "8:3" znamená 8:30, ne 8:03 – tak to člověk píše
+            m = b === undefined || b === "" ? 0 : Number(b.length === 1 ? b + "0" : b.slice(0, 2));
+        } else if (/^\d{1,2}$/.test(t)) {
+            h = Number(t); m = 0;
+        } else if (/^\d{3,4}$/.test(t)) {
+            h = Number(t.slice(0, t.length - 2));
+            m = Number(t.slice(-2));
+        } else {
+            return "";
+        }
+        if (!isFinite(h) || !isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) return "";
+
+        // na nejbližší čtvrthodinu; 23:53 → 23:45, ne přes půlnoc
+        let celkem = Math.round((h * 60 + m) / 15) * 15;
+        if (celkem >= 24 * 60) celkem = 24 * 60 - 15;
+        return String(Math.floor(celkem / 60)).padStart(2, "0") + ":" +
+               String(celkem % 60).padStart(2, "0");
+    };
+
     /* -------------------------------------------------------------- lidé */
 
     V.jmeno = (user) => ((user.first || "") + " " + (user.last || "")).trim() || user.email || "";

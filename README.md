@@ -360,17 +360,36 @@ zakázka stojí** – proto se u každého zápisu drží zakázka, komu se fakt
 | **Zápis a záznamy** | formulář dne + výpis zápisů s filtry a exportem do CSV |
 | **Přehled lidí a peněz** | součty a pruhy podle částí, technologií, zakázek, firem a lidí |
 
-### Den se zapisuje po položkách
+### Zapisuje se po zakázkách a v nich po pracích
 
-Nahoře **datum a člověk**, pod tím položky. Ráno focení a odpoledne ArcGIS jsou
-dva zápisy, ne jeden den – jinak by se nedalo říct, kolik stálo focení.
-Tlačítko **+ Další položka dne** přidá další blok a rovnou v něm:
+Formulář má dvě úrovně a jsou i barevně odlišené, ať se nepletou:
 
-- předvyplní zakázku, firmu, část, technologii a sazbu z předchozí položky,
-- začne časem, kterým ta předchozí skončila (16:00 → 16:00).
+| | |
+|---|---|
+| **blok zakázky** (červený rám, tónovaná hlavička) | zakázka, projekt, fakturovat firmě |
+| **práce** uvnitř (bílé karty) | název, část zpracování, technologie · datum, od, do, pauza, sazba |
 
-U položky se počítá **hodiny × sazba** živě, ještě před uložením. Pauza se
-zadává v minutách, ťuknutím na 0 / 30 / 45 / 60 nebo ručně. Konec dřív než
+Ráno focení a odpoledne ArcGIS jsou dvě práce, ne jeden den – jinak by se
+nedalo říct, kolik stálo focení. Obojí ale patří pod tutéž zakázku, tak se
+vybírá jednou nahoře:
+
+- **+ Přidat práci do této zakázky** přidá další bílou kartu do téhož bloku.
+  Podědí datum, část, technologii i sazbu a začne časem, kterým ta předchozí
+  skončila (16:00 → 16:00). Pauza se nedědí.
+- **+ Zapsat výkaz na novou zakázku** založí celý nový blok.
+
+**Datum je u každé práce**, hned vlevo před časy – jeden zápis tak může
+pokrývat i víc dní bez zakládání dalšího formuláře.
+
+Čas se zadává **po čtvrthodinách** z rozbalovací nabídky, ale dá se i psát
+a srovná se sám: `8` → `08:00`, `830` nebo `8:3` → `08:30`, `17:37` → `17:30`.
+Nesmysl (`25`, `abc`) se zahodí, ať se nezapíše rozbitý čas.
+
+**Pauza se přidává tlačítkem** – většina zápisů žádnou nemá, tak ať nezabírá
+místo. Po ťuknutí naskočí **30 minut** jako nejčastější případ a jdou přepsat;
+křížkem se pauza zase zruší.
+
+U práce se počítá **hodiny × sazba** živě, ještě před uložením. Konec dřív než
 začátek se bere jako práce přes půlnoc; nad 16 hodin se ukáže upozornění,
 že to bude nejspíš překlep.
 

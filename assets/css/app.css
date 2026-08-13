@@ -2136,16 +2136,57 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .vyktile__note { font-size: 11.5px; color: var(--dim); margin-top: 2px; }
 .vyktile--money .vyktile__value { color: var(--accent); }
 
-/* --- formulář dne: hlavička (datum, člověk) a pod ní položky --- */
+/* --- formulář výkazu ------------------------------------------------------
+   Dvě úrovně, a musí být na první pohled poznat která je která:
+   BLOK ZAKÁZKY (červený rám, tónovaná hlavička) drží zakázku, projekt a firmu;
+   uvnitř jsou bílé POLOŽKY práce. Další činnost na téže zakázce je jen další
+   bílá karta uvnitř téhož rámu – ne celý nový blok. */
+
+.zblok {
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--accent-tint);
+    padding: 0 0 12px;
+    overflow: hidden;
+}
+.zblok + .zblok { margin-top: 16px; }
+
+.zblok__hlava {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    background: var(--accent);
+}
+.zblok__stitek {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: #fff;
+}
+.zblok__hlava .linkbtn { color: #fff; opacity: .85; }
+.zblok__hlava .linkbtn:hover { opacity: 1; }
+
+.zblok__grid {
+    display: grid;
+    gap: 10px 12px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    padding: 12px 14px;
+}
+.zblok__polozky { padding: 0 14px; }
+.zblok__pridej { margin: 10px 0 0 14px; background: var(--surface); }
+
+/* --- jedna položka práce uvnitř bloku --- */
 
 .polozka {
     border: 1px solid var(--line);
-    border-left: 3px solid var(--accent);
     border-radius: var(--radius);
-    background: var(--bg-soft);
+    background: var(--surface);
     padding: 13px 14px;
 }
-.polozka + .polozka { margin-top: 12px; }
+.polozka + .polozka { margin-top: 10px; }
 .polozka__head {
     display: flex;
     align-items: center;
@@ -2158,15 +2199,33 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--muted);
 }
 .polozka__grid {
     display: grid;
     gap: 10px 12px;
     grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
 }
-/* název práce je nejdůležitější, ať zabere celý řádek */
-.polozka__grid .polozka__wide { grid-column: 1 / -1; }
+/* název práce je nejdůležitější, ať zabere víc místa než výběry vedle */
+.polozka__grid .polozka__nazev { grid-column: span 2; min-width: 0; }
+@media (max-width: 620px) {
+    .polozka__grid .polozka__nazev { grid-column: 1 / -1; }
+}
+
+/* Kdy a za kolik – vlastní řádek, ať datum a časy drží pohromadě
+   a neroztrhá je mřížka mezi výběry nahoře. */
+.polozka__cas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+}
+.polozka__cas > div { min-width: 0; }
+.polozka__cas .polozka__datum { width: 158px; }
+.polozka__cas .cas { width: 104px; }
+.polozka__cas [data-f="sazba"] { width: 108px; }
 
 /* spočítané hodiny a částka – výsledek toho, co je nad tím */
 .polozka__vysledek {
@@ -2183,9 +2242,13 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .polozka__kc  { font-size: 16px; font-weight: 900; color: var(--accent); }
 .polozka__varovani { font-size: 11.5px; font-weight: 700; color: var(--warn); }
 
-/* rychlá volba délky pauzy – ťuknutím místo psaní */
-.pauza { display: flex; gap: 6px; align-items: center; }
-.pauza .field { width: 74px; min-width: 0; }
+/* Pauza se přidává tlačítkem – většina zápisů žádnou nemá, tak ať nezabírá
+   místo. Po ťuknutí naskočí 30 minut a dají se přepsat. */
+.pauza { display: flex; gap: 6px; align-items: center; min-height: 40px; }
+.pauza__pridej { white-space: nowrap; }
+.pauza__zadani { display: flex; gap: 6px; align-items: center; }
+.pauza__zadani .field { width: 74px; min-width: 0; }
+.pauza__jednotka { font-size: 12px; color: var(--muted); }
 
 /* --- tabulka zápisů --- */
 
