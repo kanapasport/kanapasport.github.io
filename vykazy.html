@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=46">
+    <link rel="stylesheet" href="assets/css/app.css?v=47">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -37,7 +37,7 @@
                 </p>
             </div>
             <div class="row" style="gap:8px">
-                <button id="btnCiselniky" class="btn btn--ghost btn--sm">Firmy a sazby</button>
+                <a id="btnCiselniky" class="btn btn--ghost btn--sm" href="nastaveni.html">Firmy a sazby</a>
                 <button id="btnZapis" class="btn btn--primary btn--sm">Přidat výkaz</button>
             </div>
         </div>
@@ -136,54 +136,11 @@
     </div>
 </div>
 
-<!-- ====================================================== ČÍSELNÍKY -->
-<div id="ciselnikOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
-    <div class="card col" style="padding:22px;max-width:620px;width:100%;gap:16px;max-height:90vh;overflow-y:auto">
-        <b style="font-size:17px">Zakázky, firmy a sazby</b>
 
-        <div>
-            <span class="label">Zakázky – rozpočet a projekty</span>
-            <div id="cZakazky" class="col" style="gap:10px"></div>
-            <div class="tiny muted" style="margin-top:6px">
-                Rozpočet se zadává v korunách i hodinách; stačí jedno z toho.
-                Projekty jsou části zakázky oddělené čárkou. <b>Mazat zakázky</b>
-                se dá ve Správě zakázek v úkolovníku – je to týž číselník.
-            </div>
-        </div>
-
-        <div>
-            <label class="label" for="cNove">Přidat zakázky</label>
-            <textarea id="cNove" rows="2" class="field" placeholder="jedna zakázka na řádek"></textarea>
-        </div>
-
-        <div>
-            <label class="label" for="cFirmy">Firmy, kterým se fakturuje</label>
-            <textarea id="cFirmy" rows="4" class="field" placeholder="jedna firma na řádek"></textarea>
-            <div class="tiny muted" style="margin-top:6px">
-                Odebráním z číselníku firma nezmizí ze starých zápisů.
-            </div>
-        </div>
-
-        <div>
-            <span class="label">Výchozí hodinová sazba člověka</span>
-            <div id="cSazby" class="col" style="gap:6px"></div>
-            <div class="tiny muted" style="margin-top:6px">
-                Jen předvyplnění formuláře. U konkrétního zápisu se sazba dá přepsat
-                a uloží se ta zapsaná – změna sazby nikdy nepřepočítá starší výkazy.
-            </div>
-        </div>
-
-        <div class="row" style="gap:10px;justify-content:flex-end">
-            <button id="btnCisZrus" class="btn btn--ghost">Zrušit</button>
-            <button id="btnCisUloz" class="btn btn--primary">Uložit</button>
-        </div>
-    </div>
-</div>
-
-<script src="assets/js/taxonomy.js?v=46"></script>
-<script src="assets/js/ui.js?v=46"></script>
-<script src="assets/js/vykazy.js?v=46"></script>
-<script type="module" src="assets/js/store.js?v=46"></script>
+<script src="assets/js/taxonomy.js?v=47"></script>
+<script src="assets/js/ui.js?v=47"></script>
+<script src="assets/js/vykazy.js?v=47"></script>
+<script type="module" src="assets/js/store.js?v=47"></script>
 
 <script>
 (function () {
@@ -795,88 +752,6 @@
         }
     }
 
-    /* ===================================================== ČÍSELNÍKY ==== */
-
-    function otevriCiselniky() {
-        $("cFirmy").value = V.firmy().join("\n");
-        $("cNove").value = "";
-
-        $("cZakazky").innerHTML = V.zakazky().map(zak => {
-            const r = V.rozpocet(zak);
-            return '<div class="card" style="padding:10px 12px">' +
-                '<div class="row row--wrap" style="gap:8px">' +
-                    '<b class="grow" style="min-width:120px">' + esc(zak) + "</b>" +
-                    '<input type="number" class="field" style="width:130px" min="0" step="1000" ' +
-                        'placeholder="rozpočet Kč" data-roz-kc="' + esc(zak) + '" ' +
-                        'value="' + (r.kc || "") + '">' +
-                    '<input type="number" class="field" style="width:104px" min="0" step="10" ' +
-                        'placeholder="hodin" data-roz-h="' + esc(zak) + '" ' +
-                        'value="' + (r.hodiny || "") + '">' +
-                "</div>" +
-                '<input type="text" class="field" style="margin-top:8px" ' +
-                    'placeholder="projekty oddělené čárkou" data-projekty="' + esc(zak) + '" ' +
-                    'value="' + esc(V.projekty(zak).join(", ")) + '">' +
-            "</div>";
-        }).join("") || '<div class="tiny muted">Zatím tu není žádná zakázka.</div>';
-
-        const sazby = window.KB.sazby || {};
-        $("cSazby").innerHTML = V.lide().map(u =>
-            '<div class="row" style="gap:10px">' +
-                '<span class="grow small">' + esc(V.jmeno(u)) + "</span>" +
-                '<input type="number" class="field" style="width:120px" min="0" step="10" ' +
-                    'data-sazba="' + esc(u.id) + '" value="' + (Number(sazby[u.id]) || "") + '">' +
-                '<span class="small muted" style="width:36px">Kč/h</span>' +
-            "</div>").join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
-
-        $("ciselnikOverlay").hidden = false;
-    }
-
-    async function ulozCiselniky() {
-        const radky = (text) => text.split("\n").map(r => r.trim()).filter(Boolean);
-
-        // --- tajné: sazby lidí a rozpočty zakázek
-        const sazby = {};
-        $("cSazby").querySelectorAll("[data-sazba]").forEach(input => {
-            const value = Number(input.value) || 0;
-            if (value > 0) sazby[input.dataset.sazba] = value;
-        });
-
-        const rozpocty = {};
-        $("cZakazky").querySelectorAll("[data-roz-kc]").forEach(input => {
-            const zak = input.dataset.rozKc;
-            const kc = Number(input.value) || 0;
-            const hodiny = Number($("cZakazky").querySelector(
-                '[data-roz-h="' + CSS.escape(zak) + '"]').value) || 0;
-            // zakázku bez rozpočtu do mapy nepíšeme, ať tam nezůstávají nuly
-            if (kc > 0 || hodiny > 0) rozpocty[zak] = { kc: kc, hodiny: hodiny };
-        });
-
-        // --- netajné: názvy zakázek, projekty a firmy
-        const projekty = {};
-        $("cZakazky").querySelectorAll("[data-projekty]").forEach(input => {
-            const seznam = input.value.split(",").map(p => p.trim()).filter(Boolean);
-            if (seznam.length) projekty[input.dataset.projekty] = seznam;
-        });
-
-        const nazvy = V.zakazky().slice();
-        radky($("cNove").value).forEach(nova => {
-            if (nazvy.indexOf(nova) === -1) nazvy.push(nova);
-        });
-
-        try {
-            await window.KB.saveVykazNastaveni({ sazby: sazby, rozpocty: rozpocty });
-            await window.KB.saveCiselnikZakazek({
-                names: nazvy, projekty: projekty, firmy: radky($("cFirmy").value)
-            });
-            $("ciselnikOverlay").hidden = true;
-            window.KBUI.toast("Číselníky uloženy.");
-            nastavVychoziSazbu(true);
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Uložení selhalo.", "error");
-        }
-    }
-
     /* ========================================================= START ==== */
 
     /* Zaměstnanec si musí o svoje zápisy říct dotazem – pravidla nejsou filtr
@@ -984,9 +859,6 @@
         $("dOsoba").addEventListener("change", () => nastavVychoziSazbu(false));
 
         $("btnResetFiltr").addEventListener("click", resetFiltru);
-        $("btnCiselniky").addEventListener("click", otevriCiselniky);
-        $("btnCisZrus").addEventListener("click", () => { $("ciselnikOverlay").hidden = true; });
-        $("btnCisUloz").addEventListener("click", ulozCiselniky);
 
         $("btnEditZrus").addEventListener("click", () => { $("editOverlay").hidden = true; });
         $("btnEditUloz").addEventListener("click", ulozUpravu);

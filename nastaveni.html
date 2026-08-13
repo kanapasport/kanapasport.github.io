@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Nastavení – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=47">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Nastavení mění jen správci.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou tu sazby lidí a rozpočty zakázek. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:20px">
+
+        <div class="spread">
+            <div>
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Nastavení</h2>
+                <p class="small muted" style="margin-top:3px">
+                    Číselníky a hodnoty, ze kterých web počítá. Změna se projeví všem naráz.
+                </p>
+            </div>
+            <button type="button" id="btnUloz" class="btn btn--primary">Uložit vše</button>
+        </div>
+
+        <!-- ================================================== ZAKÁZKY -->
+        <section class="card col nastaveni" id="sekce-zakazky">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Zakázky</b>
+                    <span class="small muted">rozpočet a projekty uvnitř zakázky</span>
+                </div>
+            </div>
+            <div id="zakazky" class="col" style="gap:10px"></div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Rozpočet se zadává v korunách i v hodinách, stačí jedno z toho — podle něj
+                se počítá čerpání v přehledu. Projekty jsou části zakázky oddělené čárkou.
+                <b>Zakázku smazat nejde tady</b>, ale ve Správě zakázek v Postupu práce; je to týž
+                číselník a mazání odtud by rozbilo úkoly.
+            </p>
+            <div>
+                <label class="label" for="noveZakazky">Přidat zakázky</label>
+                <textarea id="noveZakazky" rows="2" class="field" placeholder="jedna zakázka na řádek"></textarea>
+            </div>
+        </section>
+
+        <!-- ================================================== FIRMY -->
+        <section class="card col nastaveni" id="sekce-firmy">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Firmy</b>
+                    <span class="small muted">komu se zakázky fakturují</span>
+                </div>
+            </div>
+            <textarea id="firmy" rows="6" class="field" placeholder="jedna firma na řádek"></textarea>
+            <p class="tiny muted" style="margin:0">
+                Odebráním z číselníku firma nezmizí ze starých zápisů — ty si nesou název, který
+                měly ve chvíli zapsání.
+            </p>
+        </section>
+
+        <!-- ================================================== SAZBY -->
+        <section class="card col nastaveni" id="sekce-sazby">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Hodinové sazby</b>
+                    <span class="small muted">výchozí sazba člověka</span>
+                </div>
+                <span class="tag" id="pocetSazeb"></span>
+            </div>
+            <div id="sazby" class="sazby"></div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Slouží jen k předvyplnění formuláře. U konkrétního zápisu se sazba dá přepsat
+                a uloží se ta zapsaná — <b>změna sazby tady nikdy nepřepočítá starší výkazy</b>.
+                To je záměr: loňský přehled musí zůstat takový, jaký byl.
+            </p>
+        </section>
+
+        <div class="row" style="gap:10px;justify-content:flex-end">
+            <span id="stav" class="small muted" style="margin-right:auto"></span>
+            <button type="button" id="btnUloz2" class="btn btn--primary">Uložit vše</button>
+        </div>
+
+        <p class="tiny muted" style="text-align:center;line-height:1.6">
+            Postupně sem přibude i zbytek nastavení webu.
+        </p>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=47"></script>
+<script src="assets/js/ui.js?v=47"></script>
+<script src="assets/js/vykazy.js?v=47"></script>
+<script type="module" src="assets/js/store.js?v=47"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    let sledovaniZapnuto = false;
+    /* Data z databáze dotečou až po prvním vykreslení, takže se formulář plní
+       znovu s každou dávkou. Jakmile do něj někdo sáhne, přeplňovat se přestane
+       – jinak by mu rozepsaná změna zmizela pod rukama. */
+    let upravovano = false;
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KBUI.can("vykaz.view")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchVykazy();
+    }
+
+    /* ------------------------------------------------------------ výpis */
+
+    function naplnZakazky() {
+        if (upravovano) return;
+        $("zakazky").innerHTML = V.zakazky().map(zak => {
+            const r = V.rozpocet(zak);
+            return '<div class="zakrad">' +
+                '<b class="zakrad__nazev">' + esc(zak) + "</b>" +
+                '<label class="zakrad__pole"><span class="tiny muted">rozpočet Kč</span>' +
+                    '<input type="number" class="field" min="0" step="1000" ' +
+                        'data-roz-kc="' + esc(zak) + '" value="' + (r.kc || "") + '"></label>' +
+                '<label class="zakrad__pole"><span class="tiny muted">hodin</span>' +
+                    '<input type="number" class="field" min="0" step="10" ' +
+                        'data-roz-h="' + esc(zak) + '" value="' + (r.hodiny || "") + '"></label>' +
+                '<label class="zakrad__projekty"><span class="tiny muted">projekty (oddělené čárkou)</span>' +
+                    '<input type="text" class="field" data-projekty="' + esc(zak) + '" ' +
+                        'value="' + esc(V.projekty(zak).join(", ")) + '"></label>' +
+            "</div>";
+        }).join("") || '<div class="tiny muted">Zatím tu není žádná zakázka.</div>';
+    }
+
+    function naplnSazby() {
+        if (upravovano) return;
+        const sazby = window.KB.sazby || {};
+        const lide = V.lide();
+        $("pocetSazeb").textContent = lide.length + " lidí";
+        $("sazby").innerHTML = lide.map(u =>
+            '<label class="sazba">' +
+                '<span class="sazba__jmeno">' + esc(V.jmeno(u)) + "</span>" +
+                '<input type="number" class="field" min="0" step="10" ' +
+                    'data-sazba="' + esc(u.id) + '" value="' + (Number(sazby[u.id]) || "") + '">' +
+                '<span class="sazba__jednotka">Kč/h</span>' +
+            "</label>").join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+    }
+
+    function naplnVse() {
+        if (upravovano) return;
+        $("firmy").value = V.firmy().join("\n");
+        naplnZakazky();
+        naplnSazby();
+    }
+
+    /* ----------------------------------------------------------- uložení */
+
+    async function uloz() {
+        const radky = (text) => text.split("\n").map(r => r.trim()).filter(Boolean);
+
+        const sazby = {};
+        $("sazby").querySelectorAll("[data-sazba]").forEach(input => {
+            const value = Number(input.value) || 0;
+            if (value > 0) sazby[input.dataset.sazba] = value;
+        });
+
+        const rozpocty = {};
+        $("zakazky").querySelectorAll("[data-roz-kc]").forEach(input => {
+            const zak = input.dataset.rozKc;
+            const kc = Number(input.value) || 0;
+            const hodiny = Number($("zakazky").querySelector(
+                '[data-roz-h="' + CSS.escape(zak) + '"]').value) || 0;
+            // zakázku bez rozpočtu do mapy nepíšeme, ať tam nezůstávají nuly
+            if (kc > 0 || hodiny > 0) rozpocty[zak] = { kc: kc, hodiny: hodiny };
+        });
+
+        const projekty = {};
+        $("zakazky").querySelectorAll("[data-projekty]").forEach(input => {
+            const seznam = input.value.split(",").map(p => p.trim()).filter(Boolean);
+            if (seznam.length) projekty[input.dataset.projekty] = seznam;
+        });
+
+        const nazvy = V.zakazky().slice();
+        radky($("noveZakazky").value).forEach(nova => {
+            if (nazvy.indexOf(nova) === -1) nazvy.push(nova);
+        });
+
+        [$("btnUloz"), $("btnUloz2")].forEach(b => { b.disabled = true; });
+        $("stav").textContent = "Ukládám…";
+        try {
+            await window.KB.saveVykazNastaveni({ sazby: sazby, rozpocty: rozpocty });
+            await window.KB.saveCiselnikZakazek({
+                names: nazvy, projekty: projekty, firmy: radky($("firmy").value)
+            });
+            $("noveZakazky").value = "";
+            $("stav").textContent = "Uloženo.";
+            window.KBUI.toast("Nastavení uloženo.");
+        } catch (err) {
+            console.error(err);
+            $("stav").textContent = "";
+            window.KBUI.toast("Uložení selhalo – nastavení mění jen správce.", "error");
+        } finally {
+            [$("btnUloz"), $("btnUloz2")].forEach(b => { b.disabled = false; });
+        }
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    function render() {
+        if (!window.KBUI.can("vykaz.view")) {
+            $("stop").hidden = false;
+            $("obsah").hidden = true;
+            return;
+        }
+        $("stop").hidden = true;
+        $("obsah").hidden = false;
+        zapniSledovani();
+        naplnVse();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "nastaveni.html" });
+
+        $("btnUloz").addEventListener("click", uloz);
+        $("btnUloz2").addEventListener("click", uloz);
+        // jakmile někdo do formuláře sáhne, data z databáze už mu ho nepřepíšou
+        $("obsah").addEventListener("input", () => { upravovano = true; });
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("users", () => { naplnSazby(); render(); });
+        window.KB.on("zakazky", naplnZakazky);
+        window.KB.on("vykazy-meta", naplnVse);
+
+        render();
+    });
+})();
+</script>
+</body>
+</html>

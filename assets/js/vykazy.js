@@ -172,9 +172,22 @@
 
     /* Barvy pruhů. Přiřazují se podle pořadí v číselníku, ne podle názvu –
        přejmenovaná činnost tak nezmění barvu celého grafu. */
-    const BARVY = ["#c8102e", "#1f6f8b", "#b45309", "#16794a", "#6d28d9",
-                   "#0f766e", "#a16207", "#9d174d", "#374151"];
-    V.barva = (index) => BARVY[((index % BARVY.length) + BARVY.length) % BARVY.length];
+    /* Šest barev, ne víc. Prošly kontrolou na barvosleposti (protanopie,
+       deuteranopie, tritanopie), na kontrast vůči bílému podkladu i na to,
+       aby žádná nečetla jako šedá. Sedmou a osmou už se to samé udělat
+       nepodařilo – proto se zbytek slévá do „Ostatní" v šedé.
+       Pořadí je závazné: zelená nesmí sousedit s červenou ani oranžovou,
+       to je pro barvoslepé ta nejhorší dvojice. */
+    const BARVY = ["#c8102e", "#0f62c4", "#0d7d3f", "#8a2be2", "#c26a00", "#b3006b"];
+    const SEDA = "#8b9298";
+
+    V.SEDA = SEDA;
+    V.POCET_BAREV = BARVY.length;
+    /** Nezařazené a „Ostatní" jsou vždycky šedé, ať jsou na první pohled vidět. */
+    V.barva = (index, nazev) => {
+        if (nazev && /nerozřazeno|neurčeno|ostatní|nezařazeno/i.test(nazev)) return SEDA;
+        return index >= 0 && index < BARVY.length ? BARVY[index] : SEDA;
+    };
 
     /* ------------------------------------------------------------ období */
 
@@ -263,11 +276,32 @@
 
         const index = (hodnota) => {
             const i = (poradi || []).indexOf(hodnota);
-            return i === -1 ? (poradi || []).length : i;
+            return i === -1 ? -1 : i;
         };
         return Array.from(mapa.values())
-            .map(radek => Object.assign(radek, { barva: V.barva(index(radek.klic)) }))
+            .map(radek => Object.assign(radek, { barva: V.barva(index(radek.klic), radek.klic) }))
             .sort((a, b) => b.castka - a.castka || b.hodiny - a.hodiny);
+    };
+
+    /**
+     * Nejsilnějších N položek zvlášť, zbytek do „Ostatní".
+     * Barev máme šest a devátá se vymyslet nedá tak, aby ji od ostatních
+     * rozeznal i barvoslepý – proto se chvost slévá, ne že by se dobarvoval.
+     */
+    V.sesypZbytek = (polozky, kolik) => {
+        const limit = kolik || V.POCET_BAREV;
+        if (polozky.length <= limit + 1) return polozky;
+
+        const hlavni = polozky.slice(0, limit).map((p, i) =>
+            Object.assign({}, p, { barva: V.barva(i, p.klic) }));
+        const zbytek = polozky.slice(limit);
+        return hlavni.concat([{
+            klic: "Ostatní (" + zbytek.length + ")",
+            hodiny: zbytek.reduce((s, p) => s + p.hodiny, 0),
+            castka: zbytek.reduce((s, p) => s + p.castka, 0),
+            pocet: zbytek.reduce((s, p) => s + p.pocet, 0),
+            barva: V.SEDA
+        }]);
     };
 
     /* --------------------------------------------------------- vykreslení */
@@ -295,14 +329,70 @@
             const vedlejsi = metrika === "hod" ? V.kc(p.castka) : V.hod(p.hodiny);
             const nazev = popisek ? popisek(p.klic) : p.klic;
 
+            /* Seřazený žebříček je o velikosti, ne o totožnosti – každý pruh má
+               vlastní popisek, takže barva nic nerozlišuje a všechny jsou stejné.
+               Vlastní barvu si pruh nese jen tam, kde něco znamená (čerpání
+               rozpočtu zeleně/oranžově/červeně). */
             return '<div class="vykbar">' +
                 '<div class="vykbar__name" title="' + esc(nazev) + '">' + esc(nazev) + "</div>" +
                 '<div class="vykbar__track">' +
-                    '<div class="vykbar__fill" style="width:' + sirka + "%;background:" + p.barva + '"></div>' +
+                    '<div class="vykbar__fill" style="width:' + sirka + "%" +
+                        (p.vlastniBarva ? ";background:" + p.barva : "") + '"></div>' +
                 "</div>" +
                 '<div class="vykbar__val">' + hlavni + " <span>· " + vedlejsi + "</span></div>" +
             "</div>";
         }).join("");
+    };
+
+    /**
+     * Kruhový graf. Kreslí se čárkovaným obvodem kružnice – žádné počítání
+     * oblouků a žádná knihovna. Mezi výsečemi je mezera v barvě podkladu,
+     * aby na sebe dvě barvy nikde přímo nenavazovaly.
+     *
+     * Legenda je vždycky – barva sama o sobě nesmí být jediné vodítko,
+     * protože ji každý nevidí stejně.
+     */
+    V.kolac = (polozky, metrika, popisek) => {
+        const hodnota = (p) => metrika === "hod" ? p.hodiny : p.castka;
+        const celek = polozky.reduce((s, p) => s + hodnota(p), 0);
+        if (!celek) return '<div class="tiny muted">Žádná data.</div>';
+
+        const R = 68, STRED = 90, OBVOD = 2 * Math.PI * R, MEZERA = 2;
+        let posun = 0;
+
+        const vysece = polozky.map(p => {
+            const delka = Math.max(0, hodnota(p) / celek * OBVOD - MEZERA);
+            const kruh = '<circle cx="' + STRED + '" cy="' + STRED + '" r="' + R + '" fill="none" ' +
+                'stroke="' + p.barva + '" stroke-width="32" stroke-dasharray="' +
+                delka.toFixed(2) + " " + (OBVOD - delka).toFixed(2) + '" stroke-dashoffset="' +
+                (-posun).toFixed(2) + '"><title>' + esc(popisek ? popisek(p.klic) : p.klic) + ": " +
+                (metrika === "hod" ? V.hod(p.hodiny) : V.kc(p.castka)) + "</title></circle>";
+            posun += hodnota(p) / celek * OBVOD;
+            return kruh;
+        }).join("");
+
+        const stred = metrika === "hod" ? V.hod(celek) : V.kc(celek);
+        const legenda = polozky.map(p => {
+            const nazev = popisek ? popisek(p.klic) : p.klic;
+            return '<li class="bpleg__radek">' +
+                '<span class="bpleg__tecka" style="background:' + p.barva + '"></span>' +
+                '<span class="bpleg__nazev" title="' + esc(nazev) + '">' + esc(nazev) + "</span>" +
+                '<span class="bpleg__cislo">' +
+                    (metrika === "hod" ? V.hod(p.hodiny) : V.kc(p.castka)) + "</span>" +
+                '<span class="bpleg__pct">' + Math.round(hodnota(p) / celek * 100) + " %</span>" +
+            "</li>";
+        }).join("");
+
+        return '<div class="bpkolac">' +
+            '<svg viewBox="0 0 180 180" class="bpsvg" role="img">' +
+                '<g transform="rotate(-90 90 90)">' + vysece + "</g>" +
+                '<text x="90" y="86" text-anchor="middle" class="bpsvg__cislo">' +
+                    esc(stred.split(" ")[0]) + "</text>" +
+                '<text x="90" y="102" text-anchor="middle" class="bpsvg__popis">' +
+                    esc(stred.split(" ").slice(1).join(" ")) + "</text>" +
+            "</svg>" +
+            '<ul class="bpleg">' + legenda + "</ul>" +
+        "</div>";
     };
 
     /* ----------------------------------------------------------------- CSV
