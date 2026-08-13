@@ -1,7 +1,7 @@
 # Předání práce – Pasport Kaňa
 
-Shrnutí stavu k **13. 8. 2026**, aby se dalo plynule pokračovat na jiném
-počítači nebo v novém sezení. Poslední commit: `e9323bf`, verze assetů `?v=45`.
+Shrnutí stavu k **14. 8. 2026**, aby se dalo plynule pokračovat na jiném
+počítači nebo v novém sezení. Poslední commit: `7e7552d`, verze assetů `?v=49`.
 
 - **Živý web:** <https://kanapasport.github.io>
 - **Repozitář:** <https://github.com/kanapasport/kanapasport.github.io> (veřejný)
@@ -36,10 +36,23 @@ Po nasazení otevři `vykazy.html`, dej **Firmy a sazby**, doplň firmy, rozpoč
 a lidem hodinové sazby, a zkus jeden zápis uložit a zase smazat.
 **Data v databázi jsou ostrá** – testuj na tom, co po sobě uklidíš.
 
+### 0a. Dvě věci, které čekají na Michala
+
+1. **Nahrát data do Přehledu BP.** Stránka `vykazy-bp.html` je hotová, ale
+   v databázi zatím žádný souhrn není — ukáže jen prázdný importní panel.
+   Soubor `prehled-BP.json` má Michal u sebe (mimo repozitář, viz níž);
+   nahraje se tlačítkem na téže stránce, jednou za všechny správce.
+2. **Vyplnit rozpočet BioPharmy.** Nastavení → Zakázky → rozpočet v Kč
+   i hodinách. Bez něj přehled řekne, co zakázka stála, ale ne jestli
+   vychází — a přesně kvůli tomu se do toho šlo.
+
 ### 0b. Co se stalo naposledy (žádná otevřená nedodělávka)
 
-Poslední tři commity: výkazy práce (`70e90b4`), přestavba formuláře
-(`e6068f4`) a přejmenování na Postup práce s příplatky (`e9323bf`).
+Od výkazů práce (`70e90b4`) přibylo: přestavba formuláře (`e6068f4`),
+Postup práce s příplatky (`e9323bf`), **Přehled BP** ze starých excelů
+(`6c19675`, `6006944`), **Nastavení jako vlastní stránka** a prověřená
+paleta grafů (`b8bcf28`), **náhled role** pro hlavního správce (`47da901`)
+a **opravy z bezpečnostní revize** (`7e7552d`).
 Všechno je odzkoušené v prohlížeči a nasazené; nic nezůstalo rozpracované.
 
 Dvě věci, které nikdo nezadal a rozhodly se samy – klidně to změň:
@@ -180,14 +193,24 @@ blok, ze kterého se zpětně přečíst nedá.
 | `milniky.html` | Milníky – termíny odevzdání po činnostech, rozdělené podle zakázek |
 | `tabule.html` | Tabule na nápady – nekonečné plátno, myšlenkové mapy |
 | `vykazy.html` | Výkazy práce – zápis a záznamy; správce vidí všechny a peníze, zaměstnanec jen svoje |
-| `vykazy-prehled.html` | Kolik kdo odpracoval a co to stálo – **jen správci** |
+| `vykazy-prehled.html` | Kolik kdo odpracoval a co to stálo – **jen správci**; kruhové grafy a čerpání rozpočtů |
+| `vykazy-bp.html` | Přehled BioPharmy ze starých excelů – **jen správci, ještě za heslem, a v liště schválně NENÍ** (otevírá se přímým odkazem) |
+| `nastaveni.html` | Firmy, sazby, rozpočty a projekty zakázek – **jen správci**; sem přibude zbytek nastavení webu |
 | `uzivatele.html` | Lidé, role, trezor na hesla, záloha – **jen hlavní správce** |
 | `barvy.html` | Hřiště na barvy webu – **jen hlavní správce**, změna neplatí trvale |
 | `uvod.html` | Tištěný leták k rozesílaným heslům, není v navigaci (viz níž) |
 
 V liště jsou **DOMŮ · NÁVODY · POSTUP PRÁCE · MILNÍKY · TABULE**. Nad ní jsou
 ikony: nový návod, dva pokyny pro AI (návod / skript), import od AI, a podle
-práv výkazy, uživatelé a barvy.
+práv výkazy, nastavení, uživatelé a barvy. **Přehled BP mezi nimi není
+schválně** – ať na něj nikdo nenarazí náhodou.
+
+Vlevo nahoře v červeném pruhu má hlavní správce **přepínač „Zobrazit jako"**
+(správce / zaměstnance / studenta). Ukáže, co komu na webu vyskočí, bez
+hledání druhého účtu. Zapnutý náhled hlásí oranžový pruh pod hlavičkou.
+Je to **náhled toho, co se vykreslí** – data z databáze chodí pořád podle
+skutečného účtu, protože pravidla Firestore čtou UID. Na ověření zabezpečení
+to tedy nestačí, na to je potřeba druhý účet.
 
 Vzhled: písmo **Lato** přímo v repozitáři (`assets/fonts/`), hlavní barva
 červená `#c8102e`, hranaté tvary, cílová zařízení **iPhone 11 a iPad Air**.
@@ -344,6 +367,23 @@ a kdy) a **Upravit**. Roletka v liště ukazuje šest nejbližších termínů.
 22. **`git add *.html` spadne na ignorovaném souboru.** V kořeni leží
     `Caflou-dotaznik.html`, který je v `.gitignore`; git kvůli němu vrátí
     chybu a zbytek sice přidá, ale příkaz skončí nenulově.
+23. **Repozitář je veřejný, takže data nesmí do souborů webu – ani do textu.**
+    Souhrn Přehledu BP proto leží ve Firestore a stránka si ho tahá odtud.
+    Přesto se do vysvětlivek na téže stránce dostala konkrétní hodinová sazba
+    a jmenovitě čí hodiny – četl to kdokoliv bez přihlášení. Když se píše
+    text na stránku, platí totéž co pro data.
+24. **Do `innerHTML` patří všechno přes `KBUI.esc()`, i čísla.** Do dlaždic
+    Přehledu BP se vkládala procenta z nahraného JSONu bez ošetření. Nahrát
+    ho smí správce, čte ho hlavní správce – dala se tudy podstrčit skript
+    a sáhnout si na správu uživatelů a trezor hesel. Totéž platilo pro názvy
+    zakázek v roletce lišty, které smí přejmenovat kdokoliv přihlášený.
+25. **Náhled role se nesmí míchat se skutečnou rolí.** `UI.skutecnaRole()`
+    čte výhradně z databáze, `UI.role()` vrací náhled. Náhled se uzná jen
+    hlavnímu správci a jde vždycky jen dolů – kdyby to bylo obráceně, byla
+    by z toho past 12 znovu.
+26. **Sloupce do cizího sešitu se přidávají až za jeho vlastní data.**
+    Ne natvrdo od `O`: Kuba má v O–R boční tabulku malých akcí a přepsal
+    jsem mu ji.
 
 ---
 
@@ -379,11 +419,51 @@ A celá větev `private/vykazy/**` je **mimo `public/data`** schválně: nad
 `public/data/**` stojí `allow read: if clen()` a pravidla se sčítají, takže
 by se to níž už nedalo odebrat.
 
+### Historické výkazy z excelů – co se s nimi udělalo (14. 8. 2026)
+
+Čtrnáct lidí, devět let, **39 081 hodin za 8,8 milionu**. Data přišla jako
+stažené `.xlsx` z Google Sheets; **živý přenos z Google Sheets nejde** –
+sdílení je omezené a `…/export?format=csv` vrací HTTP 401.
+
+**Nástroje leží mimo repozitář** v `Desktop\claude\vykazy_nastroje\` a mají
+vlastní návod `JAK-NA-TO.md`. Do gitu nepatří: pracuje se v nich se sazbami
+a výdělky jmenovitě, a tenhle repozitář je veřejný. Je to čistý Node.js bez
+knihoven – `.xlsx` se čte přímo jako ZIP s XML.
+
+Co z toho vzešlo:
+
+| | |
+|---|---|
+| **rozřazené sešity** | `Desktop\claude\vykazy_rozrazeno\` – u každého člověka přibyly sloupce ZAKÁZKA / DRUH / hodin / co to bylo, s roletkami |
+| **`prehled-BP.json`** | souhrn BioPharmy pro stránku Přehled BP |
+| **`ZBYVA-doplnit.csv`** | co se nepodařilo zařadit, seřazené podle hodin |
+
+Zařazeno je **86 % hodin**, z toho pětina odhadem podle okolních dnů.
+BioPharma vyšla na **10 399 h za 2 776 tisíc**, druhá je hromada drobných
+pasportů RD, pak C03, SIMU a RECETOX D30.
+
+**Pravidla, podle kterých se to zařazuje, jsou v `matcher.js`** a stojí za
+přečtení, než se do nich sáhne – každá pojistka v nich vznikla po konkrétní
+chybě, která dávala nesmyslná čísla (holé číslo v textu čtené jako hodiny,
+dělení popisu na pomlčce, obecné slovo použité jako vodítko, hodiny
+připsané zakázce, která tehdy ještě neexistovala). Popis je v `JAK-NA-TO.md`.
+
+Sloupce se v každém sešitu zapisují **až za poslední vlastní data toho
+člověka**, ne natvrdo od `O` – Kuba si vpravo vede boční tabulku malých
+akcí ve sloupcích O–R a jednou už jsem mu ji přepsal.
+
 ### Co ještě není
 
-- **Import starých výkazů.** Zapisuje se jen ručně. Google Sheets přes odkaz
-  číst nejde (sdílení je omezené, `…/export?format=csv` vrací HTTP 401) –
-  cesta je stažené `.xlsx` do složky mimo git, nebo import z CSV.
+- **Import do databáze.** Rozřazení zatím žije v excelech a v souhrnu na
+  Přehledu BP; jednotlivé zápisy se do Firestore nenahrávaly. Až to bude
+  potřeba, jde o měsíční souhrny (měsíc × zakázka × druh × člověk), ne
+  o sedm tisíc jednotlivých řádků.
+- **Zbylých 14 % hodin.** Jsou to zápisy, kde člověk napsal, co dělal, ale
+  ne kde (`GIS`, `voda`, `Brno`). Z textu to nikdo nevytáhne – buď se to
+  projde s lidmi, nebo zůstane nezařazené.
+- **Šest zakázek chybí v evidenci** a vedou se pod vlastním názvem:
+  OHL ŽS SIMU (2 932 h), CETOCOEN Block (1 360 h), DLH/DHL schema,
+  BD Neumanova, Hotel Voroněž, AXA.
 - **Starší zápisy mají druh vypracování velkými písmeny** (`ARCGIS`), nový
   číselník je `ArcGIS / Focení / Skeny / Tabulky / Administrativa`. Reálná
   data zatím žádná nejsou; kdyby vznikla dřív, chce to převod.
