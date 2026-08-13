@@ -222,15 +222,26 @@
     /* ------------------------------------------------------------ součty */
 
     V.soucty = (zaznamy) => {
-        const hodiny = zaznamy.reduce((s, z) => s + (Number(z.hodiny) || 0), 0);
-        const castka = zaznamy.reduce((s, z) => s + (Number(z.castka) || 0), 0);
+        const sec = (klic) => zaznamy.reduce((s, z) => s + (Number(z[klic]) || 0), 0);
+        const hodiny = sec("hodiny");
+        const castka = sec("castka");
+        /* Průměrná sazba se počítá jen z odpracované práce – paušály za oběd
+           a kilometry by ji nafoukly a číslo by přestalo něco znamenat.
+           U starších zápisů bez `castkaPrace` bereme celou částku. */
+        const prace = zaznamy.reduce((s, z) => s +
+            (z.castkaPrace === undefined ? (Number(z.castka) || 0) : (Number(z.castkaPrace) || 0)), 0);
+
         return {
             pocet: zaznamy.length,
             hodiny: hodiny,
             castka: castka,
+            prace: prace,
+            obedKc: sec("obedKc"),
+            dopravaKc: sec("dopravaKc"),
+            km: sec("km"),
             // jeden den jednoho člověka = jeden odpracovaný den, i když má víc položek
             dny: new Set(zaznamy.map(z => z.datum + "|" + z.uid)).size,
-            sazba: hodiny ? castka / hodiny : 0
+            sazba: hodiny ? prace / hodiny : 0
         };
     };
 
@@ -305,15 +316,18 @@
         };
         const des = (value) => String(Number(value) || 0).replace(".", ",");
 
-        const hlavicka = ["Datum", "Kdo", "Název práce", "Zakázka", "Projekt", "Firma",
-            "Část zpracování", "Technologie", "Od", "Do", "Pauza (min)",
-            "Hodin", "Sazba", "Částka", "Poznámka"];
+        const hlavicka = ["Datum", "Kdo", "Úkol", "Zakázka", "Projekt", "Firma",
+            "Druh vypracování", "Technologie", "Od", "Do", "Pauza (min)",
+            "Hodin", "Sazba", "Za práci", "Oběd", "Km", "Cestovné", "Celkem", "Poznámka"];
 
         return "﻿" + [hlavicka.map(bunka).join(";")].concat(
             zaznamy.map(z => [
                 z.datum, V.osobaText(z), z.nazev, z.zakazka, z.projekt || "", z.firma,
                 z.cinnost, z.technologie, z.od, z.do, Number(z.pauza) || 0,
-                des(z.hodiny), des(z.sazba), des(z.castka), z.poznamka || ""
+                des(z.hodiny), des(z.sazba),
+                des(z.castkaPrace === undefined ? z.castka : z.castkaPrace),
+                des(z.obedKc), Number(z.km) || 0, des(z.dopravaKc),
+                des(z.castka), z.poznamka || ""
             ].map(bunka).join(";"))).join("\r\n");
     };
 

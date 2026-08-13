@@ -135,9 +135,12 @@
             "ukol.create", "ukol.edit", "ukol.delete",
             "zakazky.manage", "historie.view", "milnik.manage",
             "navod.create", "navod.delete", "navod.pdf",
-            "vykaz.view", "vykaz.edit"
+            "vykaz.otevrit", "vykaz.view", "vykaz.edit"
         ],
-        "zamestnanec": ["ukol.create", "ukol.edit", "navod.create"],
+        /* Zaměstnanec si výkazy otevře, ale vidí a zapisuje jen svoje – bez
+           cizích zápisů, bez sazeb a bez exportu. Hlídá to i databáze
+           (firestore.rules), ne jen schované tlačítko. */
+        "zamestnanec": ["ukol.create", "ukol.edit", "navod.create", "vykaz.otevrit"],
         "student":     ["ukol.edit", "navod.create"]
     };
 
@@ -152,8 +155,9 @@
         "navod.create":   "tvořit návody",
         "navod.delete":   "mazat návody",
         "navod.pdf":      "stahovat návody do PDF",
-        "vykaz.view":     "vidět výkazy práce a peníze",
-        "vykaz.edit":     "zapisovat výkazy práce",
+        "vykaz.otevrit":  "otevřít výkazy a zapisovat svoje",
+        "vykaz.view":     "vidět výkazy všech lidí včetně peněz",
+        "vykaz.edit":     "zapisovat výkazy za kohokoliv",
         "users.manage":   "spravovat uživatele",
         "web.design":     "měnit vzhled webu"
     };
@@ -775,6 +779,12 @@
     UI.searchValue = () => {
         const input = document.getElementById("kbSearch");
         return input ? input.value.trim() : "";
+    };
+
+    /** Vyprázdní hledání zvenčí – používá to tlačítko Reset u filtrů. */
+    UI.setSearch = (text) => {
+        const input = document.getElementById("kbSearch");
+        if (input) input.value = text || "";
     };
 
     function bindSearch() {

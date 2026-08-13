@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=44">
+    <link rel="stylesheet" href="assets/css/app.css?v=45">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -63,6 +63,7 @@
                 <select id="fFirma" class="field" style="width:auto;min-width:170px"></select>
                 <select id="fCinnost" class="field" style="width:auto;min-width:150px"></select>
                 <select id="fTech" class="field" style="width:auto;min-width:150px"></select>
+                <button type="button" id="btnResetFiltr" class="btn btn--ghost btn--sm">Reset</button>
             </div>
         </div>
 
@@ -81,10 +82,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=44"></script>
-<script src="assets/js/ui.js?v=44"></script>
-<script src="assets/js/vykazy.js?v=44"></script>
-<script type="module" src="assets/js/store.js?v=44"></script>
+<script src="assets/js/taxonomy.js?v=45"></script>
+<script src="assets/js/ui.js?v=45"></script>
+<script src="assets/js/vykazy.js?v=45"></script>
+<script type="module" src="assets/js/store.js?v=45"></script>
 
 <script>
 (function () {
@@ -115,6 +116,15 @@
         render();
     }
 
+    /** Zruší všechna zúžení naráz – po pár filtrech se to jinak rozklikává. */
+    function resetFiltru() {
+        ["uid", "zakazka", "projekt", "firma", "cinnost", "tech", "text"].forEach(k => { filtr[k] = ""; });
+        window.KBUI.setSearch("");
+        document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+        document.querySelector('[data-obdobi="mesic"]').classList.add("chip--active");
+        nastavObdobi("mesic");     // render si zavolá samo
+    }
+
     function naplnFiltry() {
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
@@ -125,7 +135,7 @@
             : '<option value="">Všechny projekty</option>';
         $("fProjekt").disabled = !filtr.zakazka;
         $("fFirma").innerHTML = V.options(V.firmy(), filtr.firma, "Všechny firmy");
-        $("fCinnost").innerHTML = V.options(V.cinnosti(), filtr.cinnost, "Všechny části zpracování");
+        $("fCinnost").innerHTML = V.options(V.cinnosti(), filtr.cinnost, "Všechny druhy vypracování");
         $("fTech").innerHTML = V.options(
             V.technologie().map(t => ({ value: t.zkratka, label: t.zkratka + " – " + t.nazev })),
             filtr.tech, "Všechny technologie");
@@ -311,6 +321,7 @@
             });
         });
 
+        $("btnResetFiltr").addEventListener("click", resetFiltru);
         window.KBUI.onSearch((dotaz) => { filtr.text = dotaz; render(); });
 
         document.addEventListener("kb-role", render);

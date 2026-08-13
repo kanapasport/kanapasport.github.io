@@ -175,7 +175,7 @@ window.KB_NAV = [
             })))
     },
     // roletka se naplní zakázkami z databáze (viz taskMenu v ui.js)
-    { title: 'ÚKOLOVNÍK', href: 'ukoly.html', tasks: true },
+    { title: 'POSTUP PRÁCE', href: 'ukoly.html', tasks: true },
     // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
     { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },
     { title: 'TABULE', href: 'tabule.html', icon: 'board' }
@@ -189,14 +189,12 @@ window.KB_TOOLS = [
     { title: 'Pokyn pro AI – návod',  icon: 'sparkles', action: 'ai-prompt' },
     { title: 'Pokyn pro AI – skript', icon: 'code',     action: 'script-prompt' },
     { title: 'Import od AI',   icon: 'download', href: 'editor.html#import' },
-    { title: 'Všechny návody', icon: 'library',  href: 'navody.html' },
-    { title: 'Milníky',        icon: 'flag',     href: 'milniky.html' },
-    // `need` řídí, komu se ikona vůbec ukáže
-    { title: 'Historie úprav', icon: 'tasks', href: 'historie.html', need: 'historie.view' },
+    /* Historie úprav sem nepatří – je to tlačítko na stránce Postupu práce,
+       kam obsahem náleží. Všechny návody a Milníky tu byly zbytečně, obojí
+       je v liště o řádek níž. */
     /* Výkazy práce schválně NEJSOU v liště (KB_NAV) – jediná cesta k nim je
-       tahle ikona, a ta se vykreslí jen správcům. Zaměstnanec o stránce
-       nezavadí a databáze ho k datům stejně nepustí (firestore.rules). */
-    { title: 'Výkazy práce', icon: 'clock', href: 'vykazy.html', need: 'vykaz.view' },
+       tahle ikona, a ta se vykreslí jen tomu, kdo na výkazy vůbec smí. */
+    { title: 'Výkazy práce', icon: 'clock', href: 'vykazy.html', need: 'vykaz.otevrit' },
     // jen pro hlavního správce
     { title: 'Uživatelé',   icon: 'users',   href: 'uzivatele.html', need: 'users.manage' },
     { title: 'Barvy webu',  icon: 'palette', href: 'barvy.html',     need: 'web.design' }

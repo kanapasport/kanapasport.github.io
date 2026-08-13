@@ -12,12 +12,12 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `navody.html` | Výpis návodů – vlevo dlaždice, vpravo rovnou náhled (`?kat=…&sub=…&id=…`) |
 | `navod.html` | Čtení jednoho návodu (`?id=…`) – sazba A4 + export do PDF |
 | `editor.html` | Tvorba a úprava návodu (`?id=…`) – vlevo editor (jde přiblížit), vpravo živý náhled |
-| `ukoly.html` | Úkolovník – úkoly seskupené podle zakázek, patra, procenta, poznámky |
+| `ukoly.html` | Postup práce – úkoly seskupené podle zakázek, patra, procenta, poznámky |
 | `tabule.html` | Tabule na nápady – nekonečné plátno (`?id=…`), seznam tabulí bez parametru |
 | `milniky.html` | Milníky – termíny odevzdání po činnostech, řazené podle data |
 | `barvy.html` | Zkoušení odstínů hlavní barvy na živé ukázce (odkaz je v patičce) |
-| `vykazy.html` | Výkazy práce – zápis dne po položkách a výpis zápisů (**jen správci**) |
-| `vykazy-prehled.html` | Kolik kdo odpracoval a na čem, peníze po částech zpracování (**jen správci**) |
+| `vykazy.html` | Výkazy práce – zápis a výpis; správce vidí všechny a peníze, zaměstnanec jen svoje |
+| `vykazy-prehled.html` | Kolik kdo odpracoval a na čem, peníze po druzích vypracování (**jen správci**) |
 
 ## Sdílené soubory
 
@@ -117,13 +117,13 @@ Na všech stránkách stejná. Nahoře **červený pruh** (v něm bílá variant
    je větší (`mountNav({ big: true })`),
 3. vpravo dole v pruhu, tedy **přímo nad lištou**, ikony nástrojů – popis
    vyjede až po najetí myší,
-4. **navigační lišta** (DOMŮ, NÁVODY, ÚKOLOVNÍK) vycentrovaná na střed
+4. **navigační lišta** (DOMŮ, NÁVODY, POSTUP PRÁCE) vycentrovaná na střed
    stránky a vpravo **hledání**,
-5. na výpisu návodů a v úkolovníku ještě **druhý řádek lišty** s filtry
+5. na výpisu návodů a v Postupu práce ještě **druhý řádek lišty** s filtry
    (`mountNav({ subbar: true })` vyrobí prázdný `#appSubbar`, stránka si ho
    naplní sama).
 
-Roletka u ÚKOLOVNÍKU se plní **zakázkami z databáze** – jakmile někdo založí
+Roletka u POSTUPU PRÁCE se plní **zakázkami z databáze** – jakmile někdo založí
 novou, objeví se v liště sama (`taskMenu()` v `ui.js`).
 
 Při odrolování zůstává viset jen spodní část lišty – hlavička se posune nahoru
@@ -142,7 +142,7 @@ Cílová zařízení jsou **iPhone 11 (414 px)** a **iPad Air (820 px na výšku
 
 Pod 1120 px (nebo na dotykovém displeji):
 
-- navigace **DOMŮ / NÁVODY / ÚKOLOVNÍK je vidět vždycky**, nikdy se neschovává
+- navigace **DOMŮ / NÁVODY / POSTUP PRÁCE je vidět vždycky**, nikdy se neschovává
   pod tlačítko; ustupuje jí hledání, ze kterého zbyde jen lupa a pole vyjede
   přes celou lištu až po ťuknutí,
 - v červeném pruhu jde všechno pod sebe, ale drží se u pravého okraje
@@ -200,10 +200,10 @@ npx --yes serve -l 4173 .
 Otevři `http://localhost:4173/index.html` (s koncovkou `.html`, jinak `serve`
 při přesměrování zahodí parametry v adrese).
 
-## Úkolovník
+## Postup práce
 
 Úkoly jsou seskupené podle **zakázky** (BioPharma, C03, A08, Pasport Vrbice…).
-Zakázka se vybírá v roletce ÚKOLOVNÍKU nebo ve druhém řádku lišty
+Zakázka se vybírá v roletce POSTUPU PRÁCE nebo ve druhém řádku lišty
 (`ukoly.html?zak=nazev-zakazky`); na rozcestníku má každá svou dlaždici se
 seznamem úkolů a procenty.
 
@@ -402,7 +402,7 @@ nesáhne na starší zápisy.
 
 Výchozí sazba člověka je jen předvyplnění formuláře; nastavuje se v okně
 **Firmy a sazby** spolu se seznamem firem a zakázek. Zakázky jsou týž číselník
-jako v úkolovníku (`meta/zakazky`), takže se nikde nezdvojují.
+jako v Postupu práce (`meta/zakazky`), takže se nikde nezdvojují.
 
 ### Zakázka, projekt, rozpočet
 
@@ -423,11 +423,11 @@ Zakázky, projekty a firmy jsou v `meta/zakazky` vedle skupin úkolů, protože
 si je u svého výkazu musí umět vybrat i zaměstnanec. Tajné jsou **sazby lidí
 a rozpočty zakázek**, ne názvy – ty leží v `private/vykazy/ciselniky`.
 
-### Části zpracování a technologie
+### Druhy vypracování a technologie
 
-Části zpracování jsou `FOCENÍ`, `SKENY`, `TABULKY`, `ARCGIS` – stejný číselník
+Druhy vypracování jsou `ArcGIS`, `Focení`, `Skeny`, `Tabulky` a `Administrativa` – vychází ze stejného číselníku
 jako skupiny úkolů, aby se hodiny daly porovnat s tím, jak je práce rozdělená
-v úkolovníku. Technologie (`VZT`, `CHL`, `ELE`, …) jsou převzaté ze skriptu
+v Postupu práce. Technologie (`VZT`, `CHL`, `ELE`, …) jsou převzaté ze skriptu
 na třídění fotek (`tools/sort_photos/buildings/technologie.json`).
 
 Pruhy v přehledu se měří **proti největší položce výběru**, ne proti součtu –
@@ -559,7 +559,7 @@ měnit, nasazují se ručně ve Firebase Console → Firestore Database → Rule
 ## Co je hotové a co ne
 
 Hotové: rozcestník, tři úrovně kategorií, hledání v liště, sazba A4 = PDF,
-obrázky s proklikem, šablony, import od AI, vodoznak, úkolovník po zakázkách,
+obrázky s proklikem, šablony, import od AI, vodoznak, postup práce po zakázkách,
 responzivita pro telefon a tablet, dokumentace ke všem skriptům v toolboxu.
 
 Zatím ne (schválně, až bude obsah): přihlašování účtem a heslem od správce,

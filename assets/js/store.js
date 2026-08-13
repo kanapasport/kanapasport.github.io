@@ -50,10 +50,15 @@ const APP_ID = "firemni-kb-app";
 /** Výchozí rozdělení úkolů uvnitř zakázky, dokud si ho nikdo neupraví. */
 const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ", "TABULKY"];
 
-/* Části zpracování ve výkazu. Je to týž číselník jako skupiny úkolů –
-   schválně, ať se hodiny dají porovnat s tím, jak je rozdělená práce
-   v úkolovníku. */
-const DEFAULT_CINNOSTI = DEFAULT_SKUPINY.slice();
+/* Druhy vypracování ve výkazu. Vychází ze skupin úkolů, ať se hodiny dají
+   porovnat s tím, jak je rozdělená práce v Postupu práce, ale je tu navíc
+   administrativa – ta se na zakázce odpracuje taky a někam patřit musí. */
+const DEFAULT_CINNOSTI = ["ArcGIS", "Focení", "Skeny", "Tabulky", "Administrativa"];
+
+/* Paušály k výkazu. Jsou to firemní čísla, ne tajemství – zaměstnanec si
+   svoje stravné i kilometry spočítá sám, tak ať je vidí i ve formuláři. */
+const OBED_KC = 200;      // placený oběd, když ho zápis obsahuje
+const KM_KC = 5;          // cestovní náhrada za kilometr
 
 /** Technologie – zkratky přebrané z tools/sort_photos/buildings/technologie.json. */
 const DEFAULT_TECHNOLOGIE = [
@@ -76,6 +81,8 @@ const KB = {
     DEFAULT_SKUPINY: DEFAULT_SKUPINY,
     DEFAULT_CINNOSTI: DEFAULT_CINNOSTI,
     DEFAULT_TECHNOLOGIE: DEFAULT_TECHNOLOGIE,
+    OBED_KC: OBED_KC,
+    KM_KC: KM_KC,
     guides: [],
     tasks: [],
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
@@ -770,6 +777,11 @@ function zaznamPayload(data) {
         do:       data.do || "",
         pauza:    Math.max(0, Number(data.pauza) || 0),
         hodiny:   KB.spocitejHodiny(data.od, data.do, data.pauza),
+        /* Oběd a kilometry patří k času, ne k tajným částkám – jsou to
+           náhrady tomu, kdo pracoval, a ten si na ně musí umět sáhnout.
+           Korunová hodnota se z nich dopočítá až v `castky`. */
+        obed:     data.obed === true,
+        km:       Math.max(0, Number(data.km) || 0),
         poznamka: data.poznamka || "",
         createdMs: data.createdMs || Date.now(),
         createdBy: data.createdBy || window.KB_USER || "",
@@ -785,17 +797,35 @@ KB.saveVykaz = async (id, data) => {
 
     const zaznam = zaznamPayload(data);
     const sazba = Math.max(0, Number(data.sazba) || 0);
+    const castky = KB.spocitejCastky(zaznam, sazba);
 
     await setDoc(vykazDoc(id), zaznam, { merge: true });
-    await setDoc(castkaDoc(id), {
-        sazba:  sazba,
-        castka: Math.round(zaznam.hodiny * sazba * 100) / 100,
+    await setDoc(castkaDoc(id), Object.assign({
+        sazba: sazba,
         // pár údajů navíc, aby se dalo v částkách hledat i bez druhé kolekce
         uid: zaznam.uid, datum: zaznam.datum, zakazka: zaznam.zakazka,
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
-    }, { merge: true });
+    }, castky), { merge: true });
     return id;
+};
+
+/**
+ * Peníze k zápisu. `castkaPrace` je čistě hodiny × sazba – z ní se počítá
+ * průměrná sazba, takže ji paušály nesmí ředit. `castka` je to, co zápis
+ * celkem stojí, a ta se sčítá v přehledech i v čerpání rozpočtu.
+ */
+KB.spocitejCastky = (zaznam, sazba) => {
+    const zaokrouhli = (x) => Math.round(x * 100) / 100;
+    const prace = zaokrouhli((Number(zaznam.hodiny) || 0) * (Number(sazba) || 0));
+    const obedKc = zaznam.obed ? OBED_KC : 0;
+    const dopravaKc = zaokrouhli((Number(zaznam.km) || 0) * KM_KC);
+    return {
+        castkaPrace: prace,
+        obedKc: obedKc,
+        dopravaKc: dopravaKc,
+        castka: zaokrouhli(prace + obedKc + dopravaKc)
+    };
 };
 
 /**
