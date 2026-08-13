@@ -16,6 +16,8 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `tabule.html` | Tabule na nápady – nekonečné plátno (`?id=…`), seznam tabulí bez parametru |
 | `milniky.html` | Milníky – termíny odevzdání po činnostech, řazené podle data |
 | `barvy.html` | Zkoušení odstínů hlavní barvy na živé ukázce (odkaz je v patičce) |
+| `vykazy.html` | Výkazy práce – zápis dne po položkách a výpis zápisů (**jen správci**) |
+| `vykazy-prehled.html` | Kolik kdo odpracoval a na čem, peníze po částech zpracování (**jen správci**) |
 
 ## Sdílené soubory
 
@@ -25,6 +27,7 @@ Bez buildu – všechno je čisté HTML, CSS a JavaScript, otevře se i dvojklik
 | `assets/js/store.js` | Firebase: návody, obrázky, úkoly |
 | `assets/js/doc.js` | Sazba A4, stránkování, export PDF, lupa na obrázky |
 | `assets/js/ui.js` | Horní lišta, toasty, role, hledání, komprese obrázků, pokyn pro AI |
+| `assets/js/vykazy.js` | Výkazy: filtr, součty, pruhy grafu, formát čísel a CSV (sdílí obě stránky výkazů) |
 | `assets/css/app.css` | Všechny styly včetně geometrie A4 a responzivity |
 | `assets/data/navody-skripty.json` | Záloha textů návodů ke skriptům (jednorázový import) |
 
@@ -171,7 +174,13 @@ artifacts/firemni-kb-app/public/data/guides/{guideId}              ← text náv
 artifacts/firemni-kb-app/public/data/guides/{guideId}/images/{id}  ← obrázek (base64 JPEG)
 artifacts/firemni-kb-app/public/data/tasks/{taskId}                ← úkol ze zakázky
 artifacts/firemni-kb-app/public/data/logs/{autoId}                 ← záznamy přihlášení
+
+artifacts/firemni-kb-app/private/vykazy/zaznamy/{id}               ← odpracovaný čas
+artifacts/firemni-kb-app/private/vykazy/castky/{id}                ← sazba a částka
+artifacts/firemni-kb-app/private/vykazy/ciselniky/nastaveni        ← sazby lidí, rozpočty
 ```
+
+Větev `private` je oddělená schválně – viz [Výkazy práce](#výkazy-práce).
 
 Obrázky jsou v podkolekci, aby hlavní dokument návodu zůstal malý a seznam se
 načítal rychle. Před uložením se screenshot zmenší na max. 1400 px a
@@ -338,6 +347,120 @@ onSnapshot a nepřepíšou rozepsaný text ani rozdělané tažení.
 **Pozor:** Firestore neumí uložit pole v poli, proto jsou body kresby
 naplocho `[x1,y1,x2,y2,…]`.
 
+## Výkazy práce
+
+Náhrada excelových výkazů. Cíl není „mít to na webu", ale vědět, **co která
+zakázka stojí** – proto se u každého zápisu drží zakázka, komu se fakturuje,
+část zpracování a technologie.
+
+`vykazy.html` má dvě stránky, přepínají se ve druhém řádku lišty:
+
+| | |
+|---|---|
+| **Zápis a záznamy** | formulář dne + výpis zápisů s filtry a exportem do CSV |
+| **Přehled lidí a peněz** | součty a pruhy podle částí, technologií, zakázek, firem a lidí |
+
+### Den se zapisuje po položkách
+
+Nahoře **datum a člověk**, pod tím položky. Ráno focení a odpoledne ArcGIS jsou
+dva zápisy, ne jeden den – jinak by se nedalo říct, kolik stálo focení.
+Tlačítko **+ Další položka dne** přidá další blok a rovnou v něm:
+
+- předvyplní zakázku, firmu, část, technologii a sazbu z předchozí položky,
+- začne časem, kterým ta předchozí skončila (16:00 → 16:00).
+
+U položky se počítá **hodiny × sazba** živě, ještě před uložením. Pauza se
+zadává v minutách, ťuknutím na 0 / 30 / 45 / 60 nebo ručně. Konec dřív než
+začátek se bere jako práce přes půlnoc; nad 16 hodin se ukáže upozornění,
+že to bude nejspíš překlep.
+
+### Hodiny a částka se ukládají spočítané
+
+`hodiny` i `castka` leží v databázi vedle časů a sazby. Je to úmyslná
+duplicita: **sazby se v čase mění a loňský přehled musí zůstat takový, jaký
+byl** – ne přepočítaný dnešními čísly. Změna výchozí sazby proto nikdy
+nesáhne na starší zápisy.
+
+Výchozí sazba člověka je jen předvyplnění formuláře; nastavuje se v okně
+**Firmy a sazby** spolu se seznamem firem a zakázek. Zakázky jsou týž číselník
+jako v úkolovníku (`meta/zakazky`), takže se nikde nezdvojují.
+
+### Zakázka, projekt, rozpočet
+
+Zakázka se dělí na **projekty** (etapy, budovy, části stavby). U zápisu se
+projekt nabízí teprve po výběru zakázky – jinak by to byla směsice cizích
+etap. Zápis bez projektu patří zakázce jako celku.
+
+U zakázky se zadává **rozpočet v korunách i v hodinách** (stačí jedno).
+V přehledu je pak karta *Čerpání rozpočtů* s pruhem: do 75 % zeleně,
+do 100 % oranžově, přes 100 % červeně, a k tomu kolik zbývá nebo o kolik
+se přečerpalo.
+
+**Čerpání se počítá ze všech zápisů, ne z vybraného období.** Rozpočet se
+čerpá po celou dobu zakázky – „spotřebováno 40 000 z 900 000" za jeden měsíc
+by říkalo pravý opak toho, co od takového čísla člověk čeká.
+
+Zakázky, projekty a firmy jsou v `meta/zakazky` vedle skupin úkolů, protože
+si je u svého výkazu musí umět vybrat i zaměstnanec. Tajné jsou **sazby lidí
+a rozpočty zakázek**, ne názvy – ty leží v `private/vykazy/ciselniky`.
+
+### Části zpracování a technologie
+
+Části zpracování jsou `FOCENÍ`, `SKENY`, `TABULKY`, `ARCGIS` – stejný číselník
+jako skupiny úkolů, aby se hodiny daly porovnat s tím, jak je práce rozdělená
+v úkolovníku. Technologie (`VZT`, `CHL`, `ELE`, …) jsou převzaté ze skriptu
+na třídění fotek (`tools/sort_photos/buildings/technologie.json`).
+
+Pruhy v přehledu se měří **proti největší položce výběru**, ne proti součtu –
+jinak by drobné položky byly neviditelné. Přepínač Peníze / Hodiny mění, podle
+čeho se pruh kreslí; druhé číslo je vždycky vedle.
+
+### Čas a peníze jsou dva dokumenty
+
+Jeden zápis leží ve dvou dokumentech se **stejným `{id}`**:
+
+| Kde | Co v něm je | Kdo ho přečte |
+|---|---|---|
+| `private/vykazy/zaznamy/{id}` | datum, práce, zakázka, projekt, časy, hodiny | **vlastník** a správci |
+| `private/vykazy/castky/{id}` | sazba a částka | **jen správci** |
+
+Důvod: Firestore neumí schovat jednotlivé pole – kdo dokument přečte, přečte
+ho celý. Zaměstnanec tak uvidí svoje hodiny, ale ne to, za kolik se jeho
+hodina fakturuje klientovi. Při čtení se to spáruje podle `id`; zápis bez
+částky se v přehledu ukáže za nula korun, dokud mu správce sazbu nedoplní.
+
+Zaměstnanec si smí svůj zápis založit a opravit (`KB.saveMujVykaz`), ale
+nemůže ho přepsat na někoho jiného a mazat smí jen správce.
+
+**Pravidla nejsou filtr.** Kdo nesmí číst cizí zápisy, musí si o svoje říct
+dotazem `where("uid","==",…)` – jinak Firestore odmítne celý přenos. Proto
+jsou dvě funkce: `KB.watchVykazy()` pro správce a `KB.watchMojeVykazy()`
+pro stránku zaměstnance.
+
+### Kdo se k výkazům dostane
+
+- Stránky výkazů v hlavní liště **nejsou** – jediná cesta je ikona hodin nad
+  lištou, a ta se vykreslí jen správcům (`need: 'vykaz.view'` v `taxonomy.js`).
+- Stránka sama ukáže nesprávci jen krátkou hlášku místo obsahu.
+- A hlavně: **data leží mimo `public/data`**, ve větvi
+  `artifacts/{APP_ID}/private/vykazy/…`.
+
+Ten poslední bod je ten podstatný. Nad `public/data/**` stojí
+`allow read: if clen()`, a **pravidla se sčítají – níž už se to nedá odebrat**.
+Kdyby výkazy ležely tam, přečetl by si sazby kdokoliv přihlášený prostě tím,
+že by šel na databázi mimo web, kde naše schovaná tlačítka neplatí.
+
+> **Pravidla se nasazují ručně** ve Firebase Console → Firestore Database →
+> Rules. Dokud se nová část z [firestore.rules](firestore.rules) nevloží,
+> stránka výkazů nic nenačte ani správci a ohlásí to toastem.
+
+### Export do Excelu
+
+Tlačítko **Stáhnout CSV** vysype právě vyfiltrovaný výběr: středník jako
+oddělovač, desetinná čárka a BOM na začátku – to je to, co český Excel otevře
+správně bez ptaní. Google Sheets si stejný soubor naimportuje přes
+*Soubor → Importovat*.
+
 ## Účty a role
 
 Lidé, kteří mají na web přístup, jsou v databázi v kolekci `users`; spravuje je
@@ -355,6 +478,8 @@ hlavní správce změní, projeví se to i lidem, kteří jsou zrovna přihláš
 | tvořit návody | ✓ | ✓ | ✓ | ✓ |
 | mazat návody | ✓ | ✓ | – | – |
 | stahovat návody do PDF | ✓ | ✓ | – | – |
+| vidět výkazy práce a peníze | ✓ | ✓ | – | – |
+| zapisovat výkazy práce | ✓ | ✓ | – | – |
 | spravovat uživatele | ✓ | – | – | – |
 | měnit vzhled webu | ✓ | – | – | – |
 

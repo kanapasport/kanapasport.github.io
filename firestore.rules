@@ -57,6 +57,44 @@ service cloud.firestore {
       allow read: if clen();
     }
 
+    // --- výkazy práce -------------------------------------------------------
+    //
+    // Schválně leží mimo `public/data`, a to je celý ten trik. Pravidla se
+    // sčítají – jakmile jednou nahoře stojí `allow read: if clen()` pro celý
+    // podstrom `public/data/**`, nedá se to níž ničím odebrat. Kdyby výkazy
+    // ležely tam, přečetl by si je každý zaměstnanec – stačilo by mu jít na
+    // databázi mimo web, kde na něj naše schovaná tlačítka neplatí.
+    //
+    //   private/vykazy/zaznamy/{id}          odpracovaný čas (bez peněz)
+    //   private/vykazy/castky/{id}           sazba a částka k témuž zápisu
+    //   private/vykazy/ciselniky/nastaveni   sazby lidí, rozpočty zakázek
+    //
+    // Peníze jsou v samostatném dokumentu proto, že Firestore neumí schovat
+    // jednotlivé pole – kdo dokument přečte, přečte ho celý. Zaměstnanec tak
+    // uvidí své hodiny, ale ne to, za kolik se jeho hodina fakturuje.
+    // Obojí má stejné `{id}`, takže se to spáruje jedním pohledem.
+
+    match /artifacts/firemni-kb-app/private/vykazy/zaznamy/{id} {
+      // svoje vidí každý, cizí jen správce
+      allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
+      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
+      // vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho jiného
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      allow delete: if spravce();
+    }
+
+    // částky nikdy nikomu jinému než správci
+    match /artifacts/firemni-kb-app/private/vykazy/castky/{id} {
+      allow read, write: if spravce();
+    }
+
+    // všechno ostatní v `private` (číselníky se sazbami a rozpočty) jen správce
+    match /artifacts/firemni-kb-app/private/{document=**} {
+      allow read, write: if spravce();
+    }
+
     // --- návody: tvořit a upravovat může každý, mazat jen správce ---
     match /artifacts/firemni-kb-app/public/data/guides/{guideId} {
       allow create, update: if clen();

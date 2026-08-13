@@ -9,6 +9,18 @@
      artifacts/{APP_ID}/public/data/guides/{guideId}/images/{id}  ← obrázek (base64)
      artifacts/{APP_ID}/public/data/tasks/{taskId}                ← úkol ze zakázky
      artifacts/{APP_ID}/public/data/logs/{autoId}                 ← záznamy přihlášení
+
+     artifacts/{APP_ID}/private/vykazy/zaznamy/{id}               ← odpracovaný čas
+     artifacts/{APP_ID}/private/vykazy/castky/{id}                ← sazba a částka
+     artifacts/{APP_ID}/private/vykazy/ciselniky/nastaveni        ← sazby, rozpočty
+
+   Větev `private` je oddělená schválně: do `public/data` smí podle pravidel
+   číst každý přihlášený člověk, a to se níž nedá odebrat.
+
+   Uvnitř je čas oddělený od peněz, protože Firestore neumí schovat jednotlivé
+   pole – kdo dokument přečte, přečte ho celý. Zaměstnanec tak uvidí svoje
+   hodiny, ale ne to, za kolik se jeho hodina fakturuje. Oba dokumenty mají
+   stejné `{id}` a spárují se při čtení.
    ========================================================================== */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -21,7 +33,7 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-    onSnapshot, serverTimestamp, addDoc
+    onSnapshot, serverTimestamp, addDoc, query, where
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 const FIREBASE_CONFIG = {
@@ -38,9 +50,32 @@ const APP_ID = "firemni-kb-app";
 /** Výchozí rozdělení úkolů uvnitř zakázky, dokud si ho nikdo neupraví. */
 const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ", "TABULKY"];
 
+/* Části zpracování ve výkazu. Je to týž číselník jako skupiny úkolů –
+   schválně, ať se hodiny dají porovnat s tím, jak je rozdělená práce
+   v úkolovníku. */
+const DEFAULT_CINNOSTI = DEFAULT_SKUPINY.slice();
+
+/** Technologie – zkratky přebrané z tools/sort_photos/buildings/technologie.json. */
+const DEFAULT_TECHNOLOGIE = [
+    { zkratka: "STA", nazev: "Stavební prvky" },
+    { zkratka: "VZT", nazev: "Vzduchotechnika" },
+    { zkratka: "CHL", nazev: "Chlazení" },
+    { zkratka: "UT",  nazev: "Ústřední vytápění" },
+    { zkratka: "ZTI", nazev: "Zdravotně technické instalace" },
+    { zkratka: "ELE", nazev: "Elektroinstalace" },
+    { zkratka: "SLP", nazev: "Slaboproud" },
+    { zkratka: "MAR", nazev: "Měření a regulace" },
+    { zkratka: "EPS", nazev: "Elektrická požární signalizace" },
+    { zkratka: "SHZ", nazev: "Stabilní hasicí zařízení" },
+    { zkratka: "HAS", nazev: "Hasicí přístroje" },
+    { zkratka: "VYT", nazev: "Výtahy" }
+];
+
 const bus = new EventTarget();
 const KB = {
     DEFAULT_SKUPINY: DEFAULT_SKUPINY,
+    DEFAULT_CINNOSTI: DEFAULT_CINNOSTI,
+    DEFAULT_TECHNOLOGIE: DEFAULT_TECHNOLOGIE,
     guides: [],
     tasks: [],
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
@@ -49,6 +84,13 @@ const KB = {
     users: [],              // lidé, kteří mají na web přístup, a jejich role
     milniky: [],            // termíny odevzdání po činnostech
     boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
+    vykazy: [],             // zápisy práce – načtou se až na vyžádání
+    firmy: [],              // komu se fakturuje (číselník u zakázek, není tajný)
+    projekty: {},           // části zakázky: { "BioPharma": ["Etapa 1", "Etapa 2"] }
+    cinnosti: DEFAULT_CINNOSTI.slice(),
+    technologie: DEFAULT_TECHNOLOGIE.slice(),
+    sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
+    rozpocty: {},           // rozpočet zakázky: { "BioPharma": { kc: 900000, hodiny: 1600 } }
     status: "connecting",   // connecting | online | offline
     ready: false
 };
@@ -76,6 +118,12 @@ const usersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "us
 const userDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "users", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
 const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images", imgId);
+/* výkazy – mimo `public/data`, viz komentář v hlavičce souboru */
+const vykazyCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", "zaznamy");
+const vykazDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "zaznamy", id);
+const castkyCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", "castky");
+const castkaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "castky", id);
+const vykazyMeta = () => doc(db, "artifacts", APP_ID, "private", "vykazy", "ciselniky", "nastaveni");
 
 /* ------------------------------------------------------------------ start */
 
@@ -83,6 +131,16 @@ const imageDoc = (guideId, imgId) => doc(db, "artifacts", APP_ID, "public", "dat
    aby po člověku nezůstal otevřený poslech dat. */
 let odbery = [];
 const zrusOdbery = () => { odbery.forEach(stop => { try { stop(); } catch (e) {} }); odbery = []; };
+
+/* Výkazy se neposlouchají samy od sebe – kdo na ně nemá právo, dostal by od
+   databáze jen odmítnutí do konzole. Odběr si vyžádá stránka `vykazy.html`
+   zavoláním KB.watchVykazy() a od té chvíle se obnovuje i po přihlášení. */
+let vykazyOdbery = [];
+let vykazyChteno = "";          // "" | "vse" (správce) | "moje" (zaměstnanec)
+const zrusVykazy = () => {
+    vykazyOdbery.forEach(stop => { try { stop(); } catch (e) {} });
+    vykazyOdbery = [];
+};
 
 try {
     const app = initializeApp(FIREBASE_CONFIG);
@@ -99,7 +157,9 @@ try {
     onAuthStateChanged(auth, (user) => {
         if (!user) {
             zrusOdbery();
+            zrusVykazy();
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
+            KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -157,8 +217,17 @@ try {
             // dokud si skupiny nikdo neupravil, platí výchozí trojice
             KB.skupiny = (Array.isArray(data.groups) && data.groups.length)
                 ? data.groups : KB.DEFAULT_SKUPINY.slice();
+            /* Projekty uvnitř zakázky a firmy, kterým se fakturuje, leží tady
+               a ne mezi tajnými čísly – zaměstnanec si je u svého výkazu musí
+               umět vybrat. Tajné jsou sazby a rozpočty, ne názvy. */
+            KB.projekty = (data.projekty && typeof data.projekty === "object") ? data.projekty : {};
+            KB.firmy = Array.isArray(data.firmy) ? data.firmy : [];
             emit("zakazky", KB.zakazky);
         }, (err) => console.error("Chyba čtení zakázek:", err)));
+
+        // po opětovném přihlášení navázat i výkazy, pokud si o ně stránka řekla
+        zrusVykazy();
+        if (vykazyChteno) sledujVykazy(vykazyChteno === "moje");
     });
 } catch (err) {
     console.warn("Firebase se nepodařilo spustit – offline režim.", err);
@@ -578,6 +647,206 @@ KB.loadBoardImages = async (boardId) => {
     const map = {};
     snap.forEach(d => { map[d.id] = d.data().data; });
     return map;
+};
+
+/* ---------------------------------------------------------------- výkazy --
+   Jeden dokument = jedna položka práce, ne celý den. Den se skládá z položek,
+   protože ráno se fotí a odpoledne kreslí do ArcGIS – a přesně tyhle části
+   se pak sčítají zvlášť. Kdyby byl dokumentem celý den, muselo by se to
+   rozpadat až při čtení a nedalo by se to pořádně filtrovat.
+
+   Položka:
+     { uid, osoba, datum:"2026-08-12", nazev, zakazka, firma,
+       cinnost:"FOCENÍ", technologie:"VZT", od:"07:30", do:"16:00",
+       pauza:30, hodiny:8.5, sazba:350, castka:2975, poznamka }
+
+   `hodiny` a `castka` se ukládají dopočítané. Je to úmyslná duplicita:
+   sazba se časem mění a přehled za loňský rok musí zůstat takový, jaký byl
+   ve chvíli zápisu – ne přepočítaný dnešními čísly. */
+
+/* Čas a peníze chodí ze dvou kolekcí. Držíme si je zvlášť a po každé změně
+   je spojíme do jednoho pole – stránky pak pracují s jedním záznamem a je
+   jim jedno, odkud která hodnota přišla. */
+let syroveZaznamy = [];
+let syroveCastky = {};
+
+function spojVykazy() {
+    KB.vykazy = syroveZaznamy.map(z => Object.assign(
+        { sazba: 0, castka: 0 }, z, syroveCastky[z.id] || {}));
+    // nejnovější nahoře; ve stejném dni se řadí podle začátku práce
+    KB.vykazy.sort((a, b) => (b.datum || "").localeCompare(a.datum || "")
+        || (a.od || "").localeCompare(b.od || ""));
+    emit("vykazy", KB.vykazy);
+}
+
+function sledujVykazy(jenSve) {
+    if (!db || !auth || !auth.currentUser) return;
+
+    /* Pravidla nejsou filtr: kdo nesmí číst cizí zápisy, musí si o svoje říct
+       dotazem, jinak Firestore odmítne celý přenos. */
+    const zdroj = jenSve
+        ? query(vykazyCol(), where("uid", "==", auth.currentUser.uid))
+        : vykazyCol();
+
+    vykazyOdbery.push(onSnapshot(zdroj, (snapshot) => {
+        syroveZaznamy = [];
+        snapshot.forEach(d => syroveZaznamy.push({ id: d.id, ...d.data() }));
+        spojVykazy();
+    }, (err) => {
+        console.error("Chyba čtení výkazů:", err);
+        emit("vykazy-chyba", err);
+    }));
+
+    if (jenSve) return;      // částky ani sazby zaměstnanci nepatří
+
+    vykazyOdbery.push(onSnapshot(castkyCol(), (snapshot) => {
+        syroveCastky = {};
+        snapshot.forEach(d => { syroveCastky[d.id] = d.data(); });
+        spojVykazy();
+    }, (err) => console.error("Chyba čtení částek:", err)));
+
+    vykazyOdbery.push(onSnapshot(vykazyMeta(), (snap) => {
+        const data = snap.exists() ? snap.data() : {};
+        // prázdný uložený číselník nesmí přebít výchozí hodnoty z kódu
+        KB.cinnosti = (Array.isArray(data.cinnosti) && data.cinnosti.length)
+            ? data.cinnosti : KB.DEFAULT_CINNOSTI.slice();
+        KB.technologie = (Array.isArray(data.technologie) && data.technologie.length)
+            ? data.technologie : KB.DEFAULT_TECHNOLOGIE.slice();
+        KB.sazby = (data.sazby && typeof data.sazby === "object") ? data.sazby : {};
+        KB.rozpocty = (data.rozpocty && typeof data.rozpocty === "object") ? data.rozpocty : {};
+        emit("vykazy-meta", data);
+    }, (err) => console.error("Chyba čtení číselníků výkazů:", err)));
+}
+
+/** Živý přenos všech výkazů včetně peněz – jen pro správce. */
+KB.watchVykazy = async () => {
+    vykazyChteno = "vse";
+    if (vykazyOdbery.length) return;
+    if (authReady) await authReady;
+    if (!vykazyOdbery.length) sledujVykazy(false);
+};
+
+/** Živý přenos vlastních zápisů bez peněz – pro stránku zaměstnance. */
+KB.watchMojeVykazy = async () => {
+    vykazyChteno = "moje";
+    if (vykazyOdbery.length) return;
+    if (authReady) await authReady;
+    if (!vykazyOdbery.length) sledujVykazy(true);
+};
+
+KB.newVykazId = () => "vyk_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+/**
+ * Odpracované hodiny z časů a pauzy.
+ * Konec dřív než začátek se bere jako práce přes půlnoc (22:00–02:00),
+ * ne jako chyba – noční směny v provozech se dějí. Překlep se pozná podle
+ * toho, že se výsledek hned ukáže u formuláře.
+ */
+KB.spocitejHodiny = (od, doKdy, pauzaMin) => {
+    const minuty = (cas) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(cas || "").trim());
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const a = minuty(od), b = minuty(doKdy);
+    if (a === null || b === null) return 0;
+
+    const delka = (b >= a ? b - a : b + 1440 - a) - Math.max(0, Number(pauzaMin) || 0);
+    return delka <= 0 ? 0 : Math.round((delka / 60) * 100) / 100;
+};
+
+/** Odpracovaný čas – tenhle dokument smí zapsat i vlastník zápisu. */
+function zaznamPayload(data) {
+    return {
+        uid:      data.uid || "",
+        osoba:    data.osoba || "",
+        datum:    data.datum || "",
+        nazev:    data.nazev || "",
+        zakazka:  data.zakazka || "",
+        projekt:  data.projekt || "",
+        firma:    data.firma || "",
+        cinnost:  data.cinnost || "",
+        technologie: data.technologie || "",
+        od:       data.od || "",
+        do:       data.do || "",
+        pauza:    Math.max(0, Number(data.pauza) || 0),
+        hodiny:   KB.spocitejHodiny(data.od, data.do, data.pauza),
+        poznamka: data.poznamka || "",
+        createdMs: data.createdMs || Date.now(),
+        createdBy: data.createdBy || window.KB_USER || "",
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    };
+}
+
+/** Uloží zápis i s penězi – volá stránka správce. */
+KB.saveVykaz = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+
+    const zaznam = zaznamPayload(data);
+    const sazba = Math.max(0, Number(data.sazba) || 0);
+
+    await setDoc(vykazDoc(id), zaznam, { merge: true });
+    await setDoc(castkaDoc(id), {
+        sazba:  sazba,
+        castka: Math.round(zaznam.hodiny * sazba * 100) / 100,
+        // pár údajů navíc, aby se dalo v částkách hledat i bez druhé kolekce
+        uid: zaznam.uid, datum: zaznam.datum, zakazka: zaznam.zakazka,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    return id;
+};
+
+/**
+ * Zápis zaměstnance – jen čas, žádné peníze. Sazbu k němu doplní správce,
+ * do té doby je zápis v přehledu za nula korun.
+ */
+KB.saveMujVykaz = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid) throw new Error("Není kdo zapisuje.");
+    await setDoc(vykazDoc(id), zaznamPayload(Object.assign({}, data, { uid: uid })), { merge: true });
+    return id;
+};
+
+KB.deleteVykaz = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(vykazDoc(id));
+    await deleteDoc(castkaDoc(id)).catch(() => {});
+};
+
+/**
+ * Tajné číselníky výkazů (sazby lidí, rozpočty zakázek). Zapisuje se jen to,
+ * co volající opravdu předá, ať úprava rozpočtu neshodí uložené sazby.
+ */
+KB.saveVykazNastaveni = async (patch) => {
+    if (authReady) await authReady;
+    requireDb();
+
+    const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    ["cinnosti", "technologie", "sazby", "rozpocty"].forEach(klic => {
+        if (patch[klic] !== undefined) payload[klic] = patch[klic];
+    });
+    await setDoc(vykazyMeta(), payload, { merge: true });
+};
+
+/**
+ * Netajná část číselníku zakázek – názvy, projekty uvnitř zakázky a firmy.
+ * Leží v `meta/zakazky` vedle skupin úkolů, aby si je u svého výkazu mohl
+ * vybrat i zaměstnanec. Zapisuje se přírůstkově ze stejného důvodu jako výše.
+ */
+KB.saveCiselnikZakazek = async (patch) => {
+    if (authReady) await authReady;
+    requireDb();
+
+    const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    ["names", "closed", "groups", "projekty", "firmy"].forEach(klic => {
+        if (patch[klic] !== undefined) payload[klic] = patch[klic];
+    });
+    await setDoc(metaDoc("zakazky"), payload, { merge: true });
 };
 
 /* ------------------------------------------------------------------- logy */

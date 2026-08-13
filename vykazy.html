@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Výkazy práce – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=43">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <!-- kdo na výkazy nemá právo, uvidí jen tohle -->
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Výkazy práce vidí jen správci.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou v nich hodinové sazby a výdělky lidí. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+
+        <div class="spread">
+            <div>
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Výkazy práce</h2>
+                <p class="small muted" style="margin-top:3px">
+                    Den se zapisuje po položkách – ráno focení, odpoledne ArcGIS jsou dva zápisy.
+                    Podle nich se pak počítají peníze na zakázce.
+                </p>
+            </div>
+            <div class="row" style="gap:8px">
+                <button id="btnCiselniky" class="btn btn--ghost btn--sm">Firmy a sazby</button>
+                <button id="btnZapis" class="btn btn--primary btn--sm">+ Nový den</button>
+            </div>
+        </div>
+
+        <!-- ================================================== ZÁPIS DNE -->
+        <section id="zapis" class="card col" style="padding:18px;gap:14px" hidden>
+
+            <div class="spread">
+                <b style="font-size:16px">Zápis dne</b>
+                <button type="button" class="linkbtn" id="btnZapisZavri">Zavřít</button>
+            </div>
+
+            <div class="row row--wrap" style="gap:12px;align-items:flex-end">
+                <div style="width:180px">
+                    <label class="label" for="dDatum">Datum</label>
+                    <input type="date" id="dDatum" class="field">
+                </div>
+                <div class="grow" style="min-width:220px">
+                    <label class="label" for="dOsoba">Kdo pracoval</label>
+                    <select id="dOsoba" class="field"></select>
+                </div>
+            </div>
+
+            <div id="radky"></div>
+
+            <div class="row row--wrap" style="gap:10px">
+                <button type="button" id="btnPlus" class="btn btn--ghost btn--sm">+ Další položka dne</button>
+                <div class="grow"></div>
+                <div class="small muted" id="denSoucet" style="font-variant-numeric:tabular-nums"></div>
+                <button type="button" id="btnUloz" class="btn btn--primary">Uložit den</button>
+            </div>
+        </section>
+
+        <!-- =================================================== FILTRY -->
+        <div class="card col" style="padding:14px 16px;gap:12px">
+            <div class="row row--wrap" style="gap:8px">
+                <span class="label" style="margin:0;align-self:center">Období</span>
+                <button type="button" class="chip" data-obdobi="mesic">Tento měsíc</button>
+                <button type="button" class="chip" data-obdobi="minuly">Minulý měsíc</button>
+                <button type="button" class="chip" data-obdobi="rok">Tento rok</button>
+                <button type="button" class="chip" data-obdobi="vse">Vše</button>
+                <div class="row" style="gap:6px;margin-left:auto">
+                    <input type="date" id="fOd" class="field" style="width:158px" aria-label="Od data">
+                    <span class="muted small">–</span>
+                    <input type="date" id="fDo" class="field" style="width:158px" aria-label="Do data">
+                </div>
+            </div>
+
+            <div class="row row--wrap" style="gap:10px">
+                <select id="fOsoba" class="field" style="width:auto;min-width:170px"></select>
+                <select id="fZakazka" class="field" style="width:auto;min-width:170px"></select>
+                <select id="fProjekt" class="field" style="width:auto;min-width:150px"></select>
+                <select id="fFirma" class="field" style="width:auto;min-width:170px"></select>
+                <select id="fCinnost" class="field" style="width:auto;min-width:150px"></select>
+                <select id="fTech" class="field" style="width:auto;min-width:150px"></select>
+                <div class="grow"></div>
+                <button type="button" id="btnCsv" class="btn btn--ghost btn--sm">Stáhnout CSV</button>
+            </div>
+        </div>
+
+        <div id="souhrn" class="vyksum"></div>
+
+        <div id="prazdno" class="card center small muted" style="padding:40px" hidden>
+            Pro tenhle výběr tu zatím žádný zápis není.
+        </div>
+
+        <div id="tabulkaWrap" style="overflow-x:auto">
+            <table id="tabulka" class="vyk"></table>
+        </div>
+    </div>
+</main>
+
+<!-- ==================================================== ÚPRAVA POLOŽKY -->
+<div id="editOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:680px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b style="font-size:17px">Úprava zápisu</b>
+
+        <div class="row row--wrap" style="gap:12px;align-items:flex-end">
+            <div style="width:180px">
+                <label class="label" for="eDatum">Datum</label>
+                <input type="date" id="eDatum" class="field">
+            </div>
+            <div class="grow" style="min-width:200px">
+                <label class="label" for="eOsoba">Kdo pracoval</label>
+                <select id="eOsoba" class="field"></select>
+            </div>
+        </div>
+
+        <div id="editRadek"></div>
+
+        <div class="row" style="justify-content:space-between;gap:10px">
+            <button id="btnSmaz" class="btn btn--ghost" style="color:var(--danger)">Smazat</button>
+            <div class="row" style="gap:10px;margin-left:auto">
+                <button id="btnEditZrus" class="btn btn--ghost">Zrušit</button>
+                <button id="btnEditUloz" class="btn btn--primary">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================== ČÍSELNÍKY -->
+<div id="ciselnikOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:620px;width:100%;gap:16px;max-height:90vh;overflow-y:auto">
+        <b style="font-size:17px">Zakázky, firmy a sazby</b>
+
+        <div>
+            <span class="label">Zakázky – rozpočet a projekty</span>
+            <div id="cZakazky" class="col" style="gap:10px"></div>
+            <div class="tiny muted" style="margin-top:6px">
+                Rozpočet se zadává v korunách i hodinách; stačí jedno z toho.
+                Projekty jsou části zakázky oddělené čárkou. <b>Mazat zakázky</b>
+                se dá ve Správě zakázek v úkolovníku – je to týž číselník.
+            </div>
+        </div>
+
+        <div>
+            <label class="label" for="cNove">Přidat zakázky</label>
+            <textarea id="cNove" rows="2" class="field" placeholder="jedna zakázka na řádek"></textarea>
+        </div>
+
+        <div>
+            <label class="label" for="cFirmy">Firmy, kterým se fakturuje</label>
+            <textarea id="cFirmy" rows="4" class="field" placeholder="jedna firma na řádek"></textarea>
+            <div class="tiny muted" style="margin-top:6px">
+                Odebráním z číselníku firma nezmizí ze starých zápisů.
+            </div>
+        </div>
+
+        <div>
+            <span class="label">Výchozí hodinová sazba člověka</span>
+            <div id="cSazby" class="col" style="gap:6px"></div>
+            <div class="tiny muted" style="margin-top:6px">
+                Jen předvyplnění formuláře. U konkrétního zápisu se sazba dá přepsat
+                a uloží se ta zapsaná – změna sazby nikdy nepřepočítá starší výkazy.
+            </div>
+        </div>
+
+        <div class="row" style="gap:10px;justify-content:flex-end">
+            <button id="btnCisZrus" class="btn btn--ghost">Zrušit</button>
+            <button id="btnCisUloz" class="btn btn--primary">Uložit</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=43"></script>
+<script src="assets/js/ui.js?v=43"></script>
+<script src="assets/js/vykazy.js?v=43"></script>
+<script type="module" src="assets/js/store.js?v=43"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    let sledovaniZapnuto = false;
+    let editId = null;
+    let vychoziSazba = 0;          // sazba člověka vybraného ve formuláři dne
+
+    const filtr = { od: "", do: "", uid: "", zakazka: "", projekt: "", firma: "",
+                    cinnost: "", tech: "", text: "" };
+
+    /* ================================================= FORMULÁŘ POLOŽKY ==
+       Tentýž kus formuláře slouží pro novou položku dne i pro úpravu
+       existujícího zápisu – ať se pole nemusí udržovat na dvou místech. */
+
+    /** Projekty patří pod zakázku – bez ní není z čeho vybírat. */
+    function projektOptions(zakazka, vybrany) {
+        const seznam = V.projekty(zakazka);
+        if (!zakazka) return '<option value="">— nejdřív zakázku —</option>';
+        if (!seznam.length) return '<option value="">— zakázka nemá projekty —</option>';
+        return V.options(seznam, vybrany, "— celá zakázka —");
+    }
+
+    function polozkaHtml(data, smazatelna) {
+        const d = data || {};
+        return '<div class="polozka" data-polozka>' +
+            '<div class="polozka__head">' +
+                '<span class="polozka__poradi">Zápis</span>' +
+                (smazatelna ? '<button type="button" class="linkbtn" data-odeber>Odebrat</button>' : "") +
+            "</div>" +
+
+            '<div class="polozka__grid">' +
+                '<div class="polozka__wide">' +
+                    '<label class="label">Název práce</label>' +
+                    '<input type="text" class="field" data-f="nazev" placeholder="co se konkrétně dělalo" ' +
+                        'value="' + esc(d.nazev || "") + '">' +
+                "</div>" +
+
+                '<div><label class="label">Zakázka</label>' +
+                    '<select class="field" data-f="zakazka">' +
+                        V.options(V.zakazky(), d.zakazka || "", "— vyber —") + "</select></div>" +
+
+                '<div><label class="label">Projekt</label>' +
+                    '<select class="field" data-f="projekt">' +
+                        projektOptions(d.zakazka || "", d.projekt || "") + "</select></div>" +
+
+                '<div><label class="label">Fakturovat firmě</label>' +
+                    '<select class="field" data-f="firma">' +
+                        V.options(V.firmy(), d.firma || "", "— vyber —") + "</select></div>" +
+
+                '<div><label class="label">Část zpracování</label>' +
+                    '<select class="field" data-f="cinnost">' +
+                        V.options(V.cinnosti(), d.cinnost || "", "— vyber —") + "</select></div>" +
+
+                '<div><label class="label">Technologie</label>' +
+                    '<select class="field" data-f="technologie">' +
+                        V.options(V.technologie().map(t => ({ value: t.zkratka, label: t.zkratka + " – " + t.nazev })),
+                                  d.technologie || "", "— nezadáno —") + "</select></div>" +
+
+                '<div><label class="label">Od</label>' +
+                    '<input type="time" class="field" data-f="od" value="' + esc(d.od || "") + '"></div>' +
+
+                '<div><label class="label">Do</label>' +
+                    '<input type="time" class="field" data-f="do" value="' + esc(d.do || "") + '"></div>' +
+
+                '<div><label class="label">Pauza (min)</label>' +
+                    '<div class="pauza">' +
+                        '<input type="number" class="field" data-f="pauza" min="0" step="5" ' +
+                            'value="' + (d.pauza === undefined ? 0 : Number(d.pauza)) + '">' +
+                        [0, 30, 45, 60].map(m =>
+                            '<button type="button" class="chip" data-pauza="' + m + '">' + m + "</button>").join("") +
+                    "</div></div>" +
+
+                '<div><label class="label">Sazba (Kč/h)</label>' +
+                    '<input type="number" class="field" data-f="sazba" min="0" step="10" ' +
+                        'value="' + (d.sazba ? Number(d.sazba) : "") + '"></div>' +
+
+                '<div class="polozka__wide">' +
+                    '<label class="label">Poznámka</label>' +
+                    '<input type="text" class="field" data-f="poznamka" placeholder="nepovinné" ' +
+                        'value="' + esc(d.poznamka || "") + '">' +
+                "</div>" +
+            "</div>" +
+
+            '<div class="polozka__vysledek">' +
+                '<span class="polozka__hod" data-vysledek-hod>0 h</span>' +
+                '<span class="polozka__kc" data-vysledek-kc>0 Kč</span>' +
+                '<span class="polozka__varovani" data-vysledek-pozn hidden></span>' +
+            "</div>" +
+        "</div>";
+    }
+
+    /** Přečte položku z DOM. */
+    function ctiPolozku(box) {
+        const val = (klic) => {
+            const el = box.querySelector('[data-f="' + klic + '"]');
+            return el ? el.value : "";
+        };
+        return {
+            nazev: val("nazev").trim(),
+            zakazka: val("zakazka"),
+            projekt: val("projekt"),
+            firma: val("firma"),
+            cinnost: val("cinnost"),
+            technologie: val("technologie"),
+            od: val("od"),
+            do: val("do"),
+            pauza: Number(val("pauza")) || 0,
+            sazba: Number(val("sazba")) || 0,
+            poznamka: val("poznamka").trim()
+        };
+    }
+
+    /** Přepočítá hodiny a částku pod položkou. */
+    function prepocti(box) {
+        if (!box) return 0;
+        const p = ctiPolozku(box);
+        const hodiny = window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+
+        box.querySelector("[data-vysledek-hod]").textContent = V.hod(hodiny);
+        box.querySelector("[data-vysledek-kc]").textContent = V.kc(hodiny * p.sazba);
+
+        // Konec dřív než začátek se počítá jako práce přes půlnoc. Když z toho
+        // vyjde nesmyslně dlouhý den, je to skoro jistě překlep – řekneme to.
+        const pozn = box.querySelector("[data-vysledek-pozn]");
+        let text = "";
+        if (p.od && p.do && p.do < p.od) text = "počítáno přes půlnoc";
+        if (hodiny > 16) text = "přes 16 hodin – není to překlep?";
+        if (p.od && p.do && hodiny === 0) text = "pauza je delší než odpracovaný čas";
+        pozn.textContent = text;
+        pozn.hidden = !text;
+
+        return hodiny;
+    }
+
+    /* ==================================================== ZÁPIS DNE ==== */
+
+    const radkyBox = () => $("radky");
+
+    const prectiRadky = () =>
+        Array.from(radkyBox().querySelectorAll("[data-polozka]")).map(ctiPolozku);
+
+    const posledniRadek = () => {
+        const boxy = radkyBox().querySelectorAll("[data-polozka]");
+        return boxy.length ? boxy[boxy.length - 1] : null;
+    };
+
+    /** Přečísluje popisky položek a schová „Odebrat" u jediné zbylé. */
+    function precisluj() {
+        const boxy = Array.from(radkyBox().querySelectorAll("[data-polozka]"));
+        boxy.forEach((box, i) => {
+            box.querySelector(".polozka__poradi").textContent = "Položka " + (i + 1);
+            const odeber = box.querySelector("[data-odeber]");
+            if (odeber) odeber.hidden = boxy.length < 2;
+        });
+        soucetDne();
+    }
+
+    function soucetDne() {
+        let hodiny = 0, castka = 0;
+        prectiRadky().forEach(p => {
+            const h = window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+            hodiny += h;
+            castka += h * p.sazba;
+        });
+        $("denSoucet").innerHTML = hodiny
+            ? "Den celkem: <b>" + V.hod(hodiny) + "</b> · <b>" + V.kc(castka) + "</b>"
+            : "";
+    }
+
+    /** Přidá položku. Navazuje na předchozí – čas začíná tam, kde skončila. */
+    function pridejRadek(predloha) {
+        const posledni = posledniRadek();
+        const zdroj = predloha || (posledni ? ctiPolozku(posledni) : null);
+
+        const data = zdroj ? {
+            nazev: "",
+            zakazka: zdroj.zakazka,
+            projekt: zdroj.projekt,
+            firma: zdroj.firma,
+            cinnost: zdroj.cinnost,
+            technologie: zdroj.technologie,
+            od: zdroj.do || "",
+            do: "",
+            pauza: 0,                       // pauza se do dalšího bloku netáhne
+            sazba: zdroj.sazba || vychoziSazba,
+            poznamka: ""
+        } : { sazba: vychoziSazba, pauza: 0 };
+
+        radkyBox().insertAdjacentHTML("beforeend", polozkaHtml(data, true));
+        precisluj();
+        const novy = posledniRadek();
+        prepocti(novy);
+        return novy;
+    }
+
+    function novyDen() {
+        $("dDatum").value = V.dnesISO();
+        naplnOsoby();
+        radkyBox().innerHTML = "";
+        pridejRadek({ sazba: vychoziSazba, pauza: 0 });
+        const prvni = radkyBox().querySelector('[data-f="nazev"]');
+        if (prvni) prvni.focus();
+    }
+
+    function naplnOsoby() {
+        const muj = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        const volby = V.lide().map(u => ({ value: u.id, label: V.jmeno(u) }));
+        const vybrany = $("dOsoba").value || muj;
+        $("dOsoba").innerHTML = V.options(volby, vybrany, volby.length ? "" : "— nikdo v seznamu —");
+        nastavVychoziSazbu(true);
+    }
+
+    /**
+     * Sazba člověka se propíše do řádků, které si ji ještě nepřepsaly ručně.
+     * Ručně zadané číslo přebít nesmíme – proto se mění jen to, co je prázdné
+     * nebo se rovná dosavadní výchozí hodnotě.
+     */
+    function nastavVychoziSazbu(tiche) {
+        const stara = vychoziSazba;
+        vychoziSazba = Number((window.KB.sazby || {})[$("dOsoba").value]) || 0;
+        if (tiche || stara === vychoziSazba) return;
+
+        radkyBox().querySelectorAll('[data-f="sazba"]').forEach(input => {
+            if (!input.value || Number(input.value) === stara) input.value = vychoziSazba || "";
+        });
+        radkyBox().querySelectorAll("[data-polozka]").forEach(prepocti);
+        soucetDne();
+    }
+
+    async function ulozDen() {
+        const datum = $("dDatum").value;
+        const uid = $("dOsoba").value;
+        if (!datum) return window.KBUI.toast("Doplň datum.", "warn");
+        if (!uid) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
+
+        const polozky = prectiRadky();
+        const chyba = polozky.findIndex(p =>
+            !p.nazev || !p.od || !p.do || !p.zakazka ||
+            window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0);
+
+        if (chyba !== -1) {
+            return window.KBUI.toast("Položka " + (chyba + 1) +
+                ": doplň název, zakázku a časy tak, ať vyjde kladný čas.", "warn");
+        }
+
+        const u = V.clovek(uid);
+        try {
+            await Promise.all(polozky.map(p => window.KB.saveVykaz(window.KB.newVykazId(),
+                Object.assign({}, p, { uid: uid, osoba: u ? V.jmeno(u) : "", datum: datum }))));
+
+            window.KBUI.toast(polozky.length === 1
+                ? "Zápis uložen." : "Uloženo " + polozky.length + " položek.");
+            radkyBox().innerHTML = "";
+            pridejRadek({ sazba: vychoziSazba, pauza: 0 });
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo – výkazy smí zapisovat jen správce.", "error");
+        }
+    }
+
+    /* ======================================================== FILTRY ==== */
+
+    function nastavObdobi(druh) {
+        const meze = V.obdobi(druh);
+        filtr.od = meze.od;
+        filtr.do = meze.do;
+        $("fOd").value = filtr.od;
+        $("fDo").value = filtr.do;
+        render();
+    }
+
+    function naplnFiltry() {
+        $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
+            filtr.uid, "Všichni lidé");
+        $("fZakazka").innerHTML = V.options(V.zakazky(), filtr.zakazka, "Všechny zakázky");
+        // bez vybrané zakázky by seznam projektů byl směsice ze všech zakázek
+        $("fProjekt").innerHTML = filtr.zakazka
+            ? V.options(V.projekty(filtr.zakazka), filtr.projekt, "Všechny projekty")
+            : '<option value="">Všechny projekty</option>';
+        $("fProjekt").disabled = !filtr.zakazka;
+        $("fFirma").innerHTML = V.options(V.firmy(), filtr.firma, "Všechny firmy");
+        $("fCinnost").innerHTML = V.options(V.cinnosti(), filtr.cinnost, "Všechny části zpracování");
+        $("fTech").innerHTML = V.options(
+            V.technologie().map(t => ({ value: t.zkratka, label: t.zkratka + " – " + t.nazev })),
+            filtr.tech, "Všechny technologie");
+    }
+
+    /** Druhý řádek lišty – přepínač mezi zápisem a přehledem. */
+    function paintSubbar() {
+        const slot = $("appSubbar");
+        if (!slot) return;
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            '<span class="subbar__cat">ZÁPIS A ZÁZNAMY</span>' +
+            '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html">PŘEHLED LIDÍ A PENĚZ</a>' +
+        "</div></div>";
+    }
+
+    /* ======================================================== VÝPIS ==== */
+
+    function render() {
+        if (!window.KBUI.can("vykaz.view")) {
+            $("stop").hidden = false;
+            $("obsah").hidden = true;
+            return;
+        }
+        $("stop").hidden = true;
+        $("obsah").hidden = false;
+        zapniSledovani();
+        naplnFiltry();
+
+        const zaznamy = V.vyber(window.KB.vykazy || [], filtr).slice().sort((a, b) =>
+            (b.datum || "").localeCompare(a.datum || "") || (a.od || "").localeCompare(b.od || ""));
+
+        const s = V.soucty(zaznamy);
+        $("souhrn").innerHTML =
+            V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["zápis", "zápisy", "zápisů"])) +
+            V.dlazdice("Vyfakturováno", V.kc(s.castka), "", true) +
+            V.dlazdice("Odpracovaných dní", V.cislo(s.dny), "napříč lidmi") +
+            V.dlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr");
+
+        $("prazdno").hidden = !!zaznamy.length;
+        $("tabulkaWrap").hidden = !zaznamy.length;
+        if (!zaznamy.length) return;
+
+        // seskupení po dnech – v jednom dni může být víc lidí i víc položek
+        const dny = new Map();
+        zaznamy.forEach(z => {
+            if (!dny.has(z.datum)) dny.set(z.datum, []);
+            dny.get(z.datum).push(z);
+        });
+
+        $("tabulka").innerHTML =
+            "<thead><tr>" +
+                "<th>Kdo</th><th>Práce</th><th>Zakázka</th><th>Firma</th>" +
+                "<th>Část</th><th>Tech.</th><th>Čas</th>" +
+                '<th class="vyk__num">Hodin</th><th class="vyk__num">Sazba</th>' +
+                '<th class="vyk__num">Částka</th><th></th>' +
+            "</tr></thead><tbody>" +
+            Array.from(dny.entries()).map(([datum, radky]) => {
+                const den = V.soucty(radky);
+                return '<tr class="vyk__den"><td colspan="11">' +
+                        "<b>" + esc(V.czDatum(datum)) + "</b>" +
+                        "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
+                            " · " + V.kc(den.castka) + "</span>" +
+                    "</td></tr>" + radky.map(radek).join("");
+            }).join("") +
+            "</tbody>";
+
+        function radek(z) {
+            const pauza = Number(z.pauza) || 0;
+            return "<tr>" +
+                "<td>" + esc(V.osobaText(z)) + "</td>" +
+                '<td class="vyk__nazev">' + esc(z.nazev || "") +
+                    (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
+                "<td>" + esc(z.zakazka || "") +
+                    (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
+                "<td>" + esc(z.firma || "") + "</td>" +
+                "<td>" + esc(z.cinnost || "") + "</td>" +
+                '<td title="' + esc(V.techLabel(z.technologie)) + '">' + esc(z.technologie || "") + "</td>" +
+                "<td>" + esc((z.od || "") + "–" + (z.do || "")) +
+                    (pauza ? '<span class="vyk__pozn">pauza ' + pauza + " min</span>" : "") + "</td>" +
+                '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
+                '<td class="vyk__num">' + V.cislo(z.sazba) + "</td>" +
+                '<td class="vyk__num"><b>' + V.kc(z.castka) + "</b></td>" +
+                '<td class="vyk__akce">' +
+                    '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>' +
+                "</td>" +
+            "</tr>";
+        }
+    }
+
+    /* ======================================================== ÚPRAVA ==== */
+
+    function otevriUpravu(id) {
+        const z = (window.KB.vykazy || []).find(v => v.id === id);
+        if (!z) return;
+
+        editId = id;
+        $("eDatum").value = z.datum || "";
+        $("eOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })), z.uid, "");
+        $("editRadek").innerHTML = polozkaHtml(z, false);
+        prepocti($("editRadek").querySelector("[data-polozka]"));
+        $("editOverlay").hidden = false;
+    }
+
+    async function ulozUpravu() {
+        const p = ctiPolozku($("editRadek").querySelector("[data-polozka]"));
+        const puvodni = (window.KB.vykazy || []).find(v => v.id === editId) || {};
+
+        if (!p.nazev || !p.od || !p.do || !p.zakazka) {
+            return window.KBUI.toast("Doplň název, zakázku a časy.", "warn");
+        }
+        if (window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0) {
+            return window.KBUI.toast("Z časů a pauzy nevyjde žádný odpracovaný čas.", "warn");
+        }
+
+        const uid = $("eOsoba").value;
+        const u = V.clovek(uid);
+        try {
+            await window.KB.saveVykaz(editId, Object.assign({}, p, {
+                uid: uid,
+                osoba: u ? V.jmeno(u) : (puvodni.osoba || ""),
+                datum: $("eDatum").value,
+                createdMs: puvodni.createdMs,
+                createdBy: puvodni.createdBy
+            }));
+            $("editOverlay").hidden = true;
+            window.KBUI.toast("Zápis upraven.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    async function smazZapis() {
+        const z = (window.KB.vykazy || []).find(v => v.id === editId);
+        if (!z) return;
+        if (!confirm("Opravdu smazat zápis „" + (z.nazev || "") + "“ ze dne " +
+                     V.czDatum(z.datum) + "?")) return;
+        try {
+            await window.KB.deleteVykaz(editId);
+            $("editOverlay").hidden = true;
+            window.KBUI.toast("Zápis smazán.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Smazání selhalo.", "error");
+        }
+    }
+
+    /* ===================================================== ČÍSELNÍKY ==== */
+
+    function otevriCiselniky() {
+        $("cFirmy").value = V.firmy().join("\n");
+        $("cNove").value = "";
+
+        $("cZakazky").innerHTML = V.zakazky().map(zak => {
+            const r = V.rozpocet(zak);
+            return '<div class="card" style="padding:10px 12px">' +
+                '<div class="row row--wrap" style="gap:8px">' +
+                    '<b class="grow" style="min-width:120px">' + esc(zak) + "</b>" +
+                    '<input type="number" class="field" style="width:130px" min="0" step="1000" ' +
+                        'placeholder="rozpočet Kč" data-roz-kc="' + esc(zak) + '" ' +
+                        'value="' + (r.kc || "") + '">' +
+                    '<input type="number" class="field" style="width:104px" min="0" step="10" ' +
+                        'placeholder="hodin" data-roz-h="' + esc(zak) + '" ' +
+                        'value="' + (r.hodiny || "") + '">' +
+                "</div>" +
+                '<input type="text" class="field" style="margin-top:8px" ' +
+                    'placeholder="projekty oddělené čárkou" data-projekty="' + esc(zak) + '" ' +
+                    'value="' + esc(V.projekty(zak).join(", ")) + '">' +
+            "</div>";
+        }).join("") || '<div class="tiny muted">Zatím tu není žádná zakázka.</div>';
+
+        const sazby = window.KB.sazby || {};
+        $("cSazby").innerHTML = V.lide().map(u =>
+            '<div class="row" style="gap:10px">' +
+                '<span class="grow small">' + esc(V.jmeno(u)) + "</span>" +
+                '<input type="number" class="field" style="width:120px" min="0" step="10" ' +
+                    'data-sazba="' + esc(u.id) + '" value="' + (Number(sazby[u.id]) || "") + '">' +
+                '<span class="small muted" style="width:36px">Kč/h</span>' +
+            "</div>").join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+
+        $("ciselnikOverlay").hidden = false;
+    }
+
+    async function ulozCiselniky() {
+        const radky = (text) => text.split("\n").map(r => r.trim()).filter(Boolean);
+
+        // --- tajné: sazby lidí a rozpočty zakázek
+        const sazby = {};
+        $("cSazby").querySelectorAll("[data-sazba]").forEach(input => {
+            const value = Number(input.value) || 0;
+            if (value > 0) sazby[input.dataset.sazba] = value;
+        });
+
+        const rozpocty = {};
+        $("cZakazky").querySelectorAll("[data-roz-kc]").forEach(input => {
+            const zak = input.dataset.rozKc;
+            const kc = Number(input.value) || 0;
+            const hodiny = Number($("cZakazky").querySelector(
+                '[data-roz-h="' + CSS.escape(zak) + '"]').value) || 0;
+            // zakázku bez rozpočtu do mapy nepíšeme, ať tam nezůstávají nuly
+            if (kc > 0 || hodiny > 0) rozpocty[zak] = { kc: kc, hodiny: hodiny };
+        });
+
+        // --- netajné: názvy zakázek, projekty a firmy
+        const projekty = {};
+        $("cZakazky").querySelectorAll("[data-projekty]").forEach(input => {
+            const seznam = input.value.split(",").map(p => p.trim()).filter(Boolean);
+            if (seznam.length) projekty[input.dataset.projekty] = seznam;
+        });
+
+        const nazvy = V.zakazky().slice();
+        radky($("cNove").value).forEach(nova => {
+            if (nazvy.indexOf(nova) === -1) nazvy.push(nova);
+        });
+
+        try {
+            await window.KB.saveVykazNastaveni({ sazby: sazby, rozpocty: rozpocty });
+            await window.KB.saveCiselnikZakazek({
+                names: nazvy, projekty: projekty, firmy: radky($("cFirmy").value)
+            });
+            $("ciselnikOverlay").hidden = true;
+            window.KBUI.toast("Číselníky uloženy.");
+            nastavVychoziSazbu(true);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    /* ========================================================= START ==== */
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KBUI.can("vykaz.view")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchVykazy();
+    }
+
+    // živý přepočet – jeden posluchač na celou stránku, ať se nemusí navazovat
+    // na každé nově vzniklé pole zvlášť
+    document.addEventListener("input", (event) => {
+        const box = event.target.closest("[data-polozka]");
+        if (!box) return;
+
+        // se změnou zakázky se mění i nabídka projektů pod ní
+        if (event.target.dataset.f === "zakazka") {
+            box.querySelector('[data-f="projekt"]').innerHTML =
+                projektOptions(event.target.value, "");
+        }
+        prepocti(box);
+        if (radkyBox().contains(box)) soucetDne();
+    });
+
+    document.addEventListener("click", (event) => {
+        const pauza = event.target.closest("[data-pauza]");
+        if (pauza) {
+            const box = pauza.closest("[data-polozka]");
+            box.querySelector('[data-f="pauza"]').value = pauza.dataset.pauza;
+            prepocti(box);
+            if (radkyBox().contains(box)) soucetDne();
+            return;
+        }
+
+        const odeber = event.target.closest("[data-odeber]");
+        if (odeber) {
+            odeber.closest("[data-polozka]").remove();
+            precisluj();
+            return;
+        }
+
+        const uprav = event.target.closest("[data-uprav]");
+        if (uprav) otevriUpravu(uprav.dataset.uprav);
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
+        paintSubbar();
+        nastavObdobi("mesic");
+
+        $("btnZapis").addEventListener("click", () => {
+            $("zapis").hidden = false;
+            novyDen();
+            $("zapis").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        $("btnZapisZavri").addEventListener("click", () => { $("zapis").hidden = true; });
+        $("btnPlus").addEventListener("click", () => {
+            pridejRadek().querySelector('[data-f="nazev"]').focus();
+        });
+        $("btnUloz").addEventListener("click", ulozDen);
+        $("dOsoba").addEventListener("change", () => nastavVychoziSazbu(false));
+
+        $("btnCiselniky").addEventListener("click", otevriCiselniky);
+        $("btnCisZrus").addEventListener("click", () => { $("ciselnikOverlay").hidden = true; });
+        $("btnCisUloz").addEventListener("click", ulozCiselniky);
+
+        $("btnEditZrus").addEventListener("click", () => { $("editOverlay").hidden = true; });
+        $("btnEditUloz").addEventListener("click", ulozUpravu);
+        $("btnSmaz").addEventListener("click", smazZapis);
+
+        $("btnCsv").addEventListener("click", () => {
+            const zaznamy = V.vyber(window.KB.vykazy || [], filtr).slice()
+                .sort((a, b) => (a.datum || "").localeCompare(b.datum || "") ||
+                                (a.od || "").localeCompare(b.od || ""));
+            if (!zaznamy.length) return window.KBUI.toast("Není co stahovat.", "warn");
+            V.stahni(V.csv(zaznamy),
+                "vykazy_" + (filtr.od || "vse") + "_" + (filtr.do || "vse") + ".csv");
+            window.KBUI.toast("Staženo " + zaznamy.length + " zápisů.");
+        });
+
+        document.querySelectorAll("[data-obdobi]").forEach(chip => {
+            chip.addEventListener("click", () => {
+                document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+                chip.classList.add("chip--active");
+                nastavObdobi(chip.dataset.obdobi);
+            });
+        });
+        document.querySelector('[data-obdobi="mesic"]').classList.add("chip--active");
+
+        [["fOd", "od"], ["fDo", "do"], ["fOsoba", "uid"], ["fZakazka", "zakazka"],
+         ["fProjekt", "projekt"], ["fFirma", "firma"], ["fCinnost", "cinnost"],
+         ["fTech", "tech"]].forEach(([id, klic]) => {
+            $(id).addEventListener("change", () => {
+                filtr[klic] = $(id).value;
+                // jiná zakázka = jiné projekty, ten starý by nic nenašel
+                if (klic === "zakazka") filtr.projekt = "";
+                render();
+            });
+        });
+
+        // hledání v liště prohledává zápisy – práci, zakázku, firmu i člověka
+        window.KBUI.onSearch((dotaz) => { filtr.text = dotaz; render(); });
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("vykazy", render);
+        window.KB.on("vykazy-meta", () => { naplnFiltry(); nastavVychoziSazbu(true); });
+        window.KB.on("users", render);
+        window.KB.on("zakazky", naplnFiltry);
+        window.KB.on("vykazy-chyba", () => {
+            window.KBUI.toast("Databáze výkazy nevydala – zkontroluj pravidla Firestore.", "error");
+        });
+
+        render();
+    });
+})();
+</script>
+</body>
+</html>

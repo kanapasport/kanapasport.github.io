@@ -134,7 +134,8 @@
         "spravce": [
             "ukol.create", "ukol.edit", "ukol.delete",
             "zakazky.manage", "historie.view", "milnik.manage",
-            "navod.create", "navod.delete", "navod.pdf"
+            "navod.create", "navod.delete", "navod.pdf",
+            "vykaz.view", "vykaz.edit"
         ],
         "zamestnanec": ["ukol.create", "ukol.edit", "navod.create"],
         "student":     ["ukol.edit", "navod.create"]
@@ -151,6 +152,8 @@
         "navod.create":   "tvořit návody",
         "navod.delete":   "mazat návody",
         "navod.pdf":      "stahovat návody do PDF",
+        "vykaz.view":     "vidět výkazy práce a peníze",
+        "vykaz.edit":     "zapisovat výkazy práce",
         "users.manage":   "spravovat uživatele",
         "web.design":     "měnit vzhled webu"
     };

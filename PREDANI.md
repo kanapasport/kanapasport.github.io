@@ -5,6 +5,9 @@ nebo v novém sezení. Poslední commit: `41fa176`.
 
 - **Živý web:** <https://kanapasport.github.io>
 - **Repozitář:** <https://github.com/kanapasport/kanapasport.github.io> (veřejný)
+  – pracovní kopie má v `origin` ještě starou adresu `kocismichal/pasportkana_navody`.
+  GitHub ji přesměrovává, takže push projde, ale čistší je ji přepsat:
+  `git remote set-url origin https://github.com/kanapasport/kanapasport.github.io.git`
 - **Data:** Firebase Firestore, projekt `pasportkana`, kolekce pod
   `artifacts/firemni-kb-app/public/data/…`
 
@@ -263,6 +266,66 @@ a kdy) a **Upravit**. Roletka v liště ukazuje šest nejbližších termínů.
     verzi assetu ve zdroji stránky.
 
 ---
+
+## Výkazy práce – rozpracované (12. 8. 2026)
+
+Návrh náhrady excelových výkazů: `vykazy.html` (zápis a záznamy) a
+`vykazy-prehled.html` (kolik kdo odpracoval a co to stálo). Popis je
+v [README.md](README.md#výkazy-práce), tady je jen to, co ještě není hotové.
+
+### Co se změnilo
+
+| Soubor | Co v něm přibylo |
+|---|---|
+| `vykazy.html` | **nový** – zápis dne po položkách, výpis, číselníky, export CSV |
+| `vykazy-prehled.html` | **nový** – součty, pruhy, čerpání rozpočtů, karty lidí |
+| `assets/js/vykazy.js` | **nový** – filtr, součty, pruhy, formát čísel, CSV (sdílí obě stránky) |
+| `assets/js/store.js` | kolekce `zaznamy` + `castky`, číselníky, `spocitejHodiny`, dva odběry |
+| `assets/js/ui.js` | práva `vykaz.view` a `vykaz.edit` pro správce |
+| `assets/js/taxonomy.js` | ikony `clock` a `chart`, nástroj *Výkazy práce* s `need` |
+| `assets/css/app.css` | sekce VÝKAZY PRÁCE – dlaždice, položky, tabulka, pruhy |
+| `firestore.rules` | větev `private/vykazy/**` – vlastník vidí svoje, peníze jen správce |
+| `*.html` | verze assetů `?v=42` → `?v=43` |
+
+### Jak to nasadit
+
+1. **Pravidla Firestore.** Firebase Console → Firestore Database → Rules,
+   vložit celý obsah [firestore.rules](firestore.rules) a dát *Publish*.
+   **Dokud se to neudělá, stránka nenačte nic ani hlavnímu správci** a řekne
+   to toastem.
+2. **Zkouška doma.** `npx --yes serve -l 4173 .`, otevřít
+   `http://localhost:4173/vykazy.html` (s koncovkou `.html`) a přihlásit se.
+3. **Číselníky.** Tlačítko *Firmy a sazby*: doplnit firmy, u zakázek rozpočty
+   a projekty, lidem výchozí hodinové sazby.
+4. **Zkušební zápis.** *+ Nový den*, uložit, zkontrolovat v přehledu a zase
+   smazat – data v databázi jsou ostrá.
+5. **Nasazení.** Commit a push na `main`, pak vyžádat build:
+   `gh api --method POST repos/kanapasport/kanapasport.github.io/pages/builds`
+6. **Ověření.** Přihlásit se pod účtem zaměstnance a zkontrolovat, že ikonu
+   hodin nevidí a na `vykazy.html` se mu ukáže jen hláška.
+
+**Model je připravený na to, že si lidi budou zapisovat sami.** Zápis je
+rozdělený na dva dokumenty se stejným `{id}`: čas (`zaznamy`) vidí vlastník
+i správce, peníze (`castky`) jen správce. Pravidla i funkce
+`KB.saveMujVykaz()` / `KB.watchMojeVykazy()` už s tím počítají.
+
+**Co ještě není:**
+
+- **Stránka „Moje výkazy" pro zaměstnance.** Datová vrstva je hotová, chybí
+  jen ta stránka. Až vznikne, musí se rozmyslet, jestli má člověk vidět
+  i vlastní částku – teď ji z principu nevidí.
+- **Odkud vzít stará data.** Google Sheets přes odkaz nejde číst – sdílení
+  je omezené, `…/export?format=csv` vrací HTTP 401. Buď stažené `.xlsx`
+  do složky (mimo git, jsou to firemní data), nebo import z CSV.
+- **Import starých výkazů.** Zatím se zapisuje jen ručně; hromadné nahrání
+  z Excelu je další krok, až bude jasná struktura těch tabulek.
+- **Zpětný zápis do Google Sheets nejde napřímo** – je to tentýž problém
+  jako u Cafly: statický web na Pages nemá kam schovat klíč. Cesta je
+  export CSV (hotovo) nebo Apps Script na straně tabulky.
+- **Schvalování výkazů** (kdo a kdy zápis potvrdil) není – nevíme, jestli se
+  má schvalovat. U Cafly to byla jedna z otázek v dotazníku.
+- **Sazba u zápisu je fakturační**, ne mzdová. Kdyby se měly sledovat i
+  náklady (mzda × hodiny) a z toho zisk zakázky, přibude druhé číslo.
 
 ## Co zbývá
 
