@@ -616,14 +616,19 @@
 
             const groups = menu.map(group =>
                 '<div class="dropdown__group">' +
+                    /* Názvy v roletce chodí z databáze (zakázky u úkolů, náplň
+                       milníků) a přejmenovat je smí kdokoliv přihlášený – bez
+                       ošetření by si tudy šlo podstrčit skript do lišty, tedy
+                       na každou stránku webu. */
                     (group.href
-                        ? '<a class="dropdown__title" href="' + group.href + '">' + group.title +
+                        ? '<a class="dropdown__title" href="' + esc(group.href) + '">' + esc(group.title) +
                           ((group.children || []).length ? '<span class="dropdown__more">›</span>' : "") + "</a>"
-                        : '<span class="dropdown__title">' + group.title + "</span>") +
+                        : '<span class="dropdown__title">' + esc(group.title) + "</span>") +
                     ((group.children || []).length
                         ? '<div class="dropdown__sub"><div class="dropdown__subin">' +
                             group.children.map(child =>
-                                '<a class="dropdown__link" href="' + child.href + '">' + child.title + "</a>").join("") +
+                                '<a class="dropdown__link" href="' + esc(child.href) + '">' +
+                                    esc(child.title) + "</a>").join("") +
                           "</div></div>"
                         : "") +
                 "</div>"

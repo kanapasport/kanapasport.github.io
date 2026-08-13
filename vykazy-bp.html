@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled BioPharm – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=48">
+    <link rel="stylesheet" href="assets/css/app.css?v=49">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -135,9 +135,9 @@
     </section>
 </main>
 
-<script src="assets/js/taxonomy.js?v=48"></script>
-<script src="assets/js/ui.js?v=48"></script>
-<script type="module" src="assets/js/store.js?v=48"></script>
+<script src="assets/js/taxonomy.js?v=49"></script>
+<script src="assets/js/ui.js?v=49"></script>
+<script type="module" src="assets/js/store.js?v=49"></script>
 
 <script>
 (function () {
@@ -224,10 +224,13 @@
         $("podnadpis").textContent = (data.nazevPlny || "") +
             " · spočítáno z historických výkazů" + (data.vytvoreno ? " k " + data.vytvoreno : "");
 
+        /* `value` chodí z uloženého JSONu, který nahrává správce – a správce
+           není hlavní správce. Kdyby se neošetřilo, dal by se tudy podstrčit
+           skript, který se spustí hlavnímu správci v prohlížeči. */
         const dlazdice = (label, value, note, money) =>
             '<div class="card vyktile' + (money ? " vyktile--money" : "") + '">' +
                 '<div class="vyktile__label">' + esc(label) + "</div>" +
-                '<div class="vyktile__value">' + value + "</div>" +
+                '<div class="vyktile__value">' + esc(value) + "</div>" +
                 (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
             "</div>";
 
@@ -237,7 +240,7 @@
             dlazdice("Průměrná sazba", kc(c.prumernaSazba) + "/h", "vážený průměr") +
             dlazdice("Podíl na firmě", pct(c.hodin, data.firma.hodin) + " %",
                 "z " + cislo(data.firma.hodin) + " h všech výkazů") +
-            dlazdice("Z toho odhad", c.odhadPct + " %", "dopočet podle okolních dnů");
+            dlazdice("Z toho odhad", cislo(c.odhadPct) + " %", "dopočet podle okolních dnů");
 
         /* koláče */
         $("kolacDruhy").innerHTML = kolac(
@@ -272,8 +275,9 @@
                     '<td class="vyk__num"><b>' + (l.sazbaTed ? cislo(l.sazbaTed) : "—") + "</b></td>" +
                     '<td class="vyk__num muted">' + cislo(l.sazba) + "</td>" +
                     '<td class="small">' + nejvic + "</td>" +
-                    '<td class="vyk__num">' + l.podilJehoPrace + " %</td>" +
-                    '<td class="vyk__num' + (l.odhad > 40 ? " bpvarovani" : "") + '">' + l.odhad + " %</td></tr>";
+                    '<td class="vyk__num">' + cislo(l.podilJehoPrace) + " %</td>" +
+                    '<td class="vyk__num' + (l.odhad > 40 ? " bpvarovani" : "") + '">' +
+                        cislo(l.odhad) + " %</td></tr>";
             }).join("") + "</tbody>";
 
         /* roky */
@@ -306,7 +310,8 @@
             "<code>BioPharm</code>, <code>BPH</code>, <code>BP</code>, budovy <code>G61</code> a <code>G62</code>, " +
             "kódy prvků <code>BHA61/BHA62</code> a překlepy typu <code>BioPfarm</code> nebo <code>Biophamra</code>. " +
             "Kde v textu zakázka není, doplnil se odhad podle okolních dnů — lidé dělají většinou týden v kuse " +
-            "na jedné věci. Takových hodin je <b>" + data.celkem.odhadPct + " %</b> a v sešitech jsou označené.</p>" +
+            "na jedné věci. Takových hodin je <b>" + cislo(data.celkem.odhadPct) +
+            " %</b> a v sešitech jsou označené.</p>" +
 
             "<p><b>Jak se pozná druh práce.</b> Ze slovesa v zápisu: <i>kreslení, editace</i> → ArcGIS, " +
             "<i>focení</i> → Focení, <i>skenování</i> → Skeny, <i>zaměřování</i> → Zaměření. " +
@@ -317,13 +322,13 @@
 
             "<p><b>Peníze.</b> Sčítá se den po dni: hodiny toho dne × sazba zapsaná u toho dne. " +
             "Žádný průměr, žádný odhad — sazby se v čase mění a historie musí zůstat taková, jaká byla. " +
-            "U dvou zaměstnanců, kteří sazbu ve výkazu nemají, se počítá 250 Kč/h. " +
+            "U zaměstnanců, kteří sazbu ve výkazu vůbec nemají, se dosadí zvolená výchozí sazba. " +
             "Dny nad 16 hodin jsou vynechané — bývají to překlepy nebo kilometry zapsané do sloupce hodin.</p>" +
 
             "<p><b>Zakázka nemůže mít hodiny dřív, než vznikla.</b> Číslo v sobě nese rok, " +
             "takže na <code>2024-007</code> se nic staršího než rok 2024 nepřipíše. " +
-            "Bez téhle pojistky sem spadlo 544 Richardových hodin z let 2017–2019 a stáhlo " +
-            "průměrnou sazbu zakázky o padesát korun dolů.</p>" +
+            "Bez téhle pojistky se na ni připisovaly i roky staré hodiny za tehdejší nižší " +
+            "sazby a křivily průměr celé zakázky.</p>" +
 
             "<p><b>Co v číslech není.</b> Rozpočet zakázky, protože v evidenci vyplněný není — " +
             "tenhle přehled tedy říká, co zakázka stála, ne jestli vychází.</p>";
