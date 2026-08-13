@@ -1,7 +1,7 @@
 # Předání práce – Pasport Kaňa
 
-Shrnutí stavu k **6. 8. 2026**, aby se dalo plynule pokračovat na jiném počítači
-nebo v novém sezení. Poslední commit: `41fa176`.
+Shrnutí stavu k **13. 8. 2026**, aby se dalo plynule pokračovat na jiném
+počítači nebo v novém sezení. Poslední commit: `e9323bf`, verze assetů `?v=45`.
 
 - **Živý web:** <https://kanapasport.github.io>
 - **Repozitář:** <https://github.com/kanapasport/kanapasport.github.io> (veřejný)
@@ -16,10 +16,45 @@ Technický popis webu je v [README.md](README.md) – tenhle soubor je navíc:
 
 ---
 
-## Kde jsme skončili (6. 8. 2026, odpoledne)
+## Kde jsme skončili (13. 8. 2026)
 
-Všechno je **zacommitované a nahrané na GitHub**, v pracovní kopii nic nezůstalo.
-Doma stačí `git pull` (nebo čerstvý `git clone`) a jede se dál.
+Všechno je **zacommitované a nahrané na GitHub**, v pracovní kopii nic
+nezůstalo. Doma stačí `git pull` (nebo čerstvý `git clone`) a jede se dál.
+
+### 0. NEJDŘÍV: nasadit pravidla Firestore
+
+**Bez tohohle kroku výkazy nefungují nikomu, ani tobě.** Stránka nic nenačte
+a ohlásí to toastem. Pravidla se nasazují ručně:
+
+Firebase Console → projekt `pasportkana` → Firestore Database → **Rules** →
+vložit celý obsah [firestore.rules](firestore.rules) → **Publish**.
+
+Přibyla tam větev `private/vykazy/**`. Soubor v repu je jen předloha, sám se
+nikam nenasadí.
+
+Po nasazení otevři `vykazy.html`, dej **Firmy a sazby**, doplň firmy, rozpočty
+a lidem hodinové sazby, a zkus jeden zápis uložit a zase smazat.
+**Data v databázi jsou ostrá** – testuj na tom, co po sobě uklidíš.
+
+### 0b. Co se stalo naposledy (žádná otevřená nedodělávka)
+
+Poslední tři commity: výkazy práce (`70e90b4`), přestavba formuláře
+(`e6068f4`) a přejmenování na Postup práce s příplatky (`e9323bf`).
+Všechno je odzkoušené v prohlížeči a nasazené; nic nezůstalo rozpracované.
+
+Dvě věci, které nikdo nezadal a rozhodly se samy – klidně to změň:
+
+- **Oběd a kilometry leží u času, ne u peněz** (`zaznamy`, ne `castky`).
+  Jsou to náhrady tomu, kdo pracoval, tak si na ně musí sáhnout. Korunová
+  hodnota se z nich dopočítá až v `castky`, kam vidí jen správce.
+- **Průměrná sazba se počítá jen z odpracované práce**, bez paušálů – jinak
+  by ji oběd a kilometry nafoukly (`castkaPrace` vedle `castka`).
+
+### 0c. Složka `prozkoumat/`
+
+V projektu leží `prozkoumat/pasportkana_navody` – klon z druhého počítače,
+ze kterého se výkazy přenesly. Je **mimo git** a už není k ničemu potřeba,
+klidně ji smaž.
 
 ### 1. Nasazení Pages – workflow padá, buildí se přes API
 
@@ -69,9 +104,9 @@ znát nemám. Text připravím, odeslání zůstává na tobě.
 ### 2b. Úvodní leták k webu
 
 `uvod.html` je jednorázová tištěná stránka, která se přikládá k rozesílaným
-heslům – popisuje prokliky v liště, ikony nad ní, úkolovník, milníky, tabuli
-a přihlašování. Není v navigaci webu, otevírá se přímo. Hotové PDF leží
-v repu jako `Pasport_Kana_uvod.pdf`; po úpravě `uvod.html` se přegeneruje:
+heslům – popisuje prokliky v liště, ikony nad ní, Postup práce, milníky,
+tabuli a přihlašování. Není v navigaci webu, otevírá se přímo. Hotové PDF
+leží v repu jako `Pasport_Kana_uvod.pdf`; po úpravě `uvod.html` se přegeneruje:
 
 ```bash
 chrome --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Pasport_Kana_uvod.pdf uvod.html
@@ -80,6 +115,12 @@ chrome --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Pasport_Ka
 Zlomy stran jsou ruční (`.strana2`, `.strana3`), aby každá strana měla
 uzavřené téma a vlastní patičku. Na A4 se vejde 267 mm obsahu na stranu –
 po přidání textu to překontroluj, jinak se leták rozjede na čtyři strany.
+Změřit se to dá v prohlížeči: `document.body.style.width = "180mm"` a odečíst
+`offsetTop` u `.strana2` / `.strana3`.
+
+**Leták je zdroj pravdy pro lidi, ne pro kód** – když se něco přejmenuje na
+webu (jako úkolovník → Postup práce), musí se přepsat i tady a PDF
+přegenerovat. Naposledy se to udělalo 13. 8. 2026.
 
 ### 3. Ostatní drobnosti, které čekají
 
@@ -134,11 +175,19 @@ blok, ze kterého se zpětně přečíst nedá.
 | `navody.html` | Výpis návodů: vlevo dlaždice, vpravo rovnou náhled A4 |
 | `navod.html` | Čtečka návodu + export do PDF (jen správci) |
 | `editor.html` | Editor návodu, vlevo úpravy (jde přiblížit), vpravo živý náhled |
-| `ukoly.html` | Úkolovník po zakázkách a skupinách, sbalené úkoly, historie zápisů |
+| `ukoly.html` | **Postup práce** (dřív úkolovník) po zakázkách a skupinách, sbalené úkoly, historie zápisů |
+| `historie.html` | Zápisy postupu ze všech zakázek na jednom místě – **jen správci**, tlačítko je na Postupu práce |
 | `milniky.html` | Milníky – termíny odevzdání po činnostech, rozdělené podle zakázek |
 | `tabule.html` | Tabule na nápady – nekonečné plátno, myšlenkové mapy |
+| `vykazy.html` | Výkazy práce – zápis a záznamy; správce vidí všechny a peníze, zaměstnanec jen svoje |
+| `vykazy-prehled.html` | Kolik kdo odpracoval a co to stálo – **jen správci** |
 | `uzivatele.html` | Lidé, role, trezor na hesla, záloha – **jen hlavní správce** |
 | `barvy.html` | Hřiště na barvy webu – **jen hlavní správce**, změna neplatí trvale |
+| `uvod.html` | Tištěný leták k rozesílaným heslům, není v navigaci (viz níž) |
+
+V liště jsou **DOMŮ · NÁVODY · POSTUP PRÁCE · MILNÍKY · TABULE**. Nad ní jsou
+ikony: nový návod, dva pokyny pro AI (návod / skript), import od AI, a podle
+práv výkazy, uživatelé a barvy.
 
 Vzhled: písmo **Lato** přímo v repozitáři (`assets/fonts/`), hlavní barva
 červená `#c8102e`, hranaté tvary, cílová zařízení **iPhone 11 a iPad Air**.
@@ -159,6 +208,10 @@ si ho umí přečíst i pravidla. Role se bere z databáze, ne z prohlížeče.
 Pravomoci jsou na jednom místě v `assets/js/ui.js` (`PERMISSIONS`), stránky se
 ptají přes `KBUI.can("ukol.create")`. Tabulka „co která role smí" na
 `uzivatele.html` se z toho dopočítá sama.
+
+**Pravomoc sama o sobě nic nechrání** – je to jen o tom, co se vykreslí.
+Co je opravdu tajné (hesla, sazby, cizí výkazy), hlídá `firestore.rules`.
+Když přibude nová pravomoc, patří k ní i pravidlo.
 
 Ve firmě je **21 účtů** (1 hlavní správce, 4 správci, 11 zaměstnanců,
 5 studentů) – všechny založené s hesly ze `Seznam.xlsx`.
@@ -187,14 +240,24 @@ artifacts/firemni-kb-app/public/data/
   guides/{id}                    text návodu (+ podkolekce images/{id})
   tasks/{id}                     úkol: zakazka, skupina, owners[], subtasks[], notes[], log[], done
   users/{uid}                    člověk: email, first, last, role, active, salt, hash, enc
-  meta/zakazky                   { names: [], closed: [], groups: [] }
+  meta/zakazky                   { names: [], closed: [], groups: [], projekty: {}, firmy: [] }
   meta/milniky                   { items: [] } – všechny milníky v jednom poli
   meta/vault                     { salt, check } – nastavení trezoru
   boards/{id}                    hlavička tabule (název, kdo a kdy)
   boards/{id}/content/data       prvky tabule (elements[])
   boards/{id}/images/{id}        obrázky na tabuli
   logs/{id}                      záznamy přihlášení
+
+artifacts/firemni-kb-app/private/vykazy/
+  zaznamy/{id}                   čas: uid, datum, nazev, zakazka, projekt, firma,
+                                 cinnost, technologie, od, do, pauza, hodiny, obed, km
+  castky/{id}                    peníze: sazba, castkaPrace, obedKc, dopravaKc, castka
+  ciselniky/nastaveni            sazby lidí, rozpočty zakázek
 ```
+
+Názvy zakázek, projektů a firem jsou schválně v `meta/zakazky` mezi veřejnými
+daty – zaměstnanec si je u svého výkazu musí umět vybrat. Tajné jsou **sazby
+a rozpočty**, ne názvy.
 
 Platná pravidla jsou v [firestore.rules](firestore.rules). **Nasazují se ručně**
 ve Firebase Console → Firestore Database → Rules; soubor v repu je jen předloha.
@@ -204,7 +267,7 @@ rozpracovanou mapu od Michala – **netestovat na ní**, založit si vlastní.
 
 ---
 
-## Úkolovník a milníky – jak se chovají
+## Postup práce a milníky – jak se chovají
 
 **Úkoly** jsou sbalené, rozbalí se kliknutím na hlavičku. Zakázka se dělí na
 skupiny (`ARCGIS`, `SKENY`, `FOCENÍ`, `TABULKY`) ze společného číselníku
@@ -241,7 +304,8 @@ a kdy) a **Upravit**. Roletka v liště ukazuje šest nejbližších termínů.
 5. **Google Fonts servírují Lato rozsekané** – proto vlastní WOFF v repu.
 6. **`serve` zahazuje parametry** při přesměrování z `/x.html` na `/x`.
 7. **Verze assetů:** po každé změně v `assets/…` zvýšit `?v=N` ve všech HTML
-   (teď `?v=38`), jinak lidé uvidí starou verzi kvůli cache GitHub Pages.
+   (teď `?v=45`), jinak lidé uvidí starou verzi kvůli cache GitHub Pages.
+   Jedním vrzem: `sed -i 's/?v=45/?v=46/g' *.html`
 8. **`saveTask` a `saveUser` zapisují pole natvrdo, ne přírůstkově.** Formulář
    úkolu se skládal znovu bez `log` a `done` a každá úprava smazala historii.
    Když se přidá další pole, musí se přenést taky.
@@ -264,68 +328,74 @@ a kdy) a **Upravit**. Roletka v liště ukazuje šest nejbližších termínů.
 16. **GitHub Pages staví několik minut.** „Oprava se neprojevila" bývá jen
     nedokončený build – ověřit `gh api repos/…/pages/builds/latest` nebo
     verzi assetu ve zdroji stránky.
+17. **Pravidla Firestore nejsou filtr.** Kdo smí číst jen svoje, musí si o to
+    říct dotazem `where("uid","==",…)`; na celou kolekci databáze odpoví
+    odmítnutím celého přenosu, ne prázdným výsledkem.
+18. **Pravidla se sčítají a níž se nedají odebrat.** Proto leží výkazy mimo
+    `public/data`, nad kterým stojí `allow read: if clen()`.
+19. **Firestore neumí schovat jednotlivé pole** – kdo dokument přečte, přečte
+    ho celý. Proto je čas a peníze rozdělený na dva dokumenty se stejným `{id}`.
+20. **Schované tlačítko není zabezpečení.** `KBUI.can()` řídí jen to, co se
+    vykreslí; skutečnou hranicí je `firestore.rules`. K nové pravomoci nad
+    citlivými daty patří vždycky i pravidlo.
+21. **Uložené hodiny a částky se nikdy nepřepočítávají zpětně.** Sazby se
+    v čase mění a loňský přehled musí zůstat takový, jaký byl. Změna výchozí
+    sazby proto nesahá na starší zápisy.
+22. **`git add *.html` spadne na ignorovaném souboru.** V kořeni leží
+    `Caflou-dotaznik.html`, který je v `.gitignore`; git kvůli němu vrátí
+    chybu a zbytek sice přidá, ale příkaz skončí nenulově.
 
 ---
 
-## Výkazy práce – rozpracované (12. 8. 2026)
+## Výkazy práce (13. 8. 2026)
 
-Návrh náhrady excelových výkazů: `vykazy.html` (zápis a záznamy) a
-`vykazy-prehled.html` (kolik kdo odpracoval a co to stálo). Popis je
-v [README.md](README.md#výkazy-práce), tady je jen to, co ještě není hotové.
+Náhrada excelových výkazů: `vykazy.html` (zápis a záznamy) a
+`vykazy-prehled.html` (kolik kdo odpracoval a co to stálo). Jak to funguje
+je v [README.md](README.md#výkazy-práce), tady je jen to, co ještě není
+hotové a proč se to udělalo takhle.
 
-### Co se změnilo
+### Kdo co vidí
 
-| Soubor | Co v něm přibylo |
-|---|---|
-| `vykazy.html` | **nový** – zápis dne po položkách, výpis, číselníky, export CSV |
-| `vykazy-prehled.html` | **nový** – součty, pruhy, čerpání rozpočtů, karty lidí |
-| `assets/js/vykazy.js` | **nový** – filtr, součty, pruhy, formát čísel, CSV (sdílí obě stránky) |
-| `assets/js/store.js` | kolekce `zaznamy` + `castky`, číselníky, `spocitejHodiny`, dva odběry |
-| `assets/js/ui.js` | práva `vykaz.view` a `vykaz.edit` pro správce |
-| `assets/js/taxonomy.js` | ikony `clock` a `chart`, nástroj *Výkazy práce* s `need` |
-| `assets/css/app.css` | sekce VÝKAZY PRÁCE – dlaždice, položky, tabulka, pruhy |
-| `firestore.rules` | větev `private/vykazy/**` – vlastník vidí svoje, peníze jen správce |
-| `*.html` | verze assetů `?v=42` → `?v=43` |
+| | Správce | Zaměstnanec |
+|---|---|---|
+| ikona hodin nad lištou | ✓ | ✓ (`vykaz.otevrit`) |
+| cizí zápisy, filtr *Všichni lidé* | ✓ | – |
+| sazby, částky, dlaždice *Vyfakturováno* | ✓ | – |
+| *Stáhnout CSV*, *Firmy a sazby*, Přehled peněz | ✓ | – |
+| zapisovat za kohokoliv | ✓ | jen za sebe |
 
-### Jak to nasadit
+Zaměstnanci to **není jen schované** – databáze mu cizí zápisy ani sazby
+nevydá. Musí si o svoje říct dotazem `where("uid","==",…)`
+(`KB.watchMojeVykazy()`), protože **pravidla nejsou filtr**: na celou kolekci
+by Firestore odpověděl odmítnutím.
 
-1. **Pravidla Firestore.** Firebase Console → Firestore Database → Rules,
-   vložit celý obsah [firestore.rules](firestore.rules) a dát *Publish*.
-   **Dokud se to neudělá, stránka nenačte nic ani hlavnímu správci** a řekne
-   to toastem.
-2. **Zkouška doma.** `npx --yes serve -l 4173 .`, otevřít
-   `http://localhost:4173/vykazy.html` (s koncovkou `.html`) a přihlásit se.
-3. **Číselníky.** Tlačítko *Firmy a sazby*: doplnit firmy, u zakázek rozpočty
-   a projekty, lidem výchozí hodinové sazby.
-4. **Zkušební zápis.** *+ Nový den*, uložit, zkontrolovat v přehledu a zase
-   smazat – data v databázi jsou ostrá.
-5. **Nasazení.** Commit a push na `main`, pak vyžádat build:
-   `gh api --method POST repos/kanapasport/kanapasport.github.io/pages/builds`
-6. **Ověření.** Přihlásit se pod účtem zaměstnance a zkontrolovat, že ikonu
-   hodin nevidí a na `vykazy.html` se mu ukáže jen hláška.
+### Proč je to rozdělené na dva dokumenty
 
-**Model je připravený na to, že si lidi budou zapisovat sami.** Zápis je
-rozdělený na dva dokumenty se stejným `{id}`: čas (`zaznamy`) vidí vlastník
-i správce, peníze (`castky`) jen správce. Pravidla i funkce
-`KB.saveMujVykaz()` / `KB.watchMojeVykazy()` už s tím počítají.
+Jeden zápis leží ve dvou dokumentech se stejným `{id}`: čas v `zaznamy`
+(vidí vlastník i správce), peníze v `castky` (jen správce). Firestore neumí
+schovat jednotlivé pole – kdo dokument přečte, přečte ho celý.
 
-**Co ještě není:**
+A celá větev `private/vykazy/**` je **mimo `public/data`** schválně: nad
+`public/data/**` stojí `allow read: if clen()` a pravidla se sčítají, takže
+by se to níž už nedalo odebrat.
 
-- **Stránka „Moje výkazy" pro zaměstnance.** Datová vrstva je hotová, chybí
-  jen ta stránka. Až vznikne, musí se rozmyslet, jestli má člověk vidět
-  i vlastní částku – teď ji z principu nevidí.
-- **Odkud vzít stará data.** Google Sheets přes odkaz nejde číst – sdílení
-  je omezené, `…/export?format=csv` vrací HTTP 401. Buď stažené `.xlsx`
-  do složky (mimo git, jsou to firemní data), nebo import z CSV.
-- **Import starých výkazů.** Zatím se zapisuje jen ručně; hromadné nahrání
-  z Excelu je další krok, až bude jasná struktura těch tabulek.
-- **Zpětný zápis do Google Sheets nejde napřímo** – je to tentýž problém
-  jako u Cafly: statický web na Pages nemá kam schovat klíč. Cesta je
-  export CSV (hotovo) nebo Apps Script na straně tabulky.
+### Co ještě není
+
+- **Import starých výkazů.** Zapisuje se jen ručně. Google Sheets přes odkaz
+  číst nejde (sdílení je omezené, `…/export?format=csv` vrací HTTP 401) –
+  cesta je stažené `.xlsx` do složky mimo git, nebo import z CSV.
+- **Starší zápisy mají druh vypracování velkými písmeny** (`ARCGIS`), nový
+  číselník je `ArcGIS / Focení / Skeny / Tabulky / Administrativa`. Reálná
+  data zatím žádná nejsou; kdyby vznikla dřív, chce to převod.
 - **Schvalování výkazů** (kdo a kdy zápis potvrdil) není – nevíme, jestli se
   má schvalovat. U Cafly to byla jedna z otázek v dotazníku.
 - **Sazba u zápisu je fakturační**, ne mzdová. Kdyby se měly sledovat i
   náklady (mzda × hodiny) a z toho zisk zakázky, přibude druhé číslo.
+- **Oběd (200 Kč) a kilometr (5 Kč) jsou natvrdo v kódu** (`OBED_KC`,
+  `KM_KC` v `store.js`). Až se změní, patří to do číselníku, ne do konstant.
+- **Zpětný zápis do Google Sheets nejde napřímo** – tentýž problém jako
+  u Cafly: statický web na Pages nemá kam schovat klíč. Cesta je export CSV
+  (hotovo) nebo Apps Script na straně tabulky.
 
 ## Co zbývá
 
@@ -339,7 +409,9 @@ nahrát ručně. Stálo by za to doplnit import.
 
 - `assets/data/navody-skripty.json` (41 kB textů) je ve veřejném repu; data
   jsou stejně ve Firestore, klidně smazat.
-- Chybí `noindex`, web se může objevit ve vyhledávačích.
+- **`noindex` má jen `vykazy.html`** – ostatní stránky se můžou objevit ve
+  vyhledávačích. Obsah je za přihlášením, takže se vyzradí leda názvy.
+- Složku `prozkoumat/` (klon z druhého počítače) je možné smazat.
 - Šedé logo (vodoznak v PDF) má jen 600 px, pro tisk by chtělo ~1200 px.
 - Písma váží 1,4 MB; WOFF2 by to srazil na ~400 kB.
 - Načítání všech návodů najednou řešit až kolem 100–150 návodů.
