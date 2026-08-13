@@ -168,7 +168,7 @@
      * než dorazí data – jakmile je seznam lidí k dispozici, rozhoduje on.
      * Kdo v seznamu není (třeba starým anonymním přihlášením), je student.
      */
-    UI.role = () => {
+    UI.skutecnaRole = () => {
         const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
         const users = (window.KB && window.KB.users) || [];
 
@@ -178,6 +178,42 @@
         }
         return window.KB_ROLE || "student";
     };
+
+    /* ------------------------------------------------------ náhled role ---
+
+       Hlavní správce si může web prohlédnout očima zaměstnance nebo studenta,
+       aby viděl, co na koho vyskočí. Tři pojistky, aby z toho nebyla díra:
+
+       1. Náhled se uzná JEN tomu, jehož skutečná role v databázi je hlavní
+          správce. Kdokoliv jiný si ho do prohlížeče může zapsat, jak chce,
+          a nedostane tím ani o kousek víc – proto se to nedá zneužít.
+       2. Náhled jde vždycky jen dolů. Hlavní správce smí všechno, takže
+          každá jiná role je zúžení, nikdy rozšíření.
+       3. Sedí v sessionStorage, ne v localStorage – zavřením záložky zmizí.
+
+       A hlavně: je to náhled TOHO, CO SE VYKRESLÍ. Data z databáze chodí
+       pořád podle skutečného účtu, protože pravidla Firestore čtou UID.
+       Na otestování zabezpečení tohle není – na to je potřeba druhý účet. */
+
+    const NAHLED_KEY = "company_kb_nahled";
+
+    UI.nahled = () => {
+        if (UI.skutecnaRole() !== "hlavni-spravce") return "";
+        try { return sessionStorage.getItem(NAHLED_KEY) || ""; } catch (err) { return ""; }
+    };
+
+    UI.setNahled = (role) => {
+        if (UI.skutecnaRole() !== "hlavni-spravce") return;
+        try {
+            if (role) sessionStorage.setItem(NAHLED_KEY, role);
+            else sessionStorage.removeItem(NAHLED_KEY);
+        } catch (err) { /* soukromý režim */ }
+        document.dispatchEvent(new CustomEvent("kb-role"));
+        UI.paintUser();
+    };
+
+    /** Role, podle které se stránka vykresluje – tedy náhled, když je zapnutý. */
+    UI.role = () => UI.nahled() || UI.skutecnaRole();
     UI.roleTitle = (id) => (UI.ROLES.find(r => r.id === (id || UI.role())) || {}).title || "Student";
 
     /** Smí daná role tuhle věc? Hlavní správce smí všechno. */
@@ -227,7 +263,46 @@
         document.querySelectorAll("[data-need]").forEach(el => {
             el.hidden = !UI.can(el.dataset.need);
         });
+        paintNahled();
     };
+
+    /** Přepínač náhledu a pruh, který připomíná, že je zapnutý. */
+    function paintNahled() {
+        const jeHlavni = UI.skutecnaRole() === "hlavni-spravce";
+        const nahled = UI.nahled();
+
+        document.querySelectorAll("[data-nahled-box]").forEach(box => { box.hidden = !jeHlavni; });
+        document.querySelectorAll("[data-nahled]").forEach(sel => { sel.value = nahled; });
+
+        let pruh = document.getElementById("kbNahledPruh");
+        if (!nahled) { if (pruh) pruh.remove(); return; }
+
+        const role = UI.ROLES.find(r => r.id === nahled) || {};
+        if (!pruh) {
+            pruh = document.createElement("div");
+            pruh.id = "kbNahledPruh";
+            pruh.className = "nahledpruh no-print";
+            const header = document.querySelector(".appbar");
+            if (header && header.parentNode) header.parentNode.insertBefore(pruh, header.nextSibling);
+            else document.body.insertBefore(pruh, document.body.firstChild);
+        }
+        pruh.innerHTML = "<span><b>Prohlížíš web jako " + esc((role.title || nahled).toLowerCase()) +
+            "</b> — vidíš jen to, co vidí on. Tvoje oprávnění se nezměnila.</span>" +
+            '<button type="button" class="btn btn--sm" data-nahled-konec>Zpět na hlavního správce</button>';
+    }
+
+    /* Přepínač se nesprávci musí schovat i tehdy, když se role změní jinudy
+       než přes paintUser – třeba když dorazí seznam lidí až po vykreslení. */
+    document.addEventListener("kb-role", paintNahled);
+
+    // přepnutí náhledu a návrat zpět – kdekoliv na stránce
+    document.addEventListener("change", (event) => {
+        const sel = event.target.closest("[data-nahled]");
+        if (sel) UI.setNahled(sel.value);
+    });
+    document.addEventListener("click", (event) => {
+        if (event.target.closest("[data-nahled-konec]")) UI.setNahled("");
+    });
 
     /* ---------------------------------------------------------- přihlášení */
 
@@ -612,6 +687,18 @@
                 // červený pruh: uživatel vpravo nahoře, logo uprostřed,
                 // ikony nástrojů vpravo dole – tedy přímo nad lištou
                 '<div class="appbar__band"><div class="appbar__bandin">' +
+                    // vlevo nahoře přepínač náhledu – vykreslí se jen hlavnímu
+                    // správci, ostatním zůstane skrytý (paintUser)
+                    '<label class="appbar__nahled" data-nahled-box hidden>' +
+                        '<span>Zobrazit jako</span>' +
+                        '<select data-nahled>' +
+                            /* 4. pád, protože se to čte jako „zobrazit jako koho" */
+                            '<option value="">hlavního správce</option>' +
+                            '<option value="spravce">správce</option>' +
+                            '<option value="zamestnanec">zaměstnance</option>' +
+                            '<option value="student">studenta</option>' +
+                        "</select>" +
+                    "</label>" +
                     // barvy webu jsou jen mezi ikonami nástrojů a jen pro
                     // hlavního správce – v pruhu je to zbytečně na očích
                     '<div class="appbar__userbox">' +
