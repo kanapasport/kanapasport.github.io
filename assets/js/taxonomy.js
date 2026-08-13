@@ -195,6 +195,8 @@ window.KB_TOOLS = [
     /* Výkazy práce schválně NEJSOU v liště (KB_NAV) – jediná cesta k nim je
        tahle ikona, a ta se vykreslí jen tomu, kdo na výkazy vůbec smí. */
     { title: 'Výkazy práce', icon: 'clock', href: 'vykazy.html', need: 'vykaz.otevrit' },
+    /* Přehled BioPharmy ze starých excelů – jen správci, a ještě za heslem. */
+    { title: 'Přehled BP', icon: 'chart', href: 'vykazy-bp.html', need: 'vykaz.view' },
     // jen pro hlavního správce
     { title: 'Uživatelé',   icon: 'users',   href: 'uzivatele.html', need: 'users.manage' },
     { title: 'Barvy webu',  icon: 'palette', href: 'barvy.html',     need: 'web.design' }

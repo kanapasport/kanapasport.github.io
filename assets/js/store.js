@@ -131,6 +131,8 @@ const vykazDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "zazn
 const castkyCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", "castky");
 const castkaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "castky", id);
 const vykazyMeta = () => doc(db, "artifacts", APP_ID, "private", "vykazy", "ciselniky", "nastaveni");
+/* hotové souhrny ze starých excelových výkazů – jeden dokument na zakázku */
+const prehledDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "prehledy", id);
 
 /* ------------------------------------------------------------------ start */
 
@@ -880,6 +882,29 @@ KB.saveCiselnikZakazek = async (patch) => {
 };
 
 /* ------------------------------------------------------------------- logy */
+
+/* ------------------------------------------------------------ přehledy ---
+   Souhrny spočítané z historických excelových výkazů. Leží ve Firestore,
+   a ne v souboru na webu, schválně: repozitář je VEŘEJNÝ, takže cokoliv
+   uloženého v něm by si přečetl kdokoliv na světě. Takhle je to za
+   přihlášením a za pravidly, která pouštějí dál jen správce. */
+
+KB.loadPrehled = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(prehledDoc(id));
+    return snap.exists() ? snap.data() : null;
+};
+
+KB.savePrehled = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(prehledDoc(id), {
+        data: JSON.stringify(data),      // jeden blob, ať se to nepere s limity na pole
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
+};
 
 KB.logLogin = async (name) => {
     try {

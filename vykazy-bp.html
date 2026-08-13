@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Přehled BioPharm – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=46">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <!-- kdo na výkazy nemá právo -->
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Přehled zakázky vidí jen správci.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou v něm odpracované hodiny a výdělky jmenovitě. Když si myslíš, že sem
+            patříš, ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <!-- heslo navíc -->
+    <div id="zamek" class="card col center" style="padding:44px 22px;gap:14px;max-width:420px;margin:40px auto" hidden>
+        <svg style="width:34px;height:34px;margin:0 auto;color:var(--accent)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <b style="font-size:16px">Přehled je navíc pod heslem</b>
+        <p class="small muted" style="line-height:1.6;margin:0">
+            Zadej heslo k přehledu zakázky. Platí do zavření záložky.
+        </p>
+        <input type="password" id="hesloPole" class="field" placeholder="heslo" autocomplete="off">
+        <div id="hesloChyba" class="tiny" style="color:var(--danger);min-height:16px"></div>
+        <button type="button" id="hesloOk" class="btn btn--primary" style="width:100%">Odemknout</button>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:22px">
+
+        <div class="spread">
+            <div>
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2" id="nadpis">Přehled zakázky</h2>
+                <p class="small muted" style="margin-top:3px" id="podnadpis"></p>
+            </div>
+            <button type="button" id="btnZnovu" class="btn btn--ghost btn--sm">Nahrát nová data</button>
+        </div>
+
+        <div id="souhrn" class="vyksum"></div>
+
+        <!-- ================================================ KOLÁČE -->
+        <div class="bpgrid">
+            <section class="card bpkarta">
+                <div class="bpkarta__hlava">
+                    <b>Podle druhu práce</b>
+                    <span class="small muted">co se na zakázce dělalo</span>
+                </div>
+                <div class="bpkolac" id="kolacDruhy"></div>
+            </section>
+
+            <section class="card bpkarta">
+                <div class="bpkarta__hlava">
+                    <b>Podle lidí</b>
+                    <span class="small muted">kdo kolik odpracoval</span>
+                </div>
+                <div class="bpkolac" id="kolacLide"></div>
+            </section>
+        </div>
+
+        <!-- ================================================ MĚSÍCE -->
+        <section class="card" style="padding:16px 18px">
+            <div class="bpkarta__hlava" style="margin-bottom:14px">
+                <b>Průběh v čase</b>
+                <span class="small muted">odpracované hodiny po měsících</span>
+            </div>
+            <div id="mesice" style="overflow-x:auto"></div>
+        </section>
+
+        <!-- ================================================ LIDÉ -->
+        <section>
+            <h3 style="font-size:16px;font-weight:900;margin:0 0 10px">Kdo co odpracoval</h3>
+            <div style="overflow-x:auto"><table id="tabLide" class="vyk"></table></div>
+            <p class="tiny muted" style="margin-top:8px">
+                „Z jeho práce" = jak velkou část všeho, co ten člověk za ta léta vykázal,
+                spolkla tahle zakázka. „Odhad" = kolik jeho hodin sem nepřiřadil text ve výkazu,
+                ale dopočet podle okolních dnů.
+            </p>
+        </section>
+
+        <!-- ================================================ ROKY A KONTEXT -->
+        <div class="bpgrid">
+            <section class="card bpkarta">
+                <div class="bpkarta__hlava"><b>Po letech</b></div>
+                <div style="overflow-x:auto"><table id="tabRoky" class="vyk" style="min-width:0"></table></div>
+            </section>
+            <section class="card bpkarta">
+                <div class="bpkarta__hlava">
+                    <b>Kolik je to z firmy</b>
+                    <span class="small muted">největší zakázky</span>
+                </div>
+                <div id="kontext"></div>
+            </section>
+        </div>
+
+        <!-- ================================================ JAK SE TO POČÍTÁ -->
+        <section class="card" style="padding:18px 20px">
+            <b style="font-size:16px;display:block;margin-bottom:10px">Jak se ta čísla spočítala</b>
+            <div id="metodika" class="small" style="line-height:1.7;color:var(--text-soft)"></div>
+        </section>
+    </div>
+
+    <!-- ================================================ IMPORT -->
+    <section id="import" class="card col" style="padding:22px;gap:12px;max-width:600px;margin:0 auto" hidden>
+        <b style="font-size:16px">Nahrát data přehledu</b>
+        <p class="small muted" style="margin:0;line-height:1.6">
+            Vyber soubor <code>prehled-BP.json</code>. Uloží se do databáze mezi výkazy,
+            kam vidí jen správci — <b>ne do souborů webu</b>, ty jsou veřejné.
+        </p>
+        <input type="file" id="soubor" accept=".json,application/json" class="field">
+        <div id="importStav" class="small" style="min-height:20px"></div>
+        <div class="row" style="gap:10px;justify-content:flex-end">
+            <button type="button" id="importZrus" class="btn btn--ghost" hidden>Zpět na přehled</button>
+            <button type="button" id="importUloz" class="btn btn--primary">Uložit do databáze</button>
+        </div>
+    </section>
+</main>
+
+<script src="assets/js/taxonomy.js?v=46"></script>
+<script src="assets/js/ui.js?v=46"></script>
+<script type="module" src="assets/js/store.js?v=46"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    /* Heslo navíc. Skutečnou hranicí jsou pravidla databáze – tohle je zámek
+       na dveřích, které jsou už zamčené: brání tomu, aby přehled zůstal
+       otevřený na cizí obrazovce. V kódu je jen otisk, ne heslo. */
+    const OTISK = "1aaced2cc65406b29b64a84d582ef1928c06cd78cbbc1dbce1b6a3dd053f106c";
+    const KLIC = "pasport_bp_odemceno";
+
+    let data = null;
+
+    /* ------------------------------------------------------------ čísla */
+
+    const cislo = (v, des) => Number(v || 0).toLocaleString("cs-CZ",
+        { minimumFractionDigits: des || 0, maximumFractionDigits: des || 0 });
+    const kc = (v) => cislo(Math.round(v)) + " Kč";
+    const hod = (v) => Number(v || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) + " h";
+    const pct = (cast, celek) => celek ? Math.round(cast / celek * 100) : 0;
+
+    const MESICE = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
+    const czMesic = (iso) => MESICE[Number(iso.slice(5, 7)) - 1] + " " + iso.slice(2, 4);
+
+    /* Barvy koláčů. Držené dál od firemní červené, aby se pletly co nejmíň;
+       „Nerozřazeno" je vždycky šedé, ať je na první pohled vidět. */
+    const BARVY = ["#c8102e", "#1f6f8b", "#b45309", "#16794a", "#6d28d9",
+                   "#0f766e", "#a16207", "#9d174d", "#3f6212", "#7c2d12",
+                   "#155e75", "#4c1d95", "#831843"];
+    const SEDA = "#9aa1a8";
+    const barva = (nazev, i) => /nerozřazeno|neurčeno/i.test(nazev) ? SEDA : BARVY[i % BARVY.length];
+
+    /* ------------------------------------------------------------ koláč */
+
+    /**
+     * Kruhový graf. Kreslí se čárkovaným obvodem kružnice – žádné počítání
+     * oblouků a žádná knihovna.
+     */
+    function kolac(polozky, celek, jednotka) {
+        const R = 68, STRED = 90, OBVOD = 2 * Math.PI * R;
+        let posun = 0;
+
+        const kusy = polozky.map((p, i) => {
+            const dil = celek ? p.hodnota / celek : 0;
+            const delka = dil * OBVOD;
+            const kruh = '<circle cx="' + STRED + '" cy="' + STRED + '" r="' + R + '" fill="none" ' +
+                'stroke="' + barva(p.nazev, i) + '" stroke-width="34" ' +
+                'stroke-dasharray="' + delka.toFixed(2) + " " + (OBVOD - delka).toFixed(2) + '" ' +
+                'stroke-dashoffset="' + (-posun).toFixed(2) + '"><title>' +
+                esc(p.nazev) + ": " + jednotka(p.hodnota) + "</title></circle>";
+            posun += delka;
+            return kruh;
+        }).join("");
+
+        const legenda = polozky.map((p, i) =>
+            '<li class="bpleg__radek">' +
+                '<span class="bpleg__tecka" style="background:' + barva(p.nazev, i) + '"></span>' +
+                '<span class="bpleg__nazev">' + esc(p.nazev) + "</span>" +
+                '<span class="bpleg__cislo">' + jednotka(p.hodnota) + "</span>" +
+                '<span class="bpleg__pct">' + pct(p.hodnota, celek) + " %</span>" +
+            "</li>").join("");
+
+        return '<svg viewBox="0 0 180 180" class="bpsvg" role="img">' +
+                '<g transform="rotate(-90 90 90)">' + kusy + "</g>" +
+                '<text x="90" y="86" text-anchor="middle" class="bpsvg__cislo">' +
+                    esc(jednotka(celek).split(" ")[0]) + "</text>" +
+                '<text x="90" y="102" text-anchor="middle" class="bpsvg__popis">' +
+                    esc(jednotka(celek).split(" ").slice(1).join(" ")) + "</text>" +
+            "</svg>" +
+            '<ul class="bpleg">' + legenda + "</ul>";
+    }
+
+    /* ------------------------------------------------------- vykreslení */
+
+    function vykresli() {
+        const c = data.celkem;
+
+        $("nadpis").textContent = "Přehled zakázky " + (data.zakazka || "");
+        $("podnadpis").textContent = (data.nazevPlny || "") +
+            " · spočítáno z historických výkazů" + (data.vytvoreno ? " k " + data.vytvoreno : "");
+
+        const dlazdice = (label, value, note, money) =>
+            '<div class="card vyktile' + (money ? " vyktile--money" : "") + '">' +
+                '<div class="vyktile__label">' + esc(label) + "</div>" +
+                '<div class="vyktile__value">' + value + "</div>" +
+                (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
+            "</div>";
+
+        $("souhrn").innerHTML =
+            dlazdice("Odpracováno", hod(c.hodin), c.lidi + " lidí na zakázce") +
+            dlazdice("Vyfakturováno", kc(c.kc), "", true) +
+            dlazdice("Průměrná sazba", kc(c.prumernaSazba) + "/h", "vážený průměr") +
+            dlazdice("Podíl na firmě", pct(c.hodin, data.firma.hodin) + " %",
+                "z " + cislo(data.firma.hodin) + " h všech výkazů") +
+            dlazdice("Z toho odhad", c.odhadPct + " %", "dopočet podle okolních dnů");
+
+        /* koláče */
+        $("kolacDruhy").innerHTML = kolac(
+            data.podleDruhu.map(d => ({ nazev: d.nazev, hodnota: d.hodin })), c.hodin, hod);
+        $("kolacLide").innerHTML = kolac(
+            data.podleLidi.map(l => ({ nazev: l.jmeno, hodnota: l.hodin })), c.hodin, hod);
+
+        /* měsíce */
+        const maxM = Math.max.apply(null, data.podleMesicu.map(m => m.hodin));
+        $("mesice").innerHTML = '<div class="bpmesice">' + data.podleMesicu.map(m =>
+            '<div class="bpmesic" title="' + esc(czMesic(m.mesic)) + ": " + hod(m.hodin) + " · " + kc(m.kc) + '">' +
+                '<div class="bpmesic__sloupec" style="height:' +
+                    Math.max(2, Math.round(m.hodin / maxM * 100)) + '%"></div>' +
+                '<div class="bpmesic__popis">' + esc(czMesic(m.mesic)) + "</div>" +
+            "</div>").join("") + "</div>";
+
+        /* lidé */
+        $("tabLide").innerHTML =
+            "<thead><tr><th>Člověk</th>" +
+                '<th class="vyk__num">Hodin</th><th class="vyk__num">Podíl</th>' +
+                '<th class="vyk__num">Kč</th><th class="vyk__num">Sazba</th>' +
+                "<th>Na čem dělal</th>" +
+                '<th class="vyk__num">Z jeho práce</th><th class="vyk__num">Odhad</th></tr></thead><tbody>' +
+            data.podleLidi.map(l => {
+                const nejvic = l.druhy.filter(d => d.h > 0).slice(0, 3)
+                    .map(d => esc(d.nazev) + " " + Math.round(d.h)).join(" · ");
+                return "<tr><th scope=\"row\">" + esc(l.jmeno) + "</th>" +
+                    '<td class="vyk__num">' + hod(l.hodin) + "</td>" +
+                    '<td class="vyk__num">' + pct(l.hodin, c.hodin) + " %</td>" +
+                    '<td class="vyk__num"><b>' + kc(l.kc) + "</b></td>" +
+                    '<td class="vyk__num">' + cislo(l.sazba) + "</td>" +
+                    '<td class="small">' + nejvic + "</td>" +
+                    '<td class="vyk__num">' + l.podilJehoPrace + " %</td>" +
+                    '<td class="vyk__num' + (l.odhad > 40 ? " bpvarovani" : "") + '">' + l.odhad + " %</td></tr>";
+            }).join("") + "</tbody>";
+
+        /* roky */
+        $("tabRoky").innerHTML =
+            "<thead><tr><th>Rok</th><th class=\"vyk__num\">Hodin</th><th class=\"vyk__num\">Kč</th></tr></thead><tbody>" +
+            data.podleLet.map(r => "<tr><th scope=\"row\">" + esc(r.rok) + "</th>" +
+                '<td class="vyk__num">' + hod(r.hodin) + "</td>" +
+                '<td class="vyk__num">' + kc(r.kc) + "</td></tr>").join("") + "</tbody>";
+
+        /* kontext */
+        const maxZ = data.zakazkyFirmy[0] ? data.zakazkyFirmy[0].hodin : 1;
+        $("kontext").innerHTML = data.zakazkyFirmy.map(z => {
+            const jeBp = z.nazev === data.zakazka;
+            return '<div class="vykbar" style="padding:5px 0">' +
+                '<div class="vykbar__name"' + (jeBp ? ' style="color:var(--accent)"' : "") + '>' +
+                    esc(z.nazev) + "</div>" +
+                '<div class="vykbar__track"><div class="vykbar__fill" style="width:' +
+                    Math.max(2, Math.round(z.hodin / maxZ * 100)) + "%;background:" +
+                    (jeBp ? "var(--accent)" : "var(--dim)") + '"></div></div>' +
+                '<div class="vykbar__val">' + cislo(z.hodin) + " h</div></div>";
+        }).join("");
+
+        /* metodika */
+        $("metodika").innerHTML =
+            "<p><b>Odkud data jsou.</b> Ze " + esc(data.zdroj || "stažených výkazů") +
+            ". Není to živý přenos — je to snímek pořízený jednorázově" +
+            (data.vytvoreno ? " " + esc(data.vytvoreno) : "") + ". Nové zápisy z webu se sem nepromítají.</p>" +
+
+            "<p><b>Jak se pozná, že práce patří BioPharmě.</b> Podle toho, co člověk napsal do popisu dne: " +
+            "<code>BioPharm</code>, <code>BPH</code>, <code>BP</code>, budovy <code>G61</code> a <code>G62</code>, " +
+            "kódy prvků <code>BHA61/BHA62</code> a překlepy typu <code>BioPfarm</code> nebo <code>Biophamra</code>. " +
+            "Kde v textu zakázka není, doplnil se odhad podle okolních dnů — lidé dělají většinou týden v kuse " +
+            "na jedné věci. Takových hodin je <b>" + data.celkem.odhadPct + " %</b> a v sešitech jsou označené.</p>" +
+
+            "<p><b>Jak se pozná druh práce.</b> Ze slovesa v zápisu: <i>kreslení, editace</i> → ArcGIS, " +
+            "<i>focení</i> → Focení, <i>skenování</i> → Skeny, <i>zaměřování</i> → Zaměření. " +
+            "Samotná technologie (VZT, SLN, KAN, HAS) znamená kreslení, tedy ArcGIS. " +
+            "Když je v jednom dni víc činností, hodiny se mezi ně dělí rovným dílem — " +
+            "<i>„třídění fotek + excel tabulky“</i> je půl Focení a půl Tabulky. " +
+            "Kde ze zápisu činnost poznat nejde, zůstává <b>Nerozřazeno</b>.</p>" +
+
+            "<p><b>Peníze.</b> Hodiny × sazba zapsaná u toho dne, ne dnešní sazba. " +
+            "U dvou zaměstnanců, kteří sazbu ve výkazu nemají, se počítá 250 Kč/h. " +
+            "Dny nad 16 hodin jsou vynechané — bývají to překlepy nebo kilometry zapsané do sloupce hodin.</p>" +
+
+            "<p><b>Co v číslech není.</b> Rozpočet zakázky, protože v evidenci vyplněný není — " +
+            "tenhle přehled tedy říká, co zakázka stála, ne jestli vychází.</p>";
+    }
+
+    /* --------------------------------------------------------- načtení */
+
+    async function nacti() {
+        try {
+            const zaznam = await window.KB.loadPrehled("biopharma");
+            if (!zaznam || !zaznam.data) {
+                $("import").hidden = false;
+                $("importStav").innerHTML = '<span class="muted">V databázi zatím žádný přehled není.</span>';
+                return;
+            }
+            data = JSON.parse(zaznam.data);
+            $("obsah").hidden = false;
+            $("import").hidden = true;
+            vykresli();
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Přehled se nepodařilo načíst.", "error");
+        }
+    }
+
+    async function ulozSoubor() {
+        const soubor = $("soubor").files[0];
+        if (!soubor) return void ($("importStav").innerHTML =
+            '<span style="color:var(--warn)">Nejdřív vyber soubor.</span>');
+        try {
+            const text = await soubor.text();
+            const nova = JSON.parse(text);
+            if (!nova.celkem || !nova.podleLidi) throw new Error("Tohle není přehled zakázky.");
+            await window.KB.savePrehled("biopharma", nova);
+            $("importStav").innerHTML = '<span style="color:var(--ok)">Uloženo.</span>';
+            window.KBUI.toast("Přehled uložen do databáze.");
+            await nacti();
+        } catch (err) {
+            console.error(err);
+            $("importStav").innerHTML = '<span style="color:var(--danger)">' +
+                esc(err.message || "Soubor se nepodařilo načíst.") + "</span>";
+        }
+    }
+
+    /* ------------------------------------------------------------ zámek */
+
+    async function otisk(heslo) {
+        const data = new TextEncoder().encode("pasport-bp:" + heslo);
+        const buffer = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function zkusHeslo() {
+        const zadane = $("hesloPole").value;
+        if (await otisk(zadane) !== OTISK) {
+            $("hesloChyba").textContent = "Špatné heslo.";
+            $("hesloPole").select();
+            return;
+        }
+        try { sessionStorage.setItem(KLIC, "1"); } catch (e) { /* soukromý režim */ }
+        $("zamek").hidden = true;
+        nacti();
+    }
+
+    function render() {
+        if (!window.KBUI.can("vykaz.view")) {
+            $("stop").hidden = false;
+            $("zamek").hidden = true;
+            $("obsah").hidden = true;
+            $("import").hidden = true;
+            return;
+        }
+        $("stop").hidden = true;
+        let odemceno = false;
+        try { odemceno = sessionStorage.getItem(KLIC) === "1"; } catch (e) { /* soukromý režim */ }
+        if (!odemceno) {
+            $("zamek").hidden = false;
+            setTimeout(() => $("hesloPole").focus(), 60);
+            return;
+        }
+        $("zamek").hidden = true;
+        if (!data) nacti();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "vykazy-bp.html" });
+
+        $("hesloOk").addEventListener("click", zkusHeslo);
+        $("hesloPole").addEventListener("keydown", (e) => { if (e.key === "Enter") zkusHeslo(); });
+        $("importUloz").addEventListener("click", ulozSoubor);
+        $("importZrus").addEventListener("click", () => { $("import").hidden = true; $("obsah").hidden = !data; });
+        $("btnZnovu").addEventListener("click", () => {
+            $("import").hidden = false;
+            $("importZrus").hidden = false;
+            $("importStav").textContent = "";
+            $("import").scrollIntoView({ behavior: "smooth" });
+        });
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("users", render);
+        render();
+    });
+})();
+</script>
+</body>
+</html>
