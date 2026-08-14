@@ -765,20 +765,24 @@
         bindHeader();
         bindSearch();
         mountRail();
-        renderRailContext();
         placeSearch();
         UI.paintUser();
         UI.bindCloudStatus("[data-cloud-status]");
         stickyOffset();
         mountToTop();
+        pozadejOData();
+        renderMujDen();
 
         // roletky se plní z databáze – po doručení dat se lišta překreslí
         if (window.KB) {
             window.KB.on("tasks", refreshNav);
-            window.KB.on("ukoly", refreshNav);
+            window.KB.on("ukoly", () => { refreshNav(); renderMujDen(); });
             window.KB.on("projekty-docs", refreshNav);
             window.KB.on("milniky", refreshNav);
+            window.KB.on("vykazy", renderMujDen);
+            window.KB.on("users", () => { pozadejOData(); renderMujDen(); });
         }
+        document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); });
     };
 
     /** Překreslí navigaci (obsah roletek se bere z databáze). */
@@ -788,7 +792,6 @@
         if (!nav) return;
         nav.outerHTML = navHtml(active);
         bindNav();
-        renderRailContext();
         UI.paintUser();
     }
 
@@ -805,17 +808,14 @@
             '<a class="siderail__logo" href="index.html" aria-label="Domů">' +
                 '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa"></a>' +
             '<div data-rail-search></div>' +
-            '<nav class="siderail__akce">' +
+            // „Můj den" – osobní stav, ne kopie lišty (viz komentář u renderMujDen)
+            '<div class="siderail__mujden" data-rail-mujden hidden></div>' +
+            '<div class="siderail__spodek">' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
                     icon("plus") + "<span>Nový výkaz</span></a>" +
                 '<a class="siderail__btn" href="ukoly.html?moje=1">' +
                     icon("tasks") + "<span>Moje úkoly</span></a>" +
-            "</nav>" +
-            // obsah aktivní sekce lišty – u návodů kategorie, u projektů
-            // otevřené projekty… plní renderRailContext
-            '<nav class="siderail__sekce" data-rail-sekce></nav>' +
-            '<div class="siderail__spodek">' +
                 '<a class="siderail__btn" href="nastaveni.html" data-need="vykaz.view" hidden>' +
                     icon("cog") + "<span>Nastavení</span></a>" +
                 '<div class="siderail__ja" data-rail-ja></div>' +
@@ -824,28 +824,65 @@
         document.body.insertBefore(rail, document.body.firstChild);
     }
 
-    /* Levý pás zrcadlí lištu: pod rychlými akcemi ukazuje obsah té sekce,
-       na které člověk zrovna je – u návodů kategorie, u projektů otevřené
-       projekty, u milníků nejbližší termíny. Přání Michala: „v levém sloupci
-       budou prostě ty různé možnosti toho, co je na liště." */
-    function renderRailContext() {
-        const slot = document.querySelector("[data-rail-sekce]");
+    /* ------------------------------------------------------- „Můj den" ---
+
+       První pokus byl zrcadlit lištu (u návodů kategorie, u projektů
+       projekty). Michal to zamítl a měl pravdu: roletka v liště to udělá
+       líp a pás pak jen opisoval. Tohle je náhrada, která lištu nedubluje:
+       osobní stav toho, kdo je přihlášený – kolik má dnes a tento týden
+       vykázáno, kolik má otevřených úkolů a co ho nejdřív tlačí.
+
+       Data si pás vyžádá sám (jen „moje"), takže je má na každé stránce;
+       kdyby si stránka řekla o víc, store odběr povýší – zúžit ho nejde. */
+
+    let mujDenZapnut = false;
+
+    function pozadejOData() {
+        if (mujDenZapnut || !window.KB || !window.KB.currentUid || !window.KB.currentUid()) return;
+        if (!UI.can("vykaz.otevrit")) return;      // student výkazy nemá
+        mujDenZapnut = true;
+        window.KB.watchMojeVykazy();
+        window.KB.watchMojeUkoly();
+    }
+
+    function renderMujDen() {
+        const slot = document.querySelector("[data-rail-mujden]");
         if (!slot) return;
 
-        const active = lastNav.active || location.pathname.split("/").pop() || "index.html";
-        const item = (window.KB_NAV || []).find(n =>
-            n.href && n.href.split(/[?#]/)[0] === active);
-        const menu = item ? menuOf(item) : null;
-        if (!menu || !menu.length) {
-            slot.innerHTML = "";
-            slot.hidden = true;
-            return;
-        }
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        if (!uid || !UI.can("vykaz.otevrit")) { slot.hidden = true; return; }
+
+        const dnes = new Date();
+        const iso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+            "-" + String(d.getDate()).padStart(2, "0");
+        // týden od pondělí – tak se u nás počítá odpracovaná doba
+        const pondeli = new Date(dnes);
+        pondeli.setDate(pondeli.getDate() - ((pondeli.getDay() + 6) % 7));
+
+        const moje = (window.KB.vykazy || []).filter(z => z.uid === uid && !z.absence);
+        const secti = (kdy) => moje.filter(kdy).reduce((s, z) => s + (Number(z.hodiny) || 0), 0);
+        const hodinyDnes = secti(z => z.datum === iso(dnes));
+        const hodinyTyden = secti(z => (z.datum || "") >= iso(pondeli) && (z.datum || "") <= iso(dnes));
+
+        const mojeUkoly = (window.KB.ukoly || [])
+            .filter(u => u.stav !== "hotovo" && (u.prirazeni || []).indexOf(uid) !== -1);
+        const nejblizsi = mojeUkoly.filter(u => u.termin).sort((a, b) => a.termin.localeCompare(b.termin))[0];
+
+        const cislo = (h) => Number(h || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+        const czDatum = (i) => { const [, m, d] = i.split("-"); return Number(d) + ". " + Number(m) + "."; };
+
         slot.hidden = false;
-        slot.innerHTML = '<span class="siderail__nadpis">' + esc(item.title) + "</span>" +
-            menu.slice(0, 14).map(group =>
-                '<a class="siderail__odkaz" href="' + esc(group.href || item.href) + '">' +
-                    esc(group.title) + "</a>").join("");
+        slot.innerHTML =
+            '<span class="siderail__nadpis">Můj den</span>' +
+            '<div class="mujden__radek"><span>Dnes</span><b>' + cislo(hodinyDnes) + " h</b></div>" +
+            '<div class="mujden__radek"><span>Tento týden</span><b>' + cislo(hodinyTyden) + " h</b></div>" +
+            '<div class="mujden__radek"><span>Otevřené úkoly</span><b>' + mojeUkoly.length + "</b></div>" +
+            (nejblizsi
+                ? '<a class="mujden__termin" href="ukoly.html?moje=1">' +
+                    "<span>Nejbližší termín · " + esc(czDatum(nejblizsi.termin)) + "</span>" +
+                    "<b>" + esc(nejblizsi.nazev || "") + "</b></a>"
+                : '<div class="mujden__termin mujden__termin--klid">' +
+                    "<span>Žádný termín před sebou</span></div>");
     }
 
     /* Hledání je jedno jediné pole. Na širokém okně bydlí v pásu, na úzkém

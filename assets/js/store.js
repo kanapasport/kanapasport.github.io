@@ -104,6 +104,7 @@ const KB = {
     kalendar: [],           // události, dovolené, nemoci – vidí všichni členové
     pritomnost: [],         // kdo je právě na webu: { id: uid, ms, jmeno }
     aktivity: [],           // historie kroků (kdo co uložil) – jen pro manažery
+    logy: [],               // historie přihlášení (public/data/logs)
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
@@ -174,6 +175,7 @@ let vykazyChteno = "";          // "" | "vse" (správce) | "moje" (zaměstnanec)
 const zrusVykazy = () => {
     vykazyOdbery.forEach(stop => { try { stop(); } catch (e) {} });
     vykazyOdbery = [];
+    vykazyRezim = "";
 };
 
 /* Projekty a úkoly jedou na stejném principu: manažer poslouchá všechno,
@@ -183,9 +185,18 @@ let projektyOdber = null;
 let projektyChteno = "";        // "" | "vse" | "moje"
 let ukolyOdber = null;
 let ukolyChteno = "";
+
+/* Kdo si o data řekl dřív, ten určuje rozsah – a to je past: svislý pás
+   si na každé stránce vyžádá „jen moje", takže by manažerovi zablokoval
+   plný odběr, který si o kus dál řekne stránka. Proto se rozsah smí
+   ROZŠÍŘIT (moje → vše), ale nikdy zúžit. */
+let vykazyRezim = "";           // "" | "moje" | "vse"
+let projektyRezim = "";
+let ukolyRezim = "";
 const zrusProjektyUkoly = () => {
     if (projektyOdber) { try { projektyOdber(); } catch (e) {} projektyOdber = null; }
     if (ukolyOdber) { try { ukolyOdber(); } catch (e) {} ukolyOdber = null; }
+    projektyRezim = ""; ukolyRezim = "";
 };
 
 try {
@@ -207,6 +218,7 @@ try {
             zrusProjektyUkoly();
             if (pritomnostCasovac) { clearInterval(pritomnostCasovac); pritomnostCasovac = null; }
             if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
+            if (logyOdber) { try { logyOdber(); } catch (e) {} logyOdber = null; }
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
@@ -301,10 +313,10 @@ try {
         // po opětovném přihlášení navázat i výkazy, projekty a úkoly,
         // pokud si o ně některá stránka už řekla
         zrusVykazy();
-        if (vykazyChteno) sledujVykazy(vykazyChteno === "moje");
+        if (vykazyChteno) { vykazyRezim = vykazyChteno; sledujVykazy(vykazyChteno === "moje"); }
         zrusProjektyUkoly();
-        if (projektyChteno) sledujProjekty(projektyChteno === "moje");
-        if (ukolyChteno) sledujUkoly(ukolyChteno === "moje");
+        if (projektyChteno) { projektyRezim = projektyChteno; sledujProjekty(projektyChteno === "moje"); }
+        if (ukolyChteno) { ukolyRezim = ukolyChteno; sledujUkoly(ukolyChteno === "moje"); }
     });
 } catch (err) {
     console.warn("Firebase se nepodařilo spustit – offline režim.", err);
@@ -850,17 +862,23 @@ function sledujVykazy(jenSve) {
 /** Živý přenos všech výkazů včetně peněz – jen pro správce. */
 KB.watchVykazy = async () => {
     vykazyChteno = "vse";
-    if (vykazyOdbery.length) return;
+    if (vykazyRezim === "vse") return;
     if (authReady) await authReady;
-    if (!vykazyOdbery.length) sledujVykazy(false);
+    if (vykazyRezim === "vse") return;
+    // z „jen moje" se povyšuje na plný odběr – starý se musí zrušit
+    if (vykazyRezim === "moje") zrusVykazy();
+    vykazyRezim = "vse";
+    sledujVykazy(false);
 };
 
 /** Živý přenos vlastních zápisů bez peněz – pro stránku zaměstnance. */
 KB.watchMojeVykazy = async () => {
+    if (vykazyRezim) return;            // plný odběr se nikdy nezužuje
     vykazyChteno = "moje";
-    if (vykazyOdbery.length) return;
     if (authReady) await authReady;
-    if (!vykazyOdbery.length) sledujVykazy(true);
+    if (vykazyRezim) return;
+    vykazyRezim = "moje";
+    sledujVykazy(true);
 };
 
 KB.newVykazId = () => "vyk_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
@@ -1038,17 +1056,22 @@ function sledujProjekty(jenSve) {
 /** Živý přenos všech projektů – pro manažery. */
 KB.watchProjekty = async () => {
     projektyChteno = "vse";
-    if (projektyOdber) return;
+    if (projektyRezim === "vse") return;
     if (authReady) await authReady;
-    if (!projektyOdber) sledujProjekty(false);
+    if (projektyRezim === "vse") return;
+    if (projektyOdber) { try { projektyOdber(); } catch (e) {} projektyOdber = null; }
+    projektyRezim = "vse";
+    sledujProjekty(false);
 };
 
 /** Živý přenos projektů, ke kterým je člověk přiřazený. */
 KB.watchMojeProjekty = async () => {
+    if (projektyRezim) return;
     projektyChteno = "moje";
-    if (projektyOdber) return;
     if (authReady) await authReady;
-    if (!projektyOdber) sledujProjekty(true);
+    if (projektyRezim) return;
+    projektyRezim = "moje";
+    sledujProjekty(true);
 };
 
 KB.newProjektId = () => "prj_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
@@ -1139,17 +1162,22 @@ function sledujUkoly(jenSve) {
 /** Živý přenos všech úkolů – pro manažery. */
 KB.watchUkoly = async () => {
     ukolyChteno = "vse";
-    if (ukolyOdber) return;
+    if (ukolyRezim === "vse") return;
     if (authReady) await authReady;
-    if (!ukolyOdber) sledujUkoly(false);
+    if (ukolyRezim === "vse") return;
+    if (ukolyOdber) { try { ukolyOdber(); } catch (e) {} ukolyOdber = null; }
+    ukolyRezim = "vse";
+    sledujUkoly(false);
 };
 
 /** Živý přenos úkolů přiřazených přihlášenému. */
 KB.watchMojeUkoly = async () => {
+    if (ukolyRezim) return;
     ukolyChteno = "moje";
-    if (ukolyOdber) return;
     if (authReady) await authReady;
-    if (!ukolyOdber) sledujUkoly(true);
+    if (ukolyRezim) return;
+    ukolyRezim = "moje";
+    sledujUkoly(true);
 };
 
 KB.newUkolId = () => "ukl_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
@@ -1276,11 +1304,36 @@ KB.logLogin = async (name) => {
         if (authReady) await authReady;
         requireDb();
         await addDoc(collection(db, "artifacts", APP_ID, "public", "data", "logs"), {
-            userName: name, action: "login", timestamp: serverTimestamp()
+            userName: name,
+            uid: KB.currentUid(),
+            action: "login",
+            /* `ms` je tu vedle serverTimestamp schválně: podle něj se dá
+               řadit hned při zápisu, kdežto serverTimestamp dorazí až
+               ze serveru a chvíli je prázdný. */
+            ms: Date.now(),
+            timestamp: serverTimestamp()
         });
     } catch (err) {
         console.warn("Log se nepodařilo zapsat.", err);
     }
+};
+
+/* Historie přihlášení. Řadí se podle `ms`, takže staré záznamy bez tohohle
+   pole se nenačtou – ty vznikly před zavedením historie a nikomu nechybí. */
+let logyOdber = null;
+
+KB.watchLogy = async () => {
+    if (logyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || logyOdber) return;
+    logyOdber = onSnapshot(
+        query(collection(db, "artifacts", APP_ID, "public", "data", "logs"),
+            orderBy("ms", "desc"), limit(60)),
+        (snapshot) => {
+            KB.logy = [];
+            snapshot.forEach(d => KB.logy.push({ id: d.id, ...d.data() }));
+            emit("logy", KB.logy);
+        }, (err) => console.error("Chyba čtení přihlášení:", err));
 };
 
 emit("boot");

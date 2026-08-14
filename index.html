@@ -12,9 +12,13 @@
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* nástěnka: dvě poloviny, na úzkém okně pod sebou */
-        .nastenka { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-        @media (max-width: 900px) { .nastenka { grid-template-columns: 1fr; } }
+        /* Nástěnka: dlaždice stejné velikosti (přání Michala) – proto pevná
+           výška karty a rolování uvnitř, ne podle délky obsahu. */
+        .nastenka { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        @media (min-width: 1500px) { .nastenka { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 900px)  { .nastenka { grid-template-columns: 1fr; } }
+        .nastenka__karta { display: flex; flex-direction: column; gap: 8px; padding: 16px; height: 290px; }
+        .nastenka__telo { overflow-y: auto; flex: 1; min-height: 0; padding-right: 2px; }
         .mujukol { display: flex; align-items: center; gap: 10px; padding: 9px 11px;
             border: 1px solid var(--line-soft); border-radius: var(--radius);
             background: var(--surface); cursor: pointer; text-align: left; font: inherit; width: 100%; }
@@ -51,63 +55,59 @@
     </section>
 
     <!-- ================================================ nástěnka člověka -->
-    <section id="nastenka" class="wrap" style="padding-top:26px">
-        <div class="section-head" style="margin-bottom:14px">
-            <div class="spread">
-                <div>
-                    <h2 id="nastenkaPozdrav" style="font-size:24px">Moje nástěnka</h2>
-                    <p id="nastenkaPopis">Zadané úkoly vlevo, postup práce vybraného úkolu vpravo.</p>
-                </div>
-                <button type="button" id="btnPrizpusob" class="btn btn--ghost btn--sm">Přizpůsobit</button>
-            </div>
-            <!-- co kdo na nástěnce chce – pamatuje si to prohlížeč každého zvlášť -->
-            <div id="nastenkaVolby" class="row row--wrap card" hidden
-                 style="gap:14px;padding:10px 14px;margin-top:10px;font-size:13px">
-                <label class="row" style="gap:6px;cursor:pointer">
-                    <input type="checkbox" data-widget="ukoly" checked> Úkoly a TO-DO</label>
-                <label class="row" style="gap:6px;cursor:pointer">
-                    <input type="checkbox" data-widget="online" checked> Kdo je na webu</label>
-                <label class="row" style="gap:6px;cursor:pointer" data-need="vykaz.view" hidden>
-                    <input type="checkbox" data-widget="aktivita" checked> Poslední aktivita</label>
-            </div>
+    <section id="nastenka" class="wrap" style="padding-top:22px">
+        <div class="row" style="justify-content:flex-end;margin-bottom:10px">
+            <button type="button" id="btnPrizpusob" class="btn btn--ghost btn--sm">Přizpůsobit</button>
         </div>
-        <div class="nastenka" id="wUkoly">
-            <div class="card col" style="gap:8px;padding:16px">
+        <!-- co kdo na nástěnce chce – pamatuje si to prohlížeč každého zvlášť -->
+        <div id="nastenkaVolby" class="row row--wrap card" hidden
+             style="gap:14px;padding:10px 14px;margin-bottom:12px;font-size:13px">
+            <label class="row" style="gap:6px;cursor:pointer">
+                <input type="checkbox" data-widget="ukoly" checked> Zadané úkoly</label>
+            <label class="row" style="gap:6px;cursor:pointer">
+                <input type="checkbox" data-widget="todo" checked> TO-DO</label>
+            <label class="row" style="gap:6px;cursor:pointer">
+                <input type="checkbox" data-widget="online" checked> Kdo tu byl</label>
+            <label class="row" style="gap:6px;cursor:pointer" data-need="vykaz.view" hidden>
+                <input type="checkbox" data-widget="aktivita" checked> Poslední aktivita</label>
+        </div>
+
+        <!-- všechny dlaždice stejně velké; delší obsah roluje uvnitř -->
+        <div class="nastenka">
+            <div class="card nastenka__karta" id="wUkoly">
                 <div class="spread">
                     <b>Zadané úkoly</b>
-                    <a class="linkbtn" style="border-color:var(--line)" href="ukoly.html?moje=1">všechny →</a>
+                    <a class="linkbtn" href="ukoly.html?moje=1">všechny →</a>
                 </div>
-                <div id="mojeUkoly" class="col" style="gap:6px"></div>
+                <div id="mojeUkoly" class="nastenka__telo col" style="gap:6px"></div>
             </div>
-            <div class="card col" style="gap:8px;padding:16px">
+            <div class="card nastenka__karta" id="wTodo">
                 <div class="spread">
                     <b>TO-DO — postup práce</b>
-                    <a id="todoOdkaz" class="linkbtn" style="border-color:var(--line)" href="ukoly.html" hidden>otevřít →</a>
+                    <a id="todoOdkaz" class="linkbtn" href="ukoly.html" hidden>otevřít →</a>
                 </div>
-                <div id="todoRozpad" class="col" style="gap:4px"></div>
+                <div id="todoRozpad" class="nastenka__telo col" style="gap:2px"></div>
             </div>
-        </div>
-        <div class="nastenka" style="margin-top:16px">
-            <div class="card col" id="wOnline" style="gap:8px;padding:16px">
-                <b>Kdo je právě na webu</b>
-                <div id="onlineSeznam" class="row row--wrap" style="gap:8px"></div>
+            <div class="card nastenka__karta" id="wOnline">
+                <div class="spread">
+                    <b>Kdo tu byl</b>
+                    <a class="linkbtn" href="reporty.html" data-need="vykaz.view" hidden>historie →</a>
+                </div>
+                <div id="onlineSeznam" class="nastenka__telo col" style="gap:4px"></div>
             </div>
             <!-- poslední aktivita je jen pro manažery – bez práv se karta nevykreslí -->
-            <div class="card col" id="wAktivita" data-need="vykaz.view" hidden style="gap:8px;padding:16px">
+            <div class="card nastenka__karta" id="wAktivita" data-need="vykaz.view" hidden>
                 <div class="spread">
                     <b>Poslední aktivita</b>
-                    <a class="linkbtn" style="border-color:var(--line)" href="reporty.html">historie →</a>
+                    <a class="linkbtn" href="reporty.html">historie →</a>
                 </div>
-                <div id="aktivitaSeznam" class="col" style="gap:5px;font-size:13px"></div>
+                <div id="aktivitaSeznam" class="nastenka__telo col" style="gap:4px;font-size:12.5px"></div>
             </div>
         </div>
     </section>
 
-    <!-- =========================================================== sekce -->
-    <div id="sections" class="wrap" style="padding:34px 20px 70px;display:flex;flex-direction:column;gap:46px"></div>
-
     <footer style="border-top:1px solid var(--line);padding:26px 0 calc(26px + env(safe-area-inset-bottom));text-align:center;font-size:12px;color:var(--dim)">
-        Pasport Kaňa · interní dokumentace · data jsou určena pouze pro potřeby firmy
+        Pasport Kaňa · interní systém · data jsou určena pouze pro potřeby firmy
     </footer>
 </main>
 
@@ -121,98 +121,6 @@
     const esc = (value) => window.KBUI.esc(value);
     const icon = (name) =>
         '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' + (window.KB_ICONS[name] || "") + "</svg>";
-
-    /* ------------------------------------------------------- dlaždice */
-
-    const VISIBLE_CHIPS = 4;
-
-    /**
-     * Seřadí podsekce podle toho, kde se naposledy něco upravovalo –
-     * v dlaždici je pak vidět poslední čtyři, zbytek se dá rozbalit.
-     */
-    function sortedChildren(tile) {
-        const guides = window.KB.guides || [];
-        return (tile.children || []).map(child => {
-            const ids = window.KB_descendantIds(tile.cat, child.id);
-            const last = guides.reduce((max, guide) =>
-                (guide.cat === tile.cat && ids.indexOf(guide.subcat) !== -1)
-                    ? Math.max(max, guide.updatedMs || 0) : max, 0);
-            return { id: child.id, title: child.title, last: last };
-        }).sort((a, b) => b.last - a.last);
-    }
-
-    function tileHtml(tile) {
-        const head =
-            '<div class="tile__head">' +
-                '<div class="tile__icon">' + icon(tile.icon) + "</div>" +
-                '<div class="tile__title">' + esc(tile.title) + "</div>" +
-            "</div>" +
-            (tile.sub ? '<div class="tile__sub">' + esc(tile.sub) + "</div>" : "");
-
-        if (tile.soon) {
-            return '<div class="tile tile--soon"><div class="tile__main">' + head + "</div>" +
-                '<div class="tile__meta">Připravujeme</div></div>';
-        }
-
-        // štítky podsekcí jsou samostatné odkazy (proto dlaždice není celá <a>)
-        const children = sortedChildren(tile);
-        const link = (child) =>
-            '<a class="chip" href="navody.html?kat=' + tile.cat + "&sub=" + child.id + '">' +
-            esc(child.title) + "</a>";
-
-        let chips = "";
-        if (children.length) {
-            chips = '<div class="tile__children">' +
-                children.slice(0, VISIBLE_CHIPS).map(link).join("") + "</div>";
-
-            const rest = children.slice(VISIBLE_CHIPS);
-            if (rest.length) {
-                chips += '<div class="tile__children">' +
-                        '<button type="button" class="chip chip--more" data-more="' + tile.cat + '">' +
-                        "Další sekce (" + rest.length + ") ▾</button>" +
-                    "</div>" +
-                    '<div class="tile__children" data-morelist="' + tile.cat + '" hidden>' +
-                        rest.map(link).join("") + "</div>";
-            }
-        }
-
-        const main = tile.action
-            ? '<button type="button" class="tile__main" data-action="' + tile.action + '" style="cursor:pointer;background:none;border:none;font:inherit">' + head + "</button>"
-            : '<a class="tile__main" href="' + tile.href + '">' + head + "</a>";
-
-        return '<div class="tile">' + main + chips + "</div>";
-    }
-
-    // nadpis sekce je rovnou proklik na její výpis (stejný princip jako
-    // tlačítka nad lištou); bez odkazu zůstává obyčejný nadpis
-    const sectionHtml = (section, tiles) =>
-        '<section id="sec-' + section.id + '">' +
-            '<div class="section-head">' +
-                (section.href
-                    ? '<a class="sectionbtn" href="' + section.href + '">' +
-                        icon(section.icon || "library") + esc(section.title) + "</a>"
-                    : "<h2>" + esc(section.title) + "</h2>") +
-                (section.desc ? "<p>" + esc(section.desc) + "</p>" : "") +
-            "</div>" +
-            '<div class="tilegrid">' + tiles + "</div>" +
-        "</section>";
-
-    function renderSections() {
-        document.getElementById("sections").innerHTML = window.KB_SECTIONS
-            .map(section => sectionHtml(section, section.tiles.map(tileHtml).join(""))).join("");
-    }
-
-    // rozbalení zbylých podsekcí v dlaždici
-    document.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-more]");
-        if (!button) return;
-        const list = document.querySelector('[data-morelist="' + button.dataset.more + '"]');
-        if (!list) return;
-        list.hidden = !list.hidden;
-        button.textContent = list.hidden
-            ? "Další sekce (" + list.children.length + ") ▾"
-            : "Skrýt ▴";
-    });
 
     /* ------------------------------------------------- nástěnka člověka --
        Dvě poloviny: vlevo úkoly zadané přihlášenému, vpravo TO-DO rozpad
@@ -244,38 +152,64 @@
 
     const VOLBY_KLIC = "kb-nastenka";
 
+    const VYCHOZI_VOLBY = { ukoly: true, todo: true, online: true, aktivita: true };
+
     function nactiVolby() {
-        try { return Object.assign({ ukoly: true, online: true, aktivita: true },
+        try { return Object.assign({}, VYCHOZI_VOLBY,
             JSON.parse(localStorage.getItem(VOLBY_KLIC) || "{}")); }
-        catch (err) { return { ukoly: true, online: true, aktivita: true }; }
+        catch (err) { return Object.assign({}, VYCHOZI_VOLBY); }
     }
 
     function pouzijVolby() {
         const volby = nactiVolby();
         document.querySelectorAll("[data-widget]").forEach(ch => { ch.checked = volby[ch.dataset.widget] !== false; });
-        document.getElementById("wUkoly").style.display = volby.ukoly === false ? "none" : "";
-        document.getElementById("wOnline").style.display = volby.online === false ? "none" : "";
-        // aktivita má navíc data-need – práva řeší paintUser, tady jen volba
-        if (volby.aktivita === false) document.getElementById("wAktivita").style.display = "none";
-        else document.getElementById("wAktivita").style.removeProperty("display");
+        // karta s data-need se skrývá i podle práv (paintUser), tady jen podle volby
+        [["ukoly", "wUkoly"], ["todo", "wTodo"], ["online", "wOnline"], ["aktivita", "wAktivita"]]
+            .forEach(([klic, id]) => {
+                const karta = document.getElementById(id);
+                if (volby[klic] === false) karta.style.display = "none";
+                else karta.style.removeProperty("display");
+            });
     }
 
-    /** Kdo je na webu: otisk mladší deseti minut = je tady. */
+    /**
+     * Kdo tu byl. Otisk se obnovuje po pěti minutách, takže „před 3 minutami"
+     * znamená „je tady teď"; starší časy říkají, kdy kdo naposledy pracoval.
+     * Šest posledních – delší seznam patří do Reportů.
+     */
+    function predJakDlouho(ms) {
+        const minut = Math.max(0, Math.round((Date.now() - ms) / 60000));
+        if (minut < 6) return "právě teď";
+        if (minut < 60) return "před " + minut + " minutami";
+        const hodin = Math.round(minut / 60);
+        if (hodin < 24) return "před " + hodin + (hodin === 1 ? " hodinou" :
+            hodin < 5 ? " hodinami" : " hodinami");
+        const dnu = Math.round(hodin / 24);
+        return "před " + dnu + (dnu === 1 ? " dnem" : " dny");
+    }
+
     function renderOnline() {
-        const ted = Date.now();
         const tady = (window.KB.pritomnost || [])
-            .filter(p => (Number(p.ms) || 0) > ted - 10 * 60 * 1000)
             .map(p => {
                 const u = (window.KB.users || []).find(x => x.id === p.id);
-                return u ? ((u.first || "") + " " + (u.last || "")).trim() : (p.jmeno || "");
+                return { jmeno: u ? ((u.first || "") + " " + (u.last || "")).trim() : (p.jmeno || ""),
+                         ms: Number(p.ms) || 0 };
             })
-            .filter(Boolean).sort((a, b) => a.localeCompare(b, "cs"));
+            .filter(p => p.jmeno)
+            .sort((a, b) => b.ms - a.ms)
+            .slice(0, 6);
+
         document.getElementById("onlineSeznam").innerHTML = tady.length
-            ? tady.map(jmeno => '<span class="row" style="gap:6px;border:1px solid var(--line);' +
-                'border-radius:99px;padding:4px 11px;font-size:12.5px">' +
-                '<span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span>' +
-                esc(jmeno) + "</span>").join("")
-            : '<span class="tiny muted">Teď tu nikdo další není.</span>';
+            ? tady.map(p => {
+                const cerstvy = Date.now() - p.ms < 10 * 60 * 1000;
+                return '<div class="row" style="gap:8px;padding:4px 0;border-bottom:1px dashed var(--line-soft)">' +
+                    '<span style="flex:none;width:8px;height:8px;border-radius:50%;background:' +
+                        (cerstvy ? "var(--ok)" : "var(--dim)") + '"></span>' +
+                    '<span class="grow truncate" style="font-size:13px">' + esc(p.jmeno) + "</span>" +
+                    '<span class="tiny muted" style="flex:none">' + esc(predJakDlouho(p.ms)) + "</span>" +
+                "</div>";
+            }).join("")
+            : '<span class="tiny muted">Zatím tu nikdo nebyl – seznam se plní sám, jak se lidé přihlašují.</span>';
     }
 
     /** Poslední aktivita – jen manažeři (data chodí jen jim). */
@@ -311,10 +245,6 @@
     }
 
     function renderNastenka() {
-        const krestni = (window.KB_USER || "").split(" ")[0];
-        document.getElementById("nastenkaPozdrav").textContent =
-            krestni ? "Nástěnka – " + krestni : "Moje nástěnka";
-
         const seznam = mojeUkoly();
         if (!seznam.some(u => u.id === vybranyUkol)) vybranyUkol = seznam.length ? seznam[0].id : "";
 
@@ -371,50 +301,6 @@
         if (pct) zapisPct(pct.dataset.ntodo, Number(pct.dataset.npct));
     });
 
-    /** Vloží nebo nahradí sekci; pořadí drží podle seznamu následníků. */
-    function placeSection(id, html, beforeIds) {
-        const host = document.getElementById(id);
-        if (host) return void (host.outerHTML = html);
-
-        const wrap = document.getElementById("sections");
-        const holder = document.createElement("div");
-        holder.innerHTML = html;
-        const anchor = beforeIds.map(x => document.getElementById(x)).find(Boolean);
-        wrap.insertBefore(holder.firstChild, anchor || null);
-    }
-
-    /* --------------------------------------------------- tabule na nápady */
-
-    function renderBoards(boards) {
-        const section = {
-            id: "boards", title: "Tabule", href: "tabule.html", icon: "board",
-            desc: "Nekonečné plátno na myšlenkové mapy, poznámky a náčrtky."
-        };
-
-        const list = (boards || []).slice(0, 6);
-        const tiles = list.length
-            ? list.map(board =>
-                '<div class="tile">' +
-                    '<a class="tile__main" href="tabule.html?id=' + encodeURIComponent(board.id) + '">' +
-                        '<div class="tile__head">' +
-                            '<div class="tile__icon">' + icon("board") + "</div>" +
-                            '<div class="tile__title">' + esc((board.title || "Bez názvu").toUpperCase()) + "</div>" +
-                        "</div>" +
-                        '<div class="tile__sub">' +
-                            (board.updatedBy ? "naposledy kreslil " + esc(board.updatedBy) : "zatím prázdná") +
-                            (board.updatedMs ? " · " + new Date(board.updatedMs).toLocaleDateString("cs-CZ") : "") +
-                        "</div>" +
-                    "</a>" +
-                "</div>").join("")
-            : '<div class="tile"><a class="tile__main" href="tabule.html">' +
-                '<div class="tile__head"><div class="tile__icon">' + icon("board") + "</div>" +
-                '<div class="tile__title">ZALOŽIT TABULI</div></div>' +
-                '<div class="tile__sub">Zatím tu žádná není. Klikni a založ první.</div>' +
-              "</a></div>";
-
-        placeSection("sec-boards", sectionHtml(section, tiles), ["sec-pripravujeme"]);
-    }
-
     /* ---------------------------------------------------------- hledání */
 
     function guideRow(guide, query) {
@@ -429,19 +315,22 @@
         "</a>";
     }
 
+    /* Hledání zůstává i tady – při psaní do pole v pásu se místo nástěnky
+       ukážou nalezené návody. Dlaždice návodů na domovské stránce ale už
+       nejsou, na ty vede lišta. */
     function runSearch(query) {
         const results = document.getElementById("searchResults");
-        const sections = document.getElementById("sections");
+        const nastenka = document.getElementById("nastenka");
 
         if (!query) {
             results.hidden = true;
-            sections.hidden = false;
+            nastenka.hidden = false;
             return;
         }
 
         const found = window.KBUI.searchGuides(window.KB.guides, query);
         results.hidden = false;
-        sections.hidden = true;
+        nastenka.hidden = true;
         document.getElementById("searchCount").textContent =
             found.length + " z " + window.KB.guides.length + " návodů";
         document.getElementById("searchList").innerHTML = found.length
@@ -454,23 +343,16 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "index.html", big: true });
-        renderSections();
         renderNastenka();
         window.KBUI.onSearch(runSearch);
 
-        // pořadí štítků závisí na tom, kde se naposledy upravovalo
-        window.KB.on("guides", () => {
-            renderSections();
-            runSearch(window.KBUI.searchValue());
-        });
+        window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("ukoly", renderNastenka);
         window.KB.on("pritomnost", renderOnline);
         window.KB.on("aktivity", renderAktivita);
-        renderBoards(window.KB.boards);
-        window.KB.on("boards", (event) => renderBoards(event.detail));
 
         // přizpůsobení nástěnky
         document.getElementById("btnPrizpusob").addEventListener("click", () => {

@@ -8,6 +8,28 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <style>
+        /* Hlavička karty člověka je zároveň přepínač jeho zápisů. Bez šipky
+           a bez reakce na najetí myší nikoho nenapadne, že se dá rozkliknout –
+           podbarvení zasahuje až k okrajům karty, proto záporné okraje. */
+        .osoba__head {
+            cursor: pointer;
+            user-select: none;
+            padding: 8px 10px 10px;
+            margin: -8px -10px 12px;
+            border-radius: 8px 8px 0 0;
+        }
+        .osoba__head:hover, .osoba__head:focus-visible { background: var(--bg-soft); }
+        /* Čísla drží u šipky vpravo, jméno zůstává vlevo. */
+        .osoba__cisla { margin-left: auto; }
+        .osoba__sipka { font-size: 13px; color: var(--muted); }
+
+        .osoba__zapisy { margin-top: 18px; }
+        .osoba__tabulka { overflow-x: auto; }
+        /* Dovolená, nemoc a školení nejsou odpracovaný čas – řádek je proto
+           utlumený, ať se opticky neplete s prací, za kterou se fakturuje. */
+        .vyk__absence td { background: var(--bg-soft); color: var(--muted); }
+    </style>
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -99,6 +121,16 @@
     let metrika = "kc";            // kc | hod
     const filtr = { od: "", do: "", uid: "", zakazka: "", projekt: "", firma: "",
                     cinnost: "", tech: "", text: "" };
+
+    /* Které karty lidí jsou rozbalené a u koho je vidět celý seznam.
+       Drží se to tady, ne v DOM: stránka se překresluje při každé změně
+       filtru i při každém příchodu dat z Firestore a rozbalený seznam
+       by se pod rukama zavíral. Klíčem je uid člověka. */
+    const rozbalene = new Set();
+    const plneSeznamy = new Set();
+
+    /* Delší výpis je k ničemu – kdo hledá konkrétní zápis, použije filtr. */
+    const LIMIT_ZAPISU = 30;
 
     /* Pořadí pro barvy – ať má FOCENÍ stejnou barvu v součtu i u každého člověka. */
     const poradiCinnosti = () => V.cinnosti();
@@ -202,6 +234,60 @@
         return karta("Čerpání rozpočtů", "za celou dobu zakázky, ne za vybrané období", radky);
     }
 
+    /* Dvě písmena stačí (po, út, …) a je hned vidět, že se dělalo o víkendu. */
+    const denZkratka = (iso) => V.denVTydnu(iso).slice(0, 2);
+
+    function zapisRadek(z) {
+        const castka = z.absence ? "—" : "<b>" + V.kc(z.castka) + "</b>";
+
+        return "<tr" + (z.absence ? ' class="vyk__absence"' : "") + ">" +
+            "<td>" + esc(V.czDatum(z.datum)) +
+                '<span class="vyk__pozn">' + esc(denZkratka(z.datum)) + "</span></td>" +
+            '<td class="vyk__nazev">' + esc(z.nazev || "") +
+                (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
+            "<td>" + esc(z.zakazka || "") +
+                (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
+            "<td>" + esc(z.cinnost || "") + "</td>" +
+            '<td title="' + esc(V.techLabel(z.technologie)) + '">' + esc(z.technologie || "") + "</td>" +
+            "<td>" + esc((z.od || "") + "–" + (z.do || "")) + "</td>" +
+            '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
+            '<td class="vyk__num">' + castka + "</td>" +
+        "</tr>";
+    }
+
+    /**
+     * Rozbalený seznam zápisů jednoho člověka. Bere se z pole, ze kterého
+     * jsou spočítaná čísla nad ním – tím je jisté, že seznam a součet sedí,
+     * i kdyby se filtr někdy změnil.
+     */
+    function zapisyHtml(klic, radky) {
+        /* Nejnovější den nahoře, uvnitř dne po sobě tak, jak se pracovalo.
+           Datum i čas jsou pevně formátované, takže stačí porovnat řetězce. */
+        const vsechny = radky.slice().sort((a, b) => {
+            const da = a.datum || "", db = b.datum || "";
+            if (da !== db) return da < db ? 1 : -1;
+            const oa = a.od || "", ob = b.od || "";
+            return oa < ob ? -1 : oa > ob ? 1 : 0;
+        });
+        const videt = plneSeznamy.has(klic) ? vsechny : vsechny.slice(0, LIMIT_ZAPISU);
+
+        return '<div class="osoba__zapisy">' +
+            '<div class="osoba__nadpis">Jednotlivé zápisy</div>' +
+            '<div class="osoba__tabulka"><table class="vyk">' +
+                "<thead><tr>" +
+                    "<th>Datum</th><th>Popis práce</th><th>Projekt</th>" +
+                    "<th>Druh</th><th>Tech.</th><th>Čas</th>" +
+                    '<th class="vyk__num">Hodin</th><th class="vyk__num">Částka</th>' +
+                "</tr></thead><tbody>" + videt.map(zapisRadek).join("") + "</tbody>" +
+            "</table></div>" +
+            (vsechny.length > videt.length
+                ? '<button type="button" class="btn btn--sm btn--ghost" ' +
+                    'style="margin-top:10px" data-osoba-vse="' + esc(klic) + '">' +
+                    "Zobrazit všech " + esc(V.cislo(vsechny.length)) + "</button>"
+                : "") +
+        "</div>";
+    }
+
     function render() {
         if (!window.KBUI.can("vykaz.view")) {
             $("stop").hidden = false;
@@ -260,9 +346,13 @@
             .map(osoba => {
                 const u = V.clovek(osoba.uid);
                 const jmeno = u ? V.jmeno(u) : (osoba.radky[0].osoba || "Neznámý člověk");
+                // starší zápisy nemusí mít uid; prázdný klíč je pořád klíč
+                const klic = String(osoba.uid || "");
+                const otevrena = rozbalene.has(klic);
 
                 return '<section class="card osoba">' +
-                    '<div class="osoba__head">' +
+                    '<div class="osoba__head" data-osoba-rozbal="' + esc(klic) + '" ' +
+                            'role="button" tabindex="0" aria-expanded="' + (otevrena ? "true" : "false") + '">' +
                         '<span class="osoba__jmeno">' + esc(jmeno) + "</span>" +
                         '<span class="osoba__cisla">' + V.hod(osoba.s.hodiny) +
                             " · <b>" + V.kc(osoba.s.castka) + "</b>" +
@@ -270,6 +360,8 @@
                                 V.kc(osoba.s.sazba) + "/h průměr · " +
                                 V.pocet(osoba.s.dny, ["den", "dny", "dní"]) + "</span>" +
                         "</span>" +
+                        '<span class="osoba__sipka" aria-hidden="true">' +
+                            (otevrena ? "▴" : "▾") + "</span>" +
                     "</div>" +
                     '<div class="osoba__grid">' +
                         '<div><div class="osoba__nadpis">Části zpracování</div>' +
@@ -277,6 +369,7 @@
                         '<div><div class="osoba__nadpis">Technologie</div>' +
                             V.pruhy(V.podle(osoba.radky, "technologie", poradiTech()), metrika, V.techLabel) + "</div>" +
                     "</div>" +
+                    (otevrena ? zapisyHtml(klic, osoba.radky) : "") +
                 "</section>";
             }).join("");
     }
@@ -321,6 +414,32 @@
                 if (klic === "zakazka") filtr.projekt = "";
                 render();
             });
+        });
+
+        /* Karty se překreslují, tak posloucháme na dokumentu – jinak by se
+           posluchač musel po každém render() věšet znovu. */
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest) return;
+            const vse = event.target.closest("[data-osoba-vse]");
+            if (vse) {
+                plneSeznamy.add(vse.dataset.osobaVse);
+                return void render();
+            }
+            const hlava = event.target.closest("[data-osoba-rozbal]");
+            if (!hlava) return;
+            const klic = hlava.dataset.osobaRozbal;
+            rozbalene.has(klic) ? rozbalene.delete(klic) : rozbalene.add(klic);
+            render();
+        });
+
+        /* Hlavička je přepínač, ne odkaz – bez tohohle by se k zápisům
+           nedostal nikdo, kdo jede po klávesnici. */
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            const hlava = event.target.closest && event.target.closest("[data-osoba-rozbal]");
+            if (!hlava) return;
+            event.preventDefault();
+            hlava.click();
         });
 
         $("btnResetFiltr").addEventListener("click", resetFiltru);
