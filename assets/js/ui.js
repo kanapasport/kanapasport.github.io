@@ -814,6 +814,11 @@
         if (box.parentElement !== cil) cil.appendChild(box);
     }
     window.addEventListener("resize", placeSearch);
+    // resize někdy nepřijde (otočení tabletu, obnovení okna) – hlídá se i média
+    try {
+        window.matchMedia("(max-width: 1120px), (hover: none)")
+            .addEventListener("change", placeSearch);
+    } catch (err) { /* starší prohlížeč – stačí resize */ }
 
     /** Tlačítko „nahoru" – ukáže se, až je stránka o dost delší než okno. */
     function mountToTop() {
