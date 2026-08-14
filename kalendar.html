@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Kalendář – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        .kal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .kal--3 { grid-template-columns: repeat(3, 1fr); }
+        .kal__hlava { font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
+            color: var(--muted); text-align: center; padding: 4px 0; }
+        .kal__den { min-height: 96px; border: 1px solid var(--line-soft); border-radius: var(--radius);
+            background: var(--surface); padding: 5px 6px; display: flex; flex-direction: column; gap: 3px; }
+        .kal__den--cizi { background: var(--bg-soft); opacity: .6; }
+        .kal__den--dnes { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .kal__den--velky { min-height: 190px; }
+        .kal__cislo { font-size: 12px; font-weight: 900; color: var(--text-soft); }
+        .kal__den--dnes .kal__cislo { color: var(--accent); }
+        .kal__vic { font-size: 10.5px; color: var(--muted); cursor: pointer; }
+        .ud { display: block; width: 100%; text-align: left; border: none; font: inherit;
+            font-size: 10.5px; font-weight: 700; line-height: 1.35; padding: 2px 6px;
+            border-radius: 4px; color: #fff; cursor: pointer;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ud--udalost { background: #0f62c4; }
+        .ud--dovolena { background: #0d7d3f; }
+        .ud--nemoc { background: #c8102e; }
+        .ud--skoleni { background: #8a2be2; }
+        .ud--ukol { background: #c26a00; }
+        .ud--milnik { background: #b3006b; }
+        .kalform { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .kalform label > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .legenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; color: var(--muted); }
+        .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; font-style: normal; }
+        @media (max-width: 760px) {
+            .kal { grid-template-columns: repeat(1, 1fr); }
+            .kal__hlava { display: none; }
+            .kal__den--cizi { display: none; }
+            .kal__den { min-height: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
+
+    <div class="spread">
+        <div>
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Kalendář</h2>
+            <p class="small muted" style="margin-top:3px">
+                Dovolené, nemoci a školení celé firmy, termíny úkolů a milníky.
+            </p>
+        </div>
+        <button type="button" id="btnPridat" class="btn btn--primary">+ Přidat událost</button>
+    </div>
+
+    <!-- přidání události -->
+    <section id="pridani" class="card col" hidden style="gap:12px">
+        <b>Nová událost</b>
+        <div class="kalform">
+            <label><span>Typ</span>
+                <select id="uTyp" class="field">
+                    <option value="udalost">Událost</option>
+                    <option value="dovolena">Dovolená</option>
+                    <option value="nemoc">Nemoc</option>
+                    <option value="skoleni">Školení</option>
+                </select></label>
+            <label><span>Od</span><input type="date" id="uOd" class="field"></label>
+            <label><span>Do</span><input type="date" id="uDo" class="field"></label>
+            <label class="row" style="gap:8px;align-self:end;cursor:pointer;padding-bottom:8px">
+                <input type="checkbox" id="uCelyDen" checked> <b>Celý den</b></label>
+            <label id="uCasBox" hidden><span>Čas od–do</span>
+                <span class="row" style="gap:6px">
+                    <input type="time" id="uOdCas" class="field" step="900">
+                    <input type="time" id="uDoCas" class="field" step="900">
+                </span></label>
+            <label style="grid-column:span 2"><span>Popis</span>
+                <input type="text" id="uText" class="field" placeholder="co se děje"></label>
+        </div>
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button type="button" id="btnZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="btnUlozit" class="btn btn--primary">Uložit</button>
+        </div>
+        <p class="tiny muted" style="margin:0">
+            Dovolené zapsané ve výkazu se v kalendáři objeví samy – tady se přidává to ostatní.
+        </p>
+    </section>
+
+    <div class="card col" style="gap:12px;padding:14px 16px">
+        <div class="row row--wrap" style="gap:8px">
+            <button type="button" class="btn btn--ghost btn--sm" id="btnZpet">‹</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="btnDnes">Dnes</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="btnDal">›</button>
+            <b id="obdobi" style="font-size:15px;margin-left:6px"></b>
+            <div class="grow"></div>
+            <button type="button" class="chip" data-pohled="mesic">Měsíc</button>
+            <button type="button" class="chip" data-pohled="tyden">Týden</button>
+            <button type="button" class="chip" data-pohled="tri">3 dny</button>
+        </div>
+        <div id="mrizka"></div>
+        <div class="legenda">
+            <span><i class="ud--udalost"></i>událost</span>
+            <span><i class="ud--dovolena"></i>dovolená</span>
+            <span><i class="ud--nemoc"></i>nemoc</span>
+            <span><i class="ud--skoleni"></i>školení</span>
+            <span><i class="ud--ukol"></i>termín úkolu</span>
+            <span><i class="ud--milnik"></i>milník</span>
+        </div>
+    </div>
+
+</main>
+
+<script src="assets/js/taxonomy.js?v=50"></script>
+<script src="assets/js/ui.js?v=50"></script>
+<script src="assets/js/vykazy.js?v=50"></script>
+<script type="module" src="assets/js/store.js?v=50"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    const TYPY = { udalost: "událost", dovolena: "dovolená", nemoc: "nemoc", skoleni: "školení" };
+    const DNY_KRATCE = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
+    const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
+        "srpen", "září", "říjen", "listopad", "prosinec"];
+
+    let pohled = "mesic";               // mesic | tyden | tri
+    let kotva = new Date();             // den, kolem kterého se kreslí
+    let sledovaniZapnuto = false;
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        sledovaniZapnuto = true;
+        // kalendář chodí všem sám; úkoly podle práv (kvůli termínům v mřížce)
+        if (window.KBUI.can("vykaz.view")) window.KB.watchUkoly();
+        else window.KB.watchMojeUkoly();
+    }
+
+    const iso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+        "-" + String(d.getDate()).padStart(2, "0");
+    const dnesIso = () => iso(new Date());
+    const posun = (d, dni) => { const n = new Date(d); n.setDate(n.getDate() + dni); return n; };
+
+    /** Pondělí týdne, do kterého den patří. */
+    function pondeli(d) {
+        const n = new Date(d);
+        n.setDate(n.getDate() - ((n.getDay() + 6) % 7));
+        return n;
+    }
+
+    /* ------------------------------------------------ co v který den je */
+
+    function udalostiDne(den) {
+        const out = [];
+        (window.KB.kalendar || []).forEach(u => {
+            if ((u.od || "") <= den && den <= (u.do || u.od || "")) {
+                const cas = (!u.celyDen && u.odCas) ? u.odCas + " " : "";
+                out.push({ typ: u.typ || "udalost", id: u.id, muj: u.uid === window.KB.currentUid(),
+                    text: cas + (u.osoba ? u.osoba + " – " : "") + (u.text || TYPY[u.typ] || "událost") });
+            }
+        });
+        (window.KB.ukoly || []).forEach(u => {
+            if (u.termin === den && u.stav !== "hotovo") {
+                out.push({ typ: "ukol", text: "úkol: " + (u.nazev || "") +
+                    ((u.prirazeni || []).length ? " – " + u.prirazeni.map(uid => {
+                        const cl = V.clovek(uid); return cl ? (cl.first || V.jmeno(cl)) : "";
+                    }).filter(Boolean).join(", ") : "") });
+            }
+        });
+        (window.KB.milniky || []).forEach(m => {
+            if (m.datum === den && !m.hotovo) {
+                out.push({ typ: "milnik", text: "milník: " + (m.cinnost || "") +
+                    (m.zakazka ? " (" + m.zakazka + ")" : "") });
+            }
+        });
+        return out;
+    }
+
+    function udalostHtml(u) {
+        return '<button type="button" class="ud ud--' + esc(u.typ) + '"' +
+            (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
+            ' title="' + esc(u.text) + '">' + esc(u.text) + "</button>";
+    }
+
+    /* ------------------------------------------------------- vykreslení */
+
+    function denHtml(d, moznosti) {
+        const den = iso(d);
+        const seznam = udalostiDne(den);
+        const LIMIT = moznosti.velky ? 14 : 4;
+        const videt = seznam.slice(0, LIMIT);
+        const zbytek = seznam.length - videt.length;
+
+        return '<div class="kal__den' +
+            (moznosti.cizi ? " kal__den--cizi" : "") +
+            (den === dnesIso() ? " kal__den--dnes" : "") +
+            (moznosti.velky ? " kal__den--velky" : "") + '">' +
+            '<span class="kal__cislo">' + d.getDate() + ". " + (d.getMonth() + 1) + "." +
+                (moznosti.velky ? " · " + DNY_KRATCE[(d.getDay() + 6) % 7] : "") + "</span>" +
+            videt.map(udalostHtml).join("") +
+            (zbytek > 0 ? '<span class="kal__vic">+ ' + zbytek + " dalších</span>" : "") +
+        "</div>";
+    }
+
+    function vykresli() {
+        document.querySelectorAll("[data-pohled]").forEach(ch =>
+            ch.classList.toggle("chip--active", ch.dataset.pohled === pohled));
+
+        const mrizka = $("mrizka");
+
+        if (pohled === "mesic") {
+            const prvni = new Date(kotva.getFullYear(), kotva.getMonth(), 1);
+            const start = pondeli(prvni);
+            $("obdobi").textContent = MESICE[kotva.getMonth()] + " " + kotva.getFullYear();
+
+            let html = '<div class="kal">' +
+                DNY_KRATCE.map(d => '<div class="kal__hlava">' + d + "</div>").join("");
+            for (let i = 0; i < 42; i++) {
+                const d = posun(start, i);
+                if (i === 35 && d.getMonth() !== kotva.getMonth()) break;   // šestý řádek jen když je potřeba
+                html += denHtml(d, { cizi: d.getMonth() !== kotva.getMonth() });
+            }
+            mrizka.innerHTML = html + "</div>";
+            return;
+        }
+
+        const dnu = pohled === "tyden" ? 7 : 3;
+        const start = pohled === "tyden" ? pondeli(kotva) : new Date(kotva);
+        const konec = posun(start, dnu - 1);
+        $("obdobi").textContent = start.getDate() + ". " + (start.getMonth() + 1) + ". – " +
+            konec.getDate() + ". " + (konec.getMonth() + 1) + ". " + konec.getFullYear();
+
+        let html = '<div class="kal' + (dnu === 3 ? " kal--3" : "") + '">';
+        for (let i = 0; i < dnu; i++) html += denHtml(posun(start, i), { velky: true });
+        mrizka.innerHTML = html + "</div>";
+    }
+
+    /* --------------------------------------------------------- ukládání */
+
+    async function ulozUdalost() {
+        const od = $("uOd").value;
+        if (!od) return void window.KBUI.toast("Vyber aspoň den Od.", "warn");
+        try {
+            await window.KB.saveUdalost(window.KB.newUdalostId(), {
+                typ: $("uTyp").value,
+                od: od,
+                do: $("uDo").value || od,
+                celyDen: $("uCelyDen").checked,
+                odCas: $("uCelyDen").checked ? "" : $("uOdCas").value,
+                doCas: $("uCelyDen").checked ? "" : $("uDoCas").value,
+                text: $("uText").value.trim()
+            });
+            $("pridani").hidden = true;
+            $("uText").value = "";
+            window.KBUI.toast("Událost uložena.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    async function klikNaUdalost(id) {
+        const u = (window.KB.kalendar || []).find(x => x.id === id);
+        if (!u) return;
+        const moje = u.uid === window.KB.currentUid();
+        const popis = (u.osoba ? u.osoba + " – " : "") + (u.text || TYPY[u.typ] || "událost") +
+            " (" + V.czDatum(u.od) + (u.do && u.do !== u.od ? " až " + V.czDatum(u.do) : "") + ")";
+        if (!moje && !window.KBUI.can("vykaz.view")) return void window.KBUI.toast(popis);
+        if (confirm(popis + "\n\nSmazat tuhle událost?")) {
+            await window.KB.deleteUdalost(id).catch(() =>
+                window.KBUI.toast("Smazání selhalo – cizí události maže jen manažer.", "error"));
+        }
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "kalendar.html" });
+
+        $("btnPridat").addEventListener("click", () => {
+            $("uOd").value = dnesIso();
+            $("uDo").value = "";
+            $("pridani").hidden = false;
+        });
+        $("btnZrusit").addEventListener("click", () => { $("pridani").hidden = true; });
+        $("btnUlozit").addEventListener("click", ulozUdalost);
+        $("uCelyDen").addEventListener("change", () => {
+            $("uCasBox").hidden = $("uCelyDen").checked;
+        });
+
+        $("btnDnes").addEventListener("click", () => { kotva = new Date(); vykresli(); });
+        $("btnZpet").addEventListener("click", () => {
+            kotva = pohled === "mesic"
+                ? new Date(kotva.getFullYear(), kotva.getMonth() - 1, 1)
+                : posun(kotva, pohled === "tyden" ? -7 : -3);
+            vykresli();
+        });
+        $("btnDal").addEventListener("click", () => {
+            kotva = pohled === "mesic"
+                ? new Date(kotva.getFullYear(), kotva.getMonth() + 1, 1)
+                : posun(kotva, pohled === "tyden" ? 7 : 3);
+            vykresli();
+        });
+        document.querySelectorAll("[data-pohled]").forEach(ch =>
+            ch.addEventListener("click", () => { pohled = ch.dataset.pohled; vykresli(); }));
+        document.addEventListener("click", (event) => {
+            const ud = event.target.closest("[data-udalost]");
+            if (ud) klikNaUdalost(ud.dataset.udalost);
+        });
+
+        const obnov = () => { zapniSledovani(); vykresli(); };
+        document.addEventListener("kb-role", obnov);
+        window.KB.on("users", obnov);
+        window.KB.on("kalendar", vykresli);
+        window.KB.on("ukoly", vykresli);
+        window.KB.on("milniky", vykresli);
+        obnov();
+    });
+})();
+</script>
+</body>
+</html>

@@ -90,7 +90,41 @@ service cloud.firestore {
       allow read, write: if spravce();
     }
 
-    // všechno ostatní v `private` (číselníky se sazbami a rozpočty) jen správce
+    // --- projekty (dřív „zakázky") --------------------------------------
+    //
+    //   private/projekty/seznam/{id}    hlavička: název, firma, stav,
+    //                                   priorita, termíny, lidé (pole UID)
+    //   private/projekty/finance/{id}   příjmy a výdaje – JEN manažeři
+    //
+    // Zaměstnanec vidí jen projekty, ke kterým je přiřazený – proto leží
+    // mimo `public/data` (tam se čtení níž odebrat nedá) a peníze jsou
+    // zase ve vedlejším dokumentu, protože pravidla neumí schovat pole.
+    // Zápis hlaviček i financí drží spodní pravidlo pro `private` (manažer).
+
+    match /artifacts/firemni-kb-app/private/projekty/seznam/{id} {
+      allow read: if spravce() || (clen() && request.auth.uid in resource.data.lide);
+    }
+
+    // --- úkoly s TO-DO rozpadem -----------------------------------------
+    //
+    //   private/ukoly/seznam/{id}   projekt, druh, technologie, budova,
+    //                               patro, přiřazení lidé, budget hodin,
+    //                               todo: [{ text, pct }]
+    //
+    // Přiřazený člověk čte svoje úkoly a smí si zapisovat postup – ale jen
+    // pole `todo` a `stav`; zadání, budget ani přiřazení mu pravidlo změnit
+    // nedovolí. Zakládání a mazání je manažerská práce (spodní pravidlo).
+
+    match /artifacts/firemni-kb-app/private/ukoly/seznam/{id} {
+      allow read: if spravce() || (clen() && request.auth.uid in resource.data.prirazeni);
+      allow update: if spravce() || (clen()
+                       && request.auth.uid in resource.data.prirazeni
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['todo', 'stav', 'updatedMs', 'updatedBy']));
+    }
+
+    // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
+    // projektů, zakládání úkolů…) jen správce
     match /artifacts/firemni-kb-app/private/{document=**} {
       allow read, write: if spravce();
     }
@@ -129,6 +163,17 @@ service cloud.firestore {
       match /{sub=**} {
         allow write: if clen();
       }
+    }
+
+    // --- kalendář: události, dovolené, nemoci a školení -----------------
+    // Vidí je všichni členové (blanket `read` výš), tak jsou schválně
+    // v `public/data`. Každý zapisuje svoje; cizí smí měnit jen správce.
+    match /artifacts/firemni-kb-app/public/data/kalendar/{id} {
+      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
     }
 
     // --- záznamy přihlášení: zapsat smí každý, mazat nikdo ---

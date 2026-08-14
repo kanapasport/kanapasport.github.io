@@ -5,128 +5,114 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
-    <title>Postup práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=49">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Úkoly – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=50">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        .ukol { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+        .ukol__hlava { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+        .ukol__hlava:hover { background: var(--bg-soft); }
+        .ukol__nazev { font-weight: 900; font-size: 14.5px; }
+        .ukol__meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .ukol__pct { flex: none; font-weight: 900; font-size: 14px; width: 46px; text-align: right; }
+        .ukol__prubeh { flex: none; width: 130px; height: 8px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+        .ukol__prubeh i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+        .ukol--hotovo .ukol__prubeh i { background: var(--p100-fg); }
+        .ukol__telo { border-top: 1px solid var(--line-soft); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .todo { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line-soft); }
+        .todo:last-child { border-bottom: none; }
+        .todo__text { flex: 1; min-width: 0; font-size: 13.5px; }
+        .todo__pcts { display: flex; gap: 4px; flex-wrap: wrap; }
+        .todo__pct { border: 1px solid var(--line); background: var(--surface); border-radius: 99px;
+            padding: 3px 8px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--muted); }
+        .todo__pct.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .skupina-nadpis { font-size: 13px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+            color: var(--text-soft); margin: 14px 0 2px; display: flex; align-items: center; gap: 10px; }
+        .skupina-nadpis .tag { font-weight: 700; }
+        .ukolform { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+        .ukolform label > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .lidevyber { display: flex; flex-wrap: wrap; gap: 7px; }
+        .lidevyber label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+            border: 1px solid var(--line); border-radius: 99px; font-size: 12.5px; cursor: pointer; background: var(--surface); }
+        .lidevyber label:has(input:checked) { background: var(--accent-tint); border-color: var(--accent-lt); color: var(--accent); font-weight: 700; }
+    </style>
 </head>
 <body>
 
 <div id="appHeader"></div>
 
-<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:22px">
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
 
     <div class="spread">
         <div>
-            <h2 id="pageTitle" style="font-size:20px;font-weight:900;line-height:1.2">Postup práce</h2>
-            <p class="small muted" style="margin-top:3px">Zaškrtnutím potvrdíš, že je patro hotové;
-               poznámkou se dá dopsat, na co se čeká.</p>
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Úkoly</h2>
+            <p class="small muted" style="margin-top:3px">
+                Každý úkol má budget hodin a TO-DO rozpad, ve kterém se zapisuje postup.
+            </p>
         </div>
-        <button type="button" class="rolepill" data-role-pill></button>
+        <div class="row" style="gap:8px">
+            <button type="button" id="btnImport" class="btn btn--ghost" data-need="ukol.delete" hidden
+                title="Převezme úkoly ze staré stránky Postup práce">Převzít starý postup práce</button>
+            <button type="button" id="btnNovy" class="btn btn--primary" data-need="ukol.delete" hidden>+ Nový úkol</button>
+        </div>
     </div>
 
-    <div id="adminHint" class="card small" style="padding:14px 16px;color:var(--muted);line-height:1.6" hidden>
-        Zakládat úkoly a spravovat zakázky můžou jen <b>zaměstnanci a správci</b>.
-        Přihlas se tlačítkem vpravo nahoře – co kdo smí, se řídí tvou rolí.
+    <div class="row row--wrap" style="gap:8px">
+        <button type="button" class="chip" data-pohled="moje">Moje úkoly</button>
+        <button type="button" class="chip" data-pohled="vse" data-need="vykaz.view" hidden>Všechny</button>
+        <select id="fProjekt" class="field" style="width:auto;min-width:180px"></select>
+        <label class="row" style="gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="fHotove"> i hotové
+        </label>
     </div>
 
-    <div id="list" class="col" style="gap:16px"></div>
+    <!-- ============================================== TVORBA ÚKOLU -->
+    <section id="tvorba" class="card col" hidden style="gap:12px">
+        <b id="tvorbaNadpis">Nový úkol</b>
+        <div class="ukolform">
+            <label style="grid-column:span 2"><span>Projekt</span><select id="uProjekt" class="field"></select></label>
+            <label><span>Druh práce</span>
+                <select id="uDruh" class="field">
+                    <option value="ArcGIS">ArcGIS – kreslení</option>
+                    <option value="Focení">Focení</option>
+                    <option value="Skeny">Skeny</option>
+                    <option value="Tabulky">Tabulky</option>
+                </select></label>
+            <label id="uTechBox"><span>Technologie</span><select id="uTech" class="field"></select></label>
+            <label><span>Budova</span><select id="uBudova" class="field"></select></label>
+            <label><span>Patro</span><select id="uPatro" class="field"></select></label>
+            <label style="grid-column:span 2"><span>Název (doplní se sám, jde přepsat)</span>
+                <input type="text" id="uNazev" class="field"></label>
+            <label><span>Termín</span><input type="date" id="uTermin" class="field"></label>
+            <label><span>Budget hodin</span><input type="number" id="uBudget" class="field" min="0" step="5"></label>
+        </div>
+        <div>
+            <span class="label">Komu úkol patří</span>
+            <div id="uLide" class="lidevyber"></div>
+        </div>
+        <div>
+            <span class="label">TO-DO rozpad (jeden řádek = jedna položka)</span>
+            <textarea id="uTodo" rows="3" class="field" placeholder="Zákres půdorysu&#10;Kontrola polohových kódů&#10;Výkres do PDF"></textarea>
+        </div>
+        <label><span class="label">Poznámka</span><textarea id="uPoznamka" rows="2" class="field"></textarea></label>
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button type="button" id="btnSmazat" class="btn btn--ghost" hidden style="margin-right:auto;color:var(--danger)">Smazat úkol</button>
+            <button type="button" id="btnZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="btnUlozit" class="btn btn--primary">Uložit úkol</button>
+        </div>
+    </section>
+
+    <div id="vypis" class="col" style="gap:10px"></div>
+
 </main>
 
-<!-- ======================================================= OKNO NOVÝ ÚKOL -->
-<div id="taskOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
-    <div class="card col" style="padding:22px;max-width:560px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
-        <b id="taskFormTitle" style="font-size:17px">Nový úkol</b>
-
-        <div>
-            <label class="label" for="fZakazka">Zakázka</label>
-            <select id="fZakazka" class="field"></select>
-            <div class="tiny muted" style="margin-top:6px">
-                Vybírá se ze seznamu, ať nevznikají duplicity překlepem.
-                Novou založíš přes <b>Správa zakázek</b> v liště.
-            </div>
-        </div>
-        <div>
-            <label class="label" for="fTitle">Název úkolu</label>
-            <input type="text" id="fTitle" class="field" placeholder="např. Odevzdání stavby">
-        </div>
-        <div>
-            <label class="label" for="fSkupina">Skupina uvnitř zakázky</label>
-            <div class="row" style="gap:8px">
-                <select id="fSkupina" class="field grow"></select>
-                <button type="button" id="btnSkupinaNew" class="btn btn--ghost btn--sm">+ Nová</button>
-            </div>
-            <div class="tiny muted" style="margin-top:6px">
-                Podle skupiny se úkoly řadí v zakázce i na hlavní stránce.
-            </div>
-        </div>
-        <div>
-            <span class="label">Odpovědní lidé</span>
-            <div id="fOwners" class="people"></div>
-            <div class="tiny muted" style="margin-top:6px">
-                Vybraných může být víc. Každý si pak v úkolovníku přepne na
-                <b>Moje úkoly</b> a uvidí jen to svoje.
-            </div>
-        </div>
-        <div style="max-width:220px">
-            <label class="label" for="fDeadline">Termín</label>
-            <input type="date" id="fDeadline" class="field">
-        </div>
-        <div>
-            <label class="label" for="fSubs">Podúkoly (jeden na řádek)</label>
-            <textarea id="fSubs" rows="8" class="field"
-                      placeholder="3PP&#10;2PP&#10;1PP&#10;1NP&#10;2NP"></textarea>
-            <div class="tiny muted" style="margin-top:6px">
-                U existujícího úkolu se zachovají už zaškrtnutá patra, která ponecháš ve stejném názvu.
-            </div>
-        </div>
-
-        <div class="row" style="justify-content:flex-end;gap:10px">
-            <button id="btnFormCancel" class="btn btn--ghost">Zrušit</button>
-            <button id="btnFormSave" class="btn btn--primary">Uložit úkol</button>
-        </div>
-    </div>
-</div>
-
-<!-- ===================================================== OKNO NOVÁ ZAKÁZKA -->
-<div id="zakOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
-    <div class="card col" style="padding:22px;max-width:560px;width:100%;gap:16px;max-height:90vh;overflow-y:auto">
-        <b style="font-size:17px">Správa zakázek</b>
-
-        <div>
-            <span class="label">Skupiny úkolů (platí pro všechny zakázky)</span>
-            <div id="skupList" class="col" style="gap:6px"></div>
-            <div class="row" style="gap:8px;margin-top:8px">
-                <input type="text" id="fSkupNew" class="field grow" placeholder="např. FOCENÍ">
-                <button type="button" id="btnSkupAdd" class="btn btn--ghost btn--sm">Přidat</button>
-            </div>
-        </div>
-
-        <div>
-            <span class="label">Evidované zakázky</span>
-            <div id="zakList" class="col" style="gap:6px"></div>
-        </div>
-
-        <div>
-            <label class="label" for="fZakNew">Přidat nové</label>
-            <textarea id="fZakNew" rows="4" class="field" placeholder="C04&#10;B12&#10;Pasport Lednice"></textarea>
-            <div class="tiny muted" style="margin-top:6px">
-                Jedna zakázka na řádek – můžeš jich přidat víc najednou.
-                Uzavřená zakázka zůstane v seznamu a v dlaždici zezelená.
-            </div>
-        </div>
-
-        <div class="row" style="justify-content:flex-end;gap:10px">
-            <button id="btnZakCancel" class="btn btn--ghost">Zavřít</button>
-            <button id="btnZakSave" class="btn btn--primary">Přidat zakázky</button>
-        </div>
-    </div>
-</div>
-
-<script src="assets/js/taxonomy.js?v=49"></script>
-<script src="assets/js/doc.js?v=49"></script>
-<script src="assets/js/ui.js?v=49"></script>
-<script type="module" src="assets/js/store.js?v=49"></script>
+<script src="assets/js/taxonomy.js?v=50"></script>
+<script src="assets/js/ui.js?v=50"></script>
+<script src="assets/js/vykazy.js?v=50"></script>
+<script type="module" src="assets/js/store.js?v=50"></script>
 
 <script>
 (function () {
@@ -134,1109 +120,348 @@
 
     const $ = (id) => document.getElementById(id);
     const esc = (value) => window.KBUI.esc(value);
-
-    let onlyOpen = false;
-    let editingId = null;
-    let activeZak = new URLSearchParams(location.search).get("zak") || "";   // slug zakázky
-    let highlightId = "";                                                    // úkol, na který se přišlo prokliknutím
-
-    /* Úkoly jsou sbalené – rozbalí se až kliknutím na hlavičku. Drží se to
-       jen v paměti stránky, aby seznam po překreslení nepřeskakoval. */
-    const expanded = new Set();
-
-    const slug = (value) => window.KBUI.slug(value);
-    const zakName = (task) => (task.zakazka || "").trim() || "Bez zakázky";
-
-    let onlyMine = false;   // „Moje úkoly" – přepíná se v liště
-    let mineTouched = false;   // uživatel si filtr přepnul sám, nepřenastavovat
-
-    const NEZARAZENO = "Nezařazeno";
-    const skupinyList = () => (window.KB.skupiny && window.KB.skupiny.length)
-        ? window.KB.skupiny : (window.KB.DEFAULT_SKUPINY || []);
-
-    /* ------------------------------------------------ odpovědní lidé ----
-       Úkol nese `owners` – pole UID. Starší úkoly mají jen volný text
-       v `owner`, ten se pořád zobrazuje, dokud se nepřepíšou. */
-
-    const jmeno = (user) => ((user.first || "") + " " + (user.last || "")).trim() || user.email;
-
-    const ownersOf = (task) => (task.owners || [])
-        .map(uid => (window.KB.users || []).find(u => u.id === uid))
-        .filter(Boolean);
-
-    /** Text s odpovědnými – nové UID mají přednost, jinak starý volný text. */
-    function ownersText(task) {
-        const lide = ownersOf(task);
-        if (lide.length) return lide.map(jmeno).join(", ");
-        return (task.owner || "").trim();
-    }
-
-    /** Patří úkol přihlášenému? Zkouší i shodu se starým textovým zápisem. */
-    function isMine(task) {
-        const uid = window.KB.currentUid();
-        if (uid && (task.owners || []).indexOf(uid) !== -1) return true;
-        if ((task.owners || []).length) return false;
-
-        // starší úkoly: porovnáme podle příjmení ve volném textu
-        const me = window.KBUI.me();
-        if (!me || !task.owner) return false;
-        const text = window.KBUI.fold(task.owner);
-        return !!(me.last && text.includes(window.KBUI.fold(me.last)));
-    }
-    /** Skupina úkolu; starší úkoly ji nemají a spadnou do „Nezařazeno". */
-    const skupName = (task) => (task.skupina || "").trim() || NEZARAZENO;
-
-    const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M5 13l4 4L19 7"/></svg>';
-
-    /* Kroky rozpracovanosti a barevná stupnice k nim.
-       Stejné rozdělení se používá u patra i u celkových procent úkolu. */
-    const STEPS = [0, 25, 50, 75, 95, 100];
-
-    function pctLevel(percent) {
-        const value = percent || 0;
-        if (value >= 100) return "p100";   // zelená
-        if (value >= 95)  return "p95";    // slabší zelená
-        if (value >= 75)  return "p75";    // oranžová
-        if (value > 0)    return "p50";    // žlutá (25 a 50 %)
-        return "p0";                       // šedá
-    }
-
-    /* ------------------------------------------------------------ výpočty */
-
-    const taskPercent = (task) => {
-        const subs = task.subtasks || [];
-        if (!subs.length) return 0;
-        return Math.round(subs.reduce((sum, s) => sum + (s.percent || 0), 0) / subs.length);
-    };
-
-    const czDate = (iso) => {
-        if (!iso) return "";
-        const [y, m, d] = iso.split("-");
-        return d.replace(/^0/, "") + ". " + m.replace(/^0/, "") + ". " + y;
-    };
-
-    const stamp = (ms) => {
-        if (!ms) return "";
-        const date = new Date(ms);
-        return date.toLocaleDateString("cs-CZ") + " " +
-               date.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-    };
-
-    function deadlineStyle(task) {
-        if (!task.deadline) return { text: "bez termínu", color: "var(--dim)" };
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const due = new Date(task.deadline + "T00:00:00");
-        const days = Math.round((due - today) / 86400000);
-        const done = taskPercent(task) === 100;
-        if (done)      return { text: "termín " + czDate(task.deadline), color: "var(--ok)" };
-        if (days < 0)  return { text: "po termínu (" + czDate(task.deadline) + ")", color: "var(--danger)" };
-        if (days <= 3) return { text: "do " + czDate(task.deadline) + " – zbývá " + days + " dnů", color: "var(--warn)" };
-        return { text: "do " + czDate(task.deadline), color: "var(--muted)" };
-    }
-
-    /* --------------------------------------------------------- vykreslení */
-
-    function subtaskHtml(task, sub, index) {
-        const percent = sub.percent || 0;
-        const done = percent === 100;
-        const notes = (task.notes || []).filter(n => n.subtaskId === sub.id);
-
-        return '<div>' +
-            '<div class="subtask subtask--' + pctLevel(percent) + (done ? " subtask--done" : "") + '">' +
-                '<button class="subtask__check" data-toggle="' + task.id + "|" + sub.id + '" ' +
-                    'title="Označit jako hotové">' + CHECK + "</button>" +
-                '<span class="subtask__name">' + esc(sub.title) + "</span>" +
-                '<span class="subtask__info">' +
-                    (sub.by ? "zapsal " + esc(sub.by) + " · " + stamp(sub.ms) : "zatím nikdo nepotvrdil") +
-                "</span>" +
-                '<button class="subtask__pct" data-cycle="' + task.id + "|" + sub.id + '" ' +
-                    'style="border:none;background:none;cursor:pointer" title="Klikni pro dílčí procenta">' +
-                    percent + " %</button>" +
-                // posuvník na libovolnou hodnotu; klikání po krocích zůstává
-                '<input type="range" class="subtask__slider" min="0" max="100" step="5" ' +
-                    'value="' + percent + '" data-slider="' + task.id + "|" + sub.id + '" ' +
-                    'title="Přetažením nastavíš přesná procenta" aria-label="Procenta hotovo">' +
-                '<button class="btn btn--sm btn--ghost subtask__add" ' +
-                    'data-note="' + task.id + "|" + sub.id + '" title="Přidat poznámku">+</button>' +
-            "</div>" +
-            '<div style="padding:0 18px 0 56px">' +
-                notes.map(note =>
-                    '<div class="note">' + esc(note.text) +
-                        '<span class="note__who">' + esc(note.author || "neznámý") + " · " + stamp(note.ms) +
-                        (window.KBUI.isAdmin()
-                            ? ' · <button data-delnote="' + task.id + "|" + note.id + '" ' +
-                              'style="border:none;background:none;color:var(--danger);cursor:pointer;font:inherit;padding:0">smazat</button>'
-                            : "") +
-                        "</span>" +
-                    "</div>").join("") +
-                '<div hidden data-noteform="' + task.id + "|" + sub.id + '" class="row" style="gap:8px;margin-top:8px">' +
-                    '<input type="text" class="field grow" placeholder="např. čekám, až to na stavbě udělají">' +
-                    '<button class="btn btn--sm btn--primary" data-notesave="' + task.id + "|" + sub.id + '">Přidat</button>' +
-                "</div>" +
-            "</div>" +
-        "</div>";
-    }
-
-    /** Zelený pruh pod úkolem – objeví se, až jsou všechna patra na 100 %. */
-    function doneHtml(task, percent) {
-        const admin = window.KBUI.can("ukol.delete");   // vrátit hotový úkol smí správce
-
-        if (task.done) {
-            return '<div class="taskdone taskdone--set">' +
-                "<span>Hotovo · potvrdil <b>" + esc(task.done.by || "?") + "</b> · " + stamp(task.done.ms) + "</span>" +
-                (admin ? '<button class="btn btn--sm btn--ghost" data-undone="' + task.id + '">Vrátit</button>' : "") +
-            "</div>";
-        }
-        if (percent < 100) return "";
-        return '<div class="taskdone">' +
-            "<span>Všechna patra jsou na 100 %.</span>" +
-            '<button class="btn btn--sm btn--ok" data-done="' + task.id + '">Úkol je hotov</button>' +
-        "</div>";
-    }
-
-    /**
-     * Historie zápisů – vidí ji jen správce.
-     * Záznamy jsou seskupené po dnech, u každého je vidět posun procent
-     * (např. 50 → 75), kdo ho zapsal a v kolik.
-     */
-    function logHtml(task) {
-        // řadíme podle času, ne podle pořadí v poli – sloučení zápisů
-        // posouvá čas staršího záznamu dopředu, takže by se dny rozházely
-        const entries = (task.log || []).slice()
-            .sort((a, b) => (b.ms || 0) - (a.ms || 0))
-            .slice(0, 60);
-        if (!window.KBUI.can("historie.view") || !entries.length) return "";
-
-        const time = (ms) => new Date(ms).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-        const day = (ms) => new Date(ms).toLocaleDateString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric", year: "numeric" });
-
-        let html = "";
-        let lastDay = "";
-        entries.forEach(entry => {
-            const label = day(entry.ms);
-            if (label !== lastDay) {
-                lastDay = label;
-                html += '<div class="tasklog__day">' + esc(label) + "</div>";
-            }
-            const to = entry.percent || 0;
-            // starší záznamy výchozí hodnotu nemají – tam ukážeme jen cílové procento
-            const from = (typeof entry.from === "number") ? entry.from : null;
-            html += '<div class="tasklog__row">' +
-                "<b>" + esc(entry.sub || "") + "</b>" +
-                '<span class="tasklog__pct">' +
-                    (from === null ? "" : '<span class="tasklog__from">' + from + " %</span> → ") +
-                    "<b>" + to + " %</b>" +
-                "</span>" +
-                "<span>" + esc(entry.by || "") + "</span>" +
-                "<span>" + time(entry.ms) + "</span>" +
-            "</div>";
-        });
-
-        return '<details class="tasklog"><summary>Historie zápisů (' + (task.log || []).length + ")</summary>" + html + "</details>";
-    }
-
-    function taskHtml(task) {
-        const percent = taskPercent(task);
-        const due = deadlineStyle(task);
-        const open = expanded.has(task.id);
-        const subs = task.subtasks || [];
-        const doneSubs = subs.filter(s => (s.percent || 0) === 100).length;
-
-        // rozbalený obsah se vykresluje jen když je potřeba – seznam pak
-        // zvládne i desítky úkolů bez zbytečné práce navíc
-        const body = open
-            ? '<div class="task__body">' +
-                subs.map((sub, i) => subtaskHtml(task, sub, i)).join("") +
-                doneHtml(task, percent) +
-                logHtml(task) +
-              "</div>"
-            : "";
-
-        return '<article class="task' + (open ? " task--open" : "") + '" ' +
-                'id="task-' + esc(task.id) + '" data-task="' + task.id + '">' +
-            '<div class="task__head" data-expand="' + task.id + '" role="button" tabindex="0">' +
-                '<span class="task__caret" aria-hidden="true">' +
-                    '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
-                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>' +
-                "</span>" +
-                '<div class="task__info">' +
-                    '<div class="task__title">' + esc(task.title || "Bez názvu") + "</div>" +
-                    '<div class="task__meta">' +
-                        (ownersText(task) ? "zodpovídá <b>" + esc(ownersText(task)) + "</b> · " : "") +
-                        '<span style="color:' + due.color + ';font-weight:700">' + due.text + "</span>" +
-                        (subs.length ? ' · <span class="muted">' + doneSubs + "/" + subs.length + " hotovo</span>" : "") +
-                    "</div>" +
-                "</div>" +
-                '<div class="task__progress">' +
-                    '<div class="spread" style="margin-bottom:5px">' +
-                        '<span class="tiny muted">hotovo</span>' +
-                        '<span class="pctval pctval--' + pctLevel(percent) + '" ' +
-                            'style="font-size:14px;font-weight:900">' + percent + " %</span>" +
-                    "</div>" +
-                    '<div class="bar"><div class="bar__fill bar__fill--' + pctLevel(percent) +
-                        '" style="width:' + percent + '%"></div></div>' +
-                "</div>" +
-                (window.KBUI.can("ukol.edit") || window.KBUI.can("ukol.delete")
-                    ? '<div class="task__admin">' +
-                        (window.KBUI.can("ukol.edit")
-                            ? '<button class="btn btn--sm btn--ghost" data-edit="' + task.id + '">Upravit</button>' : "") +
-                        (window.KBUI.can("ukol.delete")
-                            ? '<button class="btn btn--sm btn--ghost" style="color:var(--danger)" data-remove="' + task.id + '">Smazat</button>' : "") +
-                      "</div>"
-                    : "") +
-            "</div>" +
-            body +
-        "</article>";
-    }
-
-    /* ------------------------------------------- druhý řádek lišty */
-
-    /** Číselník zakázek + názvy, které se vyskytují u úkolů (starší data). */
-    function allZakazky() {
-        const names = (window.KB.zakazky || []).slice();
-        (window.KB.tasks || []).forEach(task => {
-            const name = zakName(task);
-            if (names.indexOf(name) === -1) names.push(name);
-        });
-        return names;
-    }
-
-    /** Zakázky se nabízejí v liště – ve vybrané se pak dá rovnou přidávat. */
-    function paintSubbar() {
-        const names = allZakazky();
-
-        const chip = (label, active, zak) =>
-            '<button type="button" class="chip' + (active ? " chip--active" : "") + '" ' +
-            'data-zak="' + esc(zak) + '">' + esc(label) + "</button>";
-
-        const current = names.find(n => slug(n) === activeZak) || "";
-
-        $("appSubbar").innerHTML =
-            '<div class="subbar__in">' +
-                '<div class="subbar__left">' +
-                    '<a class="subbar__cat" href="ukoly.html">' +
-                        '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' + window.KB_ICONS.tasks + "</svg>" +
-                        "POSTUP PRÁCE</a>" +
-                    '<span class="subbar__sep"></span>' +
-                    chip("VŠE", !activeZak, "") +
-                    names.map(n => chip(n, slug(n) === activeZak, slug(n))).join("") +
-                "</div>" +
-                '<div class="subbar__right">' +
-                    '<button type="button" class="btn btn--sm ' + (onlyMine ? "btn--primary" : "btn--ghost") + '" data-onlymine>Moje úkoly</button>' +
-                    '<button type="button" class="btn btn--sm ' + (onlyOpen ? "btn--primary" : "btn--ghost") + '" data-onlyopen>Jen rozdělané</button>' +
-                    // historie zápisů patří obsahem sem, ne mezi ikony nad lištou
-                    (window.KBUI.can("historie.view")
-                        ? '<a href="historie.html" class="btn btn--ghost btn--sm">Historie úprav</a>' : "") +
-                    (window.KBUI.can("zakazky.manage")
-                        ? '<button type="button" class="btn btn--ghost btn--sm" data-newzak>Správa zakázek</button>' : "") +
-                    (window.KBUI.can("ukol.create")
-                        ? '<button type="button" class="btn btn--primary btn--sm" data-newtask>+ Nový úkol' +
-                              (current ? " do " + esc(current) : "") + "</button>" : "") +
-                "</div>" +
-            "</div>";
-
-        $("pageTitle").textContent = current || "Postup práce";
-    }
-
-    /** Kotva skupiny v adrese – ať se dá na skupinu odkázat i prokliknout. */
-    const skupAnchor = (zak, skup) => "skup-" + slug(zak) + "-" + slug(skup);
-
-    /**
-     * Rychlé odkazy na skupiny nad zakázkou. Kliknutím to sjede na tu
-     * správnou skupinu níž na stránce.
-     */
-    function skupNavHtml(zak, order, tasks) {
-        const links = order.map(skup => {
-            const inSkup = tasks.filter(t => skupName(t) === skup);
-            if (!inSkup.length) return "";
-            const percent = Math.round(inSkup.reduce((sum, t) => sum + taskPercent(t), 0) / inSkup.length);
-            return '<a class="skupnav__item" href="#' + skupAnchor(zak, skup) + '">' +
-                    "<span>" + esc(skup) + "</span>" +
-                    '<span class="skupnav__pct pctval--' + pctLevel(percent) + '">' + percent + " %</span>" +
-                   "</a>";
-        }).join("");
-
-        return links ? '<nav class="skupnav">' + links + "</nav>" : "";
-    }
-
-    /** Jedna skupina uvnitř zakázky (ARCGIS / SKENY / FOCENÍ / TABULKY / Nezařazeno). */
-    function skupinaHtml(zak, name, tasks) {
-        const percent = tasks.length
-            ? Math.round(tasks.reduce((sum, t) => sum + taskPercent(t), 0) / tasks.length) : 0;
-
-        return '<div class="skup" id="' + skupAnchor(zak, name) + '">' +
-            '<div class="skup__head">' +
-                '<span class="skup__name' + (name === NEZARAZENO ? " skup__name--none" : "") + '">' +
-                    esc(name) + "</span>" +
-                '<span class="skup__meta">' + tasks.length +
-                    (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
-                    ' · <b class="pctval--' + pctLevel(percent) + '">' + percent + " %</b></span>" +
-                (window.KBUI.can("ukol.create")
-                    ? '<button type="button" class="btn btn--sm btn--ghost skup__add" ' +
-                      'data-newtask-in="' + esc(zak) + '" data-newtask-skup="' + esc(name) + '">+ Úkol</button>'
-                    : "") +
-            "</div>" +
-            tasks.map(taskHtml).join("") +
-        "</div>";
-    }
-
-    /** Nadpis zakázky a pod ním úkoly rozdělené do skupin. */
-    function groupHtml(name, tasks) {
-        const done = tasks.filter(t => taskPercent(t) === 100).length;
-
-        // pořadí skupin drží číselník; „Nezařazeno" a skupiny smazané
-        // z číselníku se přidají až za ně, ať se žádný úkol neztratí
-        const order = skupinyList().slice();
-        tasks.forEach(task => {
-            const s = skupName(task);
-            if (order.indexOf(s) === -1) order.push(s);
-        });
-        if (order.indexOf(NEZARAZENO) === -1) order.push(NEZARAZENO);
-
-        const body = tasks.length
-            ? order.map(skup => {
-                const inSkup = tasks.filter(t => skupName(t) === skup);
-                // prázdné skupiny ukazujeme jen správci, ať má kam přidávat
-                if (!inSkup.length && (!window.KBUI.can("ukol.create") || skup === NEZARAZENO)) return "";
-                return skupinaHtml(name, skup, inSkup);
-              }).join("")
-            : '<div class="card small muted" style="padding:16px;text-align:center">' +
-              "V téhle zakázce zatím není žádný úkol." +
-              (window.KBUI.can("ukol.create")
-                  ? ' <button type="button" class="btn btn--sm btn--ghost" style="margin-left:8px" ' +
-                    'data-newtask-in="' + esc(name) + '">+ Přidat úkol</button>'
-                  : "") +
-              "</div>";
-
-        return '<section id="zak-' + slug(name) + '" class="col" style="gap:12px">' +
-            '<div class="taskgroup__head' + (isClosed(name) ? " taskgroup__head--closed" : "") + '">' +
-                '<span class="taskgroup__name">' + esc(name) + "</span>" +
-                (isClosed(name) ? '<span class="taskgroup__tag">uzavřená</span>' : "") +
-                '<span class="taskgroup__meta">' + (tasks.length
-                    ? tasks.length + (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
-                      (done ? " · " + done + " hotovo" : "")
-                    : "bez úkolů") + "</span>" +
-            "</div>" +
-            skupNavHtml(name, order, tasks) +
-            body +
-        "</section>";
-    }
-
-    function render() {
-        const query = window.KBUI.fold(window.KBUI.searchValue());
-        let tasks = window.KB.tasks || [];
-
-        if (query) {
-            tasks = tasks.filter(task => window.KBUI.fold(
-                [task.zakazka, task.title, ownersText(task),
-                 (task.subtasks || []).map(s => s.title).join(" ")].join(" ")).includes(query));
-        }
-        if (onlyMine) tasks = tasks.filter(isMine);
-        if (onlyOpen) tasks = tasks.filter(task => taskPercent(task) < 100);
-        if (activeZak) tasks = tasks.filter(task => slug(zakName(task)) === activeZak);
-
-        $("adminHint").hidden = window.KBUI.can("ukol.create") || !!tasks.length;
-
-        // bez hledání a bez filtru ukážeme i zakázky, které zatím nemají úkol
-        const groups = new Map();
-        if (!query && !onlyOpen && !onlyMine) {
-            allZakazky()
-                .filter(name => !activeZak || slug(name) === activeZak)
-                .forEach(name => groups.set(name, []));
-        }
-        tasks.forEach(task => {
-            const name = zakName(task);
-            if (!groups.has(name)) groups.set(name, []);
-            groups.get(name).push(task);
-        });
-
-        $("list").innerHTML = groups.size
-            ? Array.from(groups.entries()).map(([name, list]) => groupHtml(name, list)).join("")
-            : '<div class="card center" style="padding:44px;color:var(--muted);font-size:14px">' +
-              "Žádné úkoly k zobrazení." +
-              '<br><button id="btnSeed" class="btn btn--ghost btn--sm" style="margin-top:14px">Vytvořit vzorové zakázky</button>' +
-              "</div>";
-
-        const seed = $("btnSeed");
-        if (seed) seed.addEventListener("click", createSamples);
-
-        paintHighlight();
-    }
-
-    /** Skočí na zakázku (#zak-…) nebo rovnou na konkrétní úkol (#task-…). */
-    function jumpToHash() {
-        if (!location.hash) return;
-        const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
-        if (!target) return;
-
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-        if (target.classList.contains("task")) {
-            // zvýraznění musí přežít i překreslení seznamu po doručení dat
-            highlightId = target.id;
-            paintHighlight();
-            setTimeout(() => { highlightId = ""; paintHighlight(); }, 3000);
-        }
-    }
-
-    function paintHighlight() {
-        document.querySelectorAll(".task--hl").forEach(el => el.classList.remove("task--hl"));
-        if (!highlightId) return;
-        const el = document.getElementById(highlightId);
-        if (el) el.classList.add("task--hl");
-    }
-
-    /* ------------------------------------------------------------- akce */
-
-    const findTask = (id) => (window.KB.tasks || []).find(t => t.id === id);
-
-    async function persist(task) {
-        try {
-            await window.KB.saveTask(task.id, task);
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Uložení se nepodařilo.", "error");
-        }
-    }
-
-    function whoAmI() {
-        return window.KB_USER || window.KBUI.requireUser() || "";
-    }
-
-    /* Doklikávání po 25 % nemá smysl zapisovat po jednom. Když tentýž člověk
-       mění stejné patro do deseti minut, jen se dorovná cíl už založeného
-       záznamu – výchozí hodnota v něm zůstane původní. Naklikání 0 → 100
-       během chvilky je proto v historii jeden řádek „0 → 100", kdežto
-       0 → 50 v pondělí, 50 → 75 ve středu a 75 → 100 za týden jsou tři. */
-    const LOG_WINDOW = 10 * 60 * 1000;
-
-    async function setPercent(taskId, subId, percent) {
-        const task = findTask(taskId);
-        if (!task) return;
-        const sub = (task.subtasks || []).find(s => s.id === subId);
-        if (!sub) return;
-
-        const before = sub.percent || 0;
-        if (before === percent) return;   // nic se nemění, historii nešpiníme
-
-        const name = whoAmI();
-        if (!name) return window.KBUI.toast("Nejdřív zadej své jméno.", "warn");
-
-        const now = Date.now();
-        sub.percent = percent;
-        sub.by = percent > 0 ? name : "";
-        sub.ms = percent > 0 ? now : 0;
-
-        task.log = task.log || [];
-
-        // poslední záznam k TOMUTO podúkolu, ne jen poslední v celé historii –
-        // jinak by se merge rozbil, kdyby mezitím někdo klikl jinde
-        let last = null;
-        for (let i = task.log.length - 1; i >= 0; i--) {
-            if (task.log[i].subtaskId === subId) { last = task.log[i]; break; }
-        }
-
-        if (last && last.by === name && (now - (last.ms || 0)) < LOG_WINDOW) {
-            last.percent = percent;
-            last.ms = now;
+    const V = window.KBVYK;
+
+    /* Technologie kreslení podle Budgetu zakázek Pasport – tohle jsou názvy
+       výkresů, ne výkazová čísla. STAVBA je půdorys, zbytek profese. */
+    const TECH_KRESLENI = ["STAVBA", "HRM", "SLN", "SLB", "MAR", "ZAR", "VZT",
+        "HAS", "PLYN", "RLM", "TER", "CHLAD", "VODA", "KAN"];
+    const PATRA_VYCHOZI = ["3PP", "2PP", "1PP", "1NP", "2NP", "3NP", "4NP", "5NP", "6NP"];
+    const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+
+    const params = new URLSearchParams(location.search);
+    let pohled = params.get("moje") ? "moje" : (params.get("zak") ? "zak" : "moje");
+    const zakSlug = params.get("zak") || "";
+    let editovanyId = "";
+    let sledovaniZapnuto = false;
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        sledovaniZapnuto = true;
+        if (window.KBUI.can("vykaz.view")) {
+            window.KB.watchUkoly();
+            window.KB.watchProjekty();
         } else {
-            task.log.push({
-                subtaskId: subId, sub: sub.title,
-                from: before, percent: percent,
-                by: name, ms: now
-            });
+            window.KB.watchMojeUkoly();
+            window.KB.watchMojeProjekty();
         }
-        if (task.log.length > 200) task.log = task.log.slice(-200);
-
-        render();
-        await persist(task);
     }
 
-    async function setDone(taskId, done) {
-        const task = findTask(taskId);
-        if (!task) return;
+    const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
+    const pctUkolu = (u) => (u.todo && u.todo.length)
+        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
+        : (u.stav === "hotovo" ? 100 : 0);
 
-        const name = whoAmI();
-        if (!name) return window.KBUI.toast("Nejdřív zadej své jméno.", "warn");
+    /* ------------------------------------------------------------- výpis */
 
-        task.done = done ? { by: name, ms: Date.now() } : null;
-        render();
-        await persist(task);
-        window.KBUI.toast(done ? "Úkol označen jako hotový." : "Úkol vrácen mezi rozdělané.");
-    }
-
-    $("list").addEventListener("click", async (event) => {
-        const button = event.target.closest("button");
-
-        // klik mimo tlačítko v hlavičce úkolu = rozbalit / sbalit
-        if (!button) {
-            const head = event.target.closest("[data-expand]");
-            if (!head) return;
-            const id = head.dataset.expand;
-            if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
-            return render();
-        }
-
-        if (button.dataset.toggle) {
-            const [taskId, subId] = button.dataset.toggle.split("|");
-            const task = findTask(taskId);
-            const sub = task && (task.subtasks || []).find(s => s.id === subId);
-            return setPercent(taskId, subId, (sub && sub.percent === 100) ? 0 : 100);
-        }
-
-        if (button.dataset.cycle) {
-            const [taskId, subId] = button.dataset.cycle.split("|");
-            const task = findTask(taskId);
-            const sub = task && (task.subtasks || []).find(s => s.id === subId);
-            const current = sub ? (sub.percent || 0) : 0;
-            // hodnota mimo stupnici (ze starších dat) skočí na nejbližší vyšší krok
-            const index = STEPS.indexOf(current);
-            const next = index === -1
-                ? (STEPS.find(s => s > current) || 0)
-                : STEPS[(index + 1) % STEPS.length];
-            return setPercent(taskId, subId, next);
-        }
-
-        if (button.dataset.note) {
-            const form = document.querySelector('[data-noteform="' + button.dataset.note + '"]');
-            if (form) {
-                form.hidden = !form.hidden;
-                if (!form.hidden) form.querySelector("input").focus();
-            }
-            return;
-        }
-
-        if (button.dataset.notesave) {
-            const [taskId, subId] = button.dataset.notesave.split("|");
-            const form = document.querySelector('[data-noteform="' + button.dataset.notesave + '"]');
-            const text = form ? form.querySelector("input").value.trim() : "";
-            if (!text) return;
-
-            const name = whoAmI();
-            if (!name) return window.KBUI.toast("Nejdřív zadej své jméno.", "warn");
-
-            const task = findTask(taskId);
-            if (!task) return;
-            task.notes = task.notes || [];
-            task.notes.push({
-                id: "note_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-                subtaskId: subId, text: text, author: name, ms: Date.now()
-            });
-            render();
-            return persist(task);
-        }
-
-        if (button.dataset.delnote) {
-            const [taskId, noteId] = button.dataset.delnote.split("|");
-            const task = findTask(taskId);
-            if (!task) return;
-            task.notes = (task.notes || []).filter(n => n.id !== noteId);
-            render();
-            return persist(task);
-        }
-
-        if (button.dataset.done)   return setDone(button.dataset.done, true);
-        if (button.dataset.undone) return setDone(button.dataset.undone, false);
-
-        if (button.dataset.edit) return openForm(button.dataset.edit);
-
-        if (button.dataset.remove) {
-            const task = findTask(button.dataset.remove);
-            if (!task) return;
-            if (!confirm('Opravdu smazat úkol „' + task.title + '"?')) return;
-            try {
-                await window.KB.deleteTask(task.id);
-                window.KBUI.toast("Úkol smazán.");
-            } catch (err) {
-                window.KBUI.toast("Smazání selhalo.", "error");
-            }
-        }
-    });
-
-    /* Posuvník: během tažení jen přebarvíme číslo, do databáze se zapíše
-       až po puštění – jinak by každý pixel znamenal jeden zápis. */
-    $("list").addEventListener("input", (event) => {
-        const slider = event.target.closest("[data-slider]");
-        if (!slider) return;
-        const radek = slider.closest(".subtask");
-        const cislo = radek && radek.querySelector(".subtask__pct");
-        if (cislo) cislo.textContent = slider.value + " %";
-        if (radek) {
-            radek.className = "subtask subtask--" + pctLevel(+slider.value) +
-                              (+slider.value === 100 ? " subtask--done" : "");
-        }
-    });
-
-    $("list").addEventListener("change", (event) => {
-        const slider = event.target.closest("[data-slider]");
-        if (!slider) return;
-        const [taskId, subId] = slider.dataset.slider.split("|");
-        setPercent(taskId, subId, +slider.value);
-    });
-
-    $("list").addEventListener("keydown", (event) => {
-        if (event.key !== "Enter") return;
-
-        const form = event.target.closest("[data-noteform]");
-        if (form) {
-            const save = form.querySelector("[data-notesave]");
-            if (save) save.click();
-            return;
-        }
-
-        // hlavička úkolu je ovladatelná i z klávesnice
-        const head = event.target.closest("[data-expand]");
-        if (head) {
-            event.preventDefault();
-            const id = head.dataset.expand;
-            if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
-            render();
-        }
-    });
-
-    /* ------------------------------------------------------- formulář */
-
-    /**
-     * Vykreslí zaškrtávací seznam lidí. U staršího úkolu, který má jen volný
-     * text, předzaškrtne ty, jejichž příjmení se v textu objevuje – ušetří to
-     * ruční přepisování a dá se to opravit.
-     */
-    function paintOwners(task) {
-        const vybrani = task ? (task.owners || []).slice() : [];
-        const text = task && !vybrani.length ? window.KBUI.fold(task.owner || "") : "";
-        const lide = (window.KB.users || []).filter(u => u.active !== false);
-
-        /* Podle příjmení se tipuje jen tehdy, když je ve firmě jediné –
-           u dvou Pelikánů by se jinak zaškrtli oba. Jinak musí sedět
-           i křestní jméno. */
-        const tipni = (u) => {
-            if (!text || !u.last) return false;
-            const prijmeni = window.KBUI.fold(u.last);
-            if (!text.includes(prijmeni)) return false;
-
-            const stejnePrijmeni = lide.filter(x => window.KBUI.fold(x.last || "") === prijmeni).length;
-            if (stejnePrijmeni === 1) return true;
-            return !!(u.first && text.includes(window.KBUI.fold(u.first)));
-        };
-
-        $("fOwners").innerHTML = lide
-            .map(u => {
-                const zaskrtnuto = vybrani.indexOf(u.id) !== -1 || tipni(u);
-                return '<label class="person' + (zaskrtnuto ? " person--on" : "") + '">' +
-                    '<input type="checkbox" value="' + esc(u.id) + '"' + (zaskrtnuto ? " checked" : "") + ">" +
-                    "<span>" + esc(jmeno(u)) + "</span>" +
-                "</label>";
-            }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
-    }
-
-    // zvýraznění zaškrtnutého člověka
-    $("fOwners").addEventListener("change", (event) => {
-        const label = event.target.closest(".person");
-        if (label) label.classList.toggle("person--on", event.target.checked);
-    });
-
-    /** Naplní roletku skupin – vždy i s tou, kterou má úkol zapsanou. */
-    function paintSkupSelect(selected) {
-        const names = skupinyList().slice();
-        if (selected && names.indexOf(selected) === -1) names.push(selected);
-
-        $("fSkupina").innerHTML =
-            '<option value="">— ' + NEZARAZENO.toLowerCase() + " —</option>" +
-            names.map(name => '<option value="' + esc(name) + '"' +
-                (name === selected ? " selected" : "") + ">" + esc(name) + "</option>").join("");
-    }
-
-    /**
-     * @param {string|null} taskId  úprava existujícího úkolu
-     * @param {string} presetZak    předvyplněná zakázka (prázdné = zakládá se nová)
-     * @param {string} presetSkup   předvyplněná skupina
-     */
-    function openForm(taskId, presetZak, presetSkup) {
-        editingId = taskId || null;
-        const task = taskId ? findTask(taskId) : null;
-        // do uzavřené zakázky se úkoly nepřidávají (pokud v ní úkol zrovna neupravuju)
-        const current = task ? zakName(task) : "";
-        const names = allZakazky().filter(name => !isClosed(name) || name === current);
-        const selected = current || (presetZak && names.indexOf(presetZak) !== -1 ? presetZak : names[0] || "");
-
-        $("fZakazka").innerHTML = names.length
-            ? names.map(name => '<option value="' + esc(name) + '"' +
-                (name === selected ? " selected" : "") + ">" + esc(name) + "</option>").join("")
-            : '<option value="">— nejdřív založ zakázku —</option>';
-
-        $("taskFormTitle").textContent = task ? "Upravit úkol"
-            : "Nový úkol" + (selected ? " do zakázky " + selected : "");
-        paintSkupSelect(task ? (task.skupina || "")
-            : (presetSkup && presetSkup !== NEZARAZENO ? presetSkup : ""));
-        $("fTitle").value = task ? (task.title || "") : "";
-        paintOwners(task);
-        $("fDeadline").value = task ? (task.deadline || "") : "";
-        $("fSubs").value = task ? (task.subtasks || []).map(s => s.title).join("\n") : "3PP\n2PP\n1PP\n1NP\n2NP";
-        $("taskOverlay").hidden = false;
-        $("fTitle").focus();
-    }
-
-    /* ------------------------------------------------------- zakázky */
-
-    const isClosed = (name) => (window.KB.zakazkyClosed || []).indexOf(name) !== -1;
-    const taskCount = (name) => (window.KB.tasks || []).filter(t => zakName(t) === name).length;
-
-    function paintZakList() {
-        const names = allZakazky();
-        $("zakList").innerHTML = names.length ? names.map(name => {
-            const closed = isClosed(name);
-            const count = taskCount(name);
-            return '<div class="zakrow' + (closed ? " zakrow--closed" : "") + '">' +
-                "<div><b>" + esc(name) + "</b>" +
-                    '<span class="tiny muted"> · ' + count +
-                    (count === 1 ? " úkol" : count < 5 ? " úkoly" : " úkolů") +
-                    (closed ? " · uzavřená" : "") + "</span></div>" +
-                '<div class="row" style="gap:6px">' +
-                    '<button type="button" class="btn btn--sm btn--ghost" data-zak-toggle="' + esc(name) + '">' +
-                        (closed ? "Otevřít" : "Uzavřít zakázku") + "</button>" +
-                    '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
-                        'data-zak-del="' + esc(name) + '">Smazat</button>' +
-                "</div>" +
-            "</div>";
-        }).join("") : '<div class="tiny muted">zatím žádná</div>';
-    }
-
-    /* ------------------------------------------------------- skupiny */
-
-    const skupCount = (name) => (window.KB.tasks || []).filter(t => skupName(t) === name).length;
-
-    function paintSkupList() {
-        const names = skupinyList();
-        $("skupList").innerHTML = names.length ? names.map(name => {
-            const count = skupCount(name);
-            return '<div class="zakrow">' +
-                "<div><b>" + esc(name) + "</b>" +
-                    '<span class="tiny muted"> · ' + count +
-                    (count === 1 ? " úkol" : count < 5 ? " úkoly" : " úkolů") + "</span></div>" +
-                '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
-                    'data-skup-del="' + esc(name) + '">Odebrat</button>' +
-            "</div>";
-        }).join("") : '<div class="tiny muted">zatím žádná</div>';
-    }
-
-    async function saveSkupiny(names) {
-        try {
-            await window.KB.saveZakazky(allZakazky(), window.KB.zakazkyClosed || [], names);
-            paintSkupList();
+    function vybrane() {
+        const uid = window.KB.currentUid();
+        return (window.KB.ukoly || []).filter(u => {
+            if (!$("fHotove").checked && u.stav === "hotovo" && pohled !== "zak") return false;
+            if (pohled === "moje" && (u.prirazeni || []).indexOf(uid) === -1) return false;
+            if (pohled === "zak" && window.KBUI.slug(u.projekt || "") !== zakSlug) return false;
+            if ($("fProjekt").value && (u.projekt || "") !== $("fProjekt").value) return false;
             return true;
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Uložení skupin selhalo.", "error");
-            return false;
-        }
-    }
-
-    async function addSkupina(raw) {
-        const name = (raw || "").trim();
-        if (!name) return null;
-
-        const names = skupinyList().slice();
-        const found = names.find(n => window.KBUI.fold(n) === window.KBUI.fold(name));
-        if (found) {
-            window.KBUI.toast("Skupina „" + found + "\" už existuje.", "warn");
-            return found;
-        }
-        names.push(name);
-        if (!await saveSkupiny(names)) return null;
-        window.KBUI.toast("Skupina „" + name + "\" přidána.");
-        return name;
-    }
-
-    /** Skupina se odebere jen z číselníku – úkoly v ní zůstanou a spadnou
-        do „Nezařazeno", takže se nikdy nic neztratí. */
-    async function deleteSkupina(name) {
-        const count = skupCount(name);
-        const question = count
-            ? 'Odebrat skupinu „' + name + '"? Jejích ' + count +
-              " úkolů zůstane, jen se přesunou do „" + NEZARAZENO + "\"."
-            : 'Odebrat skupinu „' + name + '"?';
-        if (!confirm(question)) return;
-
-        if (await saveSkupiny(skupinyList().filter(n => n !== name))) {
-            window.KBUI.toast("Skupina odebrána.");
-        }
-    }
-
-    function openZak() {
-        $("fZakNew").value = "";
-        $("fSkupNew").value = "";
-        paintSkupList();
-        paintZakList();
-        $("zakOverlay").hidden = false;
-    }
-
-    /** Uzavření / otevření zakázky – v dlaždici se pak vybarví zeleně. */
-    async function toggleZak(name) {
-        const closed = (window.KB.zakazkyClosed || []).slice();
-        const index = closed.indexOf(name);
-        if (index === -1) closed.push(name); else closed.splice(index, 1);
-
-        try {
-            await window.KB.saveZakazky(allZakazky(), closed);
-            paintZakList();
-            window.KBUI.toast(index === -1 ? "Zakázka uzavřena." : "Zakázka otevřena.");
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Uložení selhalo.", "error");
-        }
-    }
-
-    async function deleteZak(name) {
-        const count = taskCount(name);
-        if (count) {
-            return window.KBUI.toast("Nejdřív smaž jejích " + count + " úkolů, teprve pak zakázku.", "warn");
-        }
-        if (!confirm('Opravdu smazat zakázku „' + name + '"?')) return;
-
-        try {
-            await window.KB.saveZakazky(
-                allZakazky().filter(n => n !== name),
-                (window.KB.zakazkyClosed || []).filter(n => n !== name));
-            paintZakList();
-            window.KBUI.toast("Zakázka smazána.");
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Smazání selhalo.", "error");
-        }
-    }
-
-    async function saveZak() {
-        const added = $("fZakNew").value.split("\n").map(s => s.trim()).filter(Boolean);
-        if (!added.length) return window.KBUI.toast("Napiš aspoň jednu zakázku.", "warn");
-
-        const merged = allZakazky();
-        let count = 0;
-        added.forEach(name => {
-            const duplicate = merged.some(existing => window.KBUI.fold(existing) === window.KBUI.fold(name));
-            if (!duplicate) { merged.push(name); count++; }
         });
-        if (!count) return window.KBUI.toast("Tyhle zakázky už v seznamu jsou.", "warn");
-
-        try {
-            await window.KB.saveZakazky(merged);
-            $("fZakNew").value = "";
-            paintZakList();
-            window.KBUI.toast(count === 1 ? "Zakázka přidána." : count + " zakázky přidány.");
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Uložení selhalo.", "error");
-        }
     }
 
-    async function saveForm() {
-        const titles = $("fSubs").value.split("\n").map(t => t.trim()).filter(Boolean);
-        if (!$("fTitle").value.trim()) return window.KBUI.toast("Doplň název úkolu.", "warn");
-        if (!$("fZakazka").value.trim()) return window.KBUI.toast("Nejdřív založ zakázku tlačítkem + Nová zakázka.", "warn");
+    function todoHtml(u, smiPsat) {
+        return (u.todo || []).map(t => {
+            const kroky = PCT_KROKY.map(p =>
+                '<button type="button" class="todo__pct' + ((Number(t.pct) || 0) === p ? " je-aktivni" : "") +
+                '" data-ukol="' + esc(u.id) + '" data-todo="' + esc(t.id) + '" data-pct="' + p + '"' +
+                (smiPsat ? "" : " disabled") + ">" + p + "&nbsp;%</button>").join("");
+            return '<div class="todo">' +
+                '<span class="todo__text">' + esc(t.text) + "</span>" +
+                '<span class="todo__pcts">' + kroky + "</span>" +
+            "</div>";
+        }).join("") || '<div class="tiny muted">Úkol nemá TO-DO rozpad.</div>';
+    }
 
-        const existing = editingId ? findTask(editingId) : null;
-        const previous = existing ? (existing.subtasks || []) : [];
+    function ukolHtml(u) {
+        const uid = window.KB.currentUid();
+        const pct = pctUkolu(u);
+        const smiPsat = window.KBUI.can("ukol.delete") || (u.prirazeni || []).indexOf(uid) !== -1;
+        const otevreny = otevrene.has(u.id);
+        const meta = [u.druh, u.technologie, u.budova, u.patro].filter(Boolean).join(" · ");
+        const lide = (u.prirazeni || []).map(jmenoUid).filter(Boolean).join(", ");
 
-        const subtasks = titles.map(title => {
-            const keep = previous.find(s => s.title === title);
-            return keep || {
-                id: "sub_" + Date.now() + "_" + Math.floor(Math.random() * 10000) + "_" + title.replace(/\W/g, ""),
-                title: title, percent: 0, by: "", ms: 0
-            };
+        return '<div class="ukol' + (u.stav === "hotovo" ? " ukol--hotovo" : "") + '" id="ukol-' + esc(u.id) + '">' +
+            '<div class="ukol__hlava" data-rozbal="' + esc(u.id) + '">' +
+                '<div class="grow"><div class="ukol__nazev">' + esc(u.nazev) + "</div>" +
+                    '<div class="ukol__meta">' + esc(meta) +
+                        (lide ? (meta ? " — " : "") + esc(lide) : "") +
+                        (u.termin ? " · termín " + V.czDatum(u.termin) : "") +
+                        (u.budgetHodin ? " · budget " + V.cislo(u.budgetHodin) + " h" : "") +
+                    "</div></div>" +
+                '<span class="ukol__prubeh"><i style="width:' + pct + '%"></i></span>' +
+                '<span class="ukol__pct">' + pct + " %</span>" +
+            "</div>" +
+            (otevreny
+                ? '<div class="ukol__telo">' + todoHtml(u, smiPsat) +
+                    '<div class="row" style="justify-content:space-between;gap:10px">' +
+                        '<span class="tiny muted">' + (u.poznamka ? esc(u.poznamka) : "") + "</span>" +
+                        '<span class="row" style="gap:8px">' +
+                        (smiPsat && u.stav !== "hotovo"
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
+                        (window.KBUI.can("ukol.delete")
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(u.id) + '">Upravit</button>' : "") +
+                        "</span>" +
+                    "</div>" +
+                  "</div>"
+                : "") +
+        "</div>";
+    }
+
+    const otevrene = new Set();
+
+    function vykresli() {
+        const seznam = vybrane();
+
+        // roletka projektů ve filtru
+        const nazvy = [];
+        (window.KB.ukoly || []).forEach(u => {
+            if (u.projekt && nazvy.indexOf(u.projekt) === -1) nazvy.push(u.projekt);
+        });
+        const drzene = $("fProjekt").value;
+        $("fProjekt").innerHTML = V.options(nazvy, drzene, "— všechny projekty —");
+
+        document.querySelectorAll("[data-pohled]").forEach(ch =>
+            ch.classList.toggle("chip--active", ch.dataset.pohled === pohled));
+
+        // seskupení podle projektu
+        const skupiny = new Map();
+        seznam.forEach(u => {
+            const klic = u.projekt || "Bez projektu";
+            if (!skupiny.has(klic)) skupiny.set(klic, []);
+            skupiny.get(klic).push(u);
         });
 
-        const task = {
-            id: editingId || window.KB.newTaskId(),
-            zakazka: $("fZakazka").value.trim(),
-            skupina: $("fSkupina").value.trim(),
-            title: $("fTitle").value.trim(),
-            owners: Array.from($("fOwners").querySelectorAll("input:checked")).map(i => i.value),
-            // volný text se přestane používat, jakmile jsou vybraní lidé
-            owner: $("fOwners").querySelector("input:checked") ? "" : (existing ? existing.owner : ""),
-            deadline: $("fDeadline").value,
-            subtasks: subtasks,
-            notes: existing ? (existing.notes || []) : [],
-            // historii ani potvrzení „hotovo" úprava úkolu nesmí smazat –
-            // saveTask zapisuje obě pole natvrdo, takže se musí přenést
-            log: existing ? (existing.log || []) : [],
-            done: existing ? (existing.done || null) : null,
-            createdBy: existing ? existing.createdBy : (window.KB_USER || ""),
-            createdMs: existing ? existing.createdMs : Date.now()
+        $("vypis").innerHTML = Array.from(skupiny.entries()).map(([projekt, ukoly]) => {
+            const prumer = Math.round(ukoly.reduce((s, u) => s + pctUkolu(u), 0) / ukoly.length);
+            return '<div class="skupina-nadpis">' + esc(projekt) +
+                '<span class="tag">' + prumer + " % · " +
+                V.pocet(ukoly.length, ["úkol", "úkoly", "úkolů"]) + "</span></div>" +
+                ukoly.map(ukolHtml).join("");
+        }).join("") ||
+            '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
+            (pohled === "moje" ? "Žádný úkol pro tebe. Až ti manažer nějaký přiřadí, objeví se tady."
+                               : "Žádné úkoly.") + "</div>";
+    }
+
+    /* ------------------------------------------------- zápis postupu ----
+       Přiřazený člověk smí měnit jen `todo` a `stav` – přesně to posílá
+       KB.ulozUkolPostup, aby zápis prošel pravidly databáze. */
+
+    async function zapisPct(ukolId, todoId, pct) {
+        const u = (window.KB.ukoly || []).find(x => x.id === ukolId);
+        if (!u) return;
+        const todo = (u.todo || []).map(t => t.id === todoId
+            ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
+        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        try {
+            await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zápis se nepovedl – postup zapisuje jen přiřazený člověk.", "error");
+        }
+    }
+
+    /* ------------------------------------------------------ tvorba ----- */
+
+    function moznostiBudov(projektNazev) {
+        const b = (window.KB.budgetCiselnik || {})[projektNazev] || {};
+        return {
+            budovy: Array.isArray(b.budovy) && b.budovy.length ? b.budovy : ["celá stavba"],
+            patra: Array.isArray(b.patra) && b.patra.length ? b.patra : PATRA_VYCHOZI
         };
+    }
 
+    function doplnNazev() {
+        const tech = $("uDruh").value === "ArcGIS" ? $("uTech").value : $("uDruh").value;
+        const kusy = [tech, $("uBudova").value, $("uPatro").value].filter(x => x && x !== "celá stavba");
+        $("uNazev").value = kusy.join(" – ") || $("uDruh").value;
+    }
+
+    function naplnTvorbu(u) {
+        editovanyId = u ? u.id : "";
+        $("tvorbaNadpis").textContent = u ? "Úprava úkolu" : "Nový úkol";
+        $("btnSmazat").hidden = !u;
+
+        const projekty = (window.KB.projektyDocs || []).filter(p => !p.uzavreno)
+            .map(p => p.nazev);
+        $("uProjekt").innerHTML = V.options(projekty, u ? u.projekt || "" : "", "— vyber projekt —");
+        $("uDruh").value = u ? u.druh || "ArcGIS" : "ArcGIS";
+        $("uTech").innerHTML = V.options(TECH_KRESLENI, u ? u.technologie || "" : "", "— technologie —");
+        prepniProjekt(u);
+        $("uTermin").value = u ? u.termin || "" : "";
+        $("uBudget").value = u ? u.budgetHodin || "" : "";
+        $("uNazev").value = u ? u.nazev || "" : "";
+        $("uTodo").value = u ? (u.todo || []).map(t => t.text).join("\n") : "";
+        $("uPoznamka").value = u ? u.poznamka || "" : "";
+
+        const vybrani = new Set(u ? u.prirazeni || [] : []);
+        $("uLide").innerHTML = V.lide().map(cl =>
+            "<label><input type=\"checkbox\" value=\"" + esc(cl.id) + "\"" +
+            (vybrani.has(cl.id) ? " checked" : "") + "> " + esc(V.jmeno(cl)) + "</label>").join("");
+
+        $("uTechBox").hidden = $("uDruh").value !== "ArcGIS";
+        $("tvorba").hidden = false;
+        if (!u) doplnNazev();
+        $("tvorba").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function prepniProjekt(u) {
+        const m = moznostiBudov($("uProjekt").value);
+        $("uBudova").innerHTML = V.options(m.budovy, u ? u.budova || "" : "", null);
+        $("uPatro").innerHTML = V.options(m.patra, u ? u.patro || "" : "", "— celé —");
+    }
+
+    async function ulozUkol() {
+        const projektNazev = $("uProjekt").value;
+        if (!projektNazev) return void window.KBUI.toast("Vyber projekt.", "warn");
+        const nazev = $("uNazev").value.trim();
+        if (!nazev) return void window.KBUI.toast("Úkol potřebuje název.", "warn");
+
+        const puvodni = (window.KB.ukoly || []).find(x => x.id === editovanyId);
+        const projektDoc = (window.KB.projektyDocs || []).find(p => p.nazev === projektNazev);
+
+        // TO-DO řádky; u úpravy se drží stará procenta podle textu položky
+        const stare = new Map((puvodni ? puvodni.todo || [] : []).map(t => [t.text, t]));
+        const todo = $("uTodo").value.split("\n").map(r => r.trim()).filter(Boolean).map((text, i) => {
+            const s = stare.get(text);
+            return s || { id: "td_" + Date.now() + "_" + i, text: text, pct: 0, by: "", ms: 0 };
+        });
+
+        const id = editovanyId || window.KB.newUkolId();
+        $("btnUlozit").disabled = true;
         try {
-            await window.KB.saveTask(task.id, task);
-            $("taskOverlay").hidden = true;
-            window.KBUI.toast(editingId ? "Úkol upraven." : "Úkol založen.");
+            await window.KB.saveUkol(id, {
+                projektId: projektDoc ? projektDoc.id : (puvodni ? puvodni.projektId : ""),
+                projekt: projektNazev,
+                nazev: nazev,
+                druh: $("uDruh").value,
+                technologie: $("uDruh").value === "ArcGIS" ? $("uTech").value : "",
+                budova: $("uBudova").value === "celá stavba" ? "" : $("uBudova").value,
+                patro: $("uPatro").value,
+                prirazeni: Array.from($("uLide").querySelectorAll("input:checked")).map(ch => ch.value),
+                termin: $("uTermin").value,
+                budgetHodin: $("uBudget").value,
+                stav: puvodni ? puvodni.stav : "otevreny",
+                todo: todo,
+                poznamka: $("uPoznamka").value.trim(),
+                createdMs: puvodni ? puvodni.createdMs : undefined,
+                createdBy: puvodni ? puvodni.createdBy : undefined
+            });
+            $("tvorba").hidden = true;
+            window.KBUI.toast("Úkol uložen.");
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Uložení selhalo.", "error");
+            window.KBUI.toast("Uložení selhalo – úkoly zakládají manažeři.", "error");
+        } finally {
+            $("btnUlozit").disabled = false;
         }
     }
 
-    /** Vzorové zakázky, ať je vidět, jak se úkolovník chová s daty. */
-    const SAMPLES = [
-        {
-            zakazka: "BioPharma", title: "Odevzdání stavby", owner: "Filip", deadline: "2026-08-14",
-            subs: [["3PP", 100], ["2PP", 100], ["1PP", 75], ["1NP", 50], ["2NP", 0], ["3NP", 0], ["4NP", 0]]
-        },
-        {
-            zakazka: "C03", title: "Pasportizace technologií", owner: "Michal", deadline: "2026-08-28",
-            subs: [["1PP", 100], ["1NP", 100], ["2NP", 50], ["3NP", 25]]
-        },
-        {
-            zakazka: "C03", title: "Výkresy do tisku", owner: "Filip", deadline: "2026-09-11",
-            subs: [["Situace", 50], ["Půdorysy", 25], ["Řezy", 0]]
-        },
-        {
-            zakazka: "A08", title: "Skenování a mračna", owner: "Petr", deadline: "2026-08-07",
-            subs: [["Sběr dat", 100], ["Registrace mračna", 75], ["Export do ArcGIS", 0]]
-        },
-        {
-            zakazka: "Pasport Vrbice", title: "Pasport obecního úřadu", owner: "Michal", deadline: "2026-09-30",
-            subs: [["Zaměření 1NP", 100], ["Zaměření 2NP", 40], ["Půdní vestavba", 0], ["Zpráva pro obec", 0]]
-        }
-    ];
+    /* --------------------------------------- převzetí starého postupu ---
+       Stará stránka Postup práce má úkoly v jiné kolekci. Tohle je převede:
+       zakázka → projekt, skupina → druh, podúkoly s procenty → TO-DO.
+       Už převzaté se poznají podle `importId` a podruhé se nevezmou. */
 
-    /** Založí jen ty vzorové zakázky, které v databázi ještě nejsou. */
-    async function createSamples() {
-        const existing = (window.KB.tasks || []).map(t => (t.zakazka || "") + "|" + (t.title || ""));
-        const missing = SAMPLES.filter(s => existing.indexOf(s.zakazka + "|" + s.title) === -1);
-        if (!missing.length) return window.KBUI.toast("Vzorové zakázky už v databázi jsou.");
+    async function prevezmiStare() {
+        const stare = window.KB.tasks || [];
+        if (!stare.length) return void window.KBUI.toast("Starý postup práce je prázdný.");
+        const uzMame = new Set((window.KB.ukoly || []).map(u => u.importId).filter(Boolean));
+        const DRUHY = { "ARCGIS": "ArcGIS", "SKENY": "Skeny", "FOCENÍ": "Focení", "TABULKY": "Tabulky" };
 
+        let prevzato = 0;
+        $("btnImport").disabled = true;
         try {
-            for (const sample of missing) {
-                const id = window.KB.newTaskId() + "_" + slug(sample.zakazka);
-                await window.KB.saveTask(id, {
-                    id: id,
-                    zakazka: sample.zakazka,
-                    title: sample.title,
-                    owner: sample.owner,
-                    deadline: sample.deadline,
-                    subtasks: sample.subs.map(([title, percent]) => ({
-                        id: "sub_" + slug(sample.zakazka) + "_" + slug(title),
-                        title: title,
-                        percent: percent,
-                        by: percent > 0 ? sample.owner : "",
-                        ms: percent > 0 ? Date.now() : 0
+            for (const t of stare) {
+                if (uzMame.has(t.id)) continue;
+                await window.KB.saveUkol(window.KB.newUkolId(), {
+                    importId: t.id,
+                    projekt: t.zakazka || "Bez projektu",
+                    nazev: t.title || "Bez názvu",
+                    druh: DRUHY[(t.skupina || "").toUpperCase()] || "",
+                    prirazeni: t.owners || [],
+                    termin: t.deadline || "",
+                    stav: t.done ? "hotovo" : "otevreny",
+                    todo: (t.subtasks || []).map(s => ({
+                        id: s.id || ("td_" + Math.random().toString(36).slice(2)),
+                        text: s.title || "", pct: Number(s.percent) || 0,
+                        by: s.by || "", ms: s.ms || 0
                     })),
-                    notes: [],
-                    createdBy: window.KB_USER || "",
-                    createdMs: Date.now()
+                    poznamka: (t.notes || []).map(n => n.text).filter(Boolean).join(" · ").slice(0, 400),
+                    createdMs: t.createdMs, createdBy: t.createdBy
                 });
+                prevzato++;
             }
-            window.KBUI.toast("Vzorové zakázky vytvořeny.");
+            window.KBUI.toast(prevzato ? "Převzato " + prevzato + " úkolů." : "Všechno už je převzaté.");
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Nepodařilo se vytvořit.", "error");
+            window.KBUI.toast("Převzetí selhalo v průběhu – zkus to znovu, hotové se nezdvojí.", "error");
+        } finally {
+            $("btnImport").disabled = false;
         }
     }
 
-    /* ------------------------------------------------------------- start */
+    /* -------------------------------------------------------------- start */
 
-    /** Název právě vybrané zakázky (prázdné = zobrazují se všechny). */
-    function currentZak() {
-        const task = (window.KB.tasks || []).find(t => slug(zakName(t)) === activeZak);
-        return task ? zakName(task) : "";
-    }
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "ukoly.html" });
+        if (window.KBUI.can("vykaz.view") && (zakSlug || params.get("vse"))) pohled = zakSlug ? "zak" : "vse";
 
-    // ovládání ve druhém řádku lišty
-    document.addEventListener("click", (event) => {
-        const zakChip = event.target.closest(".subbar__left [data-zak]");
-        if (zakChip) {
-            activeZak = zakChip.dataset.zak;
-            const next = activeZak ? "?zak=" + encodeURIComponent(activeZak) : "";
-            history.replaceState(null, "", location.pathname + next);
-            paintSubbar();
-            return render();
-        }
-
-        if (event.target.closest("[data-onlyopen]")) {
-            onlyOpen = !onlyOpen;
-            paintSubbar();
-            return render();
-        }
-        if (event.target.closest("[data-onlymine]")) {
-            onlyMine = !onlyMine;
-            mineTouched = true;
-            paintSubbar();
-            return render();
-        }
-        const zakToggle = event.target.closest("[data-zak-toggle]");
-        if (zakToggle) return toggleZak(zakToggle.dataset.zakToggle);
-        const zakDel = event.target.closest("[data-zak-del]");
-        if (zakDel) return deleteZak(zakDel.dataset.zakDel);
-        const skupDel = event.target.closest("[data-skup-del]");
-        if (skupDel) return deleteSkupina(skupDel.dataset.skupDel);
-
-        if (event.target.closest("[data-newzak]"))  return openZak();
-        if (event.target.closest("[data-newtask]")) return openForm(null, currentZak());
-
-        const inGroup = event.target.closest("[data-newtask-in]");
-        if (inGroup) return openForm(null, inGroup.dataset.newtaskIn, inGroup.dataset.newtaskSkup);
-    });
-
-    document.addEventListener("DOMContentLoaded", async () => {
-        window.KBUI.mountNav({ active: "ukoly.html", subbar: true });
-        paintSubbar();
-
-        window.KBUI.onSearch(render);
-        $("btnFormCancel").addEventListener("click", () => { $("taskOverlay").hidden = true; });
-        $("btnFormSave").addEventListener("click", saveForm);
-        $("btnZakCancel").addEventListener("click", () => { $("zakOverlay").hidden = true; });
-        $("btnZakSave").addEventListener("click", saveZak);
-
-        $("btnSkupAdd").addEventListener("click", async () => {
-            if (await addSkupina($("fSkupNew").value)) $("fSkupNew").value = "";
+        $("btnNovy").addEventListener("click", () => naplnTvorbu(null));
+        $("btnZrusit").addEventListener("click", () => { $("tvorba").hidden = true; });
+        $("btnUlozit").addEventListener("click", ulozUkol);
+        $("btnImport").addEventListener("click", prevezmiStare);
+        $("btnSmazat").addEventListener("click", async () => {
+            if (!editovanyId) return;
+            if (!confirm("Opravdu smazat celý úkol i s postupem?")) return;
+            await window.KB.deleteUkol(editovanyId).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+            $("tvorba").hidden = true;
         });
-        $("fSkupNew").addEventListener("keydown", (event) => {
-            if (event.key === "Enter") { event.preventDefault(); $("btnSkupAdd").click(); }
+        $("uDruh").addEventListener("change", () => {
+            $("uTechBox").hidden = $("uDruh").value !== "ArcGIS";
+            doplnNazev();
+        });
+        $("uProjekt").addEventListener("change", () => { prepniProjekt(null); doplnNazev(); });
+        ["uTech", "uBudova", "uPatro"].forEach(id => $(id).addEventListener("change", doplnNazev));
+        $("fHotove").addEventListener("change", vykresli);
+        $("fProjekt").addEventListener("change", vykresli);
+
+        document.addEventListener("click", (event) => {
+            const pohledBtn = event.target.closest("[data-pohled]");
+            if (pohledBtn) { pohled = pohledBtn.dataset.pohled; return void vykresli(); }
+
+            const rozbal = event.target.closest("[data-rozbal]");
+            if (rozbal && !event.target.closest("button")) {
+                const id = rozbal.dataset.rozbal;
+                otevrene.has(id) ? otevrene.delete(id) : otevrene.add(id);
+                return void vykresli();
+            }
+            const pct = event.target.closest("[data-pct]");
+            if (pct && !pct.disabled) {
+                return void zapisPct(pct.dataset.ukol, pct.dataset.todo, Number(pct.dataset.pct));
+            }
+            const hotovo = event.target.closest("[data-hotovo]");
+            if (hotovo) {
+                const u = (window.KB.ukoly || []).find(x => x.id === hotovo.dataset.hotovo);
+                if (u) window.KB.ulozUkolPostup(u.id,
+                    (u.todo || []).map(t => Object.assign({}, t, { pct: 100 })), "hotovo");
+                return;
+            }
+            const uprav = event.target.closest("[data-uprav]");
+            if (uprav) naplnTvorbu((window.KB.ukoly || []).find(x => x.id === uprav.dataset.uprav));
         });
 
-        // „+ Nová" přímo u formuláře úkolu – ať se kvůli skupině nemusí nikam chodit
-        $("btnSkupinaNew").addEventListener("click", async () => {
-            const name = await addSkupina(prompt("Název nové skupiny (např. FOCENÍ):") || "");
-            if (name) paintSkupSelect(name);
-        });
-
-        /* Kdo není správce a má přiřazené úkoly, uvidí rovnou jen svoje –
-           jinak by se v cizích zakázkách ztratil. Přepínač zůstává vidět
-           a jakmile s ním jednou pohne, respektuje se jeho volba. */
-        const nastavVychoziFiltr = () => {
-            if (mineTouched || !window.KB.currentUid()) return;
-            if (!(window.KB.users || []).length || !(window.KB.tasks || []).length) return;
-            if (window.KBUI.isAdmin()) return;
-            if (!(window.KB.tasks || []).some(isMine)) return;
-            onlyMine = true;
-            mineTouched = true;
-            paintSubbar();
-            render();
-        };
-
-        document.addEventListener("kb-role", () => { paintSubbar(); render(); nastavVychoziFiltr(); });
-        window.KB.on("zakazky", () => { paintSubbar(); render(); });
-        // role se bere ze seznamu lidí – změna se projeví bez odhlášení
-        window.KB.on("users", () => {
-            window.KBUI.syncRole();
-            paintSubbar();
-            render();
-            nastavVychoziFiltr();
-        });
-
-        let jumped = false;
-        window.KB.on("tasks", () => {
-            paintSubbar();
-            render();
-            nastavVychoziFiltr();
-            if (!jumped) { jumped = true; jumpToHash(); }   // po doručení dat skoč na zakázku
-        });
-
-        render();
-        await window.KB.whenReady();
-        paintSubbar();
-        render();
-        jumpToHash();
-
-        if (location.hash === "#novy" && window.KBUI.can("ukol.create")) openForm(null, currentZak());
+        const start = () => { zapniSledovani(); vykresli(); };
+        document.addEventListener("kb-role", start);
+        window.KB.on("ukoly", vykresli);
+        window.KB.on("users", vykresli);
+        window.KB.on("projekty-docs", () => {});
+        start();
     });
 })();
 </script>

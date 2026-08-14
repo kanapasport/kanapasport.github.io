@@ -8,9 +8,32 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=49">
+    <link rel="stylesheet" href="assets/css/app.css?v=50">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* nástěnka: dvě poloviny, na úzkém okně pod sebou */
+        .nastenka { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+        @media (max-width: 900px) { .nastenka { grid-template-columns: 1fr; } }
+        .mujukol { display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+            border: 1px solid var(--line-soft); border-radius: var(--radius);
+            background: var(--surface); cursor: pointer; text-align: left; font: inherit; width: 100%; }
+        .mujukol:hover { border-color: var(--accent-lt); }
+        .mujukol.je-vybrany { border-color: var(--accent); background: var(--accent-tint); }
+        .mujukol__nazev { font-weight: 700; font-size: 13.5px; }
+        .mujukol__meta { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+        .mujukol__prubeh { flex: none; width: 90px; height: 7px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+        .mujukol__prubeh i { display: block; height: 100%; background: var(--accent); }
+        .mujukol__pct { flex: none; font-weight: 900; font-size: 12.5px; width: 40px; text-align: right; }
+        .ntodo { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line-soft); }
+        .ntodo:last-child { border-bottom: none; }
+        .ntodo__text { flex: 1; min-width: 0; font-size: 13.5px; }
+        .ntodo__pcts { display: flex; gap: 4px; flex-wrap: wrap; }
+        .ntodo__pct { border: 1px solid var(--line); background: var(--surface); border-radius: 99px;
+            padding: 3px 8px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--muted); }
+        .ntodo__pct.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .ntodo__pct:disabled { cursor: default; opacity: .55; }
+    </style>
 </head>
 <body>
 
@@ -27,6 +50,30 @@
         <div id="searchList" class="col" style="gap:10px"></div>
     </section>
 
+    <!-- ================================================ nástěnka člověka -->
+    <section id="nastenka" class="wrap" style="padding-top:26px">
+        <div class="section-head" style="margin-bottom:14px">
+            <h2 id="nastenkaPozdrav" style="font-size:24px">Moje nástěnka</h2>
+            <p id="nastenkaPopis">Zadané úkoly vlevo, postup práce vybraného úkolu vpravo.</p>
+        </div>
+        <div class="nastenka">
+            <div class="card col" style="gap:8px;padding:16px">
+                <div class="spread">
+                    <b>Zadané úkoly</b>
+                    <a class="linkbtn" style="border-color:var(--line)" href="ukoly.html?moje=1">všechny →</a>
+                </div>
+                <div id="mojeUkoly" class="col" style="gap:6px"></div>
+            </div>
+            <div class="card col" style="gap:8px;padding:16px">
+                <div class="spread">
+                    <b>TO-DO — postup práce</b>
+                    <a id="todoOdkaz" class="linkbtn" style="border-color:var(--line)" href="ukoly.html" hidden>otevřít →</a>
+                </div>
+                <div id="todoRozpad" class="col" style="gap:4px"></div>
+            </div>
+        </div>
+    </section>
+
     <!-- =========================================================== sekce -->
     <div id="sections" class="wrap" style="padding:34px 20px 70px;display:flex;flex-direction:column;gap:46px"></div>
 
@@ -35,10 +82,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=49"></script>
-<script src="assets/js/doc.js?v=49"></script>
-<script src="assets/js/ui.js?v=49"></script>
-<script type="module" src="assets/js/store.js?v=49"></script>
+<script src="assets/js/taxonomy.js?v=50"></script>
+<script src="assets/js/doc.js?v=50"></script>
+<script src="assets/js/ui.js?v=50"></script>
+<script type="module" src="assets/js/store.js?v=50"></script>
 
 <script>
 (function () {
@@ -138,123 +185,105 @@
             : "Skrýt ▴";
     });
 
-    /* ------------------------------------------- úkolovník podle zakázek */
+    /* ------------------------------------------------- nástěnka člověka --
+       Dvě poloviny: vlevo úkoly zadané přihlášenému, vpravo TO-DO rozpad
+       vybraného úkolu. Postup se zapisuje rovnou tady – posílá se jen
+       `todo` a `stav` (KB.ulozUkolPostup), víc pravidla nedovolí. */
 
-    const slug = (value) => window.KBUI.slug(value);
+    const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+    let vybranyUkol = "";
+    let sledovaniZapnuto = false;
 
-    const taskPercent = (task) => {
-        const subs = task.subtasks || [];
-        if (!subs.length) return 0;
-        return Math.round(subs.reduce((sum, s) => sum + (s.percent || 0), 0) / subs.length);
-    };
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid || !window.KB.currentUid()) return;
+        sledovaniZapnuto = true;
+        // manažer poslouchá všechno (kvůli roletce projektů v liště),
+        // ostatní jen svoje – širší dotaz by jim databáze odmítla
+        if (window.KBUI.can("vykaz.view")) {
+            window.KB.watchUkoly();
+            window.KB.watchProjekty();
+        } else {
+            window.KB.watchMojeUkoly();
+            window.KB.watchMojeProjekty();
+        }
+    }
 
-    const czDate = (iso) => {
+    const czDatum = (iso) => {
         if (!iso) return "";
         const [y, m, d] = iso.split("-");
-        return d.replace(/^0/, "") + ". " + m.replace(/^0/, "") + ". " + y;
+        return Number(d) + ". " + Number(m) + ". " + y;
     };
 
-    const NEZARAZENO = "Nezařazeno";
-    const skupName = (task) => (task.skupina || "").trim() || NEZARAZENO;
+    const pctUkolu = (u) => (u.todo && u.todo.length)
+        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
+        : (u.stav === "hotovo" ? 100 : 0);
 
-    /** Seskupí úkoly podle zakázky – z každé zakázky je jedna dlaždice se seznamem. */
-    function taskTileHtml(name, tasks) {
-        const zak = encodeURIComponent(slug(name));
-
-        const rowHtml = (task) => {
-            const percent = taskPercent(task);
-            const state = task.done || percent === 100 ? " tile__dot--done" : percent > 0 ? " tile__dot--run" : "";
-            // každý řádek je proklik rovnou na ten konkrétní úkol
-            return '<a class="tile__listrow" href="ukoly.html?zak=' + zak + "#task-" + encodeURIComponent(task.id) + '">' +
-                '<span class="tile__dot' + state + '"></span>' +
-                "<b>" + esc(task.title || "Bez názvu") + "</b>" +
-                '<span class="tile__listpct">' + percent + " %</span>" +
-            "</a>";
-        };
-
-        // pořadí skupin drží číselník, cokoliv navíc se přidá za něj,
-        // aby se v dlaždici neztratil ani úkol bez zařazení
-        const order = ((window.KB.skupiny || []).length
-            ? window.KB.skupiny : (window.KB.DEFAULT_SKUPINY || [])).slice();
-        tasks.forEach(task => {
-            const s = skupName(task);
-            if (order.indexOf(s) === -1) order.push(s);
-        });
-
-        const rows = order.map(skup => {
-            const inSkup = tasks.filter(t => skupName(t) === skup);
-            if (!inSkup.length) return "";
-            const percent = Math.round(inSkup.reduce((sum, t) => sum + taskPercent(t), 0) / inSkup.length);
-            return '<div class="tile__skup">' +
-                    "<span>" + esc(skup) + "</span>" +
-                    '<span class="tile__skuppct">' + percent + " %</span>" +
-                   "</div>" +
-                   inSkup.map(rowHtml).join("");
-        }).join("");
-
-        const deadlines = tasks.map(t => t.deadline).filter(Boolean).sort();
-        const closed = (window.KB.zakazkyClosed || []).indexOf(name) !== -1;
-        const sub = closed
-            ? "Zakázka uzavřená"
-            : tasks.length + (tasks.length === 1 ? " úkol" : tasks.length < 5 ? " úkoly" : " úkolů") +
-              (deadlines.length ? " · nejbližší termín " + czDate(deadlines[0]) : "");
-
-        return '<div class="tile' + (closed ? " tile--done" : "") + '">' +
-            '<a class="tile__main" href="ukoly.html?zak=' + zak + '">' +
-                '<div class="tile__head">' +
-                    '<div class="tile__icon">' + icon(closed ? "tasks" : "building") + "</div>" +
-                    '<div class="tile__title">' + esc(name.toUpperCase()) + "</div>" +
-                "</div>" +
-                '<div class="tile__sub">' + esc(sub) + "</div>" +
-            "</a>" +
-            '<div class="tile__list">' + rows + "</div>" +
-        "</div>";
+    function mojeUkoly() {
+        const uid = window.KB.currentUid ? window.KB.currentUid() : "";
+        return (window.KB.ukoly || [])
+            .filter(u => u.stav !== "hotovo" && (u.prirazeni || []).indexOf(uid) !== -1);
     }
 
-    function renderTasks(tasks) {
-        const host = document.getElementById("sec-ukolovnik");
-        const section = {
-            id: "ukolovnik", title: "Postup práce", href: "ukoly.html", icon: "tasks",
-            desc: "Rozdělané zakázky a stav rozpracovanosti po patrech."
-        };
+    function renderNastenka() {
+        const krestni = (window.KB_USER || "").split(" ")[0];
+        document.getElementById("nastenkaPozdrav").textContent =
+            krestni ? "Nástěnka – " + krestni : "Moje nástěnka";
 
-        const groups = new Map();
-        (tasks || []).forEach(task => {
-            const name = (task.zakazka || "").trim() || "Bez zakázky";
-            if (!groups.has(name)) groups.set(name, []);
-            groups.get(name).push(task);
-        });
+        const seznam = mojeUkoly();
+        if (!seznam.some(u => u.id === vybranyUkol)) vybranyUkol = seznam.length ? seznam[0].id : "";
 
-        /* Pořadí dlaždic: napřed hlavní zakázky (PINNED), pak otevřené
-           podle nejbližšího termínu a nakonec uzavřené. Ať je to, na čem
-           se zrovna dělá, hned vlevo nahoře. */
-        const PINNED = ["BioPharma"];
-        const closedNames = window.KB.zakazkyClosed || [];
-        const nearest = (list) => {
-            const dates = list.map(t => t.deadline).filter(Boolean).sort();
-            return dates.length ? dates[0] : "9999";
-        };
-        const rank = (name) => {
-            const pin = PINNED.findIndex(p => window.KBUI.fold(p) === window.KBUI.fold(name));
-            if (pin !== -1) return "0" + pin;
-            return (closedNames.indexOf(name) !== -1 ? "2" : "1");
-        };
+        document.getElementById("mojeUkoly").innerHTML = seznam.map(u => {
+            const pct = pctUkolu(u);
+            const meta = [u.projekt, u.termin ? "termín " + czDatum(u.termin) : ""]
+                .filter(Boolean).join(" · ");
+            return '<button type="button" class="mujukol' +
+                (u.id === vybranyUkol ? " je-vybrany" : "") + '" data-vyber="' + esc(u.id) + '">' +
+                '<span class="grow"><span class="mujukol__nazev">' + esc(u.nazev) + "</span>" +
+                '<span class="mujukol__meta" style="display:block">' + esc(meta) + "</span></span>" +
+                '<span class="mujukol__prubeh"><i style="width:' + pct + '%"></i></span>' +
+                '<span class="mujukol__pct">' + pct + " %</span>" +
+            "</button>";
+        }).join("") || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+            "Žádný otevřený úkol. Nové úkoly zadávají manažeři na stránce Úkoly.</div>";
 
-        const ordered = Array.from(groups.entries()).sort((a, b) => {
-            const byRank = rank(a[0]).localeCompare(rank(b[0]));
-            return byRank || nearest(a[1]).localeCompare(nearest(b[1]));
-        });
+        const u = seznam.find(x => x.id === vybranyUkol);
+        const odkaz = document.getElementById("todoOdkaz");
+        odkaz.hidden = !u;
+        if (u) odkaz.href = "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(u.projekt || ""));
 
-        const tiles = groups.size
-            ? ordered.map(([name, list]) => taskTileHtml(name, list)).join("")
-            : '<div class="tile"><a class="tile__main" href="ukoly.html">' +
-                '<div class="tile__head"><div class="tile__icon">' + icon("tasks") + "</div>" +
-                '<div class="tile__title">POSTUP PRÁCE</div></div>' +
-                '<div class="tile__sub">Zatím tu nejsou žádné úkoly. Otevři Postup práce a založ první zakázku.</div>' +
-              "</a></div>";
-
-        placeSection("sec-ukolovnik", sectionHtml(section, tiles), ["sec-boards", "sec-pripravujeme"]);
+        document.getElementById("todoRozpad").innerHTML = !u
+            ? '<div class="tiny muted" style="padding:10px 2px">Vyber vlevo úkol.</div>'
+            : ((u.todo || []).map(t => {
+                const kroky = PCT_KROKY.map(p =>
+                    '<button type="button" class="ntodo__pct' +
+                    ((Number(t.pct) || 0) === p ? " je-aktivni" : "") +
+                    '" data-npct="' + p + '" data-ntodo="' + esc(t.id) + '">' + p + "&nbsp;%</button>").join("");
+                return '<div class="ntodo"><span class="ntodo__text">' + esc(t.text) + "</span>" +
+                    '<span class="ntodo__pcts">' + kroky + "</span></div>";
+            }).join("") || '<div class="tiny muted" style="padding:10px 2px">Úkol nemá TO-DO rozpad.</div>');
     }
+
+    async function zapisPct(todoId, pct) {
+        const u = mojeUkoly().find(x => x.id === vybranyUkol);
+        if (!u) return;
+        const todo = (u.todo || []).map(t => t.id === todoId
+            ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
+        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        try {
+            await window.KB.ulozUkolPostup(u.id, todo, hotovo ? "hotovo" : "otevreny");
+            if (hotovo) window.KBUI.toast("Úkol je hotový. 🎉");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zápis se nepovedl.", "error");
+        }
+    }
+
+    document.addEventListener("click", (event) => {
+        const vyber = event.target.closest("[data-vyber]");
+        if (vyber) { vybranyUkol = vyber.dataset.vyber; return void renderNastenka(); }
+        const pct = event.target.closest("[data-npct]");
+        if (pct) zapisPct(pct.dataset.ntodo, Number(pct.dataset.npct));
+    });
 
     /** Vloží nebo nahradí sekci; pořadí drží podle seznamu následníků. */
     function placeSection(id, html, beforeIds) {
@@ -340,16 +369,18 @@
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "index.html", big: true });
         renderSections();
-        renderTasks(window.KB.tasks);
+        renderNastenka();
         window.KBUI.onSearch(runSearch);
 
         // pořadí štítků závisí na tom, kde se naposledy upravovalo
         window.KB.on("guides", () => {
             renderSections();
-            renderTasks(window.KB.tasks);
             runSearch(window.KBUI.searchValue());
         });
-        window.KB.on("tasks", (event) => renderTasks(event.detail));
+        const obnov = () => { zapniSledovani(); renderNastenka(); };
+        document.addEventListener("kb-role", obnov);
+        window.KB.on("users", obnov);
+        window.KB.on("ukoly", renderNastenka);
         renderBoards(window.KB.boards);
         window.KB.on("boards", (event) => renderBoards(event.detail));
     });

@@ -30,6 +30,7 @@ window.KB_ICONS = {
     flag:     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21V4m0 0h11l-1.5 3L14 10H3m0 0v6h10l-1.5-3L13 10"/>',
     cog:      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>',
     clock:    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+    calendar: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
     chart:    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>'
 };
 
@@ -160,8 +161,10 @@ window.KB_SECTIONS = [
    V liště jsou jen dvě položky a jsou vycentrované. Roletka u NÁVODŮ je
    svislý seznam kategorií – rozbalí se až najetím myší na řádek. */
 
+/* DOMŮ v liště není – domů vede logo ve svislém pásu (a v úzkém okně logo
+   v červeném pruhu). Postup práce se přejmenoval: rozpad úkolu jsou TO-DO
+   položky a stránka úkolů se jmenuje prostě ÚKOLY. */
 window.KB_NAV = [
-    { title: 'DOMŮ', href: 'index.html', icon: 'home' },
     {
         title: 'NÁVODY', href: 'navody.html',
         menu: [{ title: 'VŠECHNY NÁVODY', href: 'navody.html' }].concat(
@@ -175,11 +178,19 @@ window.KB_NAV = [
                     })))
             })))
     },
-    // roletka se naplní zakázkami z databáze (viz taskMenu v ui.js)
-    { title: 'POSTUP PRÁCE', href: 'ukoly.html', tasks: true },
+    // roletka se naplní otevřenými projekty z databáze (viz projektyMenu v ui.js)
+    { title: 'PROJEKTY', href: 'projekty.html', projekty: true },
+    // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
+    { title: 'ÚKOLY', href: 'ukoly.html', tasks: true },
+    { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },
     // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
     { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },
-    { title: 'TABULE', href: 'tabule.html', icon: 'board' }
+    { title: 'TABULE', href: 'tabule.html', icon: 'board' },
+    /* Výkazy mají vlastní odkaz v liště – vykreslí se ale jen tomu, kdo na
+       ně má právo; studentům položka zmizí (data-need v ui.js). */
+    { title: 'VÝKAZY', href: 'vykazy.html', need: 'vykaz.otevrit' },
+    // přehledy hodin a peněz – jen manažeři
+    { title: 'REPORTY', href: 'reporty.html', need: 'vykaz.view' }
 ];
 
 /* ------------------------------------------------- nástroje (ikony) -----
@@ -190,12 +201,9 @@ window.KB_TOOLS = [
     { title: 'Pokyn pro AI – návod',  icon: 'sparkles', action: 'ai-prompt' },
     { title: 'Pokyn pro AI – skript', icon: 'code',     action: 'script-prompt' },
     { title: 'Import od AI',   icon: 'download', href: 'editor.html#import' },
-    /* Historie úprav sem nepatří – je to tlačítko na stránce Postupu práce,
-       kam obsahem náleží. Všechny návody a Milníky tu byly zbytečně, obojí
-       je v liště o řádek níž. */
-    /* Výkazy práce schválně NEJSOU v liště (KB_NAV) – jediná cesta k nim je
-       tahle ikona, a ta se vykreslí jen tomu, kdo na výkazy vůbec smí. */
-    { title: 'Výkazy práce', icon: 'clock', href: 'vykazy.html', need: 'vykaz.otevrit' },
+    /* Historie úprav sem nepatří – je to tlačítko na stránce úkolů,
+       kam obsahem náleží. Výkazy už mají vlastní položku v liště (KB_NAV),
+       tak z ikon zmizely – dvakrát tu být nemusí. */
     /* Přehled BioPharmy (vykazy-bp.html) tu SCHVÁLNĚ NENÍ a přidávat se nemá.
        Otevírá se výhradně přímým odkazem, který má hlavní správce u sebe –
        ať na něj nikdo nenarazí náhodou. Stránka se stejně brání sama:

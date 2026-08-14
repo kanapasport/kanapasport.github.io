@@ -2571,3 +2571,105 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     }
     .a4-page:last-child { page-break-after: auto; break-after: auto; }
 }
+
+/* ========================================================= SVISLÝ PÁS ==== */
+/* Levý pás jako v Caflou: nahoře logo (klik = domů), pod ním hledání
+   a rychlé akce. Jen na širokém okně s myší – na dotyku a v úzkém okně
+   zůstává všechno v horní liště a pás se nevykresluje (CSS ho schová
+   a hledání si přestěhuje zpátky ui.js → placeSearch). */
+
+:root { --rail-w: 216px; }
+
+.siderail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--rail-w);
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 14px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
+    color: #fff;
+}
+
+.siderail__logo {
+    display: block;
+    text-align: center;
+    padding: 4px 4px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, .28);
+}
+.siderail__logo img { width: 100%; max-width: 164px; object-fit: contain; display: inline-block; }
+
+.siderail__akce { display: flex; flex-direction: column; gap: 8px; }
+
+.siderail__btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, .38);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, .13);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13.5px;
+    text-decoration: none;
+}
+.siderail__btn:hover { background: #fff; color: var(--accent); }
+.siderail__btn svg { width: 18px; height: 18px; flex: none; }
+
+/* hlavní akce dne – zapsat výkaz – svítí bíle */
+.siderail__btn--hlavni { background: #fff; color: var(--accent); }
+.siderail__btn--hlavni:hover { background: rgba(255, 255, 255, .88); }
+
+.siderail__pata {
+    margin-top: auto;
+    font-size: 10.5px;
+    line-height: 1.5;
+    text-align: center;
+    color: rgba(255, 255, 255, .62);
+}
+
+/* hledání přestěhované do pásu – přebije absolutní usazení z lišty */
+.siderail .searchbox {
+    position: static;
+    transform: none;
+    width: 100%;
+    background: rgba(255, 255, 255, .13);
+    border-color: rgba(255, 255, 255, .38);
+}
+.siderail .searchbox svg { color: rgba(255, 255, 255, .8); }
+.siderail .searchbox input { color: #fff; }
+.siderail .searchbox input::placeholder { color: rgba(255, 255, 255, .65); }
+.siderail .searchbox:focus-within { background: #fff; border-color: #fff; }
+.siderail .searchbox:focus-within svg { color: var(--dim); }
+.siderail .searchbox:focus-within input { color: var(--text); }
+
+/* pás jen na širokém okně s myší; jinde platí horní lišta jako doteď */
+@media (max-width: 1120px), (hover: none) {
+    .siderail { display: none; }
+}
+
+@media (min-width: 1121px) and (hover: hover) {
+    body { padding-left: var(--rail-w); }
+
+    /* logo bydlí v pásu – nahoře se neopakuje a červený pruh se zploští
+       na jeden řádek: náhled role vlevo, uživatel a nástroje vpravo */
+    .appbar__logo { display: none; }
+    .appbar__bandin,
+    .appbar--big .appbar__bandin {
+        min-height: 0;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 16px;
+        padding: 9px 20px;
+    }
+    .appbar__nahled { position: static; }
+    .appbar__userbox { position: static; margin-left: auto; }
+    .appbar__status { margin-top: 2px; }
+    .toolrail { position: static; }
+
+    /* pruh náhledu i brána přihlášení se nesmí schovat pod pás */
+    .nahledpruh, .gate { margin-left: 0; }
+}

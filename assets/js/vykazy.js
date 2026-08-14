@@ -235,6 +235,9 @@
     /* ------------------------------------------------------------ součty */
 
     V.soucty = (zaznamy) => {
+        /* Dovolená, nemoc a školení jsou evidence, ne odpracovaný čas –
+           ze součtů hodin, peněz i dní se vynechávají (rozhodnutí Michala). */
+        zaznamy = (zaznamy || []).filter(z => !z.absence);
         const sec = (klic) => zaznamy.reduce((s, z) => s + (Number(z[klic]) || 0), 0);
         const hodiny = sec("hodiny");
         const castka = sec("castka");
@@ -406,7 +409,7 @@
         };
         const des = (value) => String(Number(value) || 0).replace(".", ",");
 
-        const hlavicka = ["Datum", "Kdo", "Úkol", "Zakázka", "Projekt", "Firma",
+        const hlavicka = ["Datum", "Kdo", "Úkol", "Projekt", "Část", "Firma",
             "Druh vypracování", "Technologie", "Od", "Do", "Pauza (min)",
             "Hodin", "Sazba", "Za práci", "Oběd", "Km", "Cestovné", "Celkem", "Poznámka"];
 

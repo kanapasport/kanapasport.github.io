@@ -93,7 +93,15 @@ const KB = {
     boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
     vykazy: [],             // zápisy práce – načtou se až na vyžádání
     firmy: [],              // komu se fakturuje (číselník u zakázek, není tajný)
-    projekty: {},           // části zakázky: { "BioPharma": ["Etapa 1", "Etapa 2"] }
+    /* POZOR na názvosloví: navenek se „zakázce" říká projekt a „projektu"
+       část. Vnitřní klíče se ale NEPŘEJMENOVÁVAJÍ – sedí na nich uložená
+       data i pravidla databáze. `projekty` níž jsou tedy ČÁSTI projektu. */
+    projekty: {},           // části projektu: { "BioPharma": ["Etapa 1", "Etapa 2"] }
+    firmaMap: {},           // projekt → firma, které se fakturuje (doplní se ve výkazu samo)
+    budgetCiselnik: {},     // projekt → { budovy, patra } pro skládání úkolů
+    projektyDocs: [],       // hlavičky projektů (private/projekty/seznam) – dle práv
+    ukoly: [],              // úkoly s TO-DO rozpadem (private/ukoly/seznam) – dle práv
+    kalendar: [],           // události, dovolené, nemoci – vidí všichni členové
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
@@ -133,6 +141,16 @@ const castkaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "cas
 const vykazyMeta = () => doc(db, "artifacts", APP_ID, "private", "vykazy", "ciselniky", "nastaveni");
 /* hotové souhrny ze starých excelových výkazů – jeden dokument na zakázku */
 const prehledDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "prehledy", id);
+/* projekty a úkoly – v `private`, protože zaměstnanec smí vidět jen svoje;
+   finance projektu zvlášť, protože pravidla neumí schovat jednotlivá pole */
+const projektyCol = () => collection(db, "artifacts", APP_ID, "private", "projekty", "seznam");
+const projektDoc = (id) => doc(db, "artifacts", APP_ID, "private", "projekty", "seznam", id);
+const projektFinanceDoc = (id) => doc(db, "artifacts", APP_ID, "private", "projekty", "finance", id);
+const ukolyCol = () => collection(db, "artifacts", APP_ID, "private", "ukoly", "seznam");
+const ukolDoc = (id) => doc(db, "artifacts", APP_ID, "private", "ukoly", "seznam", id);
+/* kalendář je v `public/data` – dovolené a nemoci mají vidět všichni */
+const kalendarCol = () => collection(db, "artifacts", APP_ID, "public", "data", "kalendar");
+const kalendarDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "kalendar", id);
 
 /* ------------------------------------------------------------------ start */
 
@@ -151,6 +169,18 @@ const zrusVykazy = () => {
     vykazyOdbery = [];
 };
 
+/* Projekty a úkoly jedou na stejném principu: manažer poslouchá všechno,
+   zaměstnanec se ptá jen na svoje (pravidla nejsou filtr – dotaz bez
+   `array-contains` by mu databáze celý odmítla). */
+let projektyOdber = null;
+let projektyChteno = "";        // "" | "vse" | "moje"
+let ukolyOdber = null;
+let ukolyChteno = "";
+const zrusProjektyUkoly = () => {
+    if (projektyOdber) { try { projektyOdber(); } catch (e) {} projektyOdber = null; }
+    if (ukolyOdber) { try { ukolyOdber(); } catch (e) {} ukolyOdber = null; }
+};
+
 try {
     const app = initializeApp(FIREBASE_CONFIG);
     auth = getAuth(app);
@@ -167,8 +197,10 @@ try {
         if (!user) {
             zrusOdbery();
             zrusVykazy();
+            zrusProjektyUkoly();
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
+            KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -226,17 +258,35 @@ try {
             // dokud si skupiny nikdo neupravil, platí výchozí trojice
             KB.skupiny = (Array.isArray(data.groups) && data.groups.length)
                 ? data.groups : KB.DEFAULT_SKUPINY.slice();
-            /* Projekty uvnitř zakázky a firmy, kterým se fakturuje, leží tady
-               a ne mezi tajnými čísly – zaměstnanec si je u svého výkazu musí
+            /* Části projektu a firmy, kterým se fakturuje, leží tady a ne
+               mezi tajnými čísly – zaměstnanec si je u svého výkazu musí
                umět vybrat. Tajné jsou sazby a rozpočty, ne názvy. */
             KB.projekty = (data.projekty && typeof data.projekty === "object") ? data.projekty : {};
             KB.firmy = Array.isArray(data.firmy) ? data.firmy : [];
+            // propojení projekt → firma; výběr projektu pak doplní firmu sám
+            KB.firmaMap = (data.firmaMap && typeof data.firmaMap === "object") ? data.firmaMap : {};
+            /* budget číselník: projekt → { budovy: ["G61"], patra: ["1NP"] } –
+               z něj se skládají úkoly (technologie × budova × patro) */
+            KB.budgetCiselnik = (data.budget && typeof data.budget === "object") ? data.budget : {};
             emit("zakazky", KB.zakazky);
         }, (err) => console.error("Chyba čtení zakázek:", err)));
 
-        // po opětovném přihlášení navázat i výkazy, pokud si o ně stránka řekla
+        /* Kalendář poslouchají všichni – dovolené a nemoci kolegů jsou
+           schválně vidět, ať se dá plánovat. */
+        odbery.push(onSnapshot(kalendarCol(), (snapshot) => {
+            KB.kalendar = [];
+            snapshot.forEach(d => KB.kalendar.push({ id: d.id, ...d.data() }));
+            KB.kalendar.sort((a, b) => (a.od || "").localeCompare(b.od || ""));
+            emit("kalendar", KB.kalendar);
+        }, (err) => console.error("Chyba čtení kalendáře:", err)));
+
+        // po opětovném přihlášení navázat i výkazy, projekty a úkoly,
+        // pokud si o ně některá stránka už řekla
         zrusVykazy();
         if (vykazyChteno) sledujVykazy(vykazyChteno === "moje");
+        zrusProjektyUkoly();
+        if (projektyChteno) sledujProjekty(projektyChteno === "moje");
+        if (ukolyChteno) sledujUkoly(ukolyChteno === "moje");
     });
 } catch (err) {
     console.warn("Firebase se nepodařilo spustit – offline režim.", err);
@@ -784,6 +834,9 @@ function zaznamPayload(data) {
            Korunová hodnota se z nich dopočítá až v `castky`. */
         obed:     data.obed === true,
         km:       Math.max(0, Number(data.km) || 0),
+        /* Dovolená, nemoc a školení se evidují, ale do součtů odpracovaných
+           hodin a peněz se nepočítají – V.soucty je podle tohohle pole vynechá. */
+        absence:  data.absence === true,
         poznamka: data.poznamka || "",
         createdMs: data.createdMs || Date.now(),
         createdBy: data.createdBy || window.KB_USER || "",
@@ -875,10 +928,235 @@ KB.saveCiselnikZakazek = async (patch) => {
     requireDb();
 
     const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
-    ["names", "closed", "groups", "projekty", "firmy"].forEach(klic => {
+    ["names", "closed", "groups", "projekty", "firmy", "firmaMap", "budget"].forEach(klic => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
     await setDoc(metaDoc("zakazky"), payload, { merge: true });
+};
+
+/* ----------------------------------------------------------- projekty ----
+   Hlavička projektu je v `private/projekty/seznam` – zaměstnanec dostane
+   jen ty, kde je v poli `lide`. Peníze (příjmy, výdaje, rozpočet) jsou
+   v `private/projekty/finance` pod stejným {id} a čtou je jen manažeři –
+   stejný trik jako u výkazů, protože pravidla neumí schovat jednotlivá pole.
+
+   Hlavička: { cislo:"2024-007", nazev, firma, manazer:uid, zacatek:"2024-01-10",
+               konec:"", stav:"bezi", priorita:"nizka|stredni|vysoka|resit-okamzite",
+               uzavreno:false, lide:[uid], poznamka }                        */
+
+function sledujProjekty(jenSve) {
+    if (!db || !auth || !auth.currentUser) return;
+    const zdroj = jenSve
+        ? query(projektyCol(), where("lide", "array-contains", auth.currentUser.uid))
+        : projektyCol();
+    projektyOdber = onSnapshot(zdroj, (snapshot) => {
+        KB.projektyDocs = [];
+        snapshot.forEach(d => KB.projektyDocs.push({ id: d.id, ...d.data() }));
+        KB.projektyDocs.sort((a, b) => (a.cislo || "9999").localeCompare(b.cislo || "9999")
+            || (a.nazev || "").localeCompare(b.nazev || "", "cs"));
+        emit("projekty-docs", KB.projektyDocs);
+    }, (err) => console.error("Chyba čtení projektů:", err));
+}
+
+/** Živý přenos všech projektů – pro manažery. */
+KB.watchProjekty = async () => {
+    projektyChteno = "vse";
+    if (projektyOdber) return;
+    if (authReady) await authReady;
+    if (!projektyOdber) sledujProjekty(false);
+};
+
+/** Živý přenos projektů, ke kterým je člověk přiřazený. */
+KB.watchMojeProjekty = async () => {
+    projektyChteno = "moje";
+    if (projektyOdber) return;
+    if (authReady) await authReady;
+    if (!projektyOdber) sledujProjekty(true);
+};
+
+KB.newProjektId = () => "prj_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.saveProjekt = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(projektDoc(id), {
+        cislo:    data.cislo || "",
+        nazev:    data.nazev || "Bez názvu",
+        firma:    data.firma || "",
+        manazer:  data.manazer || "",          // UID manažera projektu
+        zacatek:  data.zacatek || "",
+        konec:    data.konec || "",
+        stav:     data.stav || "",             // volný text: „kreslí se G61" apod.
+        priorita: data.priorita || "stredni",
+        uzavreno: data.uzavreno === true,
+        lide:     Array.isArray(data.lide) ? data.lide : [],
+        poznamka: data.poznamka || "",
+        createdMs: data.createdMs || Date.now(),
+        createdBy: data.createdBy || window.KB_USER || "",
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    return id;
+};
+
+/** Peníze projektu – zapisují a čtou jen manažeři. */
+KB.saveProjektFinance = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(projektFinanceDoc(id), {
+        prijmy: Math.max(0, Number(data.prijmy) || 0),
+        vydaje: Math.max(0, Number(data.vydaje) || 0),
+        rozpocetKc: Math.max(0, Number(data.rozpocetKc) || 0),
+        rozpocetHodiny: Math.max(0, Number(data.rozpocetHodiny) || 0),
+        poznamka: data.poznamka || "",
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+};
+
+KB.loadProjektFinance = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(projektFinanceDoc(id));
+    return snap.exists() ? snap.data() : null;
+};
+
+KB.deleteProjekt = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(projektDoc(id));
+    await deleteDoc(projektFinanceDoc(id)).catch(() => {});
+};
+
+/* -------------------------------------------------------------- úkoly ----
+   Úkol = kus práce s budgetem hodin, přiřazený konkrétním lidem. Postup se
+   zapisuje do TO-DO položek (dřív „postup práce"). Zaměstnanec smí podle
+   pravidel měnit jen `todo` a `stav` – na to je KB.ulozUkolPostup, který
+   nic jiného neposílá.
+
+   Úkol: { projektId, projekt (název – ať se výpis obejde bez druhého čtení),
+           nazev, druh:"ArcGIS|Focení|Skeny|Tabulky", technologie:"SLN",
+           budova:"G61", patro:"1NP", prirazeni:[uid], termin:"2026-09-30",
+           budgetHodin: 120, stav:"otevreny|hotovo",
+           todo:[{ id, text, pct, by, ms }], poznamka }                     */
+
+function sledujUkoly(jenSve) {
+    if (!db || !auth || !auth.currentUser) return;
+    const zdroj = jenSve
+        ? query(ukolyCol(), where("prirazeni", "array-contains", auth.currentUser.uid))
+        : ukolyCol();
+    ukolyOdber = onSnapshot(zdroj, (snapshot) => {
+        KB.ukoly = [];
+        snapshot.forEach(d => KB.ukoly.push({ id: d.id, ...d.data() }));
+        // nejbližší termín nahoře, bez termínu na konec
+        KB.ukoly.sort((a, b) => (a.termin || "9999").localeCompare(b.termin || "9999"));
+        emit("ukoly", KB.ukoly);
+    }, (err) => console.error("Chyba čtení úkolů:", err));
+}
+
+/** Živý přenos všech úkolů – pro manažery. */
+KB.watchUkoly = async () => {
+    ukolyChteno = "vse";
+    if (ukolyOdber) return;
+    if (authReady) await authReady;
+    if (!ukolyOdber) sledujUkoly(false);
+};
+
+/** Živý přenos úkolů přiřazených přihlášenému. */
+KB.watchMojeUkoly = async () => {
+    ukolyChteno = "moje";
+    if (ukolyOdber) return;
+    if (authReady) await authReady;
+    if (!ukolyOdber) sledujUkoly(true);
+};
+
+KB.newUkolId = () => "ukl_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+/** Uloží celý úkol – manažerská cesta (pravidla pustí jen správce). */
+KB.saveUkol = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(ukolDoc(id), {
+        importId:  data.importId || "",     // odkud byl převzat ze starého postupu práce
+        projektId: data.projektId || "",
+        projekt:   data.projekt || "",
+        nazev:     data.nazev || "Bez názvu",
+        druh:      data.druh || "",
+        technologie: data.technologie || "",
+        budova:    data.budova || "",
+        patro:     data.patro || "",
+        prirazeni: Array.isArray(data.prirazeni) ? data.prirazeni : [],
+        termin:    data.termin || "",
+        budgetHodin: Math.max(0, Number(data.budgetHodin) || 0),
+        stav:      data.stav || "otevreny",
+        todo:      Array.isArray(data.todo) ? data.todo : [],
+        poznamka:  data.poznamka || "",
+        createdMs: data.createdMs || Date.now(),
+        createdBy: data.createdBy || window.KB_USER || "",
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    return id;
+};
+
+/**
+ * Zápis postupu přiřazeným člověkem. Posílá se JEN todo a stav – přesně
+ * tolik, kolik pravidla databáze zaměstnanci dovolí; kdyby se přibalilo
+ * cokoliv dalšího, databáze celý zápis odmítne.
+ */
+KB.ulozUkolPostup = async (id, todo, stav) => {
+    if (authReady) await authReady;
+    requireDb();
+    const payload = {
+        todo: Array.isArray(todo) ? todo : [],
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    };
+    if (stav !== undefined) payload.stav = stav;
+    await setDoc(ukolDoc(id), payload, { merge: true });
+};
+
+KB.deleteUkol = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(ukolDoc(id));
+};
+
+/* ----------------------------------------------------------- kalendář ----
+   Událost: { typ:"udalost|dovolena|nemoc|skoleni", uid, osoba,
+              od:"2026-08-20", do:"2026-08-22", celyDen:true,
+              odCas:"", doCas:"", text, zdroj:"vykaz"|"" }
+   Dovolené a nemoci sem zapisuje i formulář výkazu, ať je plánování vidět
+   na jednom místě. `zdroj` říká, odkud záznam přišel. */
+
+KB.newUdalostId = () => "kal_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.saveUdalost = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = data.uid || KB.currentUid();
+    await setDoc(kalendarDoc(id), {
+        typ:     data.typ || "udalost",
+        uid:     uid,
+        osoba:   data.osoba || window.KB_USER || "",
+        od:      data.od || "",
+        do:      data.do || data.od || "",
+        celyDen: data.celyDen !== false,
+        odCas:   data.odCas || "",
+        doCas:   data.doCas || "",
+        text:    data.text || "",
+        zdroj:   data.zdroj || "",
+        createdMs: data.createdMs || Date.now(),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    return id;
+};
+
+KB.deleteUdalost = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(kalendarDoc(id));
 };
 
 /* ------------------------------------------------------------------- logy */

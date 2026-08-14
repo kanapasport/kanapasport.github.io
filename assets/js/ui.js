@@ -122,9 +122,13 @@
        pravidla databáze, dostane se ke všem datům kdokoliv, kdo zná adresu.
        Skutečné oddělení práv je až Firebase Auth + Firestore Rules (README). */
 
+    /* „Správce" se navenek říká Manažer – tak se to ve firmě používá.
+       Vnitřní id `spravce` se NEMĚNÍ: sedí na něm pravidla databáze
+       (firestore.rules) i role uložené u lidí. Přejmenovává se jen to,
+       co je vidět. */
     UI.ROLES = [
         { id: "hlavni-spravce", title: "Hlavní správce", short: "HL. SPRÁVCE" },
-        { id: "spravce",        title: "Správce",        short: "SPRÁVCE" },
+        { id: "spravce",        title: "Manažer",        short: "MANAŽER" },
         { id: "zamestnanec",    title: "Zaměstnanec",    short: "ZAMĚSTNANEC" },
         { id: "student",        title: "Student",        short: "STUDENT" }
     ];
@@ -552,17 +556,37 @@
     /** Úzké okno nebo dotykový displej – roletky se ovládají ťuknutím. */
     const isCompact = () => window.matchMedia("(max-width: 1120px), (hover: none)").matches;
 
-    /** Seznam zakázek do roletky ÚKOLOVNÍKU – bere se živě z databáze. */
+    /** Roletka ÚKOLŮ – projekty, ke kterým existují úkoly. Bere se z nového
+        seznamu úkolů; dokud není, poslouží starší úkoly z Postupu práce. */
     function taskMenu() {
         const names = [];
-        ((window.KB && window.KB.tasks) || []).forEach(task => {
-            const name = (task.zakazka || "").trim() || "Bez zakázky";
+        const zdroj = ((window.KB && window.KB.ukoly && window.KB.ukoly.length)
+            ? window.KB.ukoly : (window.KB && window.KB.tasks) || []);
+        zdroj.forEach(task => {
+            const name = (task.projekt || task.zakazka || "").trim() || "Bez projektu";
             if (names.indexOf(name) === -1) names.push(name);
         });
         if (!names.length) return null;
 
-        return [{ title: "VŠECHNY ZAKÁZKY", href: "ukoly.html" }].concat(
+        return [{ title: "VŠECHNY ÚKOLY", href: "ukoly.html" }].concat(
             names.map(name => ({ title: name, href: "ukoly.html?zak=" + encodeURIComponent(UI.slug(name)) })));
+    }
+
+    /** Roletka PROJEKTŮ – otevřené projekty z databáze, nejdřív ty naléhavé. */
+    function projektyMenu() {
+        const dulezitost = { "resit-okamzite": 0, "vysoka": 1, "stredni": 2, "nizka": 3 };
+        const otevrene = ((window.KB && window.KB.projektyDocs) || [])
+            .filter(p => !p.uzavreno)
+            .sort((a, b) => (dulezitost[a.priorita] ?? 9) - (dulezitost[b.priorita] ?? 9)
+                || (a.nazev || "").localeCompare(b.nazev || "", "cs"))
+            .slice(0, 12)
+            .map(p => ({
+                title: ((p.cislo ? p.cislo + " " : "") + (p.nazev || "")).trim(),
+                href: "projekty.html?id=" + encodeURIComponent(p.id)
+            }));
+        return otevrene.length
+            ? [{ title: "VŠECHNY PROJEKTY", href: "projekty.html" }].concat(otevrene)
+            : null;
     }
 
     /**
@@ -595,6 +619,7 @@
 
     const menuOf = (item) => item.menu
         || (item.tasks ? taskMenu() : null)
+        || (item.projekty ? projektyMenu() : null)
         || (item.milniky ? milnikMenu() : null);
 
     /**
@@ -699,7 +724,7 @@
                         '<select data-nahled>' +
                             /* 4. pád, protože se to čte jako „zobrazit jako koho" */
                             '<option value="">hlavního správce</option>' +
-                            '<option value="spravce">správce</option>' +
+                            '<option value="spravce">manažera</option>' +
                             '<option value="zamestnanec">zaměstnance</option>' +
                             '<option value="student">studenta</option>' +
                         "</select>" +
@@ -728,6 +753,8 @@
         bindNav();
         bindHeader();
         bindSearch();
+        mountRail();
+        placeSearch();
         UI.paintUser();
         UI.bindCloudStatus("[data-cloud-status]");
         stickyOffset();
@@ -736,6 +763,8 @@
         // roletky se plní z databáze – po doručení dat se lišta překreslí
         if (window.KB) {
             window.KB.on("tasks", refreshNav);
+            window.KB.on("ukoly", refreshNav);
+            window.KB.on("projekty-docs", refreshNav);
             window.KB.on("milniky", refreshNav);
         }
     };
@@ -749,6 +778,42 @@
         bindNav();
         UI.paintUser();
     }
+
+    /* ------------------------------------------------------- svislý pás ---
+       Logo (klik = domů), hledání a rychlé akce – jako v Caflou. Vykresluje
+       se na každé stránce; na úzkém okně a na dotyku ho CSS schová a hledání
+       se přestěhuje zpátky do lišty (placeSearch). */
+
+    function mountRail() {
+        if (document.querySelector(".siderail")) return;
+        const rail = document.createElement("aside");
+        rail.className = "siderail no-print";
+        rail.innerHTML =
+            '<a class="siderail__logo" href="index.html" aria-label="Domů">' +
+                '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa"></a>' +
+            '<div data-rail-search></div>' +
+            '<nav class="siderail__akce">' +
+                '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
+                    ' data-need="vykaz.otevrit" hidden>' +
+                    icon("plus") + "<span>Nový výkaz</span></a>" +
+                '<a class="siderail__btn" href="ukoly.html?moje=1">' +
+                    icon("tasks") + "<span>Moje úkoly</span></a>" +
+            "</nav>" +
+            '<div class="siderail__pata">Pasport Kaňa · interní systém</div>';
+        document.body.insertBefore(rail, document.body.firstChild);
+    }
+
+    /* Hledání je jedno jediné pole. Na širokém okně bydlí v pásu, na úzkém
+       v liště – přesouvá se i s posluchači a rozepsaný dotaz přežije. */
+    function placeSearch() {
+        const box = document.querySelector(".searchbox");
+        const doRailu = document.querySelector("[data-rail-search]");
+        const doListy = document.querySelector(".appbar__barin");
+        if (!box || !doRailu || !doListy) return;
+        const cil = isCompact() ? doListy : doRailu;
+        if (box.parentElement !== cil) cil.appendChild(box);
+    }
+    window.addEventListener("resize", placeSearch);
 
     /** Tlačítko „nahoru" – ukáže se, až je stránka o dost delší než okno. */
     function mountToTop() {

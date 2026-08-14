@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Nastavení – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=49">
+    <link rel="stylesheet" href="assets/css/app.css?v=50">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -37,25 +37,47 @@
             <button type="button" id="btnUloz" class="btn btn--primary">Uložit vše</button>
         </div>
 
-        <!-- ================================================== ZAKÁZKY -->
+        <!-- ================================================== PROJEKTY -->
         <section class="card col nastaveni" id="sekce-zakazky">
             <div class="nastaveni__hlava">
                 <div>
-                    <b>Zakázky</b>
-                    <span class="small muted">rozpočet a projekty uvnitř zakázky</span>
+                    <b>Projekty ve výkazech</b>
+                    <span class="small muted">rozpočet, části, firma a budget budov a pater</span>
                 </div>
             </div>
             <div id="zakazky" class="col" style="gap:10px"></div>
             <p class="tiny muted" style="margin:0;line-height:1.6">
                 Rozpočet se zadává v korunách i v hodinách, stačí jedno z toho — podle něj
-                se počítá čerpání v přehledu. Projekty jsou části zakázky oddělené čárkou.
-                <b>Zakázku smazat nejde tady</b>, ale ve Správě zakázek v Postupu práce; je to týž
-                číselník a mazání odtud by rozbilo úkoly.
+                se počítá čerpání v přehledu. Části jsou kusy projektu oddělené čárkou.
+                <b>Firma</b> se po vybrání projektu ve výkazu doplní sama.
+                <b>Budovy a patra</b> jsou nabídka při skládání úkolů (technologie × budova × patro).
             </p>
             <div>
-                <label class="label" for="noveZakazky">Přidat zakázky</label>
-                <textarea id="noveZakazky" rows="2" class="field" placeholder="jedna zakázka na řádek"></textarea>
+                <label class="label" for="noveZakazky">Přidat projekty do výkazů</label>
+                <textarea id="noveZakazky" rows="2" class="field" placeholder="jeden projekt na řádek"></textarea>
             </div>
+        </section>
+
+        <!-- ============================================ IMPORT PROJEKTŮ -->
+        <section class="card col nastaveni" id="sekce-import">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Import projektů z Evidence</b>
+                    <span class="small muted">jednorázové nahrání souboru projekty-import.json</span>
+                </div>
+            </div>
+            <div class="row row--wrap" style="gap:10px">
+                <input type="file" id="importSoubor" class="field" accept=".json" style="max-width:340px">
+                <button type="button" id="btnImportuj" class="btn btn--primary btn--sm">Nahrát do databáze</button>
+                <span class="small muted" id="importStav"></span>
+            </div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Soubor vyrobí nástroj <b>vytvorImport.js</b> mimo repozitář (viz JAK-NA-TO.md).
+                Založí neuzavřené zakázky jako projekty, propojení na firmy, budget budov
+                a pater a vzorové úkoly. Projekt, jehož číslo už v databázi je, se přeskočí —
+                import se dá pustit opakovaně a nic nezdvojí. Lidi k projektům připojíš
+                na stránce Projekty.
+            </p>
         </section>
 
         <!-- ================================================== FIRMY -->
@@ -101,10 +123,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=49"></script>
-<script src="assets/js/ui.js?v=49"></script>
-<script src="assets/js/vykazy.js?v=49"></script>
-<script type="module" src="assets/js/store.js?v=49"></script>
+<script src="assets/js/taxonomy.js?v=50"></script>
+<script src="assets/js/ui.js?v=50"></script>
+<script src="assets/js/vykazy.js?v=50"></script>
+<script type="module" src="assets/js/store.js?v=50"></script>
 
 <script>
 (function () {
@@ -132,6 +154,7 @@
         if (upravovano) return;
         $("zakazky").innerHTML = V.zakazky().map(zak => {
             const r = V.rozpocet(zak);
+            const budget = (window.KB.budgetCiselnik || {})[zak] || {};
             return '<div class="zakrad">' +
                 '<b class="zakrad__nazev">' + esc(zak) + "</b>" +
                 '<label class="zakrad__pole"><span class="tiny muted">rozpočet Kč</span>' +
@@ -140,11 +163,21 @@
                 '<label class="zakrad__pole"><span class="tiny muted">hodin</span>' +
                     '<input type="number" class="field" min="0" step="10" ' +
                         'data-roz-h="' + esc(zak) + '" value="' + (r.hodiny || "") + '"></label>' +
-                '<label class="zakrad__projekty"><span class="tiny muted">projekty (oddělené čárkou)</span>' +
+                '<label class="zakrad__pole"><span class="tiny muted">fakturovat firmě</span>' +
+                    '<select class="field" data-firmamap="' + esc(zak) + '">' +
+                        V.options(V.firmy(), (window.KB.firmaMap || {})[zak] || "", "— žádná —") +
+                    "</select></label>" +
+                '<label class="zakrad__projekty"><span class="tiny muted">části (oddělené čárkou)</span>' +
                     '<input type="text" class="field" data-projekty="' + esc(zak) + '" ' +
                         'value="' + esc(V.projekty(zak).join(", ")) + '"></label>' +
+                '<label class="zakrad__projekty"><span class="tiny muted">budovy pro úkoly (čárkou)</span>' +
+                    '<input type="text" class="field" data-budovy="' + esc(zak) + '" ' +
+                        'value="' + esc((budget.budovy || []).join(", ")) + '"></label>' +
+                '<label class="zakrad__projekty"><span class="tiny muted">patra pro úkoly (čárkou)</span>' +
+                    '<input type="text" class="field" data-patra="' + esc(zak) + '" ' +
+                        'value="' + esc((budget.patra || []).join(", ")) + '"></label>' +
             "</div>";
-        }).join("") || '<div class="tiny muted">Zatím tu není žádná zakázka.</div>';
+        }).join("") || '<div class="tiny muted">Zatím tu není žádný projekt.</div>';
     }
 
     function naplnSazby() {
@@ -195,6 +228,24 @@
             if (seznam.length) projekty[input.dataset.projekty] = seznam;
         });
 
+        // propojení projekt → firma; výkaz z něj firmu doplní sám
+        const firmaMap = Object.assign({}, window.KB.firmaMap);
+        $("zakazky").querySelectorAll("[data-firmamap]").forEach(select => {
+            if (select.value) firmaMap[select.dataset.firmamap] = select.value;
+            else delete firmaMap[select.dataset.firmamap];
+        });
+
+        // budget budov a pater pro skládání úkolů
+        const budget = Object.assign({}, window.KB.budgetCiselnik);
+        $("zakazky").querySelectorAll("[data-budovy]").forEach(input => {
+            const zak = input.dataset.budovy;
+            const budovy = input.value.split(",").map(x => x.trim()).filter(Boolean);
+            const patra = ($("zakazky").querySelector('[data-patra="' + CSS.escape(zak) + '"]')
+                .value || "").split(",").map(x => x.trim()).filter(Boolean);
+            if (budovy.length || patra.length) budget[zak] = { budovy: budovy, patra: patra };
+            else delete budget[zak];
+        });
+
         const nazvy = V.zakazky().slice();
         radky($("noveZakazky").value).forEach(nova => {
             if (nazvy.indexOf(nova) === -1) nazvy.push(nova);
@@ -205,7 +256,8 @@
         try {
             await window.KB.saveVykazNastaveni({ sazby: sazby, rozpocty: rozpocty });
             await window.KB.saveCiselnikZakazek({
-                names: nazvy, projekty: projekty, firmy: radky($("firmy").value)
+                names: nazvy, projekty: projekty, firmy: radky($("firmy").value),
+                firmaMap: firmaMap, budget: budget
             });
             $("noveZakazky").value = "";
             $("stav").textContent = "Uloženo.";
@@ -216,6 +268,74 @@
             window.KBUI.toast("Uložení selhalo – nastavení mění jen správce.", "error");
         } finally {
             [$("btnUloz"), $("btnUloz2")].forEach(b => { b.disabled = false; });
+        }
+    }
+
+    /* ------------------------------------------------- import projektů ---
+       Jednorázové nahrání souboru z vytvorImport.js: projekty, propojení
+       na firmy, budget budov/pater a vzorové úkoly. Projekt se pozná podle
+       čísla a úkol podle názvu s projektem – co už existuje, se přeskočí. */
+
+    async function importuj() {
+        const soubor = $("importSoubor").files[0];
+        if (!soubor) return void window.KBUI.toast("Vyber soubor projekty-import.json.", "warn");
+
+        let data;
+        try { data = JSON.parse(await soubor.text()); }
+        catch (err) { return void window.KBUI.toast("Soubor nejde přečíst jako JSON.", "error"); }
+
+        const stav = (text) => { $("importStav").textContent = text; };
+        $("btnImportuj").disabled = true;
+        try {
+            // projekty a úkoly se sledují živě – kvůli přeskočení existujících
+            window.KB.watchProjekty();
+            window.KB.watchUkoly();
+            await new Promise(r => setTimeout(r, 1200));
+
+            const mameCisla = new Set((window.KB.projektyDocs || []).map(p => p.cislo).filter(Boolean));
+            const podleNazvu = new Map();
+
+            let zalozeno = 0, preskoceno = 0;
+            const seznam = Array.isArray(data.projekty) ? data.projekty : [];
+            for (const [i, p] of seznam.entries()) {
+                if (p.cislo && mameCisla.has(p.cislo)) { preskoceno++; continue; }
+                const id = window.KB.newProjektId() + "_" + i;
+                await window.KB.saveProjekt(id, {
+                    cislo: p.cislo || "", nazev: p.nazev || "Bez názvu",
+                    firma: p.firma || "", priorita: "nizka",
+                    poznamka: p.poznamka || "", lide: []
+                });
+                podleNazvu.set(p.nazev, id);
+                zalozeno++;
+                if (zalozeno % 25 === 0) stav(zalozeno + " / " + seznam.length + "…");
+            }
+
+            // propojení projekt → firma a budget budov/pater
+            const firmaMap = Object.assign({}, window.KB.firmaMap);
+            seznam.forEach(p => { if (p.firma) firmaMap[p.nazev] = p.firma; });
+            await window.KB.saveCiselnikZakazek({
+                firmaMap: firmaMap,
+                budget: Object.assign({}, window.KB.budgetCiselnik, data.budget || {})
+            });
+
+            // vzorové úkoly
+            let ukolu = 0;
+            const mameUkoly = new Set((window.KB.ukoly || []).map(u => u.projekt + "|" + u.nazev));
+            for (const u of (Array.isArray(data.ukoly) ? data.ukoly : [])) {
+                if (mameUkoly.has(u.projekt + "|" + u.nazev)) continue;
+                await window.KB.saveUkol(window.KB.newUkolId(), Object.assign({}, u, {
+                    projektId: podleNazvu.get(u.projekt) || "" }));
+                ukolu++;
+            }
+
+            stav("Hotovo: " + zalozeno + " projektů (" + preskoceno + " už bylo), " + ukolu + " úkolů.");
+            window.KBUI.toast("Import dokončen.");
+        } catch (err) {
+            console.error(err);
+            stav("Import selhal v průběhu – pusť ho znovu, hotové se nezdvojí.");
+            window.KBUI.toast("Import selhal.", "error");
+        } finally {
+            $("btnImportuj").disabled = false;
         }
     }
 
@@ -238,6 +358,7 @@
 
         $("btnUloz").addEventListener("click", uloz);
         $("btnUloz2").addEventListener("click", uloz);
+        $("btnImportuj").addEventListener("click", importuj);
         // jakmile někdo do formuláře sáhne, data z databáze už mu ho nepřepíšou
         $("obsah").addEventListener("input", () => { upravovano = true; });
 

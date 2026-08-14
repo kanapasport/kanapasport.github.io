@@ -7,7 +7,26 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=49">
+    <style>
+        /* Dovolená / Nemoc / Školení: zůstává jen datum, čas a Celý den.
+           Část, činnost, technologie, sazba i příplatky nedávají smysl
+           a schovají se – jak v bloku dne, tak v okně úpravy. */
+        .celyden { display: none; align-items: center; gap: 7px; font-size: 13px;
+            cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
+        .zblok--absence .celyden, .polozka--absence .celyden { display: flex; }
+        .zblok--absence .zblok__grid > div:has([data-z="projekt"]),
+        .zblok--absence .polozka__grid > div:not(.polozka__nazev),
+        .zblok--absence .polozka__nazev,
+        .zblok--absence .priplatky,
+        .zblok--absence .polozka__cas > div:has([data-f="sazba"]),
+        .polozka--absence .polozka__grid > div:has([data-f="projekt"]),
+        .polozka--absence .polozka__grid > div:has([data-f="cinnost"]),
+        .polozka--absence .polozka__grid > div:has([data-f="technologie"]),
+        .polozka--absence .polozka__nazev,
+        .polozka--absence .priplatky,
+        .polozka--absence .polozka__cas > div:has([data-f="sazba"]) { display: none; }
+    </style>
+    <link rel="stylesheet" href="assets/css/app.css?v=50">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -33,7 +52,7 @@
                 <h2 style="font-size:20px;font-weight:900;line-height:1.2">Výkazy práce</h2>
                 <p class="small muted" style="margin-top:3px">
                     Den se zapisuje po položkách – ráno focení, odpoledne ArcGIS jsou dva zápisy.
-                    Podle nich se pak počítají peníze na zakázce.
+                    Podle nich se pak počítají peníze na projektu.
                 </p>
             </div>
             <div class="row" style="gap:8px">
@@ -61,7 +80,7 @@
             <div id="radky"></div>
 
             <div class="row row--wrap" style="gap:10px">
-                <button type="button" id="btnPlus" class="btn btn--ghost btn--sm">+ Zapsat výkaz na novou zakázku</button>
+                <button type="button" id="btnPlus" class="btn btn--ghost btn--sm">+ Zapsat výkaz na další projekt</button>
                 <div class="grow"></div>
                 <div class="small muted" id="denSoucet" style="font-variant-numeric:tabular-nums"></div>
                 <button type="button" id="btnUloz" class="btn btn--primary">Uložit</button>
@@ -137,10 +156,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=49"></script>
-<script src="assets/js/ui.js?v=49"></script>
-<script src="assets/js/vykazy.js?v=49"></script>
-<script type="module" src="assets/js/store.js?v=49"></script>
+<script src="assets/js/taxonomy.js?v=50"></script>
+<script src="assets/js/ui.js?v=50"></script>
+<script src="assets/js/vykazy.js?v=50"></script>
+<script type="module" src="assets/js/store.js?v=50"></script>
 
 <script>
 (function () {
@@ -165,12 +184,35 @@
        Tentýž kus formuláře slouží pro novou položku dne i pro úpravu
        existujícího zápisu – ať se pole nemusí udržovat na dvou místech. */
 
-    /** Projekty patří pod zakázku – bez ní není z čeho vybírat. */
+    /* Dovolená, nemoc a školení se zapisují jako zvláštní „projekty":
+       bez části, bez činnosti a bez peněz, jen datum a čas (nebo celý den).
+       Evidují se, ale do součtů odpracovaných hodin se nepočítají. */
+    const ABSENCE = ["Dovolená", "Nemoc", "Školení"];
+    const jeAbsence = (nazev) => ABSENCE.indexOf(nazev) !== -1;
+    const TYP_ABSENCE = { "Dovolená": "dovolena", "Nemoc": "nemoc", "Školení": "skoleni" };
+
+    /**
+     * Nabídka projektů do zápisu. Zaměstnanci se nabízí jen projekty, ke
+     * kterým je přiřazený (plus absence); dokud mu manažer žádný nepřiřadil,
+     * nabízí se ze setrvačnosti celý číselník, ať se dá zapisovat dál.
+     */
+    function nabidkaProjektu() {
+        let jmena;
+        if (window.KBUI.can("vykaz.view")) {
+            jmena = V.zakazky();
+        } else {
+            const moje = (window.KB.projektyDocs || []).filter(p => !p.uzavreno).map(p => p.nazev);
+            jmena = moje.length ? moje : V.zakazky();
+        }
+        return ABSENCE.concat(jmena.filter(z => !jeAbsence(z)));
+    }
+
+    /** Části patří pod projekt – bez něj není z čeho vybírat. */
     function projektOptions(zakazka, vybrany) {
         const seznam = V.projekty(zakazka);
-        if (!zakazka) return '<option value="">— nejdřív zakázku —</option>';
-        if (!seznam.length) return '<option value="">— zakázka nemá projekty —</option>';
-        return V.options(seznam, vybrany, "— celá zakázka —");
+        if (!zakazka) return '<option value="">— nejdřív projekt —</option>';
+        if (!seznam.length) return '<option value="">— projekt nemá části —</option>';
+        return V.options(seznam, vybrany, "— celý projekt —");
     }
 
     /** Pole pro čas: psaní i rozbalovací nabídka po čtvrthodinách. */
@@ -223,10 +265,10 @@
         const o = opts || {};
 
         const zakazkaCast = o.sZakazkou
-            ? '<div><label class="label">Zakázka</label>' +
+            ? '<div><label class="label">Projekt</label>' +
                   '<select class="field" data-f="zakazka">' +
-                      V.options(V.zakazky(), d.zakazka || "", "— vyber —") + "</select></div>" +
-              '<div><label class="label">Projekt</label>' +
+                      V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
+              '<div><label class="label">Část</label>' +
                   '<select class="field" data-f="projekt">' +
                       projektOptions(d.zakazka || "", d.projekt || "") + "</select></div>" +
               '<div><label class="label">Fakturovat firmě</label>' +
@@ -239,7 +281,9 @@
                   '<input type="date" class="field" data-f="datum" value="' + esc(d.datum || "") + '"></div>'
             : "";
 
-        return '<div class="polozka" data-polozka>' +
+        // absence poznáme u okna úpravy rovnou z dat – blok dne řeší třídu sám
+        const absentni = o.sZakazkou && jeAbsence(d.zakazka || "");
+        return '<div class="polozka' + (absentni ? " polozka--absence" : "") + '" data-polozka>' +
             '<div class="polozka__head">' +
                 '<span class="polozka__poradi">Práce</span>' +
                 (o.odebrat ? '<button type="button" class="linkbtn" data-odeber>Odebrat</button>' : "") +
@@ -269,6 +313,9 @@
                 datumCast +
                 '<div><label class="label">Od</label>' + casPole("od", d.od) + "</div>" +
                 '<div><label class="label">Do</label>' + casPole("do", d.do) + "</div>" +
+                // u dovolené, nemoci a školení: celý den = 8 hodin evidenčně
+                '<label class="celyden"><input type="checkbox" data-f="celyden"' +
+                    (d.celyden ? " checked" : "") + "> <b>Celý den</b></label>" +
                 // sazba je peníze – zaměstnanci ji nenabízíme, doplní ji správce
                 (window.KBUI.can("vykaz.view")
                     ? '<div><label class="label">Sazba (Kč/h)</label>' +
@@ -301,18 +348,18 @@
      */
     function zblokHtml(data) {
         const d = data || {};
-        return '<div class="zblok" data-zblok>' +
+        return '<div class="zblok' + (jeAbsence(d.zakazka || "") ? " zblok--absence" : "") + '" data-zblok>' +
             '<div class="zblok__hlava">' +
-                '<div class="zblok__stitek">Zakázka</div>' +
-                '<button type="button" class="linkbtn" data-zodeber hidden>Odebrat zakázku</button>' +
+                '<div class="zblok__stitek">Projekt</div>' +
+                '<button type="button" class="linkbtn" data-zodeber hidden>Odebrat projekt</button>' +
             "</div>" +
 
             '<div class="zblok__grid">' +
-                '<div><label class="label">Zakázka</label>' +
-                    '<select class="field" data-z="zakazka">' +
-                        V.options(V.zakazky(), d.zakazka || "", "— vyber —") + "</select></div>" +
-
                 '<div><label class="label">Projekt</label>' +
+                    '<select class="field" data-z="zakazka">' +
+                        V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
+
+                '<div><label class="label">Část</label>' +
                     '<select class="field" data-z="projekt">' +
                         projektOptions(d.zakazka || "", d.projekt || "") + "</select></div>" +
 
@@ -324,7 +371,7 @@
             '<div class="zblok__polozky" data-polozky></div>' +
 
             '<button type="button" class="btn btn--ghost btn--sm zblok__pridej" data-pridej-polozku>' +
-                "+ Přidat práci do této zakázky</button>" +
+                "+ Přidat práci do tohoto projektu</button>" +
         "</div>";
     }
 
@@ -350,6 +397,7 @@
             datum: val("datum"),
             od: val("od"),
             do: val("do"),
+            celyden: zapnuto("celyden"),
             pauza: zapnuto("pauza") ? (Number(val("pauza")) || 0) : 0,
             obed: zapnuto("obed"),
             km: zapnuto("km") ? (Number(val("km")) || 0) : 0,
@@ -514,27 +562,63 @@
         soucetDne();
     }
 
+    /**
+     * Srovná absenci do podoby, ve které se ukládá: bez části, činnosti,
+     * peněz a příplatků; celý den = 07:00–15:00, tedy 8 hodin evidenčně.
+     */
+    function srovnejAbsenci(p) {
+        p.absence = jeAbsence(p.zakazka);
+        if (!p.absence) return p;
+        p.projekt = ""; p.cinnost = ""; p.technologie = "";
+        p.pauza = 0; p.obed = false; p.km = 0; p.sazba = 0;
+        p.nazev = p.nazev || p.zakazka;
+        if (p.celyden) { p.od = "07:00"; p.do = "15:00"; }
+        return p;
+    }
+
+    /** Absence se propíše i do kalendáře, ať ji vidí celá firma. */
+    function zapisDoKalendare(p, uid, jmeno) {
+        return window.KB.saveUdalost(window.KB.newUdalostId(), {
+            typ: TYP_ABSENCE[p.zakazka] || "udalost",
+            uid: uid,
+            osoba: jmeno,
+            od: p.datum,
+            do: p.datum,
+            celyDen: !!p.celyden,
+            odCas: p.celyden ? "" : p.od,
+            doCas: p.celyden ? "" : p.do,
+            text: p.zakazka,
+            zdroj: "vykaz"
+        });
+    }
+
     async function ulozDen() {
         const uid = $("dOsoba").value;
         if (!uid) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
 
-        const polozky = prectiRadky();
+        const polozky = prectiRadky().map(srovnejAbsenci);
         const chyba = polozky.findIndex(p =>
             !p.nazev || !p.datum || !p.od || !p.do || !p.zakazka ||
             window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0);
 
         if (chyba !== -1) {
             return window.KBUI.toast("Práce " + (chyba + 1) +
-                ": doplň zakázku, název, datum a časy tak, ať vyjde kladný čas.", "warn");
+                ": doplň projekt, název, datum a časy tak, ať vyjde kladný čas.", "warn");
         }
 
         const u = V.clovek(uid);
+        const jmeno = u ? V.jmeno(u) : "";
         // zaměstnanec ukládá jen čas, sazbu a částku k tomu doplní správce
         const uloz = window.KBUI.can("vykaz.view") ? window.KB.saveVykaz : window.KB.saveMujVykaz;
 
         try {
             await Promise.all(polozky.map(p => uloz(window.KB.newVykazId(),
-                Object.assign({}, p, { uid: uid, osoba: u ? V.jmeno(u) : "" }))));
+                Object.assign({}, p, { uid: uid, osoba: jmeno }))));
+
+            // dovolené, nemoci a školení navíc do kalendáře; bez zdržování zápisu
+            Promise.all(polozky.filter(p => p.absence)
+                .map(p => zapisDoKalendare(p, uid, jmeno)))
+                .catch(err => console.warn("Zápis do kalendáře se nepovedl:", err));
 
             window.KBUI.toast(polozky.length === 1
                 ? "Výkaz uložen." : "Uloženo " + polozky.length + " položek.");
@@ -569,11 +653,11 @@
     function naplnFiltry() {
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
-        $("fZakazka").innerHTML = V.options(V.zakazky(), filtr.zakazka, "Všechny zakázky");
-        // bez vybrané zakázky by seznam projektů byl směsice ze všech zakázek
+        $("fZakazka").innerHTML = V.options(V.zakazky().concat(ABSENCE), filtr.zakazka, "Všechny projekty");
+        // bez vybraného projektu by seznam částí byl směsice ze všech projektů
         $("fProjekt").innerHTML = filtr.zakazka
-            ? V.options(V.projekty(filtr.zakazka), filtr.projekt, "Všechny projekty")
-            : '<option value="">Všechny projekty</option>';
+            ? V.options(V.projekty(filtr.zakazka), filtr.projekt, "Všechny části")
+            : '<option value="">Všechny části</option>';
         $("fProjekt").disabled = !filtr.zakazka;
         $("fFirma").innerHTML = V.options(V.firmy(), filtr.firma, "Všechny firmy");
         $("fCinnost").innerHTML = V.options(V.cinnosti(), filtr.cinnost, "Všechny druhy vypracování");
@@ -647,7 +731,7 @@
         $("tabulka").innerHTML =
             "<thead><tr>" +
                 (spravce ? "<th>Kdo</th>" : "") +
-                "<th>Úkol</th><th>Zakázka</th><th>Firma</th>" +
+                "<th>Úkol</th><th>Projekt</th><th>Firma</th>" +
                 "<th>Druh</th><th>Tech.</th><th>Čas</th>" +
                 '<th class="vyk__num">Hodin</th>' +
                 (spravce ? '<th class="vyk__num">Sazba</th><th class="vyk__num">Částka</th>' : "") +
@@ -709,11 +793,11 @@
     }
 
     async function ulozUpravu() {
-        const p = ctiPolozku($("editRadek").querySelector("[data-polozka]"));
+        const p = srovnejAbsenci(ctiPolozku($("editRadek").querySelector("[data-polozka]")));
         const puvodni = (window.KB.vykazy || []).find(v => v.id === editId) || {};
 
         if (!p.nazev || !p.od || !p.do || !p.zakazka) {
-            return window.KBUI.toast("Doplň název, zakázku a časy.", "warn");
+            return window.KBUI.toast("Doplň název, projekt a časy.", "warn");
         }
         if (window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0) {
             return window.KBUI.toast("Z časů a pauzy nevyjde žádný odpracovaný čas.", "warn");
@@ -759,26 +843,56 @@
     function zapniSledovani() {
         if (sledovaniZapnuto || !window.KBUI.can("vykaz.otevrit")) return;
         sledovaniZapnuto = true;
-        if (window.KBUI.can("vykaz.view")) window.KB.watchVykazy();
-        else window.KB.watchMojeVykazy();
+        if (window.KBUI.can("vykaz.view")) {
+            window.KB.watchVykazy();
+            window.KB.watchProjekty();
+        } else {
+            window.KB.watchMojeVykazy();
+            // kvůli nabídce projektů, ke kterým je člověk přiřazený
+            window.KB.watchMojeProjekty();
+        }
     }
 
     // živý přepočet – jeden posluchač na celou stránku, ať se nemusí navazovat
     // na každé nově vzniklé pole zvlášť
+    /** Doplní firmu podle propojení projekt → firma z nastavení. */
+    function doplnFirmu(kontejner, atribut, projekt) {
+        const firma = (window.KB.firmaMap || {})[projekt] || "";
+        const select = kontejner.querySelector('[' + atribut + '="firma"]');
+        if (firma && select) select.value = firma;
+    }
+
+    /** Celý den u absence: časy se předvyplní na 8 hodin a zamknou. */
+    function prepniCelyDen(box) {
+        const zapnuto = !!box.querySelector('[data-f="celyden"]:checked');
+        box.querySelectorAll("[data-cas]").forEach(input => {
+            input.disabled = zapnuto;
+            if (zapnuto) input.value = input.dataset.f === "od" ? "07:00" : "15:00";
+        });
+        prepocti(box);
+        if (radkyBox().contains(box)) soucetDne();
+    }
+
     document.addEventListener("input", (event) => {
-        // hlavička bloku: jiná zakázka = jiná nabídka projektů
+        // hlavička bloku: jiný projekt = jiná nabídka částí (a jiná firma)
         const blok = event.target.closest("[data-zblok]");
         if (blok && event.target.dataset.z === "zakazka") {
             blok.querySelector('[data-z="projekt"]').innerHTML =
                 projektOptions(event.target.value, "");
+            doplnFirmu(blok, "data-z", event.target.value);
+            blok.classList.toggle("zblok--absence", jeAbsence(event.target.value));
             return;
         }
 
         const box = event.target.closest("[data-polozka]");
         if (!box) return;
 
-        // v okně úpravy je zakázka součástí položky
+        if (event.target.dataset.f === "celyden") return void prepniCelyDen(box);
+
+        // v okně úpravy je projekt součástí položky
         if (event.target.dataset.f === "zakazka") {
+            doplnFirmu(box, "data-f", event.target.value);
+            box.classList.toggle("polozka--absence", jeAbsence(event.target.value));
             box.querySelector('[data-f="projekt"]').innerHTML =
                 projektOptions(event.target.value, "");
         }
@@ -870,6 +984,11 @@
             novyZapis();
             $("zapis").scrollIntoView({ behavior: "smooth", block: "start" });
         });
+        // rychlá akce „Nový výkaz" ze svislého pásu vede rovnou do formuláře
+        if (location.hash === "#novy") {
+            $("zapis").hidden = false;
+            novyZapis();
+        }
         $("btnZapisZavri").addEventListener("click", () => { $("zapis").hidden = true; });
         $("btnPlus").addEventListener("click", () => {
             pridejBlok().querySelector('[data-z="zakazka"]').focus();
