@@ -791,9 +791,28 @@
     document.addEventListener("change", (event) => {
         if (!event.target.matches("[data-cas]")) return;
         const box = event.target.closest("[data-polozka]");
+        // člověk hodnotu sám změnil – původní se už při odchodu nevrací
+        delete event.target.dataset.puvodni;
         event.target.value = V.normalizujCas(event.target.value);
         prepocti(box);
         if (radkyBox().contains(box)) soucetDne();
+    });
+
+    /* Prohlížeč nabídku časů filtruje podle toho, co v poli je – jakmile se
+       jednou vybere 7:00, roletka ukazuje už jen 7:00. Proto se pole při
+       vstupu vyprázdní (nabídka je zase celá) a když člověk nic nenapíše
+       ani nevybere, při odchodu se mu původní čas vrátí. */
+    document.addEventListener("focusin", (event) => {
+        if (!event.target.matches("[data-cas]")) return;
+        event.target.dataset.puvodni = event.target.value;
+        event.target.value = "";
+    });
+    document.addEventListener("focusout", (event) => {
+        if (!event.target.matches("[data-cas]")) return;
+        if (!event.target.value && event.target.dataset.puvodni) {
+            event.target.value = event.target.dataset.puvodni;
+        }
+        delete event.target.dataset.puvodni;
     });
 
     /* Zaškrtávátka příplatků – po zapnutí vyjede pole a rovnou se do něj
