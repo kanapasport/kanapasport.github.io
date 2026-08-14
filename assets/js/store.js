@@ -33,7 +33,7 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-    onSnapshot, serverTimestamp, addDoc, query, where
+    onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 const FIREBASE_CONFIG = {
@@ -102,6 +102,8 @@ const KB = {
     projektyDocs: [],       // hlavičky projektů (private/projekty/seznam) – dle práv
     ukoly: [],              // úkoly s TO-DO rozpadem (private/ukoly/seznam) – dle práv
     kalendar: [],           // události, dovolené, nemoci – vidí všichni členové
+    pritomnost: [],         // kdo je právě na webu: { id: uid, ms, jmeno }
+    aktivity: [],           // historie kroků (kdo co uložil) – jen pro manažery
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
@@ -151,6 +153,11 @@ const ukolDoc = (id) => doc(db, "artifacts", APP_ID, "private", "ukoly", "seznam
 /* kalendář je v `public/data` – dovolené a nemoci mají vidět všichni */
 const kalendarCol = () => collection(db, "artifacts", APP_ID, "public", "data", "kalendar");
 const kalendarDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "kalendar", id);
+/* historie aktivit – zapisuje každý (svoje kroky), čtou jen manažeři */
+const aktivityCol = () => collection(db, "artifacts", APP_ID, "private", "aktivity", "seznam");
+/* kdo je právě na webu – malý dokument na člověka, vidí ho všichni */
+const pritomnostCol = () => collection(db, "artifacts", APP_ID, "public", "data", "pritomnost");
+const pritomnostDoc = (uid) => doc(db, "artifacts", APP_ID, "public", "data", "pritomnost", uid);
 
 /* ------------------------------------------------------------------ start */
 
@@ -198,6 +205,8 @@ try {
             zrusOdbery();
             zrusVykazy();
             zrusProjektyUkoly();
+            if (pritomnostCasovac) { clearInterval(pritomnostCasovac); pritomnostCasovac = null; }
+            if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
@@ -280,6 +289,15 @@ try {
             emit("kalendar", KB.kalendar);
         }, (err) => console.error("Chyba čtení kalendáře:", err)));
 
+        /* Kdo je právě na webu. Každý přihlášený o sobě dává vědět po pěti
+           minutách; za „přítomného" se bere záznam mladší deseti minut. */
+        odbery.push(onSnapshot(pritomnostCol(), (snapshot) => {
+            KB.pritomnost = [];
+            snapshot.forEach(d => KB.pritomnost.push({ id: d.id, ...d.data() }));
+            emit("pritomnost", KB.pritomnost);
+        }, (err) => console.error("Chyba čtení přítomnosti:", err)));
+        ohlasSe(user);
+
         // po opětovném přihlášení navázat i výkazy, projekty a úkoly,
         // pokud si o ně některá stránka už řekla
         zrusVykazy();
@@ -299,6 +317,58 @@ function setStatus(value) {
     KB.status = value;
     emit("status", value);
 }
+
+/* ------------------------------------------------------- kdo je online ---
+   Otisk „jsem tady" se obnovuje po pěti minutách, dokud je stránka
+   otevřená. Při odhlášení se časovač zastaví; starý záznam prostě
+   zestárne, mazat se nemusí. */
+let pritomnostCasovac = null;
+
+function ohlasSe(user) {
+    if (pritomnostCasovac) clearInterval(pritomnostCasovac);
+    const zapis = () => {
+        if (!auth || !auth.currentUser) return;
+        setDoc(pritomnostDoc(auth.currentUser.uid), {
+            ms: Date.now(),
+            jmeno: window.KB_USER || ""
+        }).catch(() => { /* pravidla ještě nemusí být nasazená */ });
+    };
+    zapis();
+    pritomnostCasovac = setInterval(zapis, 5 * 60 * 1000);
+}
+
+/* ---------------------------------------------------- historie aktivit ---
+   Krátký zápis „kdo co udělal" – plní se z ukládacích funkcí a čtou ho jen
+   manažeři (Reporty). Nikdy nesmí shodit vlastní uložení, proto se chyby
+   polykají: bez nasazených pravidel se prostě nic nezapíše. */
+
+KB.zapisAktivitu = (druh, text) => {
+    try {
+        if (!db || !auth || !auth.currentUser) return;
+        addDoc(aktivityCol(), {
+            druh: druh,                 // projekt | ukol | postup | vykaz | kalendar
+            text: String(text || "").slice(0, 200),
+            uid: auth.currentUser.uid,
+            jmeno: window.KB_USER || "",
+            ms: Date.now()
+        }).catch(() => {});
+    } catch (err) { /* nikdy neshodit uložení kvůli logu */ }
+};
+
+let aktivityOdber = null;
+
+/** Posledních pár desítek kroků – jen pro manažery (pravidla). */
+KB.watchAktivity = async () => {
+    if (aktivityOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || aktivityOdber) return;
+    aktivityOdber = onSnapshot(query(aktivityCol(), orderBy("ms", "desc"), limit(40)),
+        (snapshot) => {
+            KB.aktivity = [];
+            snapshot.forEach(d => KB.aktivity.push({ id: d.id, ...d.data() }));
+            emit("aktivity", KB.aktivity);
+        }, (err) => console.error("Chyba čtení aktivit:", err));
+};
 
 /* Počká, dokud nedorazí první dávka dat (nebo dokud není jasné, že jsme offline). */
 KB.whenReady = () => new Promise(resolve => {
@@ -825,6 +895,8 @@ function zaznamPayload(data) {
         firma:    data.firma || "",
         cinnost:  data.cinnost || "",
         technologie: data.technologie || "",
+        /* vazba na úkol – z ní se časem spočítá efektivita (budget vs. skutečnost) */
+        ukolId:   data.ukolId || "",
         od:       data.od || "",
         do:       data.do || "",
         pauza:    Math.max(0, Number(data.pauza) || 0),
@@ -854,6 +926,8 @@ KB.saveVykaz = async (id, data) => {
     const sazba = Math.max(0, Number(data.sazba) || 0);
     const castky = KB.spocitejCastky(zaznam, sazba);
 
+    KB.zapisAktivitu("vykaz", "uložil výkaz " + (zaznam.datum || "") +
+        " – " + (zaznam.zakazka || ""));
     await setDoc(vykazDoc(id), zaznam, { merge: true });
     await setDoc(castkaDoc(id), Object.assign({
         sazba: sazba,
@@ -892,7 +966,10 @@ KB.saveMujVykaz = async (id, data) => {
     requireDb();
     const uid = KB.currentUid();
     if (!uid) throw new Error("Není kdo zapisuje.");
-    await setDoc(vykazDoc(id), zaznamPayload(Object.assign({}, data, { uid: uid })), { merge: true });
+    const zaznam = zaznamPayload(Object.assign({}, data, { uid: uid }));
+    KB.zapisAktivitu("vykaz", "uložil výkaz " + (zaznam.datum || "") +
+        " – " + (zaznam.zakazka || ""));
+    await setDoc(vykazDoc(id), zaznam, { merge: true });
     return id;
 };
 
@@ -979,11 +1056,15 @@ KB.newProjektId = () => "prj_" + Date.now() + "_" + Math.floor(Math.random() * 1
 KB.saveProjekt = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
+    // manažerů může být víc; `manazer` zůstává kvůli starším záznamům
+    const manazeri = Array.isArray(data.manazeri) ? data.manazeri
+        : (data.manazer ? [data.manazer] : []);
     await setDoc(projektDoc(id), {
         cislo:    data.cislo || "",
         nazev:    data.nazev || "Bez názvu",
         firma:    data.firma || "",
-        manazer:  data.manazer || "",          // UID manažera projektu
+        manazeri: manazeri,
+        manazer:  manazeri[0] || "",
         zacatek:  data.zacatek || "",
         konec:    data.konec || "",
         stav:     data.stav || "",             // volný text: „kreslí se G61" apod.
@@ -996,6 +1077,7 @@ KB.saveProjekt = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
+    KB.zapisAktivitu("projekt", "uložil projekt " + (data.nazev || ""));
     return id;
 };
 
@@ -1096,6 +1178,8 @@ KB.saveUkol = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
+    KB.zapisAktivitu("ukol", "uložil úkol " + (data.nazev || "") +
+        (data.projekt ? " (" + data.projekt + ")" : ""));
     return id;
 };
 
@@ -1114,6 +1198,9 @@ KB.ulozUkolPostup = async (id, todo, stav) => {
     };
     if (stav !== undefined) payload.stav = stav;
     await setDoc(ukolDoc(id), payload, { merge: true });
+    const ukol = KB.ukoly.find(u => u.id === id);
+    KB.zapisAktivitu("postup", "zapsal postup" +
+        (ukol ? " u úkolu " + ukol.nazev : "") + (stav === "hotovo" ? " – hotovo" : ""));
 };
 
 KB.deleteUkol = async (id) => {

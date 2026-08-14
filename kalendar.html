@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -31,8 +31,18 @@
         .ud--dovolena { background: #0d7d3f; }
         .ud--nemoc { background: #c8102e; }
         .ud--skoleni { background: #8a2be2; }
+        .ud--homeoffice { background: #0e7490; }
         .ud--ukol { background: #c26a00; }
         .ud--milnik { background: #b3006b; }
+
+        /* hodinová mřížka pro týden a 3 dny: 6:00–20:00, řádek = hodina */
+        .kal__celodenni { display: flex; flex-direction: column; gap: 3px; min-height: 22px;
+            padding-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
+        .kal__hodiny { position: relative; height: 504px; /* 14 hodin × 36 px */
+            background: repeating-linear-gradient(to bottom,
+                var(--line-soft) 0, var(--line-soft) 1px, transparent 1px, transparent 36px); }
+        .kal__hodina { position: absolute; left: 2px; font-size: 9px; color: var(--dim); pointer-events: none; }
+        .kal__hodiny .ud { position: absolute; left: 24px; right: 2px; white-space: normal; overflow: hidden; }
         .kalform { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
         .kalform label > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
             text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
@@ -72,6 +82,7 @@
                     <option value="dovolena">Dovolená</option>
                     <option value="nemoc">Nemoc</option>
                     <option value="skoleni">Školení</option>
+                    <option value="homeoffice">Home office</option>
                 </select></label>
             <label><span>Od</span><input type="date" id="uOd" class="field"></label>
             <label><span>Do</span><input type="date" id="uDo" class="field"></label>
@@ -105,23 +116,25 @@
             <button type="button" class="chip" data-pohled="tyden">Týden</button>
             <button type="button" class="chip" data-pohled="tri">3 dny</button>
         </div>
-        <div id="mrizka"></div>
+        <!-- legenda nahoře, ať je vidět bez rolování i u celého měsíce -->
         <div class="legenda">
             <span><i class="ud--udalost"></i>událost</span>
             <span><i class="ud--dovolena"></i>dovolená</span>
             <span><i class="ud--nemoc"></i>nemoc</span>
             <span><i class="ud--skoleni"></i>školení</span>
+            <span><i class="ud--homeoffice"></i>home office</span>
             <span><i class="ud--ukol"></i>termín úkolu</span>
             <span><i class="ud--milnik"></i>milník</span>
         </div>
+        <div id="mrizka"></div>
     </div>
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=50"></script>
-<script src="assets/js/ui.js?v=50"></script>
-<script src="assets/js/vykazy.js?v=50"></script>
-<script type="module" src="assets/js/store.js?v=50"></script>
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
@@ -131,7 +144,8 @@
     const esc = (value) => window.KBUI.esc(value);
     const V = window.KBVYK;
 
-    const TYPY = { udalost: "událost", dovolena: "dovolená", nemoc: "nemoc", skoleni: "školení" };
+    const TYPY = { udalost: "událost", dovolena: "dovolená", nemoc: "nemoc",
+        skoleni: "školení", homeoffice: "home office" };
     const DNY_KRATCE = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
         "srpen", "září", "říjen", "listopad", "prosinec"];
@@ -168,6 +182,7 @@
             if ((u.od || "") <= den && den <= (u.do || u.od || "")) {
                 const cas = (!u.celyDen && u.odCas) ? u.odCas + " " : "";
                 out.push({ typ: u.typ || "udalost", id: u.id, muj: u.uid === window.KB.currentUid(),
+                    odCas: u.celyDen ? "" : (u.odCas || ""), doCas: u.celyDen ? "" : (u.doCas || ""),
                     text: cas + (u.osoba ? u.osoba + " – " : "") + (u.text || TYPY[u.typ] || "událost") });
             }
         });
@@ -199,19 +214,51 @@
     function denHtml(d, moznosti) {
         const den = iso(d);
         const seznam = udalostiDne(den);
-        const LIMIT = moznosti.velky ? 14 : 4;
-        const videt = seznam.slice(0, LIMIT);
-        const zbytek = seznam.length - videt.length;
-
-        return '<div class="kal__den' +
+        const hlava = '<span class="kal__cislo">' + d.getDate() + ". " + (d.getMonth() + 1) + "." +
+            (moznosti.velky ? " · " + DNY_KRATCE[(d.getDay() + 6) % 7] : "") + "</span>";
+        const obal = (vnitrek) => '<div class="kal__den' +
             (moznosti.cizi ? " kal__den--cizi" : "") +
             (den === dnesIso() ? " kal__den--dnes" : "") +
-            (moznosti.velky ? " kal__den--velky" : "") + '">' +
-            '<span class="kal__cislo">' + d.getDate() + ". " + (d.getMonth() + 1) + "." +
-                (moznosti.velky ? " · " + DNY_KRATCE[(d.getDay() + 6) % 7] : "") + "</span>" +
-            videt.map(udalostHtml).join("") +
-            (zbytek > 0 ? '<span class="kal__vic">+ ' + zbytek + " dalších</span>" : "") +
-        "</div>";
+            (moznosti.velky ? " kal__den--velky" : "") + '">' + hlava + vnitrek + "</div>";
+
+        // měsíc: prostý seznam s limitem
+        if (!moznosti.velky) {
+            const videt = seznam.slice(0, 4);
+            const zbytek = seznam.length - videt.length;
+            return obal(videt.map(udalostHtml).join("") +
+                (zbytek > 0 ? '<span class="kal__vic">+ ' + zbytek + " dalších</span>" : ""));
+        }
+
+        /* Týden a 3 dny: den rozdělený po hodinách (6:00–20:00). Co má čas,
+           sedí na své hodině; celodenní věci (dovolené, úkoly, milníky)
+           zůstávají v pruhu nahoře. */
+        const ZAC = 6, KON = 20, VYSKA_HODINY = 36;
+        const minuty = (cas) => {
+            const m = /^(\d{1,2}):(\d{2})$/.exec(cas || "");
+            return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+        };
+        const celodenni = [], casovane = [];
+        seznam.forEach(u => (minuty(u.odCas) === null ? celodenni : casovane).push(u));
+
+        let hodiny = "";
+        for (let h = ZAC; h <= KON; h += 2) {
+            hodiny += '<span class="kal__hodina" style="top:' +
+                ((h - ZAC) * VYSKA_HODINY - 5) + 'px">' + h + ":00</span>";
+        }
+        hodiny += casovane.map(u => {
+            const od = Math.max(ZAC * 60, Math.min(KON * 60, minuty(u.odCas)));
+            const doM = minuty(u.doCas);
+            const konec = doM === null ? od + 60 : Math.max(od + 30, Math.min(KON * 60, doM));
+            const vrch = (od - ZAC * 60) / 60 * VYSKA_HODINY;
+            const vyska = (konec - od) / 60 * VYSKA_HODINY - 2;
+            return udalostHtml(u).replace('class="ud ',
+                'style="top:' + vrch.toFixed(0) + 'px;height:' + vyska.toFixed(0) + 'px" class="ud ');
+        }).join("");
+
+        return obal('<div class="kal__celodenni">' +
+                (celodenni.map(udalostHtml).join("") || '<span class="kal__vic">&nbsp;</span>') +
+            "</div>" +
+            '<div class="kal__hodiny">' + hodiny + "</div>");
     }
 
     function vykresli() {

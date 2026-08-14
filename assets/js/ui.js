@@ -248,11 +248,21 @@
     };
 
     UI.paintUser = () => {
+        /* Jméno a role bydlí dole ve svislém pásu; nahoře vpravo zůstává
+           jen tlačítko přihlášení/odhlášení (přání Michala). Na úzkém okně
+           bez pásu se jméno ukáže i nahoře, jinak by nebylo nikde. */
         document.querySelectorAll("[data-userbox]").forEach(box => {
             box.innerHTML = window.KB_USER
-                ? "Přihlášen jako <b>" + esc(window.KB_USER) + "</b>" +
+                ? '<span class="appbar__jmeno-mobil">' + esc(window.KB_USER) + "</span>" +
                   '<button type="button" class="linkbtn" data-logout>Odhlásit</button>'
                 : '<button type="button" class="linkbtn" data-login>Přihlásit se</button>';
+        });
+        document.querySelectorAll("[data-rail-ja]").forEach(box => {
+            const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES[3];
+            box.innerHTML = window.KB_USER
+                ? "Přihlášen jako <b>" + esc(window.KB_USER) + "</b>" +
+                  '<span class="siderail__role">' + esc(role.title) + "</span>"
+                : "Nepřihlášen";
         });
         document.querySelectorAll("[data-user-name]").forEach(el => {
             el.textContent = window.KB_USER || "nepřihlášen";
@@ -731,9 +741,10 @@
                     "</label>" +
                     // barvy webu jsou jen mezi ikonami nástrojů a jen pro
                     // hlavního správce – v pruhu je to zbytečně na očích
+                    // stav synchronizace se ukazuje dole ve svislém pásu;
+                    // tady zůstává jen přihlášení, úplně vpravo
                     '<div class="appbar__userbox">' +
                         '<div class="appbar__user" data-userbox></div>' +
-                        '<div class="appbar__status" data-cloud-status>Připojuji…</div>' +
                     "</div>" +
                     '<a class="appbar__logo" href="index.html" aria-label="Domů">' +
                         '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa">' +
@@ -754,6 +765,7 @@
         bindHeader();
         bindSearch();
         mountRail();
+        renderRailContext();
         placeSearch();
         UI.paintUser();
         UI.bindCloudStatus("[data-cloud-status]");
@@ -776,6 +788,7 @@
         if (!nav) return;
         nav.outerHTML = navHtml(active);
         bindNav();
+        renderRailContext();
         UI.paintUser();
     }
 
@@ -799,8 +812,40 @@
                 '<a class="siderail__btn" href="ukoly.html?moje=1">' +
                     icon("tasks") + "<span>Moje úkoly</span></a>" +
             "</nav>" +
-            '<div class="siderail__pata">Pasport Kaňa · interní systém</div>';
+            // obsah aktivní sekce lišty – u návodů kategorie, u projektů
+            // otevřené projekty… plní renderRailContext
+            '<nav class="siderail__sekce" data-rail-sekce></nav>' +
+            '<div class="siderail__spodek">' +
+                '<a class="siderail__btn" href="nastaveni.html" data-need="vykaz.view" hidden>' +
+                    icon("cog") + "<span>Nastavení</span></a>" +
+                '<div class="siderail__ja" data-rail-ja></div>' +
+                '<div class="siderail__stav" data-cloud-status>Připojuji…</div>' +
+            "</div>";
         document.body.insertBefore(rail, document.body.firstChild);
+    }
+
+    /* Levý pás zrcadlí lištu: pod rychlými akcemi ukazuje obsah té sekce,
+       na které člověk zrovna je – u návodů kategorie, u projektů otevřené
+       projekty, u milníků nejbližší termíny. Přání Michala: „v levém sloupci
+       budou prostě ty různé možnosti toho, co je na liště." */
+    function renderRailContext() {
+        const slot = document.querySelector("[data-rail-sekce]");
+        if (!slot) return;
+
+        const active = lastNav.active || location.pathname.split("/").pop() || "index.html";
+        const item = (window.KB_NAV || []).find(n =>
+            n.href && n.href.split(/[?#]/)[0] === active);
+        const menu = item ? menuOf(item) : null;
+        if (!menu || !menu.length) {
+            slot.innerHTML = "";
+            slot.hidden = true;
+            return;
+        }
+        slot.hidden = false;
+        slot.innerHTML = '<span class="siderail__nadpis">' + esc(item.title) + "</span>" +
+            menu.slice(0, 14).map(group =>
+                '<a class="siderail__odkaz" href="' + esc(group.href || item.href) + '">' +
+                    esc(group.title) + "</a>").join("");
     }
 
     /* Hledání je jedno jediné pole. Na širokém okně bydlí v pásu, na úzkém

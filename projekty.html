@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Projekty – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -31,8 +31,16 @@
         .stavpil { display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; background: var(--bg); color: var(--text-soft); }
         .stavpil--konec { background: var(--p100-bg); color: var(--p100-fg); }
         .lidechip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 12.5px; background: var(--surface); }
-        .prjform { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+        /* pole formuláře drží mřížku: všechna na plnou šířku své buňky,
+           jinak si každé vezme vlastní šířku a nic není zarovnané */
+        .prjform { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+        .prjform label { display: block; min-width: 0; }
+        .prjform .field { width: 100%; }
         .prjform label > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .prjform .zaskrtavaci { display: flex; align-items: center; gap: 8px; height: 40px; cursor: pointer; }
+        .vybervse { border: none; background: none; font: inherit; font-size: 11.5px; font-weight: 700;
+            color: var(--accent); cursor: pointer; padding: 2px 6px; }
+        .strankovani { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 0 4px; }
         .prjlide { display: flex; flex-wrap: wrap; gap: 7px; }
         .prjlide label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 99px; font-size: 12.5px; cursor: pointer; background: var(--surface); }
         .prjlide label:has(input:checked) { background: var(--accent-tint); border-color: var(--accent-lt); color: var(--accent); font-weight: 700; }
@@ -80,7 +88,6 @@
                 <label><span>Číslo</span><input type="text" id="eCislo" class="field" placeholder="2026-021"></label>
                 <label style="grid-column:span 2"><span>Název</span><input type="text" id="eNazev" class="field" placeholder="Pasport budovy…"></label>
                 <label><span>Firma (fakturuje se)</span><select id="eFirma" class="field"></select></label>
-                <label><span>Manažer projektu</span><select id="eManazer" class="field"></select></label>
                 <label><span>Začátek</span><input type="date" id="eZacatek" class="field"></label>
                 <label><span>Konec</span><input type="date" id="eKonec" class="field"></label>
                 <label><span>Priorita</span>
@@ -90,13 +97,18 @@
                         <option value="vysoka">Vysoká</option>
                         <option value="resit-okamzite">Řešit okamžitě</option>
                     </select></label>
-                <label><span>Stav (volně)</span><input type="text" id="eStav" class="field" placeholder="kreslí se G61, čeká se na sken…"></label>
-                <label class="row" style="gap:8px;align-self:end;cursor:pointer">
+                <label style="grid-column:span 2"><span>Stav (volně)</span><input type="text" id="eStav" class="field" placeholder="kreslí se G61, čeká se na sken…"></label>
+                <label class="zaskrtavaci">
                     <input type="checkbox" id="eUzavreno"> <b>ukončený projekt</b>
                 </label>
             </div>
             <div>
-                <span class="label">Přiřazení lidé (vidí projekt a píšou na něj výkazy)</span>
+                <span class="label">Manažeři projektu (může jich být víc)</span>
+                <div id="eManazeri" class="prjlide"></div>
+            </div>
+            <div>
+                <span class="label">Přiřazení lidé (vidí projekt a píšou na něj výkazy)
+                    <button type="button" class="vybervse" data-vse="eLide">vybrat vše</button></span>
                 <div id="eLide" class="prjlide"></div>
             </div>
             <label><span class="label">Poznámka</span><textarea id="ePoznamka" rows="2" class="field"></textarea></label>
@@ -109,11 +121,16 @@
         <div class="card" style="padding:6px 10px;overflow-x:auto">
             <table class="prjtab">
                 <thead><tr>
-                    <th>Projekt</th><th>Firma</th><th>Manažer</th><th>Začátek</th><th>Konec</th>
+                    <th>Projekt</th><th>Firma</th><th>Manažeři</th><th>Začátek</th><th>Konec</th>
                     <th>Stav</th><th>Priorita</th><th></th>
                 </tr></thead>
                 <tbody id="radky"></tbody>
             </table>
+            <div id="strankovani" class="strankovani" hidden>
+                <button type="button" id="btnStranaZpet" class="btn btn--ghost btn--sm">‹ Předchozí</button>
+                <span class="small muted" id="stranaPopis"></span>
+                <button type="button" id="btnStranaDal" class="btn btn--ghost btn--sm">Další ›</button>
+            </div>
         </div>
     </section>
 
@@ -169,10 +186,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=50"></script>
-<script src="assets/js/ui.js?v=50"></script>
-<script src="assets/js/vykazy.js?v=50"></script>
-<script type="module" src="assets/js/store.js?v=50"></script>
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
@@ -236,7 +253,8 @@
                 esc(((p.cislo ? p.cislo + " " : "") + p.nazev).trim()) + "</a>" +
                 '<span class="tiny muted">' + V.pocet((p.lide || []).length, ["člověk", "lidé", "lidí"]) + "</span></td>" +
             "<td>" + (esc(p.firma) || "—") + "</td>" +
-            "<td>" + (esc(jmenoUid(p.manazer)) || "—") + "</td>" +
+            "<td>" + (esc((p.manazeri || (p.manazer ? [p.manazer] : []))
+                .map(jmenoUid).filter(Boolean).join(", ")) || "—") + "</td>" +
             "<td>" + (V.czDatum(p.zacatek) || "—") + "</td>" +
             "<td>" + (V.czDatum(p.konec) || "—") + "</td>" +
             "<td>" + stav + "</td>" +
@@ -249,6 +267,11 @@
 
     const DULEZITOST = { "resit-okamzite": 0, "vysoka": 1, "stredni": 2, "nizka": 3 };
 
+    /* Projektů jsou po importu stovky – stránka po deseti, ať se dá číst.
+       Filtry vždycky vrací na první stranu, jinak by člověk zíral do prázdna. */
+    const NA_STRANKU = 10;
+    let strana = 1;
+
     function vykresliSeznam() {
         const vsechny = window.KB.projektyDocs || [];
         const vypis = filtrovane().sort((a, b) =>
@@ -256,14 +279,24 @@
             || (DULEZITOST[a.priorita] ?? 9) - (DULEZITOST[b.priorita] ?? 9)
             || (b.cislo || "").localeCompare(a.cislo || ""));
 
+        const stran = Math.max(1, Math.ceil(vypis.length / NA_STRANKU));
+        if (strana > stran) strana = stran;
+        const videt = vypis.slice((strana - 1) * NA_STRANKU, strana * NA_STRANKU);
+
         $("seznamPopis").textContent = window.KBUI.can("vykaz.view")
             ? vsechny.filter(p => !p.uzavreno).length + " otevřených z " + vsechny.length
             : "Projekty, ke kterým jsi přiřazený.";
-        $("radky").innerHTML = vypis.map(radekHtml).join("")
+        $("radky").innerHTML = videt.map(radekHtml).join("")
             || '<tr><td colspan="8" class="tiny muted" style="padding:20px;text-align:center">' +
                "Žádný projekt. " + (window.KBUI.can("zakazky.manage")
                    ? "Založ první tlačítkem + Nový projekt, nebo je nahraj v Nastavení." :
                    "Až tě manažer k nějakému přiřadí, objeví se tady.") + "</td></tr>";
+
+        $("strankovani").hidden = stran < 2;
+        $("stranaPopis").textContent = "Strana " + strana + " z " + stran +
+            " · " + V.pocet(vypis.length, ["projekt", "projekty", "projektů"]);
+        $("btnStranaZpet").disabled = strana <= 1;
+        $("btnStranaDal").disabled = strana >= stran;
     }
 
     /* --------------------------------------------------------- formulář */
@@ -281,15 +314,19 @@
         $("ePoznamka").value = p ? p.poznamka || "" : "";
 
         $("eFirma").innerHTML = V.options(V.firmy(), p ? p.firma || "" : "", "— vyber firmu —");
-        const manazeri = V.lide().filter(u => u.role === "spravce" || u.role === "hlavni-spravce");
-        $("eManazer").innerHTML = V.options(
-            manazeri.map(u => ({ value: u.id, label: V.jmeno(u) })),
-            p ? p.manazer || "" : "", "— vyber manažera —");
+
+        const chipy = (lide, vybraniSet) => lide.map(u =>
+            "<label><input type=\"checkbox\" value=\"" + esc(u.id) + "\"" +
+            (vybraniSet.has(u.id) ? " checked" : "") + "> " + esc(V.jmeno(u)) + "</label>").join("");
+
+        // manažerů může být víc; starší projekty měly jen jednoho v `manazer`
+        const manazerskeRole = V.lide().filter(u => u.role === "spravce" || u.role === "hlavni-spravce");
+        const vybraniManazeri = new Set(p ? (p.manazeri || (p.manazer ? [p.manazer] : [])) : []);
+        $("eManazeri").innerHTML = chipy(manazerskeRole, vybraniManazeri)
+            || '<span class="tiny muted">V seznamu není žádný manažer.</span>';
 
         const vybrani = new Set(p ? p.lide || [] : []);
-        $("eLide").innerHTML = V.lide().map(u =>
-            "<label><input type=\"checkbox\" value=\"" + esc(u.id) + "\"" +
-            (vybrani.has(u.id) ? " checked" : "") + "> " + esc(V.jmeno(u)) + "</label>").join("");
+        $("eLide").innerHTML = chipy(V.lide(), vybrani);
 
         $("editace").hidden = false;
         $("eNazev").focus();
@@ -305,7 +342,7 @@
             cislo: $("eCislo").value.trim(),
             nazev: nazev,
             firma: $("eFirma").value,
-            manazer: $("eManazer").value,
+            manazeri: Array.from($("eManazeri").querySelectorAll("input:checked")).map(ch => ch.value),
             zacatek: $("eZacatek").value,
             konec: $("eKonec").value,
             stav: $("eStav").value.trim(),
@@ -353,9 +390,11 @@
             return;
         }
         $("dNazev").textContent = ((p.cislo ? p.cislo + " " : "") + p.nazev).trim();
+        const manazerska = (p.manazeri || (p.manazer ? [p.manazer] : []))
+            .map(jmenoUid).filter(Boolean).join(", ");
         $("dPodtitul").textContent = [
             p.firma ? "fakturuje se: " + p.firma : "",
-            p.manazer ? "manažer: " + jmenoUid(p.manazer) : "",
+            manazerska ? "manažeři: " + manazerska : "",
             p.zacatek ? "od " + V.czDatum(p.zacatek) : "",
             p.konec ? "do " + V.czDatum(p.konec) : ""
         ].filter(Boolean).join(" · ");
@@ -436,7 +475,18 @@
             if (b) naplnFormular(projekt(b.dataset.uprav));
         });
         ["fText", "fPrio", "fOtevrene"].forEach(id =>
-            $(id).addEventListener("input", vykresliSeznam));
+            $(id).addEventListener("input", () => { strana = 1; vykresliSeznam(); }));
+        $("btnStranaZpet").addEventListener("click", () => { strana--; vykresliSeznam(); });
+        $("btnStranaDal").addEventListener("click", () => { strana++; vykresliSeznam(); });
+        // vybrat vše u přiřazených lidí – druhé kliknutí zase všechno zruší
+        document.addEventListener("click", (event) => {
+            const vse = event.target.closest("[data-vse]");
+            if (!vse) return;
+            const boxy = document.getElementById(vse.dataset.vse).querySelectorAll("input[type=checkbox]");
+            const zapnout = Array.from(boxy).some(ch => !ch.checked);
+            boxy.forEach(ch => { ch.checked = zapnout; });
+            vse.textContent = zapnout ? "zrušit výběr" : "vybrat vše";
+        });
         $("btnFinanceUloz").addEventListener("click", async () => {
             try {
                 await window.KB.saveProjektFinance(detailId, {

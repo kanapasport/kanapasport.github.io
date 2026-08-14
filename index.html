@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -53,10 +53,25 @@
     <!-- ================================================ nástěnka člověka -->
     <section id="nastenka" class="wrap" style="padding-top:26px">
         <div class="section-head" style="margin-bottom:14px">
-            <h2 id="nastenkaPozdrav" style="font-size:24px">Moje nástěnka</h2>
-            <p id="nastenkaPopis">Zadané úkoly vlevo, postup práce vybraného úkolu vpravo.</p>
+            <div class="spread">
+                <div>
+                    <h2 id="nastenkaPozdrav" style="font-size:24px">Moje nástěnka</h2>
+                    <p id="nastenkaPopis">Zadané úkoly vlevo, postup práce vybraného úkolu vpravo.</p>
+                </div>
+                <button type="button" id="btnPrizpusob" class="btn btn--ghost btn--sm">Přizpůsobit</button>
+            </div>
+            <!-- co kdo na nástěnce chce – pamatuje si to prohlížeč každého zvlášť -->
+            <div id="nastenkaVolby" class="row row--wrap card" hidden
+                 style="gap:14px;padding:10px 14px;margin-top:10px;font-size:13px">
+                <label class="row" style="gap:6px;cursor:pointer">
+                    <input type="checkbox" data-widget="ukoly" checked> Úkoly a TO-DO</label>
+                <label class="row" style="gap:6px;cursor:pointer">
+                    <input type="checkbox" data-widget="online" checked> Kdo je na webu</label>
+                <label class="row" style="gap:6px;cursor:pointer" data-need="vykaz.view" hidden>
+                    <input type="checkbox" data-widget="aktivita" checked> Poslední aktivita</label>
+            </div>
         </div>
-        <div class="nastenka">
+        <div class="nastenka" id="wUkoly">
             <div class="card col" style="gap:8px;padding:16px">
                 <div class="spread">
                     <b>Zadané úkoly</b>
@@ -72,6 +87,20 @@
                 <div id="todoRozpad" class="col" style="gap:4px"></div>
             </div>
         </div>
+        <div class="nastenka" style="margin-top:16px">
+            <div class="card col" id="wOnline" style="gap:8px;padding:16px">
+                <b>Kdo je právě na webu</b>
+                <div id="onlineSeznam" class="row row--wrap" style="gap:8px"></div>
+            </div>
+            <!-- poslední aktivita je jen pro manažery – bez práv se karta nevykreslí -->
+            <div class="card col" id="wAktivita" data-need="vykaz.view" hidden style="gap:8px;padding:16px">
+                <div class="spread">
+                    <b>Poslední aktivita</b>
+                    <a class="linkbtn" style="border-color:var(--line)" href="reporty.html">historie →</a>
+                </div>
+                <div id="aktivitaSeznam" class="col" style="gap:5px;font-size:13px"></div>
+            </div>
+        </div>
     </section>
 
     <!-- =========================================================== sekce -->
@@ -82,10 +111,10 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=50"></script>
-<script src="assets/js/doc.js?v=50"></script>
-<script src="assets/js/ui.js?v=50"></script>
-<script type="module" src="assets/js/store.js?v=50"></script>
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/doc.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
@@ -202,10 +231,67 @@
         if (window.KBUI.can("vykaz.view")) {
             window.KB.watchUkoly();
             window.KB.watchProjekty();
+            window.KB.watchAktivity();
         } else {
             window.KB.watchMojeUkoly();
             window.KB.watchMojeProjekty();
         }
+    }
+
+    /* ---------------------------------------------- volitelné widgety ---
+       Každý si zvolí, co na nástěnce chce; volba se drží v prohlížeči
+       (na jiném počítači si ji člověk klikne znovu – to je v pořádku). */
+
+    const VOLBY_KLIC = "kb-nastenka";
+
+    function nactiVolby() {
+        try { return Object.assign({ ukoly: true, online: true, aktivita: true },
+            JSON.parse(localStorage.getItem(VOLBY_KLIC) || "{}")); }
+        catch (err) { return { ukoly: true, online: true, aktivita: true }; }
+    }
+
+    function pouzijVolby() {
+        const volby = nactiVolby();
+        document.querySelectorAll("[data-widget]").forEach(ch => { ch.checked = volby[ch.dataset.widget] !== false; });
+        document.getElementById("wUkoly").style.display = volby.ukoly === false ? "none" : "";
+        document.getElementById("wOnline").style.display = volby.online === false ? "none" : "";
+        // aktivita má navíc data-need – práva řeší paintUser, tady jen volba
+        if (volby.aktivita === false) document.getElementById("wAktivita").style.display = "none";
+        else document.getElementById("wAktivita").style.removeProperty("display");
+    }
+
+    /** Kdo je na webu: otisk mladší deseti minut = je tady. */
+    function renderOnline() {
+        const ted = Date.now();
+        const tady = (window.KB.pritomnost || [])
+            .filter(p => (Number(p.ms) || 0) > ted - 10 * 60 * 1000)
+            .map(p => {
+                const u = (window.KB.users || []).find(x => x.id === p.id);
+                return u ? ((u.first || "") + " " + (u.last || "")).trim() : (p.jmeno || "");
+            })
+            .filter(Boolean).sort((a, b) => a.localeCompare(b, "cs"));
+        document.getElementById("onlineSeznam").innerHTML = tady.length
+            ? tady.map(jmeno => '<span class="row" style="gap:6px;border:1px solid var(--line);' +
+                'border-radius:99px;padding:4px 11px;font-size:12.5px">' +
+                '<span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span>' +
+                esc(jmeno) + "</span>").join("")
+            : '<span class="tiny muted">Teď tu nikdo další není.</span>';
+    }
+
+    /** Poslední aktivita – jen manažeři (data chodí jen jim). */
+    function renderAktivita() {
+        const cas = (ms) => {
+            const d = new Date(ms);
+            return d.getDate() + ". " + (d.getMonth() + 1) + ". " +
+                String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        };
+        document.getElementById("aktivitaSeznam").innerHTML =
+            (window.KB.aktivity || []).slice(0, 10).map(a =>
+                '<div class="row" style="gap:8px;align-items:baseline">' +
+                    '<span class="tiny muted" style="flex:none;width:86px">' + cas(a.ms) + "</span>" +
+                    "<span><b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "") + "</span>" +
+                "</div>").join("")
+            || '<span class="tiny muted">Zatím žádné záznamy – historie se začne plnit používáním webu.</span>';
     }
 
     const czDatum = (iso) => {
@@ -377,12 +463,28 @@
             renderSections();
             runSearch(window.KBUI.searchValue());
         });
-        const obnov = () => { zapniSledovani(); renderNastenka(); };
+        const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("ukoly", renderNastenka);
+        window.KB.on("pritomnost", renderOnline);
+        window.KB.on("aktivity", renderAktivita);
         renderBoards(window.KB.boards);
         window.KB.on("boards", (event) => renderBoards(event.detail));
+
+        // přizpůsobení nástěnky
+        document.getElementById("btnPrizpusob").addEventListener("click", () => {
+            const volby = document.getElementById("nastenkaVolby");
+            volby.hidden = !volby.hidden;
+        });
+        document.getElementById("nastenkaVolby").addEventListener("change", () => {
+            const volby = {};
+            document.querySelectorAll("[data-widget]").forEach(ch => { volby[ch.dataset.widget] = ch.checked; });
+            try { localStorage.setItem(VOLBY_KLIC, JSON.stringify(volby)); } catch (err) {}
+            pouzijVolby();
+        });
+        pouzijVolby();
+        renderOnline();
     });
 })();
 </script>

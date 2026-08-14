@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Vytížení týmu – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Mřížka lidé × dny. Posouvá se jen tabulka, ne celá stránka –
+           měsíc má přes třicet sloupců a na mobilu by rozbil layout. */
+        .vt-wrap { overflow-x: auto; }
+        .vt { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12.5px; }
+        .vt th {
+            font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            color: var(--muted); padding: 6px 4px; border-bottom: 1px solid var(--line);
+            text-align: center; white-space: nowrap;
+        }
+        .vt td {
+            padding: 6px 4px; border-bottom: 1px solid var(--line-soft);
+            text-align: center; white-space: nowrap; min-width: 34px;
+        }
+        /* Jména drží při vodorovném posunu na místě – bez nich čísla nic neříkají.
+           Podklad musí být neprůhledný, jinak pod nimi prosvítají projíždějící buňky. */
+        .vt th:first-child, .vt td:first-child {
+            position: sticky; left: 0; z-index: 1; background: var(--surface);
+            text-align: left; padding-right: 14px; border-right: 1px solid var(--line);
+        }
+        .vt td:first-child { font-weight: 700; }
+        .vt .vt--vik { background: var(--bg-soft); }
+        /* Pastelové podklady s černým textem – čitelné i pro barvoslepé,
+           protože nesou i číslo (barva není jediné vodítko). */
+        .vt--malo   { background: #f5e6b8; color: #111; }
+        .vt--akorat { background: #d3ebdc; color: #111; }
+        .vt--hodne  { background: #f6cfd6; color: #111; }
+        .vt--abs    { background: #cfe9f3; color: #111; font-weight: 900; }
+        .vt th.vt--dnes { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 6px; color: var(--accent); }
+        /* značka absence vedle týdenního součtu */
+        .vt-a {
+            display: inline-block; background: #cfe9f3; color: #111;
+            border-radius: 4px; padding: 0 4px; margin-left: 4px;
+            font-size: 10.5px; font-weight: 900;
+        }
+        .vt-leg {
+            display: flex; justify-content: flex-end; flex-wrap: wrap;
+            gap: 6px 16px; font-size: 12px; color: var(--text-soft);
+        }
+        .vt-leg i {
+            display: inline-block; width: 12px; height: 12px;
+            border-radius: 3px; margin-right: 6px; vertical-align: -1px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Vytížení týmu vidí jen manažeři.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Ukazuje hodiny všech lidí najednou. Když si myslíš,
+            že sem patříš, ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+        <div><a href="reporty.html" class="btn btn--ghost btn--sm">← Reporty</a></div>
+
+        <div>
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Vytížení týmu</h2>
+            <p class="small muted" style="margin-top:3px">
+                Kolik hodin kdo vykázal – po dnech nebo po týdnech, s absencemi.
+            </p>
+        </div>
+
+        <div class="card col" style="gap:12px;padding:14px 16px">
+            <div class="row row--wrap" style="gap:8px">
+                <button type="button" class="btn btn--ghost btn--sm" id="btnZpet">‹</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnDnes">Dnes</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnDal">›</button>
+                <b id="obdobi" style="font-size:15px;margin-left:6px"></b>
+                <div class="grow"></div>
+                <button type="button" class="chip" data-pohled="dny">Dny</button>
+                <button type="button" class="chip" data-pohled="tydny">Týdny</button>
+                <select id="fProjekt" class="field" style="width:auto;max-width:240px"></select>
+            </div>
+
+            <div class="vt-wrap">
+                <table class="vt">
+                    <thead id="vtHlava"></thead>
+                    <tbody id="vtTelo"></tbody>
+                </table>
+            </div>
+
+            <div class="vt-leg">
+                <span><i class="vt--malo"></i>Vykázáno málo</span>
+                <span><i class="vt--akorat"></i>Tak akorát</span>
+                <span><i class="vt--hodne"></i>Přesčasy</span>
+                <span><i class="vt--abs"></i>Absence</span>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
+        "srpen", "září", "říjen", "listopad", "prosinec"];
+
+    let kotva = new Date();             // libovolný den zobrazeného měsíce
+    let pohled = "dny";                 // dny | tydny
+    let sledovaniZapnuto = false;
+
+    const iso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+        "-" + String(d.getDate()).padStart(2, "0");
+    /* „14. 7." – hlavička týdne; rok tam nepatří, je v titulku měsíce */
+    const dm = (d) => d.getDate() + ". " + (d.getMonth() + 1) + ".";
+    /* Max jedno desetinné místo: „8,5", ale rovné osmičce nechá „8".
+       V.cislo by nutilo „8,0" a mřížka by byla samá nula navíc. */
+    const hodinyTxt = (h) => Number(h).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+
+    /* Sledování dat až po přihlášení – dřív by databáze dotaz odmítla.
+       Stejná trojice jako na projektech, ať se mřížka překreslí,
+       kdykoliv manažerovi doteče cokoliv nového. */
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        if (!window.KBUI.can("vykaz.view")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchVykazy();
+        window.KB.watchProjekty();
+        window.KB.watchUkoly();
+    }
+
+    /* Lidé pod sebou podle příjmení – tak je hledá oko v papírové prezenčce. */
+    const lideSerazeni = () => V.lide().slice().sort((a, b) =>
+        (a.last || "").localeCompare(b.last || "", "cs") ||
+        (a.first || "").localeCompare(b.first || "", "cs"));
+
+    /**
+     * Dvě mapy přes všechny záznamy:
+     *  hodiny  „uid|datum" → součet odpracovaných hodin (respektuje filtr projektu),
+     *  absence „uid|datum" → ten den existuje dovolená/nemoc/školení.
+     * Absence se filtru projektu schválně neúčastní – člověk na dovolené
+     * má být vidět jako nepřítomný, ať se manažer dívá na kterýkoliv projekt.
+     */
+    function pripravData() {
+        const filtr = $("fProjekt").value;
+        const hodiny = new Map();
+        const absence = new Set();
+        (window.KB.vykazy || []).forEach(z => {
+            const k = z.uid + "|" + z.datum;
+            if (z.absence === true) { absence.add(k); return; }
+            if (filtr && z.zakazka !== filtr) return;
+            hodiny.set(k, (hodiny.get(k) || 0) + (Number(z.hodiny) || 0));
+        });
+        return { hodiny: hodiny, absence: absence };
+    }
+
+    /* Nabídka filtru z toho, co je skutečně vykázané – prázdný projekt
+       by ve filtru jen mátl. Výběr se při překreslení nesmí ztratit. */
+    function naplnFiltr() {
+        const vybrano = $("fProjekt").value;
+        const nazvy = Array.from(new Set((window.KB.vykazy || [])
+            .map(z => (z.zakazka || "").trim()).filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b, "cs"));
+        $("fProjekt").innerHTML = V.options(nazvy, vybrano, "Všechny projekty");
+    }
+
+    /* ------------------------------------------------------------ pohledy */
+
+    function vykresliDny(lide, data) {
+        const y = kotva.getFullYear(), m = kotva.getMonth();
+        const dnesIso = V.dnesISO();
+        const dny = [];
+        for (let c = 1; c <= new Date(y, m + 1, 0).getDate(); c++) {
+            const d = new Date(y, m, c);
+            dny.push({ iso: iso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6 });
+        }
+
+        $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + dny.map(x =>
+            '<th class="' + (x.vikend ? "vt--vik " : "") +
+            (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") + "</tr>";
+
+        return lide.map(u => "<tr><td>" + esc(V.jmeno(u)) + "</td>" + dny.map(x => {
+            const k = u.id + "|" + x.iso;
+            const h = data.hodiny.get(k) || 0;
+            let cls = x.vikend ? "vt--vik" : "";
+            let text = "";
+            if (data.absence.has(k)) { cls = "vt--abs"; text = "A"; }
+            else if (h > 8)  { cls = "vt--hodne";  text = hodinyTxt(h); }
+            else if (h >= 7) { cls = "vt--akorat"; text = hodinyTxt(h); }
+            else if (h > 0)  { cls = "vt--malo";   text = hodinyTxt(h); }
+            return '<td class="' + cls + '">' + esc(text) + "</td>";
+        }).join("") + "</tr>").join("");
+    }
+
+    function vykresliTydny(lide, data) {
+        const y = kotva.getFullYear(), m = kotva.getMonth();
+        const dnesIso = V.dnesISO();
+        const posledni = new Date(y, m + 1, 0);
+
+        // týdny od pondělí; první a poslední klidně přesahují do sousedních
+        // měsíců – proti čtyřicetihodinovému týdnu jde srovnat jen celý týden
+        const tydny = [];
+        let po = new Date(y, m, 1 - ((new Date(y, m, 1).getDay() + 6) % 7));
+        while (po <= posledni) {
+            const ne = new Date(po); ne.setDate(ne.getDate() + 6);
+            tydny.push({ od: new Date(po), do: ne });
+            po = new Date(po); po.setDate(po.getDate() + 7);
+        }
+
+        $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + tydny.map(t => {
+            const aktualni = iso(t.od) <= dnesIso && dnesIso <= iso(t.do);
+            return '<th class="' + (aktualni ? "vt--dnes" : "") + '">' +
+                esc(dm(t.od) + "–" + dm(t.do)) + "</th>";
+        }).join("") + "</tr>";
+
+        return lide.map(u => "<tr><td>" + esc(V.jmeno(u)) + "</td>" + tydny.map(t => {
+            let h = 0, abs = false;
+            for (let c = 0; c < 7; c++) {
+                const d = new Date(t.od); d.setDate(d.getDate() + c);
+                const k = u.id + "|" + iso(d);
+                h += data.hodiny.get(k) || 0;
+                abs = abs || data.absence.has(k);
+            }
+            // prahy dnů × 5 (plný týden = 40 hodin)
+            const cls = h > 40 ? "vt--hodne" : h >= 35 ? "vt--akorat" : h > 0 ? "vt--malo" : "";
+            return '<td class="' + cls + '">' + (h > 0 ? esc(hodinyTxt(h)) : "") +
+                (abs ? '<span class="vt-a">A</span>' : "") + "</td>";
+        }).join("") + "</tr>").join("");
+    }
+
+    function vykresli() {
+        $("obdobi").textContent = MESICE[kotva.getMonth()] + " " + kotva.getFullYear();
+        document.querySelectorAll("[data-pohled]").forEach(ch =>
+            ch.classList.toggle("chip--active", ch.dataset.pohled === pohled));
+
+        const lide = lideSerazeni();
+        const data = pripravData();
+        $("vtTelo").innerHTML = (pohled === "dny"
+            ? vykresliDny(lide, data) : vykresliTydny(lide, data))
+            || '<tr><td colspan="40" class="tiny muted" style="padding:20px;text-align:center">' +
+               "Zatím žádní lidé – přidávají se v Nastavení.</td></tr>";
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    function render() {
+        const smi = window.KBUI.can("vykaz.view");
+        $("stop").hidden = smi;
+        $("obsah").hidden = !smi;
+        if (!smi) return;
+        zapniSledovani();
+        naplnFiltr();
+        vykresli();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // stránka patří pod REPORTY, tak ať v liště svítí ony
+        window.KBUI.mountNav({ active: "reporty.html" });
+
+        $("btnZpet").addEventListener("click", () => {
+            kotva = new Date(kotva.getFullYear(), kotva.getMonth() - 1, 1); vykresli();
+        });
+        $("btnDal").addEventListener("click", () => {
+            kotva = new Date(kotva.getFullYear(), kotva.getMonth() + 1, 1); vykresli();
+        });
+        $("btnDnes").addEventListener("click", () => { kotva = new Date(); vykresli(); });
+        document.querySelectorAll("[data-pohled]").forEach(ch =>
+            ch.addEventListener("click", () => { pohled = ch.dataset.pohled; vykresli(); }));
+        $("fProjekt").addEventListener("change", vykresli);
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("users", render);
+        window.KB.on("vykazy", render);
+        window.KB.on("projekty-docs", render);
+        window.KB.on("ukoly", render);
+        render();
+    });
+})();
+</script>
+</body>
+</html>

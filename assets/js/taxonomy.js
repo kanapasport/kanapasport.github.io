@@ -163,8 +163,18 @@ window.KB_SECTIONS = [
 
 /* DOMŮ v liště není – domů vede logo ve svislém pásu (a v úzkém okně logo
    v červeném pruhu). Postup práce se přejmenoval: rozpad úkolu jsou TO-DO
-   položky a stránka úkolů se jmenuje prostě ÚKOLY. */
+   položky a stránka úkolů se jmenuje prostě ÚKOLY.
+   Pořadí položek určil Michal: výkazy jsou první, protože se používají denně. */
 window.KB_NAV = [
+    /* Výkazy se vykreslí jen tomu, kdo na ně má právo; studentům zmizí. */
+    { title: 'VÝKAZY', href: 'vykazy.html', need: 'vykaz.otevrit' },
+    // roletka se naplní otevřenými projekty z databáze (viz projektyMenu v ui.js)
+    { title: 'PROJEKTY', href: 'projekty.html', projekty: true },
+    // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
+    { title: 'ÚKOLY', href: 'ukoly.html', tasks: true },
+    { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },
+    // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
+    { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },
     {
         title: 'NÁVODY', href: 'navody.html',
         menu: [{ title: 'VŠECHNY NÁVODY', href: 'navody.html' }].concat(
@@ -178,17 +188,7 @@ window.KB_NAV = [
                     })))
             })))
     },
-    // roletka se naplní otevřenými projekty z databáze (viz projektyMenu v ui.js)
-    { title: 'PROJEKTY', href: 'projekty.html', projekty: true },
-    // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
-    { title: 'ÚKOLY', href: 'ukoly.html', tasks: true },
-    { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },
-    // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
-    { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },
     { title: 'TABULE', href: 'tabule.html', icon: 'board' },
-    /* Výkazy mají vlastní odkaz v liště – vykreslí se ale jen tomu, kdo na
-       ně má právo; studentům položka zmizí (data-need v ui.js). */
-    { title: 'VÝKAZY', href: 'vykazy.html', need: 'vykaz.otevrit' },
     // přehledy hodin a peněz – jen manažeři
     { title: 'REPORTY', href: 'reporty.html', need: 'vykaz.view' }
 ];
@@ -208,10 +208,9 @@ window.KB_TOOLS = [
        Otevírá se výhradně přímým odkazem, který má hlavní správce u sebe –
        ať na něj nikdo nenarazí náhodou. Stránka se stejně brání sama:
        právo vykaz.view, heslo navíc a pravidla databáze nad daty. */
-    { title: 'Nastavení', icon: 'cog', href: 'nastaveni.html', need: 'vykaz.view' },
-    // jen pro hlavního správce
-    { title: 'Uživatelé',   icon: 'users',   href: 'uzivatele.html', need: 'users.manage' },
-    { title: 'Barvy webu',  icon: 'palette', href: 'barvy.html',     need: 'web.design' }
+    /* Nastavení, Uživatelé a Barvy webu už mezi ikonami nejsou – bydlí ve
+       svislém pásu dole (Nastavení) a uvnitř Nastavení (Uživatelé, Barvy).
+       Nahoře zůstávají jen nástroje k návodům. */
 ];
 
 /* --------------------------------------------------------------- pomocné */

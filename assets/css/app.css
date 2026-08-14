@@ -94,6 +94,11 @@
        Chceš PDF zpátky do modré? Změň jen tenhle jeden řádek. */
     --doc-accent: #c8102e;
 
+    /* --- šířka obsahu ---
+       Web se roztahuje s monitorem (HD i 2K), strop drží čitelnost.
+       Přání Michala: radši širší a vzdušné než úzký sloupec uprostřed. */
+    --sirka-stranky: min(1720px, 96vw);
+
     /* --- geometrie A4 --- */
     --a4-w:      210mm;
     --a4-h:      297mm;
@@ -129,7 +134,7 @@ input, select, textarea, button { font-family: inherit; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; }
+.wrap { max-width: var(--sirka-stranky); margin: 0 auto; padding-inline: 20px; }
 
 /* mřížka dlaždic – 1 sloupec na telefonu, 2 na tabletu, 3 na PC */
 .tilegrid { display: grid; gap: 16px; grid-template-columns: 1fr; }
@@ -169,7 +174,7 @@ input, select, textarea, button { font-family: inherit; }
 .appbar__band { background: var(--accent); color: #fff; }
 .appbar__bandin {
     position: relative;
-    max-width: 1180px;
+    max-width: var(--sirka-stranky);
     margin: 0 auto;
     padding: 10px 20px;
     min-height: 132px;              /* logo zabere skoro celou tuhle výšku */
@@ -276,7 +281,7 @@ input, select, textarea, button { font-family: inherit; }
 }
 .appbar__barin {
     position: relative;
-    max-width: 1180px;
+    max-width: var(--sirka-stranky);
     margin: 0 auto;
     padding: 0 20px;
     height: 54px;
@@ -480,7 +485,7 @@ input, select, textarea, button { font-family: inherit; }
     background: var(--bg-soft);
 }
 .subbar__in {
-    max-width: 1180px;
+    max-width: var(--sirka-stranky);
     margin: 0 auto;
     padding: 9px 20px;
     display: flex;
@@ -1748,7 +1753,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 
 /* Co vidí nepřihlášený člověk místo celého webu. */
 .gate {
-    max-width: 1180px;
+    max-width: var(--sirka-stranky);
     margin: 0 auto;
     padding: 48px 20px;
     display: flex;
@@ -2672,4 +2677,87 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 
     /* pruh náhledu i brána přihlášení se nesmí schovat pod pás */
     .nahledpruh, .gate { margin-left: 0; }
+}
+
+/* ================================================= OPRAVY A DOPLŇKY ==== */
+
+/* .linkbtn je kreslený pro červený pruh (bílé písmo) – v obsahu stránky
+   byl neviditelný, dokud se na něj nenajelo. Tady dostává tmavou podobu. */
+main .linkbtn {
+    color: var(--text-soft);
+    background: var(--surface);
+    border-color: var(--line);
+}
+main .linkbtn:hover {
+    color: var(--accent);
+    background: var(--accent-tint);
+    border-color: var(--accent-lt);
+}
+
+/* Na širokých monitorech se dlaždicím hodí čtvrtý sloupec. */
+@media (min-width: 1500px) {
+    .tilegrid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ---- svislý pás: kontext sekce a spodek s člověkem a stavem ---- */
+
+.siderail__sekce {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    min-height: 0;
+    padding-top: 2px;
+    border-top: 1px solid rgba(255, 255, 255, .28);
+}
+.siderail__nadpis {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .6);
+    padding: 8px 6px 4px;
+}
+.siderail__odkaz {
+    display: block;
+    padding: 7px 10px;
+    border-radius: var(--radius);
+    color: rgba(255, 255, 255, .92);
+    font-size: 12.5px;
+    font-weight: 700;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.siderail__odkaz:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+
+.siderail__spodek {
+    margin-top: auto;
+    border-top: 1px solid rgba(255, 255, 255, .28);
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.siderail__ja { font-size: 12.5px; color: rgba(255, 255, 255, .95); line-height: 1.45; }
+.siderail__ja b { display: block; font-weight: 900; }
+.siderail__role {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 2px 9px;
+    border: 1px solid rgba(255, 255, 255, .5);
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .07em;
+}
+.siderail__stav { font-size: 10.5px; color: rgba(255, 255, 255, .62); }
+.siderail__stav[data-state="online"] { color: #d8f7e6; }
+.siderail__stav[data-state="offline"] { color: #ffe0b8; }
+
+/* jméno nahoře jen na úzkém okně – na širokém ho nese svislý pás */
+.appbar__jmeno-mobil { display: none; color: #fff; font-size: 13.5px; margin-right: 10px; }
+@media (max-width: 1120px), (hover: none) {
+    .appbar__jmeno-mobil { display: inline; }
 }

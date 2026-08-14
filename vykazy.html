@@ -24,9 +24,10 @@
         .polozka--absence .polozka__grid > div:has([data-f="technologie"]),
         .polozka--absence .polozka__nazev,
         .polozka--absence .priplatky,
+        .polozka--absence .polozka__ukolvyber,
         .polozka--absence .polozka__cas > div:has([data-f="sazba"]) { display: none; }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -156,10 +157,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=50"></script>
-<script src="assets/js/ui.js?v=50"></script>
-<script src="assets/js/vykazy.js?v=50"></script>
-<script type="module" src="assets/js/store.js?v=50"></script>
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
@@ -205,6 +206,19 @@
             jmena = moje.length ? moje : V.zakazky();
         }
         return ABSENCE.concat(jmena.filter(z => !jeAbsence(z)));
+    }
+
+    /**
+     * Úkoly k projektu – nepovinná vazba zápisu na úkol z plánu. Až se bude
+     * počítat efektivita (budget hodin vs. skutečnost), sedí na tomhle poli.
+     * Zaměstnanci jeho odběr stejně nabídne jen úkoly, které mu patří.
+     */
+    function ukolOptions(zakazka, vybrany) {
+        const seznam = (window.KB.ukoly || [])
+            .filter(u => u.projekt === zakazka && u.stav !== "hotovo")
+            .map(u => ({ value: u.id, label: u.nazev }));
+        if (!seznam.length) return '<option value="">— žádný úkol —</option>';
+        return V.options(seznam, vybrany, "— bez úkolu —");
     }
 
     /** Části patří pod projekt – bez něj není z čeho vybírat. */
@@ -293,10 +307,15 @@
             '<div class="polozka__grid">' +
                 zakazkaCast +
                 '<div class="polozka__nazev">' +
-                    '<label class="label">Úkol</label>' +
+                    '<label class="label">Popis práce</label>' +
                     '<input type="text" class="field" data-f="nazev" placeholder="co se konkrétně dělalo" ' +
                         'value="' + esc(d.nazev || "") + '">' +
                 "</div>" +
+
+                '<div class="polozka__ukolvyber"><label class="label">Úkol z plánu (nepovinné)</label>' +
+                    '<select class="field" data-f="ukolId">' +
+                        ukolOptions(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d.ukolId || "") +
+                    "</select></div>" +
 
                 '<div><label class="label">Druh vypracování</label>' +
                     '<select class="field" data-f="cinnost">' +
@@ -395,6 +414,7 @@
             cinnost: val("cinnost"),
             technologie: val("technologie"),
             datum: val("datum"),
+            ukolId: val("ukolId"),
             od: val("od"),
             do: val("do"),
             celyden: zapnuto("celyden"),
@@ -498,6 +518,7 @@
         const boxy = polozkyBloku(blok);
         const zdroj = boxy.length ? ctiPolozku(boxy[boxy.length - 1]) : null;
 
+        const zakazkaBloku = ctiZblok(blok).zakazka;
         const data = zdroj ? {
             nazev: "",
             cinnost: zdroj.cinnost,
@@ -506,8 +527,10 @@
             od: zdroj.do || ZACATEK_DNE,
             do: "",
             pauza: 0,                       // pauza ani paušály se do další práce netáhnou
-            sazba: zdroj.sazba || vychoziSazba
-        } : { datum: V.dnesISO(), od: ZACATEK_DNE, sazba: vychoziSazba, pauza: 0 };
+            sazba: zdroj.sazba || vychoziSazba,
+            _zakazkaBloku: zakazkaBloku     // ať nabídka úkolů sedí na projekt bloku
+        } : { datum: V.dnesISO(), od: ZACATEK_DNE, sazba: vychoziSazba, pauza: 0,
+              _zakazkaBloku: zakazkaBloku };
 
         blok.querySelector("[data-polozky]")
             .insertAdjacentHTML("beforeend", polozkaHtml(data, { odebrat: true, sDatem: true }));
@@ -846,10 +869,12 @@
         if (window.KBUI.can("vykaz.view")) {
             window.KB.watchVykazy();
             window.KB.watchProjekty();
+            window.KB.watchUkoly();
         } else {
             window.KB.watchMojeVykazy();
-            // kvůli nabídce projektů, ke kterým je člověk přiřazený
+            // kvůli nabídce projektů a úkolů, ke kterým je člověk přiřazený
             window.KB.watchMojeProjekty();
+            window.KB.watchMojeUkoly();
         }
     }
 
@@ -881,6 +906,10 @@
                 projektOptions(event.target.value, "");
             doplnFirmu(blok, "data-z", event.target.value);
             blok.classList.toggle("zblok--absence", jeAbsence(event.target.value));
+            // jiný projekt = jiná nabídka úkolů ve všech položkách bloku
+            blok.querySelectorAll('[data-f="ukolId"]').forEach(select => {
+                select.innerHTML = ukolOptions(event.target.value, "");
+            });
             return;
         }
 
@@ -893,6 +922,8 @@
         if (event.target.dataset.f === "zakazka") {
             doplnFirmu(box, "data-f", event.target.value);
             box.classList.toggle("polozka--absence", jeAbsence(event.target.value));
+            const ukolSelect = box.querySelector('[data-f="ukolId"]');
+            if (ukolSelect) ukolSelect.innerHTML = ukolOptions(event.target.value, "");
             box.querySelector('[data-f="projekt"]').innerHTML =
                 projektOptions(event.target.value, "");
         }

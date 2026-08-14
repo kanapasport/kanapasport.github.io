@@ -123,6 +123,15 @@ service cloud.firestore {
                             .hasOnly(['todo', 'stav', 'updatedMs', 'updatedBy']));
     }
 
+    // --- historie aktivit ------------------------------------------------
+    // Každý přihlášený zapisuje svoje kroky (jinak by log nešel plnit),
+    // ale číst je smí jen manažer – jsou tam i zmínky o výkazech.
+    match /artifacts/firemni-kb-app/private/aktivity/seznam/{id} {
+      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      allow read: if spravce();
+      allow update, delete: if false;
+    }
+
     // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
     // projektů, zakládání úkolů…) jen správce
     match /artifacts/firemni-kb-app/private/{document=**} {
@@ -174,6 +183,11 @@ service cloud.firestore {
                        && resource.data.uid == request.auth.uid
                        && request.resource.data.uid == request.auth.uid);
       allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+    }
+
+    // --- kdo je právě na webu: každý píše jen svůj otisk ---
+    match /artifacts/firemni-kb-app/public/data/pritomnost/{uid} {
+      allow write: if clen() && request.auth.uid == uid;
     }
 
     // --- záznamy přihlášení: zapsat smí každý, mazat nikdo ---

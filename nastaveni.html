@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Nastavení – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -112,6 +112,22 @@
             </p>
         </section>
 
+        <!-- ====================================== DALŠÍ ČÁSTI NASTAVENÍ -->
+        <section class="card col nastaveni">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Další nastavení webu</b>
+                    <span class="small muted">věci, které se mění zřídka</span>
+                </div>
+            </div>
+            <div class="row row--wrap" style="gap:10px">
+                <a class="btn btn--ghost" href="uzivatele.html" data-need="users.manage" hidden>
+                    Uživatelé a hesla</a>
+                <a class="btn btn--ghost" href="barvy.html" data-need="web.design" hidden>
+                    Barvy webu</a>
+            </div>
+        </section>
+
         <div class="row" style="gap:10px;justify-content:flex-end">
             <span id="stav" class="small muted" style="margin-right:auto"></span>
             <button type="button" id="btnUloz2" class="btn btn--primary">Uložit vše</button>
@@ -123,10 +139,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=50"></script>
-<script src="assets/js/ui.js?v=50"></script>
-<script src="assets/js/vykazy.js?v=50"></script>
-<script type="module" src="assets/js/store.js?v=50"></script>
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
@@ -328,7 +344,34 @@
                 ukolu++;
             }
 
-            stav("Hotovo: " + zalozeno + " projektů (" + preskoceno + " už bylo), " + ukolu + " úkolů.");
+            /* Výkazy (třeba ukázková data): osoba se hledá podle jména
+               v seznamu lidí, sazba se bere z nastavení. Co už v databázi
+               je (stejný člověk, den, popis), se přeskočí. */
+            let vykazu = 0, bezCloveka = 0;
+            const seznamVykazu = Array.isArray(data.vykazy) ? data.vykazy : [];
+            if (seznamVykazu.length) {
+                window.KB.watchVykazy();
+                await new Promise(r => setTimeout(r, 1200));
+                const mameZapisy = new Set((window.KB.vykazy || [])
+                    .map(z => z.uid + "|" + z.datum + "|" + z.nazev));
+                const podleJmena = new Map(V.lide().map(u => [window.KBUI.fold(V.jmeno(u)), u.id]));
+
+                for (const z of seznamVykazu) {
+                    const uid = podleJmena.get(window.KBUI.fold(z.osoba || ""));
+                    if (!uid) { bezCloveka++; continue; }
+                    if (mameZapisy.has(uid + "|" + z.datum + "|" + z.nazev)) continue;
+                    await window.KB.saveVykaz(window.KB.newVykazId(), Object.assign({}, z, {
+                        uid: uid,
+                        sazba: Number((window.KB.sazby || {})[uid]) || 0
+                    }));
+                    vykazu++;
+                    if (vykazu % 20 === 0) stav("výkazy: " + vykazu + " / " + seznamVykazu.length + "…");
+                }
+            }
+
+            stav("Hotovo: " + zalozeno + " projektů (" + preskoceno + " už bylo), " + ukolu +
+                " úkolů" + (seznamVykazu.length ? ", " + vykazu + " výkazů" +
+                (bezCloveka ? " (" + bezCloveka + " bez nalezeného člověka)" : "") : "") + ".");
             window.KBUI.toast("Import dokončen.");
         } catch (err) {
             console.error(err);

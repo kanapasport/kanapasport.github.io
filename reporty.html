@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Reporty – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=50">
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -28,12 +28,23 @@
     <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
         <div>
             <h2 style="font-size:20px;font-weight:900;line-height:1.2">Reporty</h2>
-            <p class="small muted" style="margin-top:3px">
-                Hotové přehledy na jednom místě. Další budou postupně přibývat.
+            <p class="small muted" style="margin-top:3px;line-height:1.6">
+                Manažerský rozcestník: pohledy na hodiny, peníze a plán na jednom místě
+                a pod nimi historie toho, kdo co na webu zapsal.
             </p>
         </div>
 
         <div class="tilegrid">
+            <div class="tile"><a class="tile__main" href="vytizeni.html">
+                <div class="tile__head"><div class="tile__title">VYTÍŽENÍ TÝMU</div></div>
+                <div class="tile__sub">Mřížka lidé × dny: kolik kdo který den odpracoval,
+                    přesčasy, absence a slabé dny barevně.</div>
+            </a></div>
+            <div class="tile"><a class="tile__main" href="gantt.html">
+                <div class="tile__head"><div class="tile__title">PLÁN PROJEKTŮ (GANTT)</div></div>
+                <div class="tile__sub">Časová osa projektů od začátku do konce
+                    s procenty hotovosti úkolů.</div>
+            </a></div>
             <div class="tile"><a class="tile__main" href="vykazy-prehled.html">
                 <div class="tile__head"><div class="tile__title">PŘEHLED LIDÍ A PENĚZ</div></div>
                 <div class="tile__sub">Hodiny a částky po lidech, projektech, technologiích
@@ -43,34 +54,63 @@
                 <div class="tile__head"><div class="tile__title">ZÁZNAMY VÝKAZŮ</div></div>
                 <div class="tile__sub">Jednotlivé zápisy dní se všemi filtry a exportem do CSV.</div>
             </a></div>
-            <div class="tile"><a class="tile__main" href="projekty.html">
-                <div class="tile__head"><div class="tile__title">PROJEKTY</div></div>
-                <div class="tile__sub">Stav, priority, lidé a peníze jednotlivých projektů.</div>
-            </a></div>
         </div>
 
-        <p class="tiny muted" style="line-height:1.6">
-            Chybí ti tu report? Napiš si ho na tabuli do nápadů – postupně je sem doplňujeme.
-        </p>
+        <!-- ============================================ HISTORIE AKTIVIT -->
+        <section class="card col" style="gap:10px">
+            <b>Historie aktivit</b>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Kdo co uložil – projekty, úkoly, postup i výkazy. Plní se samo od chvíle,
+                kdy lidé začnou nový web používat.
+            </p>
+            <div id="aktivity" class="col" style="gap:5px;font-size:13.5px"></div>
+        </section>
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=50"></script>
-<script src="assets/js/ui.js?v=50"></script>
-<script type="module" src="assets/js/store.js?v=50"></script>
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
     "use strict";
+    const esc = (value) => window.KBUI.esc(value);
+    let sledovaniZapnuto = false;
+
+    const DRUHY = { projekt: "projekt", ukol: "úkol", postup: "postup", vykaz: "výkaz", kalendar: "kalendář" };
+
+    function renderAktivity() {
+        const cas = (ms) => {
+            const d = new Date(ms);
+            return d.getDate() + ". " + (d.getMonth() + 1) + ". " +
+                String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        };
+        document.getElementById("aktivity").innerHTML =
+            (window.KB.aktivity || []).map(a =>
+                '<div class="row" style="gap:10px;align-items:baseline;border-bottom:1px dashed var(--line-soft);padding:4px 0">' +
+                    '<span class="tiny muted" style="flex:none;width:92px">' + cas(a.ms) + "</span>" +
+                    '<span class="tag" style="flex:none">' + esc(DRUHY[a.druh] || a.druh || "") + "</span>" +
+                    "<span><b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "") + "</span>" +
+                "</div>").join("")
+            || '<span class="tiny muted">Zatím žádné záznamy.</span>';
+    }
+
     function render() {
         const smi = window.KBUI.can("vykaz.view");
         document.getElementById("stop").hidden = smi;
         document.getElementById("obsah").hidden = !smi;
+        if (smi && !sledovaniZapnuto && window.KB.currentUid()) {
+            sledovaniZapnuto = true;
+            window.KB.watchAktivity();
+        }
+        renderAktivity();
     }
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "reporty.html" });
         document.addEventListener("kb-role", render);
         window.KB.on("users", render);
+        window.KB.on("aktivity", renderAktivity);
         render();
     });
 })();

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Plán projektů (Gantt) – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Celý diagram jsou obyčejné divy: řádek = flex, pruhy a značky
+           position:absolute v procentech časového okna. Žádné SVG, žádná
+           knihovna – stejné počítání jako pruhy ve výkazech.
+           POZOR: šířka měsíce (90px) a levého sloupce (230px) je i ve
+           skriptu dole – kdo mění jedno, mění obojí. */
+        .g-plocha { padding: 0; overflow-x: auto; }
+        .g-vnitrek { position: relative; font-size: 13px; }
+        .g-radek { display: flex; align-items: stretch; border-bottom: 1px solid var(--line-soft); }
+        .g-radek--prj { cursor: pointer; }
+        .g-radek--prj:hover .g-levy, .g-radek--prj:hover .g-osa { background: var(--bg-soft); }
+
+        /* Levý sloupec drží při vodorovném posuvu na místě; neprůhledné
+           pozadí a z-index ho kladou NAD pruhy i linku dneška, které by
+           jinak „projížděly" pod názvy projektů. */
+        .g-levy {
+            flex: 0 0 230px; width: 230px; position: sticky; left: 0; z-index: 2;
+            background: var(--surface); padding: 7px 10px 7px 12px;
+            border-right: 1px solid var(--line); min-height: 34px;
+        }
+        .g-levy a { color: inherit; text-decoration: none; font-weight: 700; }
+        .g-levy a:hover { color: var(--accent); }
+        .g-levy .tiny { display: block; margin-top: 1px; }
+        .g-levy--ukol {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding-left: 30px; font-size: 12px; color: var(--text-soft); min-height: 26px;
+        }
+        .g-sipka { display: inline-block; width: 14px; color: var(--muted); font-size: 10px; }
+
+        /* Svislé linky měsíců kreslí gradient – jedna vlastnost místo
+           osmnácti divů. Perioda 90px = šířka měsíce ve skriptu. */
+        .g-osa {
+            position: relative; flex: none; overflow: hidden;
+            background: repeating-linear-gradient(to right, var(--line-soft) 0 1px, transparent 1px 90px);
+        }
+        .g-hlava { border-bottom: 1px solid var(--line); }
+        .g-hlava .g-levy { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+        .g-mesic {
+            display: inline-block; width: 90px; padding: 8px 0 8px 6px;
+            font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+            color: var(--muted); white-space: nowrap;
+        }
+
+        .g-pruh {
+            position: absolute; top: 50%; transform: translateY(-50%); height: 18px;
+            background: var(--accent-tint); border: 1px solid var(--accent-lt);
+            border-radius: 5px; min-width: 3px;
+        }
+        /* Bez zadaného konce jen odhadujeme – čárkovaný okraj to říká na první pohled. */
+        .g-pruh--odhad { border-style: dashed; }
+        .g-vypln { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent); border-radius: 4px 0 0 4px; }
+
+        /* Štítek s procenty je „lékovka" s vlastním podkladem, aby byl
+           čitelný, ať skončí na mřížce, na pruhu, nebo na tmavé výplni. */
+        .g-pct {
+            position: absolute; top: 50%; transform: translateY(-50%); margin-left: 6px;
+            font-size: 10.5px; font-weight: 800; color: var(--accent); white-space: nowrap;
+            background: var(--surface); border: 1px solid var(--line-soft);
+            border-radius: 99px; padding: 1px 7px; z-index: 1;
+        }
+        .g-diamant { position: absolute; top: 50%; transform: translate(-50%, -50%); color: var(--accent); font-size: 12px; z-index: 1; }
+        .g-diamant--mimo { opacity: .35; }   /* termín leží mimo okno – jen naznačit u kraje */
+        .g-kraj { position: absolute; top: 50%; transform: translateY(-50%); right: 8px; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+        .g-kraj--vlevo { right: auto; left: 8px; }
+
+        .g-dneska { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); z-index: 1; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Plán projektů vidí jen manažeři.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Ukazuje termíny a rozpracovanost všech projektů najednou. Když si myslíš,
+            že sem patříš, ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="gap:10px">
+            <a href="reporty.html" class="linkbtn" style="border-color:var(--line);color:var(--muted)">← Reporty</a>
+        </div>
+        <div class="spread">
+            <div>
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Plán projektů (Gantt)</h2>
+                <p class="small muted" style="margin-top:3px" id="popis"></p>
+            </div>
+            <div class="row" style="gap:8px">
+                <button type="button" id="btnZpet" class="btn btn--ghost" title="O 3 měsíce zpět">‹</button>
+                <button type="button" id="btnDnes" class="btn btn--ghost">Dnes</button>
+                <button type="button" id="btnVpred" class="btn btn--ghost" title="O 3 měsíce dál">›</button>
+            </div>
+        </div>
+
+        <div class="card g-plocha" id="plocha"><div id="gantt"></div></div>
+
+        <p class="tiny muted" style="line-height:1.6">
+            Kliknutím na řádek se rozbalí úkoly projektu; ◆ je termín úkolu.
+            Tmavá výplň pruhu = průměrná hotovost úkolů, čárkovaný pruh = projekt bez termínu.
+        </p>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=51"></script>
+<script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
+<script type="module" src="assets/js/store.js?v=51"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (v) => window.KBUI.esc(v);
+    const V = window.KBVYK;
+
+    /* Musí sedět s CSS nahoře (šířka .g-mesic, .g-levy a perioda gradientu). */
+    const MESIC_PX = 90;
+    const LEVY_PX = 230;
+    const DEN_MS = 24 * 60 * 60 * 1000;
+    const MESICE_KR = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
+    const PRIORITY = { "nizka": "nízká", "stredni": "střední", "vysoka": "vysoká", "resit-okamzite": "řešit okamžitě" };
+    const DULEZITOST = { "resit-okamzite": 0, "vysoka": 1, "stredni": 2, "nizka": 3 };
+
+    let sledovaniZapnuto = false;
+    let posun = 0;                    // posunutí okna v měsících proti výchozímu
+    let prvniSrovnani = true;         // po prvním vykreslení najet na dnešek
+    const rozbalene = new Set();      // id projektů s rozbalenými úkoly
+
+    /* Stránka je jen pro manažery, tak se rovnou poslouchá všechno –
+       zaměstnancům by pravidla databáze širší dotaz stejně odmítla,
+       proto se watch bez práva vykaz.view vůbec nezapíná. */
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid() || !window.KBUI.can("vykaz.view")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchProjekty();
+        window.KB.watchUkoly();
+    }
+
+    /* ------------------------------------------------------- časové okno */
+
+    // měsíc jako jedno číslo (rok*12+měsíc) – posouvání a porovnávání je pak sčítání
+    const mesKlic = (d) => d.getFullYear() * 12 + d.getMonth();
+    const isoMs = (iso) => new Date(iso + "T00:00:00").getTime();
+
+    const otevrene = () => (window.KB.projektyDocs || [])
+        .filter(p => p.uzavreno !== true)
+        .sort((a, b) => (DULEZITOST[a.priorita] ?? 9) - (DULEZITOST[b.priorita] ?? 9)
+            || (a.cislo || "").localeCompare(b.cislo || ""));
+
+    /* Bez začátku bereme den založení – projekt reálně běží od té chvíle.
+       Bez konce se kreslí do „dnes + 60 dní", jen aby měl pruh kam dojet;
+       čárkovaný okraj a popisek říkají, že je to odhad, ne termín. */
+    const zacatekMs = (p) => p.zacatek ? isoMs(p.zacatek) : (p.createdMs || Date.now());
+    const konecMs = (p) => p.konec ? isoMs(p.konec) + DEN_MS : Date.now() + 60 * DEN_MS;
+
+    function spocitejOkno() {
+        const dnesK = mesKlic(new Date());
+        let odK = dnesK, doK = dnesK;
+        otevrene().forEach(p => {
+            odK = Math.min(odK, mesKlic(new Date(zacatekMs(p))));
+            doK = Math.max(doK, mesKlic(new Date(konecMs(p))));
+        });
+        /* Víc než 18 měsíců by se stejně nedalo přečíst – delší rozsah se
+           ořízne kolem dneška a zbytek se dohlédne šipkami ‹ ›. */
+        if (doK - odK + 1 > 18) {
+            odK = Math.max(odK, dnesK - 9);
+            doK = Math.min(doK, odK + 17);
+        }
+        odK += posun; doK += posun;
+
+        const mesice = [];
+        for (let k = odK; k <= doK; k++) mesice.push({ rok: Math.floor(k / 12), mes: k % 12 });
+        return {
+            mesice: mesice,
+            odMs: new Date(Math.floor(odK / 12), odK % 12, 1).getTime(),
+            doMs: new Date(Math.floor(doK / 12), doK % 12 + 1, 1).getTime()
+        };
+    }
+
+    const pctOkna = (ms, okno) => (ms - okno.odMs) / (okno.doMs - okno.odMs) * 100;
+
+    /* ------------------------------------------------------------- úkoly */
+
+    const ukolyProjektu = (p) => (window.KB.ukoly || [])
+        .filter(u => u.projektId === p.id || u.projekt === p.nazev)
+        .sort((a, b) => (a.termin || "9999").localeCompare(b.termin || "9999")
+            || (a.nazev || "").localeCompare(b.nazev || ""));
+
+    // hotovost úkolu = průměr položek todo; bez todo se nic neudělalo, tedy 0
+    const pctUkolu = (u) => u.todo && u.todo.length
+        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length) : 0;
+
+    // hotovost projektu = průměr úkolů; bez úkolů null, ať se nekreslí falešná nula
+    const pctProjektu = (ukoly) => ukoly.length
+        ? Math.round(ukoly.reduce((s, u) => s + pctUkolu(u), 0) / ukoly.length) : null;
+
+    /* -------------------------------------------------------- vykreslení */
+
+    function pruhHtml(p, ukoly, okno) {
+        const bezKonce = !p.konec;
+        let l = pctOkna(zacatekMs(p), okno);
+        let r = pctOkna(konecMs(p), okno);
+        if (r <= 0) return '<span class="g-kraj g-kraj--vlevo">‹ mimo zobrazený úsek</span>';
+        if (l >= 100) return '<span class="g-kraj">mimo zobrazený úsek ›</span>';
+        l = Math.max(0, l); r = Math.min(100, r);
+
+        const pct = pctProjektu(ukoly);
+        const stitek = (pct === null ? "bez úkolů" : pct + " %") + (bezKonce ? " · bez termínu" : "");
+        return '<div class="g-pruh' + (bezKonce ? " g-pruh--odhad" : "") +
+                '" style="left:' + l.toFixed(2) + "%;width:" + (r - l).toFixed(2) + '%">' +
+                (pct ? '<div class="g-vypln" style="width:' + pct + '%"></div>' : "") +
+            "</div>" +
+            // štítek u konce pruhu; u pravého kraje se přisune, ať ho posuv neuřízne
+            '<span class="g-pct" style="left:' + Math.min(r, 86).toFixed(2) + '%">' + esc(stitek) + "</span>";
+    }
+
+    function radekProjektu(p, okno, sirka) {
+        const ukoly = ukolyProjektu(p);
+        return '<div class="g-radek g-radek--prj" data-prj="' + esc(p.id) + '">' +
+            '<div class="g-levy">' +
+                '<span class="g-sipka">' + (rozbalene.has(p.id) ? "▾" : "▸") + "</span>" +
+                '<a href="projekty.html?id=' + encodeURIComponent(p.id) + '">' +
+                    esc(((p.cislo ? p.cislo + " " : "") + p.nazev).trim()) + "</a>" +
+                '<span class="tiny muted">' + esc(PRIORITY[p.priorita] || "střední") + " · " +
+                    V.pocet(ukoly.length, ["úkol", "úkoly", "úkolů"]) + "</span>" +
+            "</div>" +
+            '<div class="g-osa" style="width:' + sirka + 'px">' + pruhHtml(p, ukoly, okno) + "</div>" +
+        "</div>";
+    }
+
+    function radekUkolu(u, okno, sirka) {
+        let znacka;
+        if (!u.termin) {
+            znacka = '<span class="g-kraj">bez termínu</span>';
+        } else {
+            const l = pctOkna(isoMs(u.termin) + DEN_MS / 2, okno);   // střed dne, ať ◆ sedí na dni
+            const mimo = l < 0 || l > 100;                            // u kraje jen naznačit
+            znacka = '<span class="g-diamant' + (mimo ? " g-diamant--mimo" : "") +
+                '" style="left:' + Math.min(100, Math.max(0, l)).toFixed(2) +
+                '%" title="' + esc(V.czDatum(u.termin)) + '">◆</span>';
+        }
+        return '<div class="g-radek">' +
+            '<div class="g-levy g-levy--ukol"><span>' + esc(u.nazev) + "</span>" +
+                "<b>" + pctUkolu(u) + " %</b></div>" +
+            '<div class="g-osa" style="width:' + sirka + 'px">' + znacka + "</div>" +
+        "</div>";
+    }
+
+    function vykresli() {
+        const projekty = otevrene();
+        const okno = spocitejOkno();
+        const sirka = okno.mesice.length * MESIC_PX;
+
+        $("popis").textContent = V.pocet(projekty.length, ["otevřený projekt", "otevřené projekty", "otevřených projektů"]) +
+            " · " + MESICE_KR[okno.mesice[0].mes] + " " + okno.mesice[0].rok +
+            " – " + MESICE_KR[okno.mesice[okno.mesice.length - 1].mes] + " " + okno.mesice[okno.mesice.length - 1].rok;
+
+        const hlava = '<div class="g-radek g-hlava">' +
+            '<div class="g-levy">Projekt</div>' +
+            '<div class="g-osa" style="width:' + sirka + 'px">' +
+                okno.mesice.map(m => '<span class="g-mesic">' +
+                    MESICE_KR[m.mes] + " " + String(m.rok).slice(2) + "</span>").join("") +
+            "</div></div>";
+
+        const radky = projekty.map(p => radekProjektu(p, okno, sirka) +
+            (rozbalene.has(p.id)
+                ? ukolyProjektu(p).map(u => radekUkolu(u, okno, sirka)).join("")
+                    || '<div class="g-radek"><div class="g-levy g-levy--ukol muted">Projekt nemá úkoly.</div>' +
+                       '<div class="g-osa" style="width:' + sirka + 'px"></div></div>'
+                : "")).join("")
+            || '<div class="tiny muted" style="padding:24px;text-align:center">Žádné otevřené projekty.</div>';
+
+        // linka dneška – jen když dnešek do okna vůbec padne
+        const dnesPct = pctOkna(Date.now(), okno);
+        const dneska = dnesPct >= 0 && dnesPct <= 100
+            ? '<div class="g-dneska" style="left:' + (LEVY_PX + sirka * dnesPct / 100).toFixed(0) + 'px"></div>' : "";
+
+        $("gantt").innerHTML = '<div class="g-vnitrek" style="width:' + (LEVY_PX + sirka) + 'px">' +
+            hlava + radky + dneska + "</div>";
+
+        // poprvé najet posuvem na dnešek, ať se nezačíná v lednu 2025
+        if (prvniSrovnani && projekty.length) { prvniSrovnani = false; najedNaDnes(); }
+    }
+
+    function najedNaDnes() {
+        const okno = spocitejOkno();
+        const pct = pctOkna(Date.now(), okno);
+        if (pct < 0 || pct > 100) return;
+        const cil = LEVY_PX + okno.mesice.length * MESIC_PX * pct / 100;
+        $("plocha").scrollLeft = Math.max(0, cil - $("plocha").clientWidth / 2);
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    function render() {
+        const smi = window.KBUI.can("vykaz.view");
+        $("stop").hidden = smi;
+        $("obsah").hidden = !smi;
+        if (!smi) return;
+        zapniSledovani();
+        vykresli();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "reporty.html" });
+
+        $("btnZpet").addEventListener("click", () => { posun -= 3; vykresli(); });
+        $("btnVpred").addEventListener("click", () => { posun += 3; vykresli(); });
+        $("btnDnes").addEventListener("click", () => { posun = 0; vykresli(); najedNaDnes(); });
+
+        // klik na řádek rozbalí úkoly; proklik na projekt musí zůstat odkazem
+        $("gantt").addEventListener("click", (event) => {
+            if (event.target.closest("a")) return;
+            const radek = event.target.closest("[data-prj]");
+            if (!radek) return;
+            const id = radek.dataset.prj;
+            rozbalene.has(id) ? rozbalene.delete(id) : rozbalene.add(id);
+            vykresli();
+        });
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("users", render);
+        window.KB.on("projekty-docs", render);
+        window.KB.on("ukoly", render);
+        window.KB.on("vykazy", render);   // kdyby výkazy zapnula sdílená část stránky
+        render();
+    });
+})();
+</script>
+</body>
+</html>
