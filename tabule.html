@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Tabule – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=56">
+    <link rel="stylesheet" href="assets/css/app.css?v=57">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 
@@ -213,11 +213,11 @@
 
 <input type="file" id="bFile" accept="image/*" hidden>
 
-<script src="assets/js/taxonomy.js?v=56"></script>
-<script src="assets/js/doc.js?v=56"></script>
-<script src="assets/js/ui.js?v=56"></script>
-<script src="assets/js/board.js?v=56"></script>
-<script type="module" src="assets/js/store.js?v=56"></script>
+<script src="assets/js/taxonomy.js?v=57"></script>
+<script src="assets/js/doc.js?v=57"></script>
+<script src="assets/js/ui.js?v=57"></script>
+<script src="assets/js/board.js?v=57"></script>
+<script type="module" src="assets/js/store.js?v=57"></script>
 
 <script>
 (function () {
@@ -225,7 +225,18 @@
 
     const $ = (id) => document.getElementById(id);
     const esc = (value) => window.KBUI.esc(value);
-    const boardId = new URLSearchParams(location.search).get("id") || "";
+
+    /* Adresa tabule: tabule.html#deska=ID. Dřív ?id=ID, jenže místní server
+       (npx serve) při „hezkých adresách" otazníkovou část zahazoval – stránka
+       pak nevěděla, kterou tabuli otevřít, skočila na první, server zase
+       všechno zahodil… a tak pořád dokola (to bylo to věčné problikávání).
+       Část za # serveru vůbec nedojde, takže ji zahodit nemůže.
+       Staré odkazy s ?id= dál fungují. */
+    const boardId = (() => {
+        const hash = location.hash.replace(/^#/, "");
+        if (hash.indexOf("deska=") === 0) return decodeURIComponent(hash.slice(6));
+        return new URLSearchParams(location.search).get("id") || "";
+    })();
 
     /* ------------------------------------------------------ seznam tabulí */
 
@@ -241,8 +252,10 @@
 
     /* Události `boards` chodí při každém uložení tahu (mění se updatedMs).
        Podlišta se ale smí překreslit jen, když se změní seznam nebo názvy –
-       jinak při kreslení problikává a stránka poskakuje. */
-    let podlistaOtisk = "";
+       jinak při kreslení problikává a stránka poskakuje.
+       Startovní hodnota je null, ne "": prázdný seznam tabulí má otisk ""
+       a první malování (s tlačítkem + Nová tabule) se přeskočit nesmí. */
+    let podlistaOtisk = null;
 
     function paintSubbar() {
         const slot = $("appSubbar");
@@ -264,7 +277,7 @@
             (boards.length ? '<span class="subbar__sep"></span>' : "") +
             boards.map(board =>
                 '<a class="chip' + (board.id === boardId ? " chip--active" : "") + '"' +
-                    ' href="tabule.html?id=' + encodeURIComponent(board.id) + '"' +
+                    ' href="tabule.html#deska=' + encodeURIComponent(board.id) + '"' +
                     ' title="' + esc(board.title || "Bez názvu") + '">' +
                     esc(board.title || "Bez názvu") +
                 "</a>").join("") +
@@ -282,7 +295,7 @@
             const id = window.KB.newBoardId();
             await window.KB.saveBoardMeta(id, { title: title });
             await window.KB.saveBoard(id, [], "");
-            location.href = "tabule.html?id=" + encodeURIComponent(id);
+            location.href = "tabule.html#deska=" + encodeURIComponent(id);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Tabuli se nepodařilo založit.", "error");
@@ -356,6 +369,10 @@
         window.KBUI.mountNav({ active: "tabule.html", subbar: true });
         paintSubbar();
 
+        /* Přepnutí tabule v podliště mění jen část adresy za # – to samo
+           o sobě stránku nepřenačte, tak se o to postaráme. */
+        window.addEventListener("hashchange", () => location.reload());
+
         if (!boardId) {
             /* Seznam s dlaždicemi zmizel (podlišta ho nahradila) – bez ?id
                se rovnou otevře naposledy upravovaná tabule. Výzva k založení
@@ -364,7 +381,7 @@
             const skoc = () => {
                 const boards = window.KB.boards || [];
                 if (boards.length) {
-                    location.replace("tabule.html?id=" + encodeURIComponent(boards[0].id));
+                    location.replace("tabule.html#deska=" + encodeURIComponent(boards[0].id));
                     return true;
                 }
                 return false;
