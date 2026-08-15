@@ -2849,3 +2849,89 @@ main .linkbtn:hover {
 .siderail__quick .field::placeholder { color: rgba(255, 255, 255, .6); }
 .siderail__quick select.field option { color: var(--text); background: var(--surface); }
 .siderail__quick .field:focus { background: #fff; color: var(--text); }
+
+/* ============================================== QUICK TO-DO PANEL ==== */
+/* Vyjede zpoza levého pásu přes obsah stránky – vzkaz se píše uprostřed
+   jiné práce a nemá smysl kvůli němu odcházet na jinou stránku. */
+
+.quickpanel { position: fixed; inset: 0; z-index: 140; pointer-events: none; }
+.quickpanel__stin {
+    position: absolute; inset: 0;
+    background: rgba(11, 13, 16, .35);
+    opacity: 0; transition: opacity .2s ease;
+}
+.quickpanel__deska {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 0;
+    width: min(430px, 92vw);
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    box-shadow: 0 0 40px -8px rgba(16, 20, 26, .45);
+    transform: translateX(-102%);
+    transition: transform .22s ease;
+}
+.quickpanel.je-otevreny { pointer-events: auto; }
+.quickpanel.je-otevreny .quickpanel__stin { opacity: 1; }
+.quickpanel.je-otevreny .quickpanel__deska { transform: translateX(0); }
+/* na širokém okně vyjede až za pásem, ať pás zůstane vidět */
+@media (min-width: 1121px) and (hover: hover) {
+    .quickpanel__deska { left: var(--rail-w); }
+}
+
+.quickpanel__hlava {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-top));
+    background: var(--accent);
+}
+.quickpanel__stitek {
+    font-size: 12px; font-weight: 900; letter-spacing: .09em;
+    text-transform: uppercase; color: #fff;
+}
+.quickpanel__telo { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 20px; }
+.quickpanel__form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.quickpanel__radek { display: flex; gap: 8px; }
+.quickpanel__radek .field { min-width: 0; }
+.quickpanel__nadpis {
+    font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--muted); margin: 14px 0 4px;
+}
+.quickpanel__prazdno {
+    padding: 20px 4px; color: var(--muted); font-size: 13.5px; line-height: 1.6; text-align: center;
+}
+
+.quickrad {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 8px 0; border-bottom: 1px dashed var(--line-soft);
+}
+.quickrad input[type="checkbox"] { margin-top: 3px; accent-color: var(--ok); flex: none; }
+.quickrad__text { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.45; }
+.quickrad__kdo { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.quickrad__po { color: var(--danger); font-weight: 700; }
+.quickrad--hotovo .quickrad__text { text-decoration: line-through; color: var(--muted); font-weight: 400; }
+
+/* počet nesplněných vzkazů na tlačítku v pásu */
+.siderail__odznak {
+    margin-left: auto; flex: none;
+    min-width: 20px; padding: 1px 6px;
+    border-radius: 99px;
+    background: #fff; color: var(--accent);
+    font-size: 11px; font-weight: 900; text-align: center;
+}
+.siderail__btn:hover .siderail__odznak { background: var(--accent); color: #fff; }
+
+/* podrobná řada procent v TO-DO na stránce úkolů (zapíná „% podrobně") */
+.subtask__kroky { grid-area: pct; display: flex; gap: 4px; flex-wrap: wrap; justify-self: end; }
+.subtask__krok {
+    border: 1px solid rgba(0, 0, 0, .12);
+    background: rgba(255, 255, 255, .7);
+    border-radius: 99px;
+    padding: 3px 8px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-soft);
+    cursor: pointer;
+}
+.subtask__krok.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
+.subtask__krok:disabled { cursor: default; opacity: .6; }

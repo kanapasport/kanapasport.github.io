@@ -87,6 +87,8 @@
         <label class="row" style="gap:6px;font-size:13px;cursor:pointer">
             <input type="checkbox" id="fHotove"> i hotové
         </label>
+        <button type="button" id="prepPodrobne" class="chip"
+            title="Přepne mezi jedním číslem a řadou kroků">% podrobně</button>
         <button type="button" id="btnRozbal" class="btn btn--sm btn--ghost"
             title="Otevře nebo zavře TO-DO u všech vypsaných úkolů naráz">Rozbalit vše</button>
     </div>
@@ -153,6 +155,17 @@
         "HAS", "PLYN", "RLM", "TER", "CHLAD", "VODA", "KAN"];
     const PATRA_VYCHOZI = ["3PP", "2PP", "1PP", "1NP", "2NP", "3NP", "4NP", "5NP", "6NP"];
     const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+
+    /* Jak si člověk přeje zapisovat procenta: výchozí jedno číslo (starý web),
+       nebo celá řada kroků. Osobní volba, drží ji prohlížeč – stejný klíč
+       jako na nástěnce, ať se to chová všude stejně. */
+    const PODROBNE_KLIC = "kb-pct-podrobne";
+    const podrobne = () => {
+        try { return localStorage.getItem(PODROBNE_KLIC) === "1"; } catch (err) { return false; }
+    };
+    const nastavPodrobne = (zap) => {
+        try { localStorage.setItem(PODROBNE_KLIC, zap ? "1" : "0"); } catch (err) {}
+    };
 
     /* Fajfka do zaškrtávátka – stejná jako na staré stránce postupu práce. */
     const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
@@ -265,11 +278,19 @@
                     ' title="Přepnout mezi 0 a 100 %">' + CHECK + "</button>" +
                 '<span class="subtask__name">' + esc(t.text) + "</span>" +
                 '<span class="subtask__info">' + kdo + "</span>" +
-                '<button type="button" class="subtask__pct" data-krok="' + klic + '"' + zamek +
-                    ' title="Klikáním po krocích 0 → 25 → 50 → 75 → 95 → 100 %">' + pct + " %</button>" +
-                '<input type="range" class="subtask__slider" min="0" max="100" step="5" value="' + pct + '" ' +
-                    'data-tahlo="' + klic + '"' + zamek +
-                    ' title="Přetažením nastavíš přesná procenta" aria-label="Postup v procentech">' +
+                /* Výchozí je jedno číslo a táhlo jako na starém webu.
+                   „% podrobně" místo nich vypíše celou řadu kroků –
+                   volba je osobní a drží ji prohlížeč. */
+                (podrobne()
+                    ? '<span class="subtask__kroky">' + PCT_KROKY.map(p =>
+                        '<button type="button" class="subtask__krok' + (pct === p ? " je-aktivni" : "") +
+                        '" data-pct="' + p + "|" + klic + '"' + zamek + ">" + p + "&nbsp;%</button>").join("") +
+                      "</span>"
+                    : '<button type="button" class="subtask__pct" data-krok="' + klic + '"' + zamek +
+                        ' title="Klikáním po krocích 0 → 25 → 50 → 75 → 95 → 100 %">' + pct + " %</button>" +
+                      '<input type="range" class="subtask__slider" min="0" max="100" step="5" value="' + pct + '" ' +
+                        'data-tahlo="' + klic + '"' + zamek +
+                        ' title="Přetažením nastavíš přesná procenta" aria-label="Postup v procentech">') +
             "</div>";
         }).join("");
 
@@ -345,6 +366,7 @@
         /* Tlačítko říká, co udělá: dokud je zavřený aspoň jeden vypsaný úkol,
            rozbaluje; teprve když jsou otevřené všechny, nabízí sbalení. */
         $("btnRozbal").textContent = vsePlneRozbaleno(seznam) ? "Sbalit vše" : "Rozbalit vše";
+        $("prepPodrobne").classList.toggle("chip--active", podrobne());
         $("btnRozbal").disabled = !seznam.length;
 
         // seskupení podle projektu
@@ -590,6 +612,19 @@
                 const [ukolId, todoId] = prepni.dataset.prepni.split("|");
                 const t = najdiTodo(ukolId, todoId);
                 return void zapisPct(ukolId, todoId, (t && Number(t.pct) === 100) ? 0 : 100);
+            }
+
+            // podrobná řada: rovnou na zvolenou hodnotu
+            const pctBtn = event.target.closest("[data-pct]");
+            if (pctBtn && !pctBtn.disabled) {
+                const [hodnota, ukolId, todoId] = pctBtn.dataset.pct.split("|");
+                return void zapisPct(ukolId, todoId, Number(hodnota));
+            }
+
+            // přepnutí způsobu zapisování procent
+            if (event.target.closest("#prepPodrobne")) {
+                nastavPodrobne(!podrobne());
+                return void vykresli();
             }
 
             // číslo procent: posun po krocích dokola

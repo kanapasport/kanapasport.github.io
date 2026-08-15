@@ -806,8 +806,10 @@
         UI.bindCloudStatus("[data-cloud-status]");
         stickyOffset();
         mountToTop();
+        mountQuickPanel();
         pozadejOData();
         renderMujDen();
+        renderQuick();
 
         // roletky se plní z databáze – po doručení dat se lišta překreslí
         if (window.KB) {
@@ -847,17 +849,12 @@
             '<div data-rail-search></div>' +
             // STATS – osobní stav, ne kopie lišty (viz komentář u renderMujDen)
             '<div class="siderail__mujden" data-rail-mujden hidden></div>' +
-            // Quick TO-DO: rychlý vzkaz s termínem, vidí ho jen autor a adresát
-            '<div class="siderail__quick" data-rail-quick hidden>' +
-                '<span class="siderail__nadpis">Quick TO-DO</span>' +
-                '<input type="text" class="field" data-quick-text maxlength="300" ' +
-                    'placeholder="Nezapomenout na…">' +
-                '<select class="field" data-quick-komu></select>' +
-                '<input type="date" class="field" data-quick-kdy aria-label="Do kdy">' +
-                '<button type="button" class="siderail__btn" data-quick-uloz>' +
-                    icon("plus") + "<span>Poslat vzkaz</span></button>" +
-            "</div>" +
             '<div class="siderail__spodek">' +
+                /* Quick TO-DO smí každý – je to vzkaz kolegovi, ne firemní
+                   údaj. Proto bez data-need, stejně jako Moje úkoly. */
+                '<button type="button" class="siderail__btn" data-quick-otevri>' +
+                    icon("tasks") + '<span>Quick TO-DO</span>' +
+                    '<span class="siderail__odznak" data-quick-pocet hidden></span></button>' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
                     icon("plus") + "<span>Nový výkaz</span></a>" +
@@ -896,43 +893,177 @@
         window.KB.watchMojeUkoly();
     }
 
-    /* Quick TO-DO z pásu: text, komu, do kdy. Uloží a vyprázdní se. */
-    function renderQuick() {
-        const slot = document.querySelector("[data-rail-quick]");
-        if (!slot) return;
-        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
-        slot.hidden = !uid;
-        if (!uid) return;
+    /* ------------------------------------------------------ Quick TO-DO ---
+       Panel vyjede zpoza pásu přes obsah stránky – vzkaz se často píše
+       uprostřed jiné práce a nemá smysl kvůli němu někam odcházet.
+       Je dostupný na každé stránce a smí ho poslat každý. */
 
-        const komu = slot.querySelector("[data-quick-komu]");
+    function mountQuickPanel() {
+        if (document.getElementById("kbQuickPanel")) return;
+        const panel = document.createElement("div");
+        panel.id = "kbQuickPanel";
+        panel.className = "quickpanel no-print";
+        panel.innerHTML =
+            '<div class="quickpanel__stin" data-quick-zavri></div>' +
+            '<div class="quickpanel__deska">' +
+                '<div class="quickpanel__hlava">' +
+                    '<span class="quickpanel__stitek">Quick TO-DO</span>' +
+                    '<button type="button" class="linkbtn" data-quick-zavri>Zavřít</button>' +
+                "</div>" +
+                '<div class="quickpanel__telo">' +
+                    '<div class="quickpanel__form">' +
+                        '<input type="text" class="field" data-quick-text maxlength="300" ' +
+                            'placeholder="Nezapomenout vystavit fakturu…">' +
+                        '<div class="quickpanel__radek">' +
+                            '<select class="field" data-quick-komu aria-label="Komu"></select>' +
+                            '<input type="date" class="field" data-quick-kdy aria-label="Do kdy">' +
+                        "</div>" +
+                        '<button type="button" class="btn btn--primary" data-quick-uloz>Poslat vzkaz</button>' +
+                    "</div>" +
+                    '<div class="quickpanel__seznam" data-quick-seznam></div>' +
+                "</div>" +
+            "</div>";
+        document.body.appendChild(panel);
+    }
+
+    /**
+     * Otevře nebo zavře panel. Posun se nastavuje rovnou na prvek, ne jen
+     * třídou: v jednom prohlížeči, na kterém jsme to zkoušeli, se změna
+     * třídy do rozvržení nepropsala a panel zůstal odsunutý za okrajem.
+     * Třída zůstává kvůli stínu a proklikávání.
+     */
+    function prepniQuick(otevrit) {
+        const panel = document.getElementById("kbQuickPanel");
+        if (!panel) return;
+        const deska = panel.querySelector(".quickpanel__deska");
+        const stin = panel.querySelector(".quickpanel__stin");
+        panel.classList.toggle("je-otevreny", !!otevrit);
+        panel.style.pointerEvents = otevrit ? "auto" : "none";
+        deska.style.transform = otevrit ? "translateX(0)" : "translateX(-102%)";
+        stin.style.opacity = otevrit ? "1" : "0";
+    }
+
+    const czDatumKratke = (iso) => {
+        if (!iso) return "";
+        const [y, m, d] = iso.split("-");
+        return Number(d) + ". " + Number(m) + ". " + y;
+    };
+    const dnesISO = () => {
+        const d = new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+            "-" + String(d.getDate()).padStart(2, "0");
+    };
+
+    function renderQuick() {
+        const panel = document.getElementById("kbQuickPanel");
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        if (!panel || !uid) return;
+
+        // nabídka lidí (jen jednou, ať se nepřepisuje rozepsaný výběr)
+        const komu = panel.querySelector("[data-quick-komu]");
         const lide = (window.KB.users || []).filter(u => u.active !== false);
         if (lide.length && komu.options.length <= 1) {
             komu.innerHTML = '<option value="">— komu —</option>' + lide.map(u =>
-                '<option value="' + esc(u.id) + '"' + (u.id === uid ? ' selected' : '') + ">" +
+                '<option value="' + esc(u.id) + '"' + (u.id === uid ? " selected" : "") + ">" +
                 esc(((u.first || "") + " " + (u.last || "")).trim()) +
                 (u.id === uid ? " (já)" : "") + "</option>").join("");
         }
+
+        const jmeno = (id) => {
+            const u = (window.KB.users || []).find(x => x.id === id);
+            return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
+        };
+        const vse = window.KB.quicktodo || [];
+        const proMe = vse.filter(q => q.proUid === uid);
+        const odeMe = vse.filter(q => q.odKoho === uid && q.proUid !== uid);
+
+        const radek = (q, mujVzkaz) => {
+            const poTerminu = !q.hotovo && q.doKdy && q.doKdy < dnesISO();
+            return '<div class="quickrad' + (q.hotovo ? " quickrad--hotovo" : "") + '">' +
+                '<input type="checkbox" data-quick-hotovo="' + esc(q.id) + '"' +
+                    (q.hotovo ? " checked" : "") + ">" +
+                '<span class="quickrad__text">' + esc(q.text) +
+                    '<span class="quickrad__kdo">' +
+                        (mujVzkaz ? "pro " + esc(jmeno(q.proUid) || "?")
+                                  : "od " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
+                        (q.doKdy ? ' · <span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
+                            esc(czDatumKratke(q.doKdy)) + "</span>" : "") +
+                    "</span>" +
+                "</span>" +
+                (q.odKoho === uid ? '<button type="button" class="linkbtn" data-quick-smaz="' +
+                    esc(q.id) + '" title="Smazat">×</button>' : "") +
+            "</div>";
+        };
+
+        panel.querySelector("[data-quick-seznam]").innerHTML =
+            (proMe.length
+                ? '<div class="quickpanel__nadpis">Pro mě</div>' + proMe.map(q => radek(q, false)).join("")
+                : '<div class="quickpanel__prazdno">Žiješ šťastný život, nikdo po tobě nic nechce.</div>') +
+            (odeMe.length
+                ? '<div class="quickpanel__nadpis">Poslal jsem</div>' + odeMe.map(q => radek(q, true)).join("")
+                : "");
+
+        // odznak s počtem nesplněných na tlačítku v pásu
+        const kolik = proMe.filter(q => !q.hotovo).length;
+        document.querySelectorAll("[data-quick-pocet]").forEach(el => {
+            el.textContent = kolik;
+            el.hidden = !kolik;
+        });
     }
 
     document.addEventListener("click", async (event) => {
+        if (event.target.closest("[data-quick-otevri]")) {
+            mountQuickPanel();
+            renderQuick();
+            prepniQuick(true);
+            setTimeout(() => {
+                const pole = document.querySelector("#kbQuickPanel [data-quick-text]");
+                if (pole) pole.focus();
+            }, 60);
+            return;
+        }
+        if (event.target.closest("[data-quick-zavri]")) {
+            prepniQuick(false);
+            return;
+        }
+        const smaz = event.target.closest("[data-quick-smaz]");
+        if (smaz) {
+            window.KB.deleteQuickTodo(smaz.dataset.quickSmaz)
+                .catch(() => UI.toast("Smazání selhalo.", "error"));
+            return;
+        }
         if (!event.target.closest("[data-quick-uloz]")) return;
-        const slot = document.querySelector("[data-rail-quick]");
-        const text = slot.querySelector("[data-quick-text]").value.trim();
-        const komu = slot.querySelector("[data-quick-komu]").value;
+
+        const panel = document.getElementById("kbQuickPanel");
+        const text = panel.querySelector("[data-quick-text]").value.trim();
+        const komu = panel.querySelector("[data-quick-komu]").value;
         if (!text) return UI.toast("Napiš, co se nemá zapomenout.", "warn");
         if (!komu) return UI.toast("Vyber, komu vzkaz patří.", "warn");
         try {
             await window.KB.saveQuickTodo(window.KB.newQuickId(), {
                 text: text, proUid: komu,
-                doKdy: slot.querySelector("[data-quick-kdy]").value
+                doKdy: panel.querySelector("[data-quick-kdy]").value
             });
-            slot.querySelector("[data-quick-text]").value = "";
-            slot.querySelector("[data-quick-kdy]").value = "";
+            panel.querySelector("[data-quick-text]").value = "";
+            panel.querySelector("[data-quick-kdy]").value = "";
             UI.toast("Vzkaz odeslán.");
         } catch (err) {
             console.error(err);
             UI.toast("Odeslání selhalo.", "error");
         }
+    });
+
+    /* odškrtnutí hotovo – celý záznam, ať se cestou nic neztratí */
+    document.addEventListener("change", (event) => {
+        const box = event.target.closest("[data-quick-hotovo]");
+        if (!box) return;
+        const q = (window.KB.quicktodo || []).find(x => x.id === box.dataset.quickHotovo);
+        if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, { hotovo: box.checked }))
+            .catch(() => UI.toast("Uložení selhalo.", "error"));
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") prepniQuick(false);
     });
 
     function renderMujDen() {

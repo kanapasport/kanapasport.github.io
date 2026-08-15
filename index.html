@@ -18,30 +18,75 @@
            úzkých sloupců ořezávalo názvy úkolů a jména víc, než kolik přineslo. */
         .nastenka { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         @media (max-width: 900px)  { .nastenka { grid-template-columns: 1fr; } }
-        .nastenka__karta { display: flex; flex-direction: column; gap: 8px; padding: 16px; height: 330px; }
-        .nastenka__telo { overflow-y: auto; flex: 1; min-height: 0; padding-right: 2px; }
+        /* Dlaždice mají hlavičku jako blok nového výkazu: červený pruh
+           s bílým štítkem. Karta se tím dá poznat okem dřív, než se člověk
+           začte do nadpisu (přání Michala „udělej je barevnější"). */
+        .nastenka__karta { display: flex; flex-direction: column; height: 330px;
+            padding: 0; overflow: hidden; border-color: var(--accent-lt); }
+        .nastenka__hlava { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 8px 14px; background: var(--accent); }
+        .nastenka__hlava b { font-size: 12px; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #fff; }
+        .nastenka__hlava .linkbtn { color: #fff; opacity: .88; }
+        .nastenka__hlava .linkbtn:hover { opacity: 1; background: #fff; color: var(--accent); border-color: #fff; }
+        .nastenka__telo { overflow-y: auto; flex: 1; min-height: 0; padding: 12px 14px; }
         /* přepínač rozsahu v hlavičce karty – drobnější než běžný chip,
            aby hlavička zůstala jednořádková i na užším okně */
         .nastenka__prep { display: flex; align-items: center; gap: 6px; }
-        .nastenka__prep .chip { padding: 3px 9px; font-size: 11px; }
+        .nastenka__prep .chip { padding: 3px 9px; font-size: 11px;
+            background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .45); color: #fff; }
+        .nastenka__prep .chip--active { background: #fff; color: var(--accent); border-color: #fff; }
+
+        /* Úkol i TO-DO nesou barvu podle rozpracovanosti – stejná stupnice
+           jako na stránce úkolů, ať se to nikde nečte jinak. */
         .mujukol { display: flex; align-items: center; gap: 10px; padding: 9px 11px;
             border: 1px solid var(--line-soft); border-radius: var(--radius);
             background: var(--surface); cursor: pointer; text-align: left; font: inherit; width: 100%; }
         .mujukol:hover { border-color: var(--accent-lt); }
-        .mujukol.je-vybrany { border-color: var(--accent); background: var(--accent-tint); }
-        .mujukol__nazev { font-weight: 700; font-size: 13.5px; }
-        .mujukol__meta { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
-        .mujukol__prubeh { flex: none; width: 90px; height: 7px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+        .mujukol.je-vybrany { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .mujukol--p0   { background: var(--p0-bg); }
+        .mujukol--p50  { background: var(--p50-bg); }
+        .mujukol--p75  { background: var(--p75-bg); }
+        .mujukol--p95  { background: var(--p95-bg); }
+        .mujukol--p100 { background: var(--p100-bg); }
+        .mujukol__nazev { font-weight: 800; font-size: 13.5px; }
+        .mujukol__meta { font-size: 11.5px; color: var(--text-soft); margin-top: 1px; }
+        .mujukol__prubeh { flex: none; width: 90px; height: 7px; border-radius: 99px;
+            background: rgba(255, 255, 255, .65); overflow: hidden; }
         .mujukol__prubeh i { display: block; height: 100%; background: var(--accent); }
+        .mujukol--p100 .mujukol__prubeh i { background: var(--p100-fg); }
         .mujukol__pct { flex: none; font-weight: 900; font-size: 12.5px; width: 40px; text-align: right; }
-        .ntodo { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line-soft); }
-        .ntodo:last-child { border-bottom: none; }
-        .ntodo__text { flex: 1; min-width: 0; font-size: 13.5px; }
+        .mujukol--p0   .mujukol__pct { color: var(--p0-fg); }
+        .mujukol--p50  .mujukol__pct { color: var(--p50-fg); }
+        .mujukol--p75  .mujukol__pct { color: var(--p75-fg); }
+        .mujukol--p95  .mujukol__pct { color: var(--p95-fg); }
+        .mujukol--p100 .mujukol__pct { color: var(--p100-fg); }
+
+        .ntodo { display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+            border-radius: var(--radius); margin-bottom: 4px; }
+        .ntodo--p0   { background: var(--p0-bg); }
+        .ntodo--p50  { background: var(--p50-bg); }
+        .ntodo--p75  { background: var(--p75-bg); }
+        .ntodo--p95  { background: var(--p95-bg); }
+        .ntodo--p100 { background: var(--p100-bg); }
+        .ntodo__text { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; }
+        .ntodo--p100 .ntodo__text { text-decoration: line-through; opacity: .75; }
         .ntodo__pcts { display: flex; gap: 4px; flex-wrap: wrap; }
-        .ntodo__pct { border: 1px solid var(--line); background: var(--surface); border-radius: 99px;
-            padding: 3px 8px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--muted); }
+        .ntodo__pct { border: 1px solid rgba(0, 0, 0, .12); background: rgba(255, 255, 255, .7);
+            border-radius: 99px; padding: 3px 8px; font-size: 11px; font-weight: 700;
+            cursor: pointer; color: var(--text-soft); }
         .ntodo__pct.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
         .ntodo__pct:disabled { cursor: default; opacity: .55; }
+        /* jedno číslo, na které se klikne a posune se po krocích – výchozí
+           způsob ze starého webu; podrobná řada se zapne přepínačem */
+        .ntodo__cyklus { border: 1px solid rgba(0, 0, 0, .12); background: rgba(255, 255, 255, .7);
+            border-radius: 99px; padding: 4px 12px; font-size: 12px; font-weight: 900;
+            cursor: pointer; color: var(--text-soft); min-width: 56px; }
+        .ntodo--p0   .ntodo__cyklus { color: var(--p0-fg); }
+        .ntodo--p50  .ntodo__cyklus { color: var(--p50-fg); }
+        .ntodo--p75  .ntodo__cyklus { color: var(--p75-fg); }
+        .ntodo--p95  .ntodo__cyklus { color: var(--p95-fg); }
+        .ntodo--p100 .ntodo__cyklus { color: var(--p100-fg); }
         /* Nadpis vybraného úkolu hned pod hlavičkou TO-DO – Michal: ať je
            na první pohled vidět, čí postup se dole odškrtává. */
         .todonazev { font-size: 13px; font-weight: 800; line-height: 1.35; }
@@ -133,7 +178,7 @@
         <!-- všechny dlaždice stejně velké; delší obsah roluje uvnitř -->
         <div class="nastenka">
             <div class="card nastenka__karta" id="wUkoly">
-                <div class="spread">
+                <div class="nastenka__hlava">
                     <b>Zadané úkoly</b>
                     <span class="nastenka__prep">
                         <button type="button" class="chip" data-rozsah="moje">Moje</button>
@@ -144,29 +189,33 @@
                 <div id="mojeUkoly" class="nastenka__telo col" style="gap:6px"></div>
             </div>
             <div class="card nastenka__karta" id="wTodo">
-                <div class="spread">
+                <div class="nastenka__hlava">
                     <b>TO-DO — postup práce</b>
-                    <a id="todoOdkaz" class="linkbtn" href="ukoly.html" hidden>otevřít →</a>
+                    <span class="nastenka__prep">
+                        <button type="button" class="chip" id="prepPodrobne" hidden
+                            title="Přepne mezi jedním číslem a řadou kroků">% podrobně</button>
+                        <a id="todoOdkaz" class="linkbtn" href="ukoly.html" hidden>otevřít →</a>
+                    </span>
                 </div>
                 <!-- nadpis vybraného úkolu – plní ho renderNastenka přes textContent -->
                 <div id="todoNazev" class="todonazev" hidden></div>
                 <div id="todoRozpad" class="nastenka__telo col" style="gap:2px"></div>
             </div>
             <div class="card nastenka__karta" id="wQuick">
-                <div class="spread">
+                <div class="nastenka__hlava">
                     <b>Quick TO-DO</b>
                 </div>
                 <div id="quickSeznam" class="nastenka__telo"></div>
             </div>
             <div class="card nastenka__karta" id="wKalendar">
-                <div class="spread">
+                <div class="nastenka__hlava">
                     <b>Kalendář — dnes a nejbližší dny</b>
                     <a class="linkbtn" href="kalendar.html">otevřít →</a>
                 </div>
                 <div id="kalendarSeznam" class="nastenka__telo"></div>
             </div>
             <div class="card nastenka__karta" id="wOnline">
-                <div class="spread">
+                <div class="nastenka__hlava">
                     <b>Kdo tu byl</b>
                     <a class="linkbtn" href="reporty.html" data-need="vykaz.view" hidden>historie →</a>
                 </div>
@@ -174,7 +223,7 @@
             </div>
             <!-- poslední aktivita je jen pro manažery – bez práv se karta nevykreslí -->
             <div class="card nastenka__karta" id="wAktivita" data-need="vykaz.view" hidden>
-                <div class="spread">
+                <div class="nastenka__hlava">
                     <b>Poslední aktivita</b>
                     <a class="linkbtn" href="reporty.html">historie →</a>
                 </div>
@@ -323,6 +372,28 @@
         ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
         : (u.stav === "hotovo" ? 100 : 0);
 
+    /* Stupeň rozpracovanosti pro barvu – stejná stupnice jako na stránce
+       úkolů a na starém webu, ať se to nikde nečte jinak. */
+    function pctUroven(pct) {
+        const v = Number(pct) || 0;
+        if (v >= 100) return "p100";
+        if (v >= 95)  return "p95";
+        if (v >= 75)  return "p75";
+        if (v > 0)    return "p50";
+        return "p0";
+    }
+
+    /* Jak si člověk přeje zapisovat procenta. Výchozí je jedno číslo
+       (jako na starém webu); „% podrobně" ukáže celou řadu kroků.
+       Volba je osobní, drží ji prohlížeč. */
+    const PODROBNE_KLIC = "kb-pct-podrobne";
+    const podrobne = () => {
+        try { return localStorage.getItem(PODROBNE_KLIC) === "1"; } catch (err) { return false; }
+    };
+    const nastavPodrobne = (zap) => {
+        try { localStorage.setItem(PODROBNE_KLIC, zap ? "1" : "0"); } catch (err) {}
+    };
+
     const mojeUid = () => (window.KB.currentUid ? window.KB.currentUid() : "") || "";
     const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
     const jeMuj = (u) => (u.prirazeni || []).indexOf(mojeUid()) !== -1;
@@ -356,7 +427,7 @@
             const kdo = jeMuj(u) ? "" : (u.prirazeni || []).map(jmenoUid).filter(Boolean).join(", ");
             const meta = [u.projekt, kdo, u.termin ? "termín " + czDatum(u.termin) : ""]
                 .filter(Boolean).join(" · ");
-            return '<button type="button" class="mujukol' +
+            return '<button type="button" class="mujukol mujukol--' + pctUroven(pct) +
                 (u.id === vybranyUkol ? " je-vybrany" : "") + '" data-vyber="' + esc(u.id) + '">' +
                 '<span class="grow"><span class="mujukol__nazev">' + esc(u.nazev) + "</span>" +
                 '<span class="mujukol__meta" style="display:block">' + esc(meta) + "</span></span>" +
@@ -376,15 +447,26 @@
         nazev.hidden = !u;
         nazev.textContent = u ? u.nazev + (u.projekt ? " · " + u.projekt : "") : "";
 
+        // přepínač „% podrobně" se ukáže, jen když je co odškrtávat
+        document.getElementById("prepPodrobne").hidden = !u;
+        document.getElementById("prepPodrobne").classList.toggle("chip--active", podrobne());
+
         document.getElementById("todoRozpad").innerHTML = !u
             ? '<div class="tiny muted" style="padding:10px 2px">Vyber vlevo úkol.</div>'
             : ((u.todo || []).map(t => {
-                const kroky = PCT_KROKY.map(p =>
-                    '<button type="button" class="ntodo__pct' +
-                    ((Number(t.pct) || 0) === p ? " je-aktivni" : "") +
-                    '" data-npct="' + p + '" data-ntodo="' + esc(t.id) + '">' + p + "&nbsp;%</button>").join("");
-                return '<div class="ntodo"><span class="ntodo__text">' + esc(t.text) + "</span>" +
-                    '<span class="ntodo__pcts">' + kroky + "</span></div>";
+                const pct = Number(t.pct) || 0;
+                /* Výchozí je jedno číslo jako na starém webu – kliknutím
+                   se posune po krocích. Podrobnou řadu si každý zapne sám
+                   a volba mu zůstane (localStorage). */
+                const ovladani = podrobne()
+                    ? '<span class="ntodo__pcts">' + PCT_KROKY.map(p =>
+                        '<button type="button" class="ntodo__pct' + (pct === p ? " je-aktivni" : "") +
+                        '" data-npct="' + p + '" data-ntodo="' + esc(t.id) + '">' + p + "&nbsp;%</button>").join("") +
+                      "</span>"
+                    : '<button type="button" class="ntodo__cyklus" data-ncyklus="' + esc(t.id) +
+                      '" title="Klikni pro další krok">' + pct + " %</button>";
+                return '<div class="ntodo ntodo--' + pctUroven(pct) + '">' +
+                    '<span class="ntodo__text">' + esc(t.text) + "</span>" + ovladani + "</div>";
             }).join("") || '<div class="tiny muted" style="padding:10px 2px">Úkol nemá TO-DO rozpad.</div>');
     }
 
@@ -514,7 +596,22 @@
         const vyber = event.target.closest("[data-vyber]");
         if (vyber) { vybranyUkol = vyber.dataset.vyber; return void renderNastenka(); }
         const pct = event.target.closest("[data-npct]");
-        if (pct) zapisPct(pct.dataset.ntodo, Number(pct.dataset.npct));
+        if (pct) return void zapisPct(pct.dataset.ntodo, Number(pct.dataset.npct));
+
+        // klik na číslo posune procenta na další krok – jako na starém webu
+        const cyklus = event.target.closest("[data-ncyklus]");
+        if (cyklus) {
+            const u = seznamUkolu().find(x => x.id === vybranyUkol);
+            const t = u && (u.todo || []).find(x => x.id === cyklus.dataset.ncyklus);
+            if (t) {
+                const ted = Number(t.pct) || 0;
+                const dalsi = PCT_KROKY.find(p => p > ted);
+                zapisPct(t.id, dalsi === undefined ? 0 : dalsi);
+            }
+            return;
+        }
+        const prep = event.target.closest("#prepPodrobne");
+        if (prep) { nastavPodrobne(!podrobne()); renderNastenka(); }
     });
 
     /* ---------------------------------------------------------- hledání */
