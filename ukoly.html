@@ -11,12 +11,8 @@
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* Hlavička stránky: nadpis a hned vedle něj tlačítka, všechno doleva.
-           Stránka je široká (--sirka-stranky až 1720 px), takže rozhození na
-           opačné konce (justify-content:space-between) by mezi nadpis
-           a tlačítka udělalo přes půl obrazovky prázdna. */
-        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-        .hlavicka__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        /* Hlavička stránky je sdílený .spread z app.css: nadpis vlevo,
+           tlačítka vpravo – stejně jako na ostatních stránkách. */
 
         .ukol { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
         .ukol__hlava { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
@@ -49,22 +45,9 @@
         .skupina-nadpis { font-size: 13px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
             color: var(--text-soft); margin: 14px 0 2px; display: flex; align-items: center; gap: 10px; }
         .skupina-nadpis .tag { font-weight: 700; }
-        /* Formulář: první řádek projekt · druh · technologie, druhý budova ·
-           patro · termín, název pak přes celou šířku. Pevné tři sloupce, ne
-           auto-fit – jinak si každý typ pole vezme jinou šířku a řádky se
-           rozjedou. Název je až poslední schválně: skládá se z hodnot nad ním
-           a jako pole přes celý řádek nenechá v mřížce díru ve chvíli, kdy se
-           technologie u jiného druhu práce schová. */
-        .ukolform { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
-        .ukolform label { display: block; min-width: 0; }
-        /* `display:block` výše je autorský styl a přebil by `hidden` z prohlížeče –
-           bez tohohle by technologie svítila i u druhů práce, kde nedává smysl */
-        .ukolform label[hidden] { display: none; }
-        .ukolform .field { width: 100%; }
-        /* přes celý řádek při jakémkoliv počtu sloupců */
-        .ukolform__siroke { grid-column: 1 / -1; }
-        @media (max-width: 780px) { .ukolform { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 520px) { .ukolform { grid-template-columns: minmax(0, 1fr); } }
+        /* Formulář jede na sdílené mřížce .fmr z app.css (vzor = zápis
+           výkazu): kompaktní buňky se poskládají samy a schovaná technologie
+           nenechá v řádku díru. Vlastní mřížka tu proto žádná není. */
         .vybervse { border: none; background: none; font: inherit; font-size: 11.5px; font-weight: 700;
             color: var(--accent); cursor: pointer; padding: 2px 6px; }
         .lidevyber { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -79,14 +62,14 @@
 
 <main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
 
-    <div class="hlavicka">
+    <div class="spread">
         <div>
             <h2 style="font-size:20px;font-weight:900;line-height:1.2">Úkoly</h2>
             <p class="small muted" style="margin-top:3px">
                 Každý úkol má TO-DO rozpad, ve kterém se zapisuje postup.
             </p>
         </div>
-        <div class="hlavicka__akce">
+        <div class="row row--wrap" style="gap:8px">
             <button type="button" id="btnNovy" class="btn btn--primary" data-need="ukol.delete" hidden>+ Nový úkol</button>
             <!-- budovy, patra a technologie se nastavují u každého projektu
                  zvlášť, a to ve Správě projektů – tady se už jen čtou -->
@@ -111,7 +94,7 @@
     <!-- ============================================== TVORBA ÚKOLU -->
     <section id="tvorba" class="card col" hidden style="gap:12px">
         <b id="tvorbaNadpis">Nový úkol</b>
-        <div class="ukolform">
+        <div class="fmr">
             <label><span class="label">Projekt</span><select id="uProjekt" class="field"></select></label>
             <label><span class="label">Druh práce</span>
                 <select id="uDruh" class="field">
@@ -124,19 +107,21 @@
             <label><span class="label">Budova</span><select id="uBudova" class="field"></select></label>
             <label><span class="label">Patro</span><select id="uPatro" class="field"></select></label>
             <label><span class="label">Termín</span><input type="date" id="uTermin" class="field"></label>
-            <label class="ukolform__siroke"><span class="label">Název (doplní se sám, jde přepsat)</span>
+            <!-- Název přes celý řádek schválně: skládá se z hodnot nad ním
+                 a bývá nejdelší text formuláře, v úzké buňce by se usekl. -->
+            <label class="fmr__cely"><span class="label">Název (doplní se sám, jde přepsat)</span>
                 <input type="text" id="uNazev" class="field"></label>
+            <div class="fmr__cely">
+                <span class="label">Komu úkol patří
+                    <button type="button" class="vybervse" data-vse="uLide">vybrat vše</button></span>
+                <div id="uLide" class="lidevyber"></div>
+            </div>
+            <div class="fmr__cely">
+                <span class="label">TO-DO rozpad (jeden řádek = jedna položka)</span>
+                <textarea id="uTodo" rows="3" class="field" placeholder="Zákres půdorysu&#10;Kontrola polohových kódů&#10;Výkres do PDF"></textarea>
+            </div>
+            <label class="fmr__cely"><span class="label">Poznámka</span><textarea id="uPoznamka" rows="2" class="field"></textarea></label>
         </div>
-        <div>
-            <span class="label">Komu úkol patří
-                <button type="button" class="vybervse" data-vse="uLide">vybrat vše</button></span>
-            <div id="uLide" class="lidevyber"></div>
-        </div>
-        <div>
-            <span class="label">TO-DO rozpad (jeden řádek = jedna položka)</span>
-            <textarea id="uTodo" rows="3" class="field" placeholder="Zákres půdorysu&#10;Kontrola polohových kódů&#10;Výkres do PDF"></textarea>
-        </div>
-        <label><span class="label">Poznámka</span><textarea id="uPoznamka" rows="2" class="field"></textarea></label>
         <div class="row" style="justify-content:flex-end;gap:10px">
             <button type="button" id="btnSmazat" class="btn btn--ghost" hidden style="margin-right:auto;color:var(--danger)">Smazat úkol</button>
             <button type="button" id="btnZrusit" class="btn btn--ghost">Zrušit</button>

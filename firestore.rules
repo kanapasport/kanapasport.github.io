@@ -196,6 +196,24 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // --- Quick TO-DO: rychlé vzkazy mezi dvěma lidmi ---------------------
+    // Schválně MIMO `private` – tam má správce plošné čtení, kdežto tohle
+    // má vidět jen autor a adresát. Nikdo jiný, ani manažer.
+    match /artifacts/firemni-kb-app/osobni/quicktodo/seznam/{id} {
+      allow read: if clen() && (resource.data.proUid == request.auth.uid
+                                || resource.data.odKoho == request.auth.uid);
+      allow create: if clen() && request.resource.data.odKoho == request.auth.uid;
+      // adresát smí odškrtnout hotovo, autor upravit i smazat; přeposlat
+      // vzkaz jinému člověku nejde – dvojice odKoho/proUid se měnit nesmí
+      allow update: if clen()
+                       && (resource.data.proUid == request.auth.uid
+                           || resource.data.odKoho == request.auth.uid)
+                       && request.resource.data.proUid == resource.data.proUid
+                       && request.resource.data.odKoho == resource.data.odKoho;
+      allow delete: if clen() && (resource.data.odKoho == request.auth.uid
+                                  || resource.data.proUid == request.auth.uid);
+    }
+
     // všechno ostatní zavřené
     match /{document=**} {
       allow read, write: if false;

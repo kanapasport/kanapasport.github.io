@@ -816,9 +816,10 @@
             window.KB.on("projekty-docs", refreshNav);
             window.KB.on("milniky", refreshNav);
             window.KB.on("vykazy", renderMujDen);
-            window.KB.on("users", () => { pozadejOData(); renderMujDen(); });
+            window.KB.on("quicktodo", renderMujDen);
+            window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
         }
-        document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); });
+        document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); renderQuick(); });
     };
 
     /** Překreslí navigaci (obsah roletek se bere z databáze). */
@@ -844,8 +845,18 @@
             '<a class="siderail__logo" href="index.html" aria-label="Domů">' +
                 '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa"></a>' +
             '<div data-rail-search></div>' +
-            // „Můj den" – osobní stav, ne kopie lišty (viz komentář u renderMujDen)
+            // STATS – osobní stav, ne kopie lišty (viz komentář u renderMujDen)
             '<div class="siderail__mujden" data-rail-mujden hidden></div>' +
+            // Quick TO-DO: rychlý vzkaz s termínem, vidí ho jen autor a adresát
+            '<div class="siderail__quick" data-rail-quick hidden>' +
+                '<span class="siderail__nadpis">Quick TO-DO</span>' +
+                '<input type="text" class="field" data-quick-text maxlength="300" ' +
+                    'placeholder="Nezapomenout na…">' +
+                '<select class="field" data-quick-komu></select>' +
+                '<input type="date" class="field" data-quick-kdy aria-label="Do kdy">' +
+                '<button type="button" class="siderail__btn" data-quick-uloz>' +
+                    icon("plus") + "<span>Poslat vzkaz</span></button>" +
+            "</div>" +
             '<div class="siderail__spodek">' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
@@ -878,11 +889,51 @@
 
     function pozadejOData() {
         if (mujDenZapnut || !window.KB || !window.KB.currentUid || !window.KB.currentUid()) return;
-        if (!UI.can("vykaz.otevrit")) return;      // student výkazy nemá
         mujDenZapnut = true;
+        window.KB.watchQuickTodo();
+        if (!UI.can("vykaz.otevrit")) return;      // student výkazy nemá
         window.KB.watchMojeVykazy();
         window.KB.watchMojeUkoly();
     }
+
+    /* Quick TO-DO z pásu: text, komu, do kdy. Uloží a vyprázdní se. */
+    function renderQuick() {
+        const slot = document.querySelector("[data-rail-quick]");
+        if (!slot) return;
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        slot.hidden = !uid;
+        if (!uid) return;
+
+        const komu = slot.querySelector("[data-quick-komu]");
+        const lide = (window.KB.users || []).filter(u => u.active !== false);
+        if (lide.length && komu.options.length <= 1) {
+            komu.innerHTML = '<option value="">— komu —</option>' + lide.map(u =>
+                '<option value="' + esc(u.id) + '"' + (u.id === uid ? ' selected' : '') + ">" +
+                esc(((u.first || "") + " " + (u.last || "")).trim()) +
+                (u.id === uid ? " (já)" : "") + "</option>").join("");
+        }
+    }
+
+    document.addEventListener("click", async (event) => {
+        if (!event.target.closest("[data-quick-uloz]")) return;
+        const slot = document.querySelector("[data-rail-quick]");
+        const text = slot.querySelector("[data-quick-text]").value.trim();
+        const komu = slot.querySelector("[data-quick-komu]").value;
+        if (!text) return UI.toast("Napiš, co se nemá zapomenout.", "warn");
+        if (!komu) return UI.toast("Vyber, komu vzkaz patří.", "warn");
+        try {
+            await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+                text: text, proUid: komu,
+                doKdy: slot.querySelector("[data-quick-kdy]").value
+            });
+            slot.querySelector("[data-quick-text]").value = "";
+            slot.querySelector("[data-quick-kdy]").value = "";
+            UI.toast("Vzkaz odeslán.");
+        } catch (err) {
+            console.error(err);
+            UI.toast("Odeslání selhalo.", "error");
+        }
+    });
 
     function renderMujDen() {
         const slot = document.querySelector("[data-rail-mujden]");
@@ -906,22 +957,28 @@
         const mojeUkoly = (window.KB.ukoly || [])
             .filter(u => u.stav !== "hotovo" && (u.prirazeni || []).indexOf(uid) !== -1);
         const nejblizsi = mojeUkoly.filter(u => u.termin).sort((a, b) => a.termin.localeCompare(b.termin))[0];
+        // TO-DO = nedodělané položky napříč mými úkoly; Quick = co mi kdo poslal
+        const todoZbyva = mojeUkoly.reduce((s, u) =>
+            s + (u.todo || []).filter(t => (Number(t.pct) || 0) < 100).length, 0);
+        const quickZbyva = (window.KB.quicktodo || [])
+            .filter(q => !q.hotovo && q.proUid === uid).length;
 
         const cislo = (h) => Number(h || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
         const czDatum = (i) => { const [, m, d] = i.split("-"); return Number(d) + ". " + Number(m) + "."; };
 
         slot.hidden = false;
         slot.innerHTML =
-            '<span class="siderail__nadpis">Můj den</span>' +
+            '<span class="siderail__nadpis">Stats</span>' +
             '<div class="mujden__radek"><span>Dnes</span><b>' + cislo(hodinyDnes) + " h</b></div>" +
             '<div class="mujden__radek"><span>Tento týden</span><b>' + cislo(hodinyTyden) + " h</b></div>" +
-            '<div class="mujden__radek"><span>Otevřené úkoly</span><b>' + mojeUkoly.length + "</b></div>" +
+            '<div class="mujden__radek"><span>Moje úkoly</span><b>' + mojeUkoly.length + "</b></div>" +
+            '<div class="mujden__radek"><span>TO-DO</span><b>' + todoZbyva + "</b></div>" +
+            '<div class="mujden__radek"><span>Quick TO-DO</span><b>' + quickZbyva + "</b></div>" +
             (nejblizsi
                 ? '<a class="mujden__termin" href="ukoly.html?moje=1">' +
                     "<span>Nejbližší termín · " + esc(czDatum(nejblizsi.termin)) + "</span>" +
                     "<b>" + esc(nejblizsi.nazev || "") + "</b></a>"
-                : '<div class="mujden__termin mujden__termin--klid">' +
-                    "<span>Žádný termín před sebou</span></div>");
+                : "");
     }
 
     /* Hledání je jedno jediné pole. Na širokém okně bydlí v pásu, na úzkém

@@ -14,8 +14,8 @@
     <style>
         /* Nástěnka: dlaždice stejné velikosti (přání Michala) – proto pevná
            výška karty a rolování uvnitř, ne podle délky obsahu.
-           Dvě vedle sebe a druhé dvě pod nimi, i na širokém monitoru: čtyři
-           úzké sloupce ořezávaly názvy úkolů a jména víc, než kolik přinesly. */
+           Šest dlaždic ve dvou sloupcích (2×3), i na širokém monitoru: víc
+           úzkých sloupců ořezávalo názvy úkolů a jména víc, než kolik přineslo. */
         .nastenka { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         @media (max-width: 900px)  { .nastenka { grid-template-columns: 1fr; } }
         .nastenka__karta { display: flex; flex-direction: column; gap: 8px; padding: 16px; height: 330px; }
@@ -42,6 +42,55 @@
             padding: 3px 8px; font-size: 11px; font-weight: 700; cursor: pointer; color: var(--muted); }
         .ntodo__pct.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
         .ntodo__pct:disabled { cursor: default; opacity: .55; }
+        /* Nadpis vybraného úkolu hned pod hlavičkou TO-DO – Michal: ať je
+           na první pohled vidět, čí postup se dole odškrtává. */
+        .todonazev { font-size: 13px; font-weight: 800; line-height: 1.35; }
+
+        /* Quick TO-DO: vzkaz s fajfkou vlevo; hotové řádky blednou, ať oči
+           táhnou jen ty, co ještě čekají. */
+        .qt { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0;
+            border-bottom: 1px dashed var(--line-soft); }
+        .qt:last-child { border-bottom: none; }
+        .qt__fajfka { flex: none; width: 15px; height: 15px; margin-top: 3px; cursor: pointer; }
+        .qt__text { font-weight: 700; font-size: 13.5px; line-height: 1.4; }
+        .qt--hotovy .qt__text { color: var(--muted); text-decoration: line-through; font-weight: 600; }
+        .qt__meta { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+        /* prošlý termín červeně – stejný odstín jako přečerpaný rozpočet ve výkazech */
+        .qt__meta--pozde { color: #b91c1c; font-weight: 700; }
+        .qt__smaz { flex: none; border: none; background: none; font: inherit; font-size: 16px;
+            line-height: 1; padding: 2px 5px; color: var(--muted); cursor: pointer; border-radius: 4px; }
+        .qt__smaz:hover { color: #b91c1c; background: var(--bg); }
+        .qtposlal { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+        .qtposlal__nadpis { font-size: 10.5px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .qtposlal__radek { display: flex; align-items: center; gap: 8px; padding: 3px 0;
+            font-size: 12px; color: var(--text-soft); min-width: 0; }
+        .qtposlal__stav { flex: none; color: var(--muted); }
+        .qtposlal__stav.je-hotovo { color: var(--ok); font-weight: 700; }
+
+        /* Kalendář na nástěnce: dny pod sebou, tečky nesou stejné barvy druhů
+           jako kalendar.html (.ud--*) – ať obě stránky čtou stejně. */
+        .kden__nazev { font-size: 10.5px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); padding: 6px 0 3px;
+            border-bottom: 1px solid var(--line-soft); margin-bottom: 3px; }
+        .kden--dnes .kden__nazev { color: var(--accent); }
+        .kudal { display: flex; align-items: center; gap: 8px; padding: 3px 0;
+            font-size: 13px; min-width: 0; }
+        /* neznámý druh (starší zápis) zůstane šedý, ať se neztratí beze stopy */
+        .kudal__tecka { flex: none; width: 9px; height: 9px; border-radius: 3px; background: var(--dim); }
+        .kudal--ukol { color: #c26a00; font-weight: 700; }
+        .ktyp--udalost { background: #0f62c4; }
+        .ktyp--dovolena { background: #0d7d3f; }
+        .ktyp--nemoc { background: #c8102e; }
+        .ktyp--skoleni { background: #8a2be2; }
+        .ktyp--homeoffice { background: #0e7490; }
+        .ktyp--ukol { background: #c26a00; }
+
+        /* Poslední aktivita: čas drobně nad textem, jméno tučně – jedno malé
+           písmo v řádku splývalo do šedé kaše a špatně se četlo. */
+        .akt { display: flex; flex-direction: column; gap: 1px; }
+        .akt__cas { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .akt__text { font-size: 13.5px; line-height: 1.55; }
     </style>
 </head>
 <body>
@@ -72,6 +121,10 @@
             <label class="row" style="gap:6px;cursor:pointer">
                 <input type="checkbox" data-widget="todo" checked> TO-DO</label>
             <label class="row" style="gap:6px;cursor:pointer">
+                <input type="checkbox" data-widget="quick" checked> Quick TO-DO</label>
+            <label class="row" style="gap:6px;cursor:pointer">
+                <input type="checkbox" data-widget="kalendar" checked> Kalendář</label>
+            <label class="row" style="gap:6px;cursor:pointer">
                 <input type="checkbox" data-widget="online" checked> Kdo tu byl</label>
             <label class="row" style="gap:6px;cursor:pointer" data-need="vykaz.view" hidden>
                 <input type="checkbox" data-widget="aktivita" checked> Poslední aktivita</label>
@@ -95,7 +148,22 @@
                     <b>TO-DO — postup práce</b>
                     <a id="todoOdkaz" class="linkbtn" href="ukoly.html" hidden>otevřít →</a>
                 </div>
+                <!-- nadpis vybraného úkolu – plní ho renderNastenka přes textContent -->
+                <div id="todoNazev" class="todonazev" hidden></div>
                 <div id="todoRozpad" class="nastenka__telo col" style="gap:2px"></div>
+            </div>
+            <div class="card nastenka__karta" id="wQuick">
+                <div class="spread">
+                    <b>Quick TO-DO</b>
+                </div>
+                <div id="quickSeznam" class="nastenka__telo"></div>
+            </div>
+            <div class="card nastenka__karta" id="wKalendar">
+                <div class="spread">
+                    <b>Kalendář — dnes a nejbližší dny</b>
+                    <a class="linkbtn" href="kalendar.html">otevřít →</a>
+                </div>
+                <div id="kalendarSeznam" class="nastenka__telo"></div>
             </div>
             <div class="card nastenka__karta" id="wOnline">
                 <div class="spread">
@@ -110,7 +178,7 @@
                     <b>Poslední aktivita</b>
                     <a class="linkbtn" href="reporty.html">historie →</a>
                 </div>
-                <div id="aktivitaSeznam" class="nastenka__telo col" style="gap:4px;font-size:12.5px"></div>
+                <div id="aktivitaSeznam" class="nastenka__telo col" style="gap:8px"></div>
             </div>
         </div>
     </section>
@@ -166,7 +234,8 @@
 
     const VOLBY_KLIC = "kb-nastenka";
 
-    const VYCHOZI_VOLBY = { ukoly: true, todo: true, online: true, aktivita: true };
+    const VYCHOZI_VOLBY = { ukoly: true, todo: true, quick: true, kalendar: true,
+        online: true, aktivita: true };
 
     function nactiVolby() {
         try { return Object.assign({}, VYCHOZI_VOLBY,
@@ -178,7 +247,8 @@
         const volby = nactiVolby();
         document.querySelectorAll("[data-widget]").forEach(ch => { ch.checked = volby[ch.dataset.widget] !== false; });
         // karta s data-need se skrývá i podle práv (paintUser), tady jen podle volby
-        [["ukoly", "wUkoly"], ["todo", "wTodo"], ["online", "wOnline"], ["aktivita", "wAktivita"]]
+        [["ukoly", "wUkoly"], ["todo", "wTodo"], ["quick", "wQuick"],
+         ["kalendar", "wKalendar"], ["online", "wOnline"], ["aktivita", "wAktivita"]]
             .forEach(([klic, id]) => {
                 const karta = document.getElementById(id);
                 if (volby[klic] === false) karta.style.display = "none";
@@ -233,11 +303,12 @@
             return d.getDate() + ". " + (d.getMonth() + 1) + ". " +
                 String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
         };
+        // čas drobně nad textem – v řádku vedle sebe se čas a věta praly o místo
         document.getElementById("aktivitaSeznam").innerHTML =
             (window.KB.aktivity || []).slice(0, 10).map(a =>
-                '<div class="row" style="gap:8px;align-items:baseline">' +
-                    '<span class="tiny muted" style="flex:none;width:86px">' + cas(a.ms) + "</span>" +
-                    "<span><b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "") + "</span>" +
+                '<div class="akt">' +
+                    '<span class="akt__cas">' + esc(cas(a.ms)) + "</span>" +
+                    '<span class="akt__text"><b>' + esc(a.jmeno || "") + "</b> " + esc(a.text || "") + "</span>" +
                 "</div>").join("")
             || '<span class="tiny muted">Zatím žádné záznamy – historie se začne plnit používáním webu.</span>';
     }
@@ -300,6 +371,11 @@
         odkaz.hidden = !u;
         if (u) odkaz.href = "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(u.projekt || ""));
 
+        // ať je na první pohled vidět, čí TO-DO se vpravo ukazuje
+        const nazev = document.getElementById("todoNazev");
+        nazev.hidden = !u;
+        nazev.textContent = u ? u.nazev + (u.projekt ? " · " + u.projekt : "") : "";
+
         document.getElementById("todoRozpad").innerHTML = !u
             ? '<div class="tiny muted" style="padding:10px 2px">Vyber vlevo úkol.</div>'
             : ((u.todo || []).map(t => {
@@ -310,6 +386,111 @@
                 return '<div class="ntodo"><span class="ntodo__text">' + esc(t.text) + "</span>" +
                     '<span class="ntodo__pcts">' + kroky + "</span></div>";
             }).join("") || '<div class="tiny muted" style="padding:10px 2px">Úkol nemá TO-DO rozpad.</div>');
+    }
+
+    /* -------------------------------------------------- Quick TO-DO ----
+       Vzkazy pro mě nahoře (odškrtávají se), pod nimi drobně co jsem
+       poslal já. Nové se posílají z levého pásu. */
+
+    function renderQuick() {
+        const uid = mojeUid();
+        const vse = window.KB.quicktodo || [];
+        const proMe = vse.filter(q => q.proUid === uid);
+        const odeMe = vse.filter(q => q.odKoho === uid && q.proUid !== uid);
+
+        const termin = (q) => {
+            if (!q.doKdy) return "";
+            const poTerminu = !q.hotovo && q.doKdy < V.dnesISO();
+            return ' · <span style="' + (poTerminu ? "color:var(--danger);font-weight:700" : "") +
+                '">do ' + esc(czDatum(q.doKdy)) + "</span>";
+        };
+
+        const radek = (q, mujVzkaz) =>
+            '<div class="row" style="gap:9px;padding:6px 0;border-bottom:1px dashed var(--line-soft);align-items:flex-start">' +
+                '<input type="checkbox" data-quick-hotovo="' + esc(q.id) + '"' +
+                    (q.hotovo ? " checked" : "") + ' style="margin-top:3px;accent-color:var(--ok)">' +
+                '<span class="grow" style="min-width:0;font-size:13px;line-height:1.45">' +
+                    "<span style=\"" + (q.hotovo ? "text-decoration:line-through;color:var(--muted)" : "font-weight:700") + "\">" +
+                        esc(q.text) + "</span>" +
+                    '<span class="tiny muted" style="display:block">' +
+                        (mujVzkaz ? "pro " + esc(jmenoUid(q.proUid) || "?")
+                                  : "od " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
+                        termin(q) + "</span>" +
+                "</span>" +
+                (q.odKoho === uid
+                    ? '<button type="button" class="linkbtn" data-quick-smaz="' + esc(q.id) +
+                      '" title="Smazat vzkaz" style="padding:2px 8px">×</button>' : "") +
+            "</div>";
+
+        document.getElementById("quickSeznam").innerHTML =
+            (proMe.map(q => radek(q, false)).join("")
+                || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+                   "Žiješ šťastný život, nikdo po tobě nic nechce.</div>") +
+            (odeMe.length
+                ? '<div class="tiny muted" style="padding:10px 2px 2px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">Poslal jsem</div>' +
+                  odeMe.map(q => radek(q, true)).join("")
+                : "");
+    }
+
+    document.addEventListener("change", (event) => {
+        const box = event.target.closest("[data-quick-hotovo]");
+        if (!box) return;
+        const q = (window.KB.quicktodo || []).find(x => x.id === box.dataset.quickHotovo);
+        if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, { hotovo: box.checked }))
+            .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
+    });
+    document.addEventListener("click", (event) => {
+        const smaz = event.target.closest("[data-quick-smaz]");
+        if (smaz) window.KB.deleteQuickTodo(smaz.dataset.quickSmaz)
+            .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+    });
+
+    /* ------------------------------------------- kalendář na nástěnce ----
+       Dnešek a nejbližší dny: absence a události z kalendáře plus termíny
+       úkolů. Dny bez obsahu se vynechávají – prázdné řádky nic neřeknou. */
+
+    const TYP_BARVA = { udalost: "#0f62c4", dovolena: "#0d7d3f", nemoc: "#c8102e",
+        skoleni: "#8a2be2", homeoffice: "#0e7490" };
+    const TYP_NAZEV = { udalost: "událost", dovolena: "Dovolená", nemoc: "Nemoc",
+        skoleni: "Školení", homeoffice: "Home office" };
+
+    function renderKalendarDlazdice() {
+        const dny = [];
+        const dnes = new Date();
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(dnes.getFullYear(), dnes.getMonth(), dnes.getDate() + i);
+            const iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+                "-" + String(d.getDate()).padStart(2, "0");
+
+            const radky = [];
+            (window.KB.kalendar || []).forEach(k => {
+                if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
+                    const druh = TYP_NAZEV[k.typ] || "událost";
+                    radky.push({ barva: TYP_BARVA[k.typ] || TYP_BARVA.udalost,
+                        text: k.typ === "udalost"
+                            ? (k.text || "událost") + (k.osoba ? " – " + k.osoba : "")
+                            : druh + " – " + (k.osoba || "") });
+                }
+            });
+            (window.KB.ukoly || []).forEach(u => {
+                if (u.termin === iso && u.stav !== "hotovo") {
+                    radky.push({ barva: "#c26a00", text: "úkol: " + (u.nazev || "") });
+                }
+            });
+            if (radky.length) dny.push({ iso, popis: i === 0 ? "Dnes" : i === 1 ? "Zítra" : czDatum(iso), radky });
+        }
+
+        document.getElementById("kalendarSeznam").innerHTML = dny.length
+            ? dny.map(den =>
+                '<div style="padding:5px 0;border-bottom:1px dashed var(--line-soft)">' +
+                    '<span class="tiny muted" style="font-weight:800;letter-spacing:.05em;text-transform:uppercase">' +
+                        esc(den.popis) + "</span>" +
+                    den.radky.map(r =>
+                        '<span class="row" style="gap:7px;padding:2px 0;font-size:13px">' +
+                            '<i style="flex:none;width:9px;height:9px;border-radius:3px;background:' + r.barva + '"></i>' +
+                            '<span class="truncate">' + esc(r.text) + "</span></span>").join("") +
+                "</div>").join("")
+            : '<span class="tiny muted">Nejbližších sedm dní je volných.</span>';
     }
 
     async function zapisPct(todoId, pct) {
@@ -382,12 +563,15 @@
         window.KBUI.onSearch(runSearch);
 
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
-        const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline(); };
+        const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
+            renderQuick(); renderKalendarDlazdice(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
-        window.KB.on("ukoly", renderNastenka);
+        window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice(); });
         window.KB.on("pritomnost", renderOnline);
         window.KB.on("aktivity", renderAktivita);
+        window.KB.on("quicktodo", renderQuick);
+        window.KB.on("kalendar", renderKalendarDlazdice);
 
         // přizpůsobení nástěnky
         document.getElementById("btnPrizpusob").addEventListener("click", () => {

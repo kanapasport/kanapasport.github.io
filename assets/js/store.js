@@ -105,6 +105,7 @@ const KB = {
     pritomnost: [],         // kdo je právě na webu: { id: uid, ms, jmeno }
     aktivity: [],           // historie kroků (kdo co uložil) – jen pro manažery
     logy: [],               // historie přihlášení (public/data/logs)
+    quicktodo: [],          // rychlé vzkazy: vidí je jen autor a adresát
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
@@ -159,6 +160,11 @@ const aktivityCol = () => collection(db, "artifacts", APP_ID, "private", "aktivi
 /* zámek na citlivé sekce (sazby, hesla lidí) – otisk hesla leží v databázi,
    ne v kódu: repozitář je veřejný a hash z něj by šel zkoušet hrubou silou */
 const zamekDoc = () => doc(db, "artifacts", APP_ID, "private", "nastaveni", "zamek", "heslo");
+/* Quick TO-DO je schválně mimo `private` – tam má správce plošné čtení,
+   kdežto rychlé vzkazy má vidět JEN autor a adresát (pravidla je hlídají
+   po dvojici polí odKoho/proUid) */
+const quickCol = () => collection(db, "artifacts", APP_ID, "osobni", "quicktodo", "seznam");
+const quickDoc = (id) => doc(db, "artifacts", APP_ID, "osobni", "quicktodo", "seznam", id);
 /* kdo je právě na webu – malý dokument na člověka, vidí ho všichni */
 const pritomnostCol = () => collection(db, "artifacts", APP_ID, "public", "data", "pritomnost");
 const pritomnostDoc = (uid) => doc(db, "artifacts", APP_ID, "public", "data", "pritomnost", uid);
@@ -222,6 +228,8 @@ try {
             if (pritomnostCasovac) { clearInterval(pritomnostCasovac); pritomnostCasovac = null; }
             if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
             if (logyOdber) { try { logyOdber(); } catch (e) {} logyOdber = null; }
+            quickOdbery.forEach(stop => { try { stop(); } catch (e) {} });
+            quickOdbery = []; quickPrijate = []; quickOdeslane = []; KB.quicktodo = [];
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
@@ -368,6 +376,63 @@ KB.zapisAktivitu = (druh, text) => {
             ms: Date.now()
         }).catch(() => {});
     } catch (err) { /* nikdy neshodit uložení kvůli logu */ }
+};
+
+/* --------------------------------------------------------- Quick TO-DO ---
+   Rychlý vzkaz s termínem: „Nezapomenout vystavit fakturu…" Vidí ho jen
+   autor a adresát – proto dva dotazy (co mi kdo poslal + co jsem poslal já)
+   slévané do jednoho pole; pravidla širší čtení nedovolí. */
+
+let quickOdbery = [];
+let quickPrijate = [];
+let quickOdeslane = [];
+
+function slejQuick() {
+    const mapa = new Map();
+    quickPrijate.concat(quickOdeslane).forEach(q => mapa.set(q.id, q));
+    KB.quicktodo = Array.from(mapa.values())
+        .sort((a, b) => (a.hotovo ? 1 : 0) - (b.hotovo ? 1 : 0)
+            || (a.doKdy || "9999").localeCompare(b.doKdy || "9999")
+            || (b.ms || 0) - (a.ms || 0));
+    emit("quicktodo", KB.quicktodo);
+}
+
+KB.watchQuickTodo = async () => {
+    if (quickOdbery.length) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || quickOdbery.length) return;
+    const uid = auth.currentUser.uid;
+    quickOdbery.push(onSnapshot(query(quickCol(), where("proUid", "==", uid)), (s) => {
+        quickPrijate = []; s.forEach(d => quickPrijate.push({ id: d.id, ...d.data() }));
+        slejQuick();
+    }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
+    quickOdbery.push(onSnapshot(query(quickCol(), where("odKoho", "==", uid)), (s) => {
+        quickOdeslane = []; s.forEach(d => quickOdeslane.push({ id: d.id, ...d.data() }));
+        slejQuick();
+    }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
+};
+
+KB.newQuickId = () => "qt_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.saveQuickTodo = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(quickDoc(id), {
+        text:    String(data.text || "").slice(0, 300),
+        proUid:  data.proUid || KB.currentUid(),
+        odKoho:  data.odKoho || KB.currentUid(),
+        odKohoJmeno: data.odKohoJmeno || window.KB_USER || "",
+        doKdy:   data.doKdy || "",
+        hotovo:  data.hotovo === true,
+        ms:      data.ms || Date.now()
+    }, { merge: true });
+    return id;
+};
+
+KB.deleteQuickTodo = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(quickDoc(id));
 };
 
 /* ------------------------------------------------ zámek citlivých sekcí ---
