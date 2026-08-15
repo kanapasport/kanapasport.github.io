@@ -7,10 +7,20 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Vytížení týmu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
+           a u stejné síly pravidla musí vyhrát to pozdější. */
+
+        /* Hlavička stránky: nadpis a přepínač pohledu hned vedle sebe u levého
+           okraje. Stránka je široká (--sirka-stranky), takže rozhození na oba
+           konce udělá mezi nadpisem a tlačítkem prázdné půlmetrové pole.
+           Stejná hlavička je na vykazy.html i vykazy-prehled.html. */
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__text { min-width: 0; }
+
         /* Mřížka lidé × dny. Posouvá se jen tabulka, ne celá stránka –
            měsíc má přes třicet sloupců a na mobilu by rozbil layout. */
         .vt-wrap { overflow-x: auto; }
@@ -45,8 +55,10 @@
             border-radius: 4px; padding: 0 4px; margin-left: 4px;
             font-size: 10.5px; font-weight: 900;
         }
+        /* Legenda pod tabulkou začíná u stejného levého okraje jako mřížka –
+           na široké stránce by odsazená doprava odplula od toho, co vysvětluje. */
         .vt-leg {
-            display: flex; justify-content: flex-end; flex-wrap: wrap;
+            display: flex; flex-wrap: wrap;
             gap: 6px 16px; font-size: 12px; color: var(--text-soft);
         }
         .vt-leg i {
@@ -70,25 +82,29 @@
     </div>
 
     <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
-        <div><a href="reporty.html" class="btn btn--ghost btn--sm">← Reporty</a></div>
 
-        <div>
-            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Vytížení týmu</h2>
-            <p class="small muted" style="margin-top:3px">
-                Kolik hodin kdo vykázal – po dnech nebo po týdnech, s absencemi.
-            </p>
+        <div class="hlavicka">
+            <div class="hlavicka__text">
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Vytížení týmu</h2>
+                <p class="small muted" style="margin-top:3px">
+                    Kolik hodin kdo vykázal – po dnech nebo po týdnech, s absencemi.
+                </p>
+            </div>
+            <!-- přepínač celého pohledu patří k nadpisu, ne mezi filtry -->
+            <div class="row" style="gap:8px">
+                <button type="button" class="chip" data-pohled="dny">Dny</button>
+                <button type="button" class="chip" data-pohled="tydny">Týdny</button>
+            </div>
         </div>
 
         <div class="card col" style="gap:12px;padding:14px 16px">
             <div class="row row--wrap" style="gap:8px">
-                <button type="button" class="btn btn--ghost btn--sm" id="btnZpet">‹</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnZpet" aria-label="Předchozí měsíc">‹</button>
                 <button type="button" class="btn btn--ghost btn--sm" id="btnDnes">Dnes</button>
-                <button type="button" class="btn btn--ghost btn--sm" id="btnDal">›</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="btnDal" aria-label="Další měsíc">›</button>
                 <b id="obdobi" style="font-size:15px;margin-left:6px"></b>
-                <div class="grow"></div>
-                <button type="button" class="chip" data-pohled="dny">Dny</button>
-                <button type="button" class="chip" data-pohled="tydny">Týdny</button>
-                <select id="fProjekt" class="field" style="width:auto;max-width:240px"></select>
+                <select id="fProjekt" class="field" style="width:auto;max-width:240px;margin-left:10px"
+                        aria-label="Filtr projektu"></select>
             </div>
 
             <div class="vt-wrap">
@@ -108,10 +124,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=51"></script>
-<script src="assets/js/ui.js?v=51"></script>
-<script src="assets/js/vykazy.js?v=51"></script>
-<script type="module" src="assets/js/store.js?v=51"></script>
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script src="assets/js/vykazy.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
 
 <script>
 (function () {
@@ -137,8 +153,8 @@
     const hodinyTxt = (h) => Number(h).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
 
     /* Sledování dat až po přihlášení – dřív by databáze dotaz odmítla.
-       Stejná trojice jako na projektech, ať se mřížka překreslí,
-       kdykoliv manažerovi doteče cokoliv nového. */
+       Mřížka stojí na výkazech a lidech; projekty a úkoly si tahle stránka
+       nekreslí, žádá si je kvůli roletkám PROJEKTY a ÚKOLY v horní liště. */
     function zapniSledovani() {
         if (sledovaniZapnuto || !window.KB.currentUid()) return;
         if (!window.KBUI.can("vykaz.view")) return;
@@ -146,6 +162,26 @@
         window.KB.watchVykazy();
         window.KB.watchProjekty();
         window.KB.watchUkoly();
+    }
+
+    /**
+     * Druhý řádek lišty – stejný rozcestník jako na vykazy.html
+     * a vykazy-prehled.html. Všechny tři stránky počítají z výkazů, proto
+     * v horní liště svítí VÝKAZY a rozlišuje se až tady: aktivní položka
+     * je `<span>`, ostatní jsou odkazy `subbar__cat--up`.
+     */
+    function paintSubbar() {
+        const slot = $("appSubbar");
+        if (!slot) return;
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            '<a class="subbar__cat subbar__cat--up" href="vykazy.html" ' +
+                'data-need="vykaz.otevrit" hidden>ZÁPIS A ZÁZNAMY</a>' +
+            '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html" ' +
+                'data-need="vykaz.view" hidden>PŘEHLED LIDÍ A PENĚZ</a>' +
+            '<span class="subbar__cat">VYTÍŽENÍ TÝMU</span>' +
+        "</div></div>";
+        // odkazy vznikly až teď, práva se na nich musí dorovnat
+        window.KBUI.paintUser();
     }
 
     /* Lidé pod sebou podle příjmení – tak je hledá oko v papírové prezenčce. */
@@ -273,8 +309,10 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        // stránka patří pod REPORTY, tak ať v liště svítí ony
-        window.KBUI.mountNav({ active: "reporty.html" });
+        // vytížení se počítá z výkazů, proto v horní liště svítí VÝKAZY
+        // a mezi jejich stránkami se přepíná podlištou
+        window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
+        paintSubbar();
 
         $("btnZpet").addEventListener("click", () => {
             kotva = new Date(kotva.getFullYear(), kotva.getMonth() - 1, 1); vykresli();
@@ -287,11 +325,11 @@
             ch.addEventListener("click", () => { pohled = ch.dataset.pohled; vykresli(); }));
         $("fProjekt").addEventListener("change", vykresli);
 
+        // mřížku mění jen výkazy a seznam lidí – na projekty a úkoly
+        // překreslovat nemá co, ty patří roletkám v liště
         document.addEventListener("kb-role", render);
         window.KB.on("users", render);
         window.KB.on("vykazy", render);
-        window.KB.on("projekty-docs", render);
-        window.KB.on("ukoly", render);
         render();
     });
 })();

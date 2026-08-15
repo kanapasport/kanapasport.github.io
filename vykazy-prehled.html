@@ -7,8 +7,18 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
     <style>
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
+           a u stejné síly pravidla musí vyhrát to pozdější. */
+
+        /* Hlavička stránky: nadpis a přepínač hned vedle sebe u levého okraje.
+           Stránka je široká (--sirka-stranky), takže rozhození na oba konce
+           udělá mezi nadpisem a tlačítkem prázdné půlmetrové pole.
+           Stejná hlavička je na vykazy.html i vytizeni.html. */
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__text { min-width: 0; }
+
         /* Hlavička karty člověka je zároveň přepínač jeho zápisů. Bez šipky
            a bez reakce na najetí myší nikoho nenapadne, že se dá rozkliknout –
            podbarvení zasahuje až k okrajům karty, proto záporné okraje. */
@@ -49,14 +59,15 @@
 
     <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
 
-        <div class="spread">
-            <div>
+        <div class="hlavicka">
+            <div class="hlavicka__text">
                 <h2 style="font-size:20px;font-weight:900;line-height:1.2">Přehled lidí a peněz</h2>
                 <p class="small muted" style="margin-top:3px">
                     Kolik se na čem odpracovalo a co to stálo. Pruhy se měří proti
                     největší položce výběru, ne proti součtu.
                 </p>
             </div>
+            <!-- přepínač celého pohledu patří k nadpisu, ne mezi filtry -->
             <div class="row" style="gap:8px">
                 <button type="button" class="chip chip--active" data-metrika="kc">Peníze</button>
                 <button type="button" class="chip" data-metrika="hod">Hodiny</button>
@@ -97,17 +108,18 @@
 
         <div id="celky" class="col" style="gap:18px"></div>
 
-        <div>
+        <!-- prázdný nadpis nad ničím nikomu nic neřekne – bez zápisů se schová -->
+        <div id="lideBox" hidden>
             <h3 style="font-size:16px;font-weight:900;margin-bottom:10px">Jednotliví lidé</h3>
             <div id="osoby" class="col" style="gap:14px"></div>
         </div>
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=51"></script>
-<script src="assets/js/ui.js?v=51"></script>
-<script src="assets/js/vykazy.js?v=51"></script>
-<script type="module" src="assets/js/store.js?v=51"></script>
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script src="assets/js/vykazy.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
 
 <script>
 (function () {
@@ -173,13 +185,24 @@
             filtr.tech, "Všechny technologie");
     }
 
+    /**
+     * Druhý řádek lišty – stejný rozcestník jako na vykazy.html
+     * a vytizeni.html. Všechny tři stránky počítají z výkazů, proto
+     * v horní liště svítí VÝKAZY a rozlišuje se až tady: aktivní položka
+     * je `<span>`, ostatní jsou odkazy `subbar__cat--up`.
+     */
     function paintSubbar() {
         const slot = $("appSubbar");
         if (!slot) return;
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
-            '<a class="subbar__cat subbar__cat--up" href="vykazy.html">ZÁPIS A ZÁZNAMY</a>' +
+            '<a class="subbar__cat subbar__cat--up" href="vykazy.html" ' +
+                'data-need="vykaz.otevrit" hidden>ZÁPIS A ZÁZNAMY</a>' +
             '<span class="subbar__cat">PŘEHLED LIDÍ A PENĚZ</span>' +
+            '<a class="subbar__cat subbar__cat--up" href="vytizeni.html" ' +
+                'data-need="vykaz.view" hidden>VYTÍŽENÍ TÝMU</a>' +
         "</div></div>";
+        // odkazy vznikly až teď, práva se na nich musí dorovnat
+        window.KBUI.paintUser();
     }
 
     /* --------------------------------------------------------- skládání */
@@ -309,6 +332,7 @@
             V.dlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr");
 
         $("prazdno").hidden = !!zaznamy.length;
+        $("lideBox").hidden = !zaznamy.length;
         if (!zaznamy.length) {
             $("celky").innerHTML = "";
             $("osoby").innerHTML = "";
@@ -383,7 +407,9 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        window.KBUI.mountNav({ active: "vykazy-prehled.html", subbar: true });
+        // přehled se počítá z výkazů, proto v horní liště svítí VÝKAZY
+        // a mezi jejich stránkami se přepíná podlištou
+        window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
         paintSubbar();
         nastavObdobi("mesic");
 

@@ -6,9 +6,47 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* drobnosti jen pro tuhle stránku */
+
+        /* Hlavička stránky. Tlačítka patří HNED VEDLE nadpisu – stránka je
+           široká (--sirka-stranky až 1720 px) a space-between by mezi nadpis
+           a tlačítko vecpal přes metr prázdna. Proto zarovnání doleva
+           a pevná mezera; nikdo pak nemusí očima přejíždět celou obrazovku. */
+        .strhlav { display: flex; align-items: center; justify-content: flex-start; gap: 18px; flex-wrap: wrap; }
+        .strhlav__text { min-width: 0; }
+        /* Výchozí okraje nadpisu od prohlížeče (16,6 px nahoře i dole) nafouknou
+           blok na dvojnásobek a tlačítka vedle něj se pak středují na prázdno
+           místo na text. Odsazení popisků si drží popisky samy. */
+        .strhlav__text h2, .strhlav__text p { margin: 0; }
+        .strhlav__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+        /* Splněný milník. Zelené pozadí řádku má app.css, tohle je to druhé
+           vodítko – barvu sama o sobě nerozezná každý, slovo a přeškrtnutí ano. */
+        .milcin { display: block; }
+        .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
+        .milpil {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--p100-fg);
+            color: #fff;
+            font-size: 10.5px;
+            font-weight: 800;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        /* Formulář milníku: pevné dva sloupce, pole přes celou buňku.
+           Bez toho se datum a činnost rozjedou každý na jinou šířku. */
+        .milform { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+        .milform .field { width: 100%; }
+        @media (max-width: 560px) { .milform { grid-template-columns: minmax(0, 1fr); } }
+    </style>
 </head>
 <body>
 
@@ -16,16 +54,18 @@
 
 <main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
 
-    <div class="spread">
-        <div>
+    <div class="strhlav">
+        <div class="strhlav__text">
             <h2 id="pageTitle" style="font-size:20px;font-weight:900;line-height:1.2">Milníky</h2>
             <p class="small muted" style="margin-top:3px">
                 Termíny odevzdání po činnostech, seřazené tak, jak půjdou za sebou.
             </p>
+            <p id="pocty" class="small muted" style="margin-top:3px"></p>
         </div>
-        <div class="row" style="gap:8px">
-            <button id="btnHotove" class="btn btn--ghost btn--sm">Skrýt splněné</button>
-            <button id="btnNew" class="btn btn--primary btn--sm" data-need="milnik.manage" hidden>+ Nový milník</button>
+        <div class="strhlav__akce">
+            <button type="button" id="btnHotove" class="btn btn--ghost btn--sm">Zobrazit splněné milníky</button>
+            <button type="button" id="btnStarsi" class="btn btn--ghost btn--sm">Zobrazit i starší</button>
+            <button type="button" id="btnNew" class="btn btn--primary btn--sm" data-need="milnik.manage" hidden>+ Nový milník</button>
         </div>
     </div>
 
@@ -49,12 +89,12 @@
     <div class="card col" style="padding:22px;max-width:560px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
         <b id="formTitle" style="font-size:17px">Nový milník</b>
 
-        <div class="row" style="gap:12px">
-            <div class="grow">
+        <div class="milform">
+            <div>
                 <label class="label" for="fCinnost">Činnost</label>
                 <input type="text" id="fCinnost" class="field" placeholder="např. STAVBA, CHLAD, VZT">
             </div>
-            <div style="width:190px;flex:none">
+            <div>
                 <label class="label" for="fDatum">Datum dodání</label>
                 <input type="date" id="fDatum" class="field">
             </div>
@@ -88,10 +128,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=51"></script>
-<script src="assets/js/doc.js?v=51"></script>
-<script src="assets/js/ui.js?v=51"></script>
-<script type="module" src="assets/js/store.js?v=51"></script>
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/doc.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
 
 <script>
 (function () {
@@ -102,12 +142,27 @@
 
     let editingId = null;
     let activeZak = new URLSearchParams(location.search).get("zak") || "";   // slug zakázky
-    let skryjHotove = false;
+
+    /* Výchozí pohled ukazuje jen to, co je před námi. Splněné milníky a ty
+       starší než týden nikdo denně nepotřebuje a v dlouhém seznamu se v nich
+       to podstatné ztrácí – dají se doplnit tlačítky v hlavičce. */
+    let zobrazHotove = false;
+    let zobrazStarsi = false;
+
+    const DEN = 86400000;
+    const OKNO_DNI = 7;     // jak daleko dozadu se milník ještě bere jako aktuální
 
     const slug = (value) => window.KBUI.slug(value);
     const zakName = (item) => (item.zakazka || "").trim() || "Bez zakázky";
 
     const jmeno = (user) => ((user.first || "") + " " + (user.last || "")).trim() || user.email;
+
+    /** České skloňování počtu: 1 milník · 2 milníky · 5 milníků. */
+    const pocet = (n, tvary) =>
+        n + " " + (n === 1 ? tvary[0] : (n >= 2 && n <= 4 ? tvary[1] : tvary[2]));
+
+    const MILNIK = ["milník", "milníky", "milníků"];
+    const DEN_TVARY = ["den", "dny", "dnů"];
 
     /** Zpracovatelé – nová pole s UID mají přednost před starým textem. */
     function ownersText(item) {
@@ -124,6 +179,15 @@
         return d + ". " + m + ". " + y;
     };
 
+    /** Kolik dní zbývá do termínu; záporné číslo znamená po termínu. */
+    function dnyDo(iso) {
+        const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
+        return Math.round((new Date(iso + "T00:00:00") - dnes) / DEN);
+    }
+
+    /** Starší než týden. Milník bez data nikdy nezastará, ten se neschovává. */
+    const jeStary = (item) => !!item.datum && dnyDo(item.datum) < -OKNO_DNI;
+
     /** Barva termínu podle toho, jak je blízko – splněný je vždycky zelený. */
     function stavTerminu(item) {
         const iso = item.datum;
@@ -133,13 +197,14 @@
         }
         if (!iso) return { text: "bez termínu", trida: "milnik--zadny" };
 
-        const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
-        const dny = Math.round((new Date(iso + "T00:00:00") - dnes) / 86400000);
+        const dny = dnyDo(iso);
 
         if (dny < 0)   return { text: czDate(iso), trida: "milnik--po", pozn: "po termínu" };
         if (dny === 0) return { text: czDate(iso), trida: "milnik--dnes", pozn: "dnes" };
-        if (dny <= 7)  return { text: czDate(iso), trida: "milnik--blizko", pozn: "za " + dny + " dnů" };
-        return { text: czDate(iso), trida: "", pozn: "za " + dny + " dnů" };
+        // „za 3 dnů" vypadá jako chyba, proto se počet skloňuje
+        const zbyva = "za " + pocet(dny, DEN_TVARY);
+        if (dny <= 7)  return { text: czDate(iso), trida: "milnik--blizko", pozn: zbyva };
+        return { text: czDate(iso), trida: "", pozn: zbyva };
     }
 
     /* ------------------------------------------------------------ výpis */
@@ -168,17 +233,53 @@
         $("pageTitle").textContent = vybrana ? "Milníky · " + vybrana : "Milníky";
     }
 
+    /**
+     * Přepínač v hlavičce. Vypnutý si nese počet toho, co schovává –
+     * jinak by nešlo poznat, že se za ním něco skrývá.
+     */
+    function prepinac(id, zapnuty, popisZap, popisVyp, skryto) {
+        const el = $(id);
+        el.textContent = zapnuty ? popisZap : popisVyp + (skryto ? " (" + skryto + ")" : "");
+        el.className = "btn btn--sm " + (zapnuty ? "btn--primary" : "btn--ghost");
+    }
+
+    /** Věta o počtech pod nadpisem – ať je na první pohled jasné, že výpis není celý. */
+    function textPoctu(zobrazeno, celkem, skrytoHotovych, skrytoStarych) {
+        if (!celkem) return "";
+        if (zobrazeno === celkem) return "Zobrazeno všech " + pocet(celkem, MILNIK) + ".";
+
+        const duvody = [];
+        if (skrytoHotovych) duvody.push(pocet(skrytoHotovych, ["splněný", "splněné", "splněných"]));
+        if (skrytoStarych) duvody.push(pocet(skrytoStarych, ["starší", "starší", "starších"]) + " než týden");
+
+        return "Zobrazeno " + zobrazeno + " z " + pocet(celkem, MILNIK) +
+            (duvody.length ? " · skryto: " + duvody.join(", ") : "") + ".";
+    }
+
     function render() {
         const muzeMenit = window.KBUI.can("milnik.manage");
         $("hint").hidden = muzeMenit;
-        $("btnHotove").textContent = skryjHotove ? "Zobrazit splněné" : "Skrýt splněné";
-        $("btnHotove").className = "btn btn--sm " + (skryjHotove ? "btn--primary" : "btn--ghost");
         paintZakRow();
 
-        let items = serazene();
-        if (activeZak) items = items.filter(m => slug(zakName(m)) === activeZak);
-        if (skryjHotove) items = items.filter(m => !m.hotovo);
+        // `vsechny` = co spadá do vybrané zakázky, `items` = co se opravdu vypíše
+        let vsechny = serazene();
+        if (activeZak) vsechny = vsechny.filter(m => slug(zakName(m)) === activeZak);
+        const items = vsechny.filter(m =>
+            (zobrazHotove || !m.hotovo) && (zobrazStarsi || !jeStary(m)));
 
+        /* Splněný a zároveň starý milník se počítá jen jednou – u splněných,
+           protože ty se schovávají první. Jinak by čísla nesedla se součtem. */
+        const skrytoHotovych = vsechny.filter(m => m.hotovo && !zobrazHotove).length;
+        const skrytoStarych = vsechny.filter(m => jeStary(m) && !zobrazStarsi
+            && (zobrazHotove || !m.hotovo)).length;
+
+        prepinac("btnHotove", zobrazHotove, "Skrýt splněné", "Zobrazit splněné milníky", skrytoHotovych);
+        prepinac("btnStarsi", zobrazStarsi, "Skrýt starší", "Zobrazit i starší", skrytoStarych);
+        $("pocty").textContent = textPoctu(items.length, vsechny.length, skrytoHotovych, skrytoStarych);
+
+        $("empty").textContent = vsechny.length
+            ? "Žádný aktuální milník tu není – splněné a starší si ukážeš tlačítky nahoře."
+            : "Zatím tu není žádný milník.";
         $("empty").hidden = !!items.length;
         $("tableWrap").hidden = !items.length;
         if (!items.length) return;
@@ -190,6 +291,18 @@
             if (!skupiny.has(n)) skupiny.set(n, []);
             skupiny.get(n).push(m);
         });
+
+        // počty na zakázku se berou ze všech milníků, ne jen z vypsaných –
+        // hlavička skupiny má ukázat „x z y", ne se tvářit, že skryté nejsou
+        const souhrn = new Map();
+        vsechny.forEach(m => {
+            const n = zakName(m);
+            if (!souhrn.has(n)) souhrn.set(n, { celkem: 0, hotovych: 0 });
+            const s = souhrn.get(n);
+            s.celkem += 1;
+            if (m.hotovo) s.hotovych += 1;
+        });
+
         const sloupcu = muzeMenit ? 5 : 4;
 
         $("table").innerHTML =
@@ -198,10 +311,13 @@
                 (muzeMenit ? "<th></th>" : "") +
             "</tr></thead><tbody>" +
             Array.from(skupiny.entries()).map(([nazev, radky]) => {
-                const hotovych = radky.filter(m => m.hotovo).length;
+                const s = souhrn.get(nazev) || { celkem: radky.length, hotovych: 0 };
+                const kolik = radky.length === s.celkem
+                    ? pocet(s.celkem, MILNIK)
+                    : "zobrazeno " + radky.length + " z " + pocet(s.celkem, MILNIK);
                 const hlavicka = '<tr class="milniky__skupina"><td colspan="' + sloupcu + '">' +
                     "<b>" + esc(nazev) + "</b>" +
-                    '<span>' + radky.length + " milníků · " + hotovych + " splněno</span>" +
+                    "<span>" + esc(kolik) + " · " + s.hotovych + " splněno</span>" +
                 "</td></tr>";
                 return hlavicka + radky.map(radek).join("");
             }).join("") +
@@ -210,7 +326,9 @@
         function radek(item) {
                 const t = stavTerminu(item);
                 return '<tr class="' + t.trida + '">' +
-                    '<td class="milniky__cinnost">' + esc(item.cinnost || "") + "</td>" +
+                    '<td class="milniky__cinnost">' +
+                        '<span class="milcin">' + esc(item.cinnost || "") + "</span>" +
+                        (item.hotovo ? '<span class="milpil">splněno</span>' : "") + "</td>" +
                     "<td>" + esc(ownersText(item)) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum"><b>' + t.text + "</b>" +
@@ -325,7 +443,12 @@
                   });
         });
         const byl = (window.KB.milniky || []).find(m => m.id === id);
-        await ulozSeznam(items, byl && byl.hotovo ? "Milník vrácen mezi rozdělané." : "Milník označen jako splněný.");
+        /* Splněný milník ve výchozím pohledu z výpisu zmizí – řekneme to rovnou,
+           ať to nevypadá, že se místo uložení něco smazalo. */
+        const hlaska = byl && byl.hotovo
+            ? "Milník vrácen mezi rozdělané."
+            : "Milník označen jako splněný." + (zobrazHotove ? "" : " Ve výpisu se skryl.");
+        await ulozSeznam(items, hlaska);
     }
 
     document.addEventListener("click", (event) => {
@@ -351,7 +474,8 @@
         window.KBUI.mountNav({ active: "milniky.html" });
 
         $("btnNew").addEventListener("click", () => openForm(null));
-        $("btnHotove").addEventListener("click", () => { skryjHotove = !skryjHotove; render(); });
+        $("btnHotove").addEventListener("click", () => { zobrazHotove = !zobrazHotove; render(); });
+        $("btnStarsi").addEventListener("click", () => { zobrazStarsi = !zobrazStarsi; render(); });
         $("btnCancel").addEventListener("click", () => { $("milnikOverlay").hidden = true; });
         $("btnSave").addEventListener("click", save);
         $("btnDelete").addEventListener("click", remove);

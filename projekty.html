@@ -7,11 +7,24 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Projekty – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
         /* drobnosti jen pro tuhle stránku */
+
+        /* Hlavička stránky. Tlačítka patří HNED VEDLE nadpisu – stránka je
+           široká (--sirka-stranky až 1720 px) a space-between by mezi nadpis
+           a tlačítko vecpal přes metr prázdna. Proto zarovnání doleva
+           a pevná mezera; nikdo pak nemusí očima přejíždět celou obrazovku. */
+        .strhlav { display: flex; align-items: center; justify-content: flex-start; gap: 18px; flex-wrap: wrap; }
+        .strhlav__text { min-width: 0; }
+        /* Výchozí okraje nadpisu od prohlížeče (16,6 px nahoře i dole) nafouknou
+           blok na dvojnásobek a tlačítka vedle něj se pak středují na prázdno
+           místo na text. Odsazení popisku od nadpisu si drží popisek sám. */
+        .strhlav__text h2, .strhlav__text p { margin: 0; }
+        .strhlav__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
         .prjtab { width: 100%; border-collapse: collapse; font-size: 13.5px; }
         .prjtab th {
             text-align: left; font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
@@ -31,32 +44,22 @@
         .stavpil { display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; background: var(--bg); color: var(--text-soft); }
         .stavpil--konec { background: var(--p100-bg); color: var(--p100-fg); }
         .lidechip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 12.5px; background: var(--surface); }
-        /* pole formuláře drží mřížku: všechna na plnou šířku své buňky,
-           jinak si každé vezme vlastní šířku a nic není zarovnané */
-        .prjform { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+        /* Pole formuláře drží mřížku: pevný počet sloupců a každé pole na
+           plnou šířku své buňky. Bez toho si každé pole vezme vlastní šířku
+           (číslo úzké, datum široké) a levé okraje se rozjedou. */
+        .prjform { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
         .prjform label { display: block; min-width: 0; }
         .prjform .field { width: 100%; }
         .prjform label > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-        /* hlavička projektu má pevné tři sloupce, aby druhý řádek seděl pod
-           prvním; auto-fit by je při každé šířce okna přeskládal jinak */
-        .prjform--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        @media (max-width: 760px) { .prjform--3 { grid-template-columns: 1fr; } }
-        /* ukončení projektu patří k tlačítkům, ne mezi vyplňovaná pole –
-           je to rozhodnutí o projektu, a zeleně je vidět na první pohled */
-        .konecpil { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px;
-            border: 1px solid var(--line); border-radius: 99px; background: var(--surface);
-            font-size: 13px; font-weight: 700; color: var(--text-soft); cursor: pointer; }
-        .konecpil input { accent-color: var(--ok); margin: 0; }
-        .konecpil:has(input:checked) { border-color: var(--ok); color: var(--ok); }
-        /* rozdělení projektů: jeden řádek na projekt, pole se rozbalí jen
-           u toho jednoho, který se právě upravuje – jinak by tu byly stovky
-           otevřených formulářů a nedalo by se v tom nic najít */
-        .rozdrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-            padding: 8px 2px; border-bottom: 1px solid var(--line-soft); }
-        .rozdrow__nazev { min-width: 0; }
-        .rozdrow__nazev b { display: block; font-size: 13.5px; }
-        .rozdrow__nazev .tiny { display: block; }
-        .rozdbox { padding: 12px 10px; background: var(--bg-soft); border-bottom: 1px solid var(--line-soft); }
+        /* čtyři sloupce pro peníze projektu – čtyři čísla patří na jeden řádek */
+        .prjform--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        @media (max-width: 1000px) { .prjform--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 760px) { .prjform, .prjform--4 { grid-template-columns: 1fr; } }
+        /* Ukončení projektu je rozhodnutí, ne vyplňované pole – proto tlačítko
+           v řádku s Uložit a ne zaškrtávátko mezi údaji. Zapnutý stav je
+           tmavší, ať se pozná i bez čtení textu. */
+        .jehotov { border-color: var(--ok); margin-inline-end: 8px; }
+        .jehotov--zap { background: #0f5533; border-color: #0f5533; }
         .vybervse { border: none; background: none; font: inherit; font-size: 11.5px; font-weight: 700;
             color: var(--accent); cursor: pointer; padding: 2px 6px; }
         .strankovani { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 0 4px; }
@@ -78,13 +81,14 @@
 
     <!-- ======================================================== SEZNAM -->
     <section id="seznam" hidden style="display:flex;flex-direction:column;gap:14px">
-        <div class="spread">
-            <div>
+        <div class="strhlav">
+            <div class="strhlav__text">
                 <h2 style="font-size:20px;font-weight:900;line-height:1.2">Projekty</h2>
                 <p class="small muted" style="margin-top:3px" id="seznamPopis"></p>
             </div>
-            <div class="row" style="gap:8px">
-                <button type="button" id="btnRozdeleni" class="btn btn--ghost" data-need="vykaz.view" hidden>Rozdělení projektů</button>
+            <div class="strhlav__akce">
+                <!-- číselník (rozpočty, části, firmy) se přestěhoval na vlastní stránku -->
+                <a href="sprava.html" class="btn btn--ghost" data-need="vykaz.view" hidden>Správa projektů</a>
                 <button type="button" id="btnNovy" class="btn btn--primary" data-need="zakazky.manage" hidden>+ Nový projekt</button>
             </div>
         </div>
@@ -103,29 +107,10 @@
             </label>
         </div>
 
-        <!-- číselník pro výkazy: rozpočet, komu se fakturuje, rozpad na části -->
-        <section id="rozdeleni" class="card col" hidden style="gap:12px">
-            <div class="spread">
-                <b>Rozdělení projektů</b>
-                <button type="button" id="btnRozdZavri" class="btn btn--ghost btn--sm">Zavřít</button>
-            </div>
-            <p class="tiny muted" style="margin:0;line-height:1.6">
-                Části nejsou další projekty – je to rozdělení jednoho projektu na kusy
-                (etapy, budovy), mezi kterými se pak vybírá ve výkazu.
-            </p>
-            <input type="search" id="rozdHledat" class="field" placeholder="Hledat projekt v číselníku…" style="max-width:300px">
-            <div id="rozdSeznam"></div>
-            <label><span class="label">Firmy (jedna na řádek)</span>
-                <textarea id="rozdFirmy" rows="4" class="field"></textarea></label>
-            <div class="row" style="justify-content:flex-end">
-                <button type="button" id="btnRozdFirmy" class="btn btn--ghost btn--sm">Uložit firmy</button>
-            </div>
-        </section>
-
         <!-- formulář nového / upravovaného projektu -->
         <section id="editace" class="card col" hidden style="gap:12px">
             <b id="editaceNadpis">Nový projekt</b>
-            <div class="prjform prjform--3">
+            <div class="prjform">
                 <label><span>Číslo</span><input type="text" id="eCislo" class="field" placeholder="2026-021"></label>
                 <label><span>Název</span><input type="text" id="eNazev" class="field" placeholder="Pasport budovy…"></label>
                 <label><span>Firma (fakturuje se)</span><select id="eFirma" class="field"></select></label>
@@ -149,12 +134,10 @@
                 <div id="eLide" class="prjlide"></div>
             </div>
             <label><span class="label">Poznámka</span><textarea id="ePoznamka" rows="2" class="field"></textarea></label>
-            <div class="row row--wrap" style="justify-content:space-between;gap:10px">
-                <label class="konecpil"><input type="checkbox" id="eUzavreno"> ukončený projekt</label>
-                <div class="row" style="gap:10px">
-                    <button type="button" id="btnZrusit" class="btn btn--ghost">Zrušit</button>
-                    <button type="button" id="btnUlozit" class="btn btn--primary">Uložit projekt</button>
-                </div>
+            <div class="row row--wrap" style="justify-content:flex-end;gap:10px">
+                <button type="button" id="btnHotov" class="btn btn--ok jehotov" aria-pressed="false">Projekt je hotov</button>
+                <button type="button" id="btnZrusit" class="btn btn--ghost">Zrušit</button>
+                <button type="button" id="btnUlozit" class="btn btn--primary">Uložit projekt</button>
             </div>
         </section>
 
@@ -179,12 +162,12 @@
         <div class="row" style="gap:10px">
             <a href="projekty.html" class="linkbtn" style="border-color:var(--line);color:var(--muted)">← Všechny projekty</a>
         </div>
-        <div class="spread">
-            <div>
+        <div class="strhlav">
+            <div class="strhlav__text">
                 <h2 id="dNazev" style="font-size:22px;font-weight:900;line-height:1.2"></h2>
                 <p class="small muted" style="margin-top:4px" id="dPodtitul"></p>
             </div>
-            <div class="row" style="gap:8px">
+            <div class="strhlav__akce">
                 <span id="dPrio"></span>
                 <button type="button" id="btnUpravit" class="btn btn--ghost" data-need="zakazky.manage" hidden>Upravit</button>
             </div>
@@ -211,7 +194,7 @@
                 <b>Peníze projektu</b>
                 <button type="button" id="btnFinanceUloz" class="btn btn--ghost">Uložit peníze</button>
             </div>
-            <div class="prjform">
+            <div class="prjform prjform--4">
                 <label><span>Příjmy (Kč)</span><input type="number" id="fPrijmy" class="field" min="0" step="1000"></label>
                 <label><span>Výdaje (Kč)</span><input type="number" id="fVydaje" class="field" min="0" step="1000"></label>
                 <label><span>Rozpočet (Kč)</span><input type="number" id="fRozKc" class="field" min="0" step="1000"></label>
@@ -226,10 +209,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=51"></script>
-<script src="assets/js/ui.js?v=51"></script>
-<script src="assets/js/vykazy.js?v=51"></script>
-<script type="module" src="assets/js/store.js?v=51"></script>
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script src="assets/js/vykazy.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
 
 <script>
 (function () {
@@ -249,6 +232,9 @@
     const detailId = new URLSearchParams(location.search).get("id") || "";
     let sledovaniZapnuto = false;
     let editovanyId = "";        // "" = nový projekt
+    /* Ukončení projektu se drží tady a do databáze jde až s uložením – aby
+       omylem kliknuté „hotov" šlo vzít zpět tlačítkem Zrušit. */
+    let hotovoStav = false;
 
     /* Manažer poslouchá všechno, ostatní jen svoje – pravidla databáze by
        jim širší dotaz celý odmítla. */
@@ -340,6 +326,18 @@
 
     /* --------------------------------------------------------- formulář */
 
+    /** Přepne vzhled tlačítka „Projekt je hotov" podle drženého stavu. */
+    function nastavHotov(hotovo) {
+        hotovoStav = hotovo === true;
+        const tlacitko = $("btnHotov");
+        tlacitko.textContent = hotovoStav ? "Projekt je hotov ✓" : "Projekt je hotov";
+        tlacitko.classList.toggle("jehotov--zap", hotovoStav);
+        tlacitko.setAttribute("aria-pressed", hotovoStav ? "true" : "false");
+        tlacitko.title = hotovoStav
+            ? "Dalším kliknutím se ukončení zase zruší."
+            : "Označí projekt jako ukončený (uloží se s projektem).";
+    }
+
     function naplnFormular(p) {
         editovanyId = p ? p.id : "";
         $("editaceNadpis").textContent = p ? "Úprava projektu" : "Nový projekt";
@@ -348,7 +346,7 @@
         $("eZacatek").value = p ? p.zacatek || "" : "";
         $("eKonec").value = p ? p.konec || "" : "";
         $("ePriorita").value = p ? p.priorita || "stredni" : "stredni";
-        $("eUzavreno").checked = p ? p.uzavreno === true : false;
+        nastavHotov(p ? p.uzavreno === true : false);
         $("ePoznamka").value = p ? p.poznamka || "" : "";
 
         $("eFirma").innerHTML = V.options(V.firmy(), p ? p.firma || "" : "", "— vyber firmu —");
@@ -387,7 +385,7 @@
             // se jen přepisuje sám sebou, ať se uložením neztratí
             stav: puvodni.stav || "",
             priorita: $("ePriorita").value,
-            uzavreno: $("eUzavreno").checked,
+            uzavreno: hotovoStav,
             lide: Array.from($("eLide").querySelectorAll("input:checked")).map(ch => ch.value),
             poznamka: $("ePoznamka").value.trim(),
             createdMs: puvodni.createdMs,
@@ -415,103 +413,6 @@
             window.KBUI.toast("Uložení selhalo – projekty zakládají manažeři.", "error");
         } finally {
             $("btnUlozit").disabled = false;
-        }
-    }
-
-    /* --------------------------------------------- rozdělení projektů ----
-       Číselník, ze kterého čerpají výkazy: rozpočet, komu se fakturuje a
-       rozpad projektu na části. Projektů jsou stovky, takže se vypisuje
-       jeden řádek na projekt a pole se rozbalí jen u toho upravovaného. */
-
-    const ROZD_LIMIT = 15;
-    let rozdOtevreny = "";              // název projektu s rozbalenými poli
-
-    function rozdFormular(nazev, r, casti, firma) {
-        return '<div class="rozdbox">' +
-            '<div class="prjform">' +
-                "<label><span>Rozpočet (Kč)</span>" +
-                    '<input type="number" min="0" step="1000" class="field" data-pole="kc" value="' +
-                    esc(r.kc || "") + '"></label>' +
-                "<label><span>Rozpočet (hodin)</span>" +
-                    '<input type="number" min="0" step="10" class="field" data-pole="hodiny" value="' +
-                    esc(r.hodiny || "") + '"></label>' +
-                "<label><span>Fakturovat firmě</span>" +
-                    '<select class="field" data-pole="firma">' +
-                    V.options(V.firmy(), firma, "— bez firmy —") + "</select></label>" +
-                '<label style="grid-column:1/-1"><span>Části projektu (oddělené čárkou)</span>' +
-                    '<input type="text" class="field" data-pole="casti" value="' +
-                    esc(casti.join(", ")) + '"></label>' +
-            "</div>" +
-            '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">' +
-                '<button type="button" class="btn btn--ghost btn--sm" data-rozd-zavri>Zavřít</button>' +
-                '<button type="button" class="btn btn--primary btn--sm" data-rozd-uloz="' +
-                    esc(nazev) + '">Uložit rozdělení</button>' +
-            "</div>" +
-        "</div>";
-    }
-
-    function rozdRadek(nazev) {
-        const r = V.rozpocet(nazev);
-        const casti = V.projekty(nazev);
-        const firma = (window.KB.firmaMap || {})[nazev] || "";
-        const popis = [
-            firma,
-            casti.length ? V.pocet(casti.length, ["část", "části", "částí"]) : "",
-            r.kc ? V.kc(r.kc) : "",
-            r.hodiny ? V.hod(r.hodiny) : ""
-        ].filter(Boolean).join(" · ");
-        const otevreny = nazev === rozdOtevreny;
-
-        return '<div class="rozdrow">' +
-                '<div class="rozdrow__nazev"><b>' + esc(nazev) + "</b>" +
-                    '<span class="tiny muted">' + (esc(popis) || "zatím bez rozdělení") + "</span></div>" +
-                '<button type="button" class="linkbtn" style="border-color:var(--line);flex:none" ' +
-                    'data-rozd="' + esc(nazev) + '">' + (otevreny ? "zavřít" : "upravit") + "</button>" +
-            "</div>" +
-            (otevreny ? rozdFormular(nazev, r, casti, firma) : "");
-    }
-
-    function vykresliRozdeleni() {
-        if ($("rozdeleni").hidden) return;
-
-        const hledane = window.KBUI.fold($("rozdHledat").value.trim());
-        const najite = V.zakazky().filter(n =>
-            !hledane || window.KBUI.fold(n).includes(hledane));
-        const zbyva = najite.length - ROZD_LIMIT;
-
-        $("rozdSeznam").innerHTML = (najite.slice(0, ROZD_LIMIT).map(rozdRadek).join("") ||
-            '<div class="tiny muted" style="padding:10px 0">Nic takového v číselníku není.</div>') +
-            (zbyva > 0 ? '<div class="tiny muted" style="padding:10px 0">…a dalších ' +
-                esc(zbyva) + " – zpřesni hledání.</div>" : "");
-    }
-
-    async function ulozRozdeleni(nazev, tlacitko) {
-        const box = tlacitko.closest(".rozdbox");
-        const pole = (klic) => box.querySelector('[data-pole="' + klic + '"]');
-
-        /* Zapisují se i prázdné hodnoty: uložení slučuje, takže vynechaný
-           klíč by v databázi nechal starou hodnotu a smazat by nešla. */
-        const rozpocty = Object.assign({}, window.KB.rozpocty);
-        rozpocty[nazev] = {
-            kc: Number(pole("kc").value) || 0,
-            hodiny: Number(pole("hodiny").value) || 0
-        };
-        const projekty = Object.assign({}, window.KB.projekty);
-        projekty[nazev] = pole("casti").value.split(",").map(c => c.trim()).filter(Boolean);
-        const firmaMap = Object.assign({}, window.KB.firmaMap);
-        firmaMap[nazev] = pole("firma").value;
-
-        tlacitko.disabled = true;
-        try {
-            await window.KB.saveVykazNastaveni({ rozpocty: rozpocty });
-            await window.KB.saveCiselnikZakazek({ projekty: projekty, firmaMap: firmaMap });
-            rozdOtevreny = "";
-            vykresliRozdeleni();
-            window.KBUI.toast("Rozdělení projektu uloženo.");
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Uložení selhalo – číselník mění jen manažer.", "error");
-            tlacitko.disabled = false;
         }
     }
 
@@ -595,11 +496,16 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        window.KBUI.mountNav({ active: "projekty.html" });
+        window.KBUI.mountNav({ active: "projekty.html", subbar: true });
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "projekty.html");
 
         $("btnNovy").addEventListener("click", () => naplnFormular(null));
+        // rychlá akce „Nový projekt" ze svislého pásu vede rovnou do formuláře
+        if (location.hash === "#novy" && window.KBUI.can("zakazky.manage")) naplnFormular(null);
         $("btnZrusit").addEventListener("click", () => { $("editace").hidden = true; });
         $("btnUlozit").addEventListener("click", ulozProjekt);
+        // druhé kliknutí ukončení zase zruší – překliknutí se tak dá vzít zpět
+        $("btnHotov").addEventListener("click", () => nastavHotov(!hotovoStav));
         $("btnUpravit").addEventListener("click", () => {
             location.href = "projekty.html";     // úprava probíhá v seznamu
             sessionStorage.setItem("prj-uprav", detailId);
@@ -610,45 +516,6 @@
         });
         ["fText", "fPrio", "fOtevrene"].forEach(id =>
             $(id).addEventListener("input", () => { strana = 1; vykresliSeznam(); }));
-
-        /* rozdělení projektů */
-        const otevriRozdeleni = (otevrit) => {
-            $("rozdeleni").hidden = !otevrit;
-            if (!otevrit) return;
-            rozdOtevreny = "";
-            // seznam firem se přepisuje jen při otevření, ať se nepřepsalo psaní
-            $("rozdFirmy").value = V.firmy().join("\n");
-            vykresliRozdeleni();
-        };
-        $("btnRozdeleni").addEventListener("click", () => otevriRozdeleni($("rozdeleni").hidden));
-        $("btnRozdZavri").addEventListener("click", () => otevriRozdeleni(false));
-        $("rozdHledat").addEventListener("input", () => { rozdOtevreny = ""; vykresliRozdeleni(); });
-        $("rozdSeznam").addEventListener("click", (event) => {
-            const uprav = event.target.closest("[data-rozd]");
-            if (uprav) {
-                rozdOtevreny = rozdOtevreny === uprav.dataset.rozd ? "" : uprav.dataset.rozd;
-                return void vykresliRozdeleni();
-            }
-            if (event.target.closest("[data-rozd-zavri]")) {
-                rozdOtevreny = "";
-                return void vykresliRozdeleni();
-            }
-            const uloz = event.target.closest("[data-rozd-uloz]");
-            if (uloz) ulozRozdeleni(uloz.dataset.rozdUloz, uloz);
-        });
-        $("btnRozdFirmy").addEventListener("click", async () => {
-            const firmy = $("rozdFirmy").value.split("\n").map(f => f.trim()).filter(Boolean);
-            $("btnRozdFirmy").disabled = true;
-            try {
-                await window.KB.saveCiselnikZakazek({ firmy: firmy });
-                window.KBUI.toast("Firmy uloženy.");
-            } catch (err) {
-                console.error(err);
-                window.KBUI.toast("Uložení selhalo – číselník mění jen manažer.", "error");
-            } finally {
-                $("btnRozdFirmy").disabled = false;
-            }
-        });
 
         $("btnStranaZpet").addEventListener("click", () => { strana--; vykresliSeznam(); });
         $("btnStranaDal").addEventListener("click", () => { strana++; vykresliSeznam(); });
@@ -688,10 +555,6 @@
         });
         window.KB.on("ukoly", () => { if (detailId) vykresliDetail(); });
         window.KB.on("vykazy", () => { if (detailId) vykresliDetail(); });
-        // rozdělení se překreslí jen se zavřenými poli, ať nespolkne rozepsané
-        const obnovRozdeleni = () => { if (!rozdOtevreny) vykresliRozdeleni(); };
-        window.KB.on("zakazky", obnovRozdeleni);
-        window.KB.on("vykazy-meta", obnovRozdeleni);
 
         render();
         nactiFinance();

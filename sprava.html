@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Správa projektů – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* --------------------------------------------------- hlavička ----
+           Nadpis a tlačítka drží u sebe. `justify-content: space-between` by
+           je na téhle stránce roztrhl na opačné konce – stránka je široká
+           (--sirka-stranky až 1720 px) a mezi nadpisem a tlačítkem by zůstala
+           díra přes půl obrazovky. Proto zleva a s pevnou mezerou. */
+        .hlava { display: flex; align-items: center; justify-content: flex-start; gap: 18px; flex-wrap: wrap; }
+        .hlava__nadpis { font-size: 20px; font-weight: 900; line-height: 1.2; }
+        .hlava__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        /* Popis pod nadpisem se nemá táhnout přes celou šířku – dlouhý řádek
+           se špatně čte a odtrhne se od nadpisu, ke kterému patří. */
+        .hlava__popis { margin-top: 4px; max-width: 760px; line-height: 1.6; }
+
+        /* ------------------------------------------------- dva sloupce ----
+           Vlevo seznam projektů, vpravo nastavení toho vybraného.
+           Druhý sloupec je `minmax(0, 1fr)`, ne `1fr` – samotné `1fr` se
+           nesmrskne pod šířku obsahu, takže by delší název projektu roztlačil
+           mřížku a levý sloupec by se zúžil. */
+        .sprava { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
+        @media (max-width: 980px) { .sprava { grid-template-columns: 1fr; } }
+
+        .seznam { padding: 12px; gap: 10px; }
+        .seznam__vypis { display: flex; flex-direction: column; gap: 2px; max-height: 640px; overflow: auto; }
+        .seznam__skupina { font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+            color: var(--muted); padding: 10px 10px 4px; }
+        .prjbtn { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+            background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 8px 10px; }
+        .prjbtn:hover { background: var(--bg-soft); }
+        .prjbtn.is-vybrany { background: var(--accent-tint); border-color: var(--accent-lt); }
+        .prjbtn b { display: block; font-size: 13.5px; }
+        .prjbtn span { display: block; font-size: 11.5px; color: var(--muted); }
+
+        /* ----------------------------------------------------- formulář ----
+           Pevné tři sloupce a každé pole na plnou šířku své buňky. `auto-fit`
+           tu schválně není: při každé šířce okna by přeskládal počet sloupců
+           jinak a druhý řádek by neseděl pod prvním. */
+        .form3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+        .form3 .pole { display: block; min-width: 0; }
+        .form3 .field { width: 100%; }
+        .form3 .pole--vse { grid-column: 1 / -1; }
+        .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        @media (max-width: 760px) { .form3 { grid-template-columns: 1fr; } }
+
+        /* Převzetí hodnot z jiného projektu sedí pod polem, ke kterému patří –
+           v samostatné sekci by nebylo poznat, co se vlastně přebírá. */
+        .prevzit { display: flex; gap: 8px; margin-top: 8px; }
+        .prevzit select { flex: 1; min-width: 0; min-height: 36px; font-size: 12.5px; padding: 6px 10px; }
+
+        /* Sazba na projektu: jméno · přepínač · částka · jednotka. */
+        .sazbap { display: grid; grid-template-columns: minmax(0, 1fr) auto 110px auto;
+            align-items: center; gap: 10px; padding: 7px 10px;
+            border: 1px solid var(--line-soft); border-radius: var(--radius); }
+        .sazbap:focus-within { border-color: var(--accent); }
+        .sazbap__jmeno { min-width: 0; font-size: 13px; }
+        .sazbap__jmeno span { display: block; font-size: 11px; color: var(--muted); }
+        .sazbap__prep { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+            color: var(--text-soft); cursor: pointer; white-space: nowrap; }
+        .sazbap input[type="number"] { min-height: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+        /* Vypnuté pole musí být na první pohled vypnuté – jinak do něj někdo
+           píše a diví se, že se to neuloží. */
+        .sazbap input[type="number"]:disabled { background: var(--bg); color: var(--dim); }
+        @media (max-width: 620px) {
+            .sazbap { grid-template-columns: 1fr auto; }
+            .sazbap__prep { grid-column: 1 / -1; }
+        }
+
+        /* Prokliky na projekt a jeho úkoly – rozcestník nad nastavením. */
+        .odkazy { display: flex; gap: 8px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Správu projektů vidí jen manažeři.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou tu rozpočty a sazby. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+
+        <div>
+            <div class="hlava">
+                <h2 class="hlava__nadpis">Správa projektů</h2>
+                <div class="hlava__akce">
+                    <a class="btn btn--ghost btn--sm" href="projekty.html">Projekty</a>
+                    <a class="btn btn--ghost btn--sm" href="ukoly.html">Úkoly</a>
+                </div>
+            </div>
+            <p class="small muted hlava__popis">
+                Jedno místo pro nastavení projektu: rozpočet, komu se fakturuje, části,
+                budovy a patra pro úkoly i sazby platné jen na tomhle projektu.
+                Vlevo vyber projekt, vpravo ho nastav.
+            </p>
+        </div>
+
+        <div class="sprava">
+
+            <!-- ===================================== SEZNAM PROJEKTŮ -->
+            <section class="card col seznam">
+                <input type="search" id="hledat" class="field" placeholder="Hledat projekt…">
+                <div id="seznamVypis" class="seznam__vypis"></div>
+                <span class="tiny muted" id="pocet"></span>
+            </section>
+
+            <!-- ================================ NASTAVENÍ VYBRANÉHO -->
+            <div style="display:flex;flex-direction:column;gap:14px">
+
+                <div id="prazdno" class="card center" style="padding:34px 22px" hidden>
+                    <b>Vyber projekt vlevo.</b>
+                    <p class="small muted" style="margin-top:6px;line-height:1.6">
+                        Nastavení se pak ukáže tady vpravo.
+                    </p>
+                </div>
+
+                <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+
+                    <section class="card col" style="gap:10px">
+                        <div>
+                            <b id="pNazev" style="font-size:16px"></b>
+                            <p class="small muted" id="pPodtitul" style="margin-top:3px"></p>
+                        </div>
+                        <div class="odkazy">
+                            <a id="odkazProjekt" class="btn btn--ghost btn--sm" href="projekty.html">Otevřít projekt →</a>
+                            <a id="odkazUkoly" class="btn btn--ghost btn--sm" href="ukoly.html">Úkoly projektu →</a>
+                        </div>
+                    </section>
+
+                    <!-- ------------------------------ rozpočet, firma, části -->
+                    <section class="card col" style="gap:12px">
+                        <b>Rozpočet, fakturace a části</b>
+                        <div class="form3">
+                            <label class="pole"><span class="popisek">Rozpočet (Kč)</span>
+                                <input type="number" id="fKc" class="field" min="0" placeholder="0"></label>
+                            <label class="pole"><span class="popisek">Rozpočet (hodin)</span>
+                                <input type="number" id="fHodiny" class="field" min="0" placeholder="0"></label>
+                            <label class="pole"><span class="popisek">Fakturovat firmě</span>
+                                <select id="fFirma" class="field"></select></label>
+                            <label class="pole pole--vse"><span class="popisek">Části projektu (oddělené čárkou)</span>
+                                <input type="text" id="fCasti" class="field" placeholder="Etapa 1, Etapa 2"></label>
+                        </div>
+                        <p class="tiny muted" style="margin:0;line-height:1.6">
+                            Části nejsou další projekty – je to rozdělení <b>jednoho</b> projektu
+                            na kusy (etapy, budovy), mezi kterými se pak vybírá ve výkazu.
+                        </p>
+                    </section>
+
+                    <!-- ------------------- budovy, patra a technologie projektu -->
+                    <section class="card col" style="gap:12px">
+                        <div>
+                            <b>Budovy, patra a technologie</b>
+                            <p class="small muted" style="margin-top:3px;line-height:1.6">
+                                Platí jen pro tenhle projekt – každý má jiný počet budov i pater.
+                                Z těchhle seznamů se pak skládají úkoly.
+                            </p>
+                        </div>
+                        <div class="form3">
+                            <div class="pole">
+                                <span class="popisek">Budovy (oddělené čárkou)</span>
+                                <input type="text" id="fBudovy" class="field">
+                                <div class="prevzit">
+                                    <select id="zBudovy" class="field"></select>
+                                    <button type="button" class="btn btn--ghost btn--sm" data-prevzit="budovy">Převzít</button>
+                                </div>
+                            </div>
+                            <div class="pole">
+                                <span class="popisek">Patra (oddělená čárkou)</span>
+                                <input type="text" id="fPatra" class="field">
+                                <div class="prevzit">
+                                    <select id="zPatra" class="field"></select>
+                                    <button type="button" class="btn btn--ghost btn--sm" data-prevzit="patra">Převzít</button>
+                                </div>
+                            </div>
+                            <div class="pole">
+                                <span class="popisek">Technologie (oddělené čárkou)</span>
+                                <input type="text" id="fTech" class="field">
+                                <div class="prevzit">
+                                    <select id="zTech" class="field"></select>
+                                    <button type="button" class="btn btn--ghost btn--sm" data-prevzit="technologie">Převzít</button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="tiny muted" style="margin:0;line-height:1.6">
+                            Prázdné pole znamená, že platí společný seznam z Nastavení úkolů.
+                            Roletka pod polem převezme hodnoty z jiného projektu, ať se to
+                            nemusí ťukat pořád dokola.
+                        </p>
+                    </section>
+
+                    <!-- --------------------------------- sazby na projektu -->
+                    <section class="card col" style="gap:12px">
+                        <div>
+                            <b>Sazby na tomto projektu</b>
+                            <p class="small muted" style="margin-top:3px;line-height:1.6">
+                                Lidé přiřazení k projektu. Nezaškrtnuté = platí obecná sazba
+                                z Nastavení. Změna se týká jen nových zápisů, starší výkazy
+                                zůstanou takové, jaké byly.
+                            </p>
+                        </div>
+                        <div id="sazbyLide" class="col" style="gap:6px"></div>
+                    </section>
+
+                    <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+                        <span id="stav" class="small muted" style="margin-right:auto"></span>
+                        <button type="button" id="btnUloz" class="btn btn--primary">Uložit nastavení projektu</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================== SPOLEČNÉ: FIRMY -->
+        <section class="card col" style="gap:12px">
+            <div>
+                <b>Firmy</b>
+                <p class="small muted" style="margin-top:3px;line-height:1.6">
+                    Společný číselník pro všechny projekty – nabízí se výš u fakturace
+                    i ve výkazech. Jedna firma na řádek.
+                </p>
+            </div>
+            <textarea id="fFirmy" rows="4" class="field"></textarea>
+            <div class="row" style="gap:10px;justify-content:flex-end">
+                <span id="stavFirmy" class="small muted" style="margin-right:auto"></span>
+                <button type="button" id="btnFirmy" class="btn btn--ghost">Uložit firmy</button>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script src="assets/js/vykazy.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    /* Společný seznam technologií leží v číselníku `budget` pod klíčem, který
+       se s žádným projektem potkat nemůže (stejně to dělá stránka úkolů).
+       Do roletky projektů proto nesmí. */
+    const TECH_KLIC = "_technologie";
+
+    let vybrany = "";            // id vybraného projektu
+    let dotknuto = false;        // sáhl už někdo do formuláře?
+    let firmyDotknuty = false;
+    let sledovaniZapnuto = false;
+    let hledani = "";
+
+    const seznamZTextu = (text) => String(text || "").split(",").map(x => x.trim()).filter(Boolean);
+
+    /* ------------------------------------------------------------ projekty */
+
+    /** Otevřené nahoře. Řazení uvnitř skupin drží store (číslo, pak název). */
+    function seznamProjektu() {
+        return (window.KB.projektyDocs || []).slice()
+            .sort((a, b) => (a.uzavreno === true) - (b.uzavreno === true));
+    }
+
+    const vybranyProjekt = () => (window.KB.projektyDocs || []).find(p => p.id === vybrany) || null;
+
+    function filtrovane() {
+        const slova = window.KBUI.fold(hledani).split(/\s+/).filter(Boolean);
+        if (!slova.length) return seznamProjektu();
+        return seznamProjektu().filter(p => {
+            const kupka = window.KBUI.fold([p.cislo, p.nazev, p.firma].join(" "));
+            return slova.every(s => kupka.includes(s));
+        });
+    }
+
+    function vykresliSeznam() {
+        const nalezene = filtrovane();
+
+        /* Když nic vybraného není (první dávka dat, nebo projekt mezitím zmizel),
+           vybere se sám – prázdná pravá půlka vypadá jako rozbitá stránka.
+           Z adresy má přednost `?id=`, ať se dá na konkrétní projekt odkázat
+           z projektů i z úkolů. Hledá se v celém seznamu, ne v tom vyfiltrovaném:
+           psaní do hledání nesmí vybraný projekt přehodit na jiný. */
+        if (!vybranyProjekt() && (window.KB.projektyDocs || []).length) {
+            const zAdresy = new URLSearchParams(location.search).get("id") || "";
+            vybrany = (window.KB.projektyDocs || []).some(p => p.id === zAdresy)
+                ? zAdresy
+                : (nalezene[0] || (window.KB.projektyDocs || [])[0]).id;
+        }
+
+        let posledniUzavreno = null;
+        $("seznamVypis").innerHTML = nalezene.map(p => {
+            const popis = [p.cislo, (window.KB.firmaMap || {})[p.nazev] || p.firma || ""]
+                .filter(Boolean).join(" · ");
+            // nadpis skupiny se vypíše jen na přelomu otevřené / ukončené
+            const hlavicka = (p.uzavreno === true) !== posledniUzavreno
+                ? '<div class="seznam__skupina">' + (p.uzavreno ? "Ukončené" : "Otevřené") + "</div>"
+                : "";
+            posledniUzavreno = p.uzavreno === true;
+
+            return hlavicka +
+                '<button type="button" class="prjbtn' + (p.id === vybrany ? " is-vybrany" : "") +
+                    '" data-prj="' + esc(p.id) + '">' +
+                    "<b>" + esc(p.nazev || "Bez názvu") + "</b>" +
+                    (popis ? "<span>" + esc(popis) + "</span>" : "") +
+                "</button>";
+        }).join("") || '<div class="tiny muted" style="padding:8px 10px">Nic nenalezeno.</div>';
+
+        $("pocet").textContent = nalezene.length
+            ? V.pocet(nalezene.length, ["projekt", "projekty", "projektů"])
+            : "";
+    }
+
+    function vyber(id) {
+        if (id === vybrany) return;
+        vybrany = id;
+        dotknuto = false;         // jiný projekt = jiná data, formulář se přeplní
+        $("stav").textContent = "";
+        vykresliSeznam();
+        vykresliNastaveni();
+        // ať se dá na projekt odkázat i po přepnutí
+        try { history.replaceState(null, "", "sprava.html?id=" + encodeURIComponent(id)); }
+        catch (err) { /* na některých prohlížečích u souboru na disku nejde */ }
+    }
+
+    /* ---------------------------------------------------------- nastavení */
+
+    /** Doplní hodnotu, kterou projekt má, ale číselník ji už nenabízí. */
+    const sHodnotou = (seznam, hodnota) =>
+        (hodnota && seznam.indexOf(hodnota) === -1) ? [hodnota].concat(seznam) : seznam;
+
+    /** Projekty, ze kterých se dá dané pole převzít (a něco v něm mají). */
+    function zdroje(klic, krome) {
+        const budget = window.KB.budgetCiselnik || {};
+        return Object.keys(budget)
+            .filter(k => k !== TECH_KLIC && k !== krome)
+            .filter(k => Array.isArray((budget[k] || {})[klic]) && budget[k][klic].length)
+            .sort((a, b) => a.localeCompare(b, "cs"));
+    }
+
+    function naplnZdroje(nazev) {
+        [["zBudovy", "budovy"], ["zPatra", "patra"], ["zTech", "technologie"]].forEach(([id, klic]) => {
+            const moznosti = zdroje(klic, nazev);
+            $(id).innerHTML = V.options(moznosti, "",
+                moznosti.length ? "— převzít z jiného projektu —" : "— není odkud převzít —");
+        });
+    }
+
+    /** Sazby uložené u projektu. V.rozpocet vrací jen Kč a hodiny, proto přímo. */
+    const sazbyProjektu = (nazev) => {
+        const r = (window.KB.rozpocty || {})[nazev] || {};
+        return (r.sazby && typeof r.sazby === "object") ? r.sazby : {};
+    };
+
+    /** Sazby lidí přiřazených k projektu. Nezaškrtnutý člověk jede na obecné. */
+    function naplnSazby(p) {
+        const vlastniSazby = sazbyProjektu(p.nazev);
+        const obecne = window.KB.sazby || {};
+
+        $("sazbyLide").innerHTML = (p.lide || []).map(uid => {
+            const clovek = V.clovek(uid);
+            const jmeno = clovek ? V.jmeno(clovek) : uid;
+            const vlastni = Number(vlastniSazby[uid]) || 0;
+            const obecna = Number(obecne[uid]) || 0;
+
+            return '<div class="sazbap">' +
+                '<span class="sazbap__jmeno">' + esc(jmeno) +
+                    "<span>" + (obecna ? "obecná sazba " + esc(V.cislo(obecna)) + " Kč/h"
+                                       : "obecná sazba není vyplněná") + "</span></span>" +
+                '<label class="sazbap__prep"><input type="checkbox" data-jina="' + esc(uid) + '"' +
+                    (vlastni ? " checked" : "") + "> jiná sazba na tomto projektu</label>" +
+                '<input type="number" class="field" min="0" step="10" data-sazba="' + esc(uid) + '"' +
+                    (vlastni ? "" : " disabled") + ' value="' + (vlastni || "") + '">' +
+                '<span class="tiny muted">Kč/h</span>' +
+            "</div>";
+        }).join("") ||
+            '<div class="tiny muted">K projektu zatím nikdo není přiřazený – lidi přidáš u projektu.</div>';
+    }
+
+    function vykresliNastaveni() {
+        const p = vybranyProjekt();
+        $("panel").hidden = !p;
+        $("prazdno").hidden = !!p;
+        if (!p) return;
+
+        const nazev = p.nazev || "";
+        $("pNazev").textContent = nazev || "Bez názvu";
+        $("pPodtitul").textContent = [p.cislo, (window.KB.firmaMap || {})[nazev] || p.firma || "",
+            p.uzavreno ? "ukončený" : ""].filter(Boolean).join(" · ");
+        $("odkazProjekt").href = "projekty.html?id=" + encodeURIComponent(p.id);
+        $("odkazUkoly").href = "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(nazev));
+
+        // rozepsanou změnu nepřepisujeme daty, která zrovna dotečou z databáze
+        if (dotknuto) return;
+
+        const rozpocet = V.rozpocet(nazev);
+        $("fKc").value = rozpocet.kc || "";
+        $("fHodiny").value = rozpocet.hodiny || "";
+
+        const firma = (window.KB.firmaMap || {})[nazev] || p.firma || "";
+        $("fFirma").innerHTML = V.options(sHodnotou(V.firmy(), firma), firma, "— nevyplněno —");
+        $("fCasti").value = V.projekty(nazev).join(", ");
+
+        const b = (window.KB.budgetCiselnik || {})[nazev] || {};
+        $("fBudovy").value = (b.budovy || []).join(", ");
+        $("fPatra").value = (b.patra || []).join(", ");
+        $("fTech").value = (b.technologie || []).join(", ");
+        naplnZdroje(nazev);
+
+        naplnSazby(p);
+    }
+
+    function naplnFirmy() {
+        if (firmyDotknuty) return;
+        $("fFirmy").value = V.firmy().join("\n");
+    }
+
+    /* ------------------------------------------------------------ ovládání */
+
+    /** Vypnuté pole sazby se zapne až zaškrtnutím – ať je jasné, co platí. */
+    function prepniSazbu(prepinac) {
+        const radek = prepinac.closest(".sazbap");
+        const pole = radek && radek.querySelector("[data-sazba]");
+        if (!pole) return;
+        pole.disabled = !prepinac.checked;
+        if (!prepinac.checked) pole.value = "";
+        else pole.focus();
+    }
+
+    function prevezmi(klic) {
+        const zdroj = { budovy: "zBudovy", patra: "zPatra", technologie: "zTech" }[klic];
+        const cil = { budovy: "fBudovy", patra: "fPatra", technologie: "fTech" }[klic];
+        const odkud = $(zdroj).value;
+        if (!odkud) return void window.KBUI.toast("Vyber v roletce projekt, ze kterého se má převzít.", "warn");
+
+        const hodnoty = ((window.KB.budgetCiselnik || {})[odkud] || {})[klic] || [];
+        $(cil).value = hodnoty.join(", ");
+        dotknuto = true;
+        window.KBUI.toast("Převzato z projektu " + odkud + " – ještě to ulož.");
+    }
+
+    /* -------------------------------------------------------------- uložení
+       Všechno najednou, jedním tlačítkem: rozpočet a sazby jdou do tajných
+       číselníků výkazů, firma, části a budovy do netajného číselníku zakázek. */
+
+    async function uloz() {
+        const p = vybranyProjekt();
+        if (!p) return;
+        const nazev = p.nazev || "";
+
+        /* Sazba jen pro tenhle projekt sedí UVNITŘ rozpočtu projektu
+           (rozpocty[projekt].sazby), ne pod vlastním klíčem. Důvod je v
+           store.js: KB.saveVykazNastaveni propouští jedině klíče
+           ["cinnosti","technologie","sazby","rozpocty"], takže samostatný
+           `sazbyProjektu` by se cestou zahodil a nikdo by se nedozvěděl proč.
+           Uvnitř rozpočtu to navíc logicky patří – je to číslo o projektu. */
+        const sazby = {};
+        $("sazbyLide").querySelectorAll(".sazbap").forEach(radek => {
+            const prepinac = radek.querySelector("[data-jina]");
+            const pole = radek.querySelector("[data-sazba]");
+            const castka = Number(pole.value) || 0;
+            if (prepinac.checked && castka > 0) sazby[pole.dataset.sazba] = castka;
+        });
+
+        /* Bere se kopie toho, co je v paměti, a mění se jedině tenhle projekt –
+           uložení celý dokument slučuje, takže ostatní projekty musí odejít
+           zpátky beze změny. */
+        const rozpocty = Object.assign({}, window.KB.rozpocty);
+        rozpocty[nazev] = Object.assign({}, rozpocty[nazev], {
+            kc: Number($("fKc").value) || 0,
+            hodiny: Number($("fHodiny").value) || 0,
+            sazby: sazby
+        });
+
+        const casti = Object.assign({}, window.KB.projekty);
+        // zapisuje se i prázdný seznam – vynechaný klíč by starou hodnotu nechal
+        casti[nazev] = seznamZTextu($("fCasti").value);
+
+        const firmaMap = Object.assign({}, window.KB.firmaMap);
+        firmaMap[nazev] = $("fFirma").value;
+
+        const budget = Object.assign({}, window.KB.budgetCiselnik);
+        const budovy = seznamZTextu($("fBudovy").value);
+        const patra = seznamZTextu($("fPatra").value);
+        const technologie = seznamZTextu($("fTech").value);
+        if (budovy.length || patra.length || technologie.length) {
+            budget[nazev] = Object.assign({}, budget[nazev],
+                { budovy: budovy, patra: patra, technologie: technologie });
+        } else {
+            delete budget[nazev];   // prázdné mapy v číselníku jen překáží
+        }
+
+        $("btnUloz").disabled = true;
+        $("stav").textContent = "Ukládám…";
+        try {
+            await window.KB.saveVykazNastaveni({ rozpocty: rozpocty });
+            await window.KB.saveCiselnikZakazek({
+                projekty: casti, firmaMap: firmaMap, budget: budget
+            });
+            dotknuto = false;
+            $("stav").textContent = "Uloženo.";
+            vykresliNastaveni();
+            window.KBUI.toast("Nastavení projektu uloženo.");
+        } catch (err) {
+            console.error(err);
+            $("stav").textContent = "";
+            window.KBUI.toast("Uložení selhalo – nastavení mění jen manažer.", "error");
+        } finally {
+            $("btnUloz").disabled = false;
+        }
+    }
+
+    async function ulozFirmy() {
+        const firmy = $("fFirmy").value.split("\n").map(f => f.trim()).filter(Boolean);
+        $("btnFirmy").disabled = true;
+        $("stavFirmy").textContent = "Ukládám…";
+        try {
+            await window.KB.saveCiselnikZakazek({ firmy: firmy });
+            firmyDotknuty = false;
+            $("stavFirmy").textContent = "Uloženo.";
+            window.KBUI.toast("Firmy uloženy.");
+        } catch (err) {
+            console.error(err);
+            $("stavFirmy").textContent = "";
+            window.KBUI.toast("Uložení selhalo – číselník mění jen manažer.", "error");
+        } finally {
+            $("btnFirmy").disabled = false;
+        }
+    }
+
+    /* ---------------------------------------------------------------- start */
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        sledovaniZapnuto = true;
+        window.KB.watchProjekty();
+        /* Rozpočty a sazby chodí spolu s výkazy (tajný číselník) – bez tohohle
+           odběru by pole zůstala prázdná a uložení by přepsalo cizí čísla. */
+        window.KB.watchVykazy();
+    }
+
+    function render() {
+        const smi = window.KBUI.can("vykaz.view");
+        $("stop").hidden = smi;
+        $("obsah").hidden = !smi;
+        if (!smi) return;
+        zapniSledovani();
+        vykresliSeznam();
+        vykresliNastaveni();
+        naplnFirmy();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "projekty.html", subbar: true });
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "sprava.html");
+
+        $("hledat").addEventListener("input", (event) => {
+            hledani = event.target.value.trim();
+            vykresliSeznam();
+        });
+        $("seznamVypis").addEventListener("click", (event) => {
+            const tlacitko = event.target.closest("[data-prj]");
+            if (tlacitko) vyber(tlacitko.dataset.prj);
+        });
+
+        // jakmile někdo do formuláře sáhne, data z databáze mu ho nepřepíšou
+        $("panel").addEventListener("input", () => { dotknuto = true; });
+        $("panel").addEventListener("change", (event) => {
+            dotknuto = true;
+            const prepinac = event.target.closest("[data-jina]");
+            if (prepinac) prepniSazbu(prepinac);
+        });
+        $("panel").addEventListener("click", (event) => {
+            const tlacitko = event.target.closest("[data-prevzit]");
+            if (tlacitko) prevezmi(tlacitko.dataset.prevzit);
+        });
+        $("btnUloz").addEventListener("click", uloz);
+
+        $("fFirmy").addEventListener("input", () => { firmyDotknuty = true; });
+        $("btnFirmy").addEventListener("click", ulozFirmy);
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("projekty-docs", () => { vykresliSeznam(); vykresliNastaveni(); });
+        window.KB.on("zakazky", () => { vykresliNastaveni(); naplnFirmy(); });
+        window.KB.on("vykazy-meta", vykresliNastaveni);
+        window.KB.on("users", render);
+
+        render();
+    });
+})();
+</script>
+</body>
+</html>

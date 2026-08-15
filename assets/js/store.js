@@ -156,6 +156,9 @@ const kalendarCol = () => collection(db, "artifacts", APP_ID, "public", "data", 
 const kalendarDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "kalendar", id);
 /* historie aktivit – zapisuje každý (svoje kroky), čtou jen manažeři */
 const aktivityCol = () => collection(db, "artifacts", APP_ID, "private", "aktivity", "seznam");
+/* zámek na citlivé sekce (sazby, hesla lidí) – otisk hesla leží v databázi,
+   ne v kódu: repozitář je veřejný a hash z něj by šel zkoušet hrubou silou */
+const zamekDoc = () => doc(db, "artifacts", APP_ID, "private", "nastaveni", "zamek", "heslo");
 /* kdo je právě na webu – malý dokument na člověka, vidí ho všichni */
 const pritomnostCol = () => collection(db, "artifacts", APP_ID, "public", "data", "pritomnost");
 const pritomnostDoc = (uid) => doc(db, "artifacts", APP_ID, "public", "data", "pritomnost", uid);
@@ -365,6 +368,29 @@ KB.zapisAktivitu = (druh, text) => {
             ms: Date.now()
         }).catch(() => {});
     } catch (err) { /* nikdy neshodit uložení kvůli logu */ }
+};
+
+/* ------------------------------------------------ zámek citlivých sekcí ---
+   Role samotná už brání komukoliv mimo manažery, tohle je druhý zámek navíc
+   pro sazby a hesla lidí – aby stačilo odejít od odemčeného počítače a nikdo
+   je hned neviděl. Heslo si zvolí hlavní správce; ukládá se jen jeho otisk
+   se solí, takže se z databáze zpětně přečíst nedá. */
+
+KB.loadZamek = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(zamekDoc());
+    return snap.exists() ? snap.data() : null;
+};
+
+KB.saveZamek = async (salt, hash) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(zamekDoc(), {
+        salt: salt, hash: hash,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
 };
 
 let aktivityOdber = null;

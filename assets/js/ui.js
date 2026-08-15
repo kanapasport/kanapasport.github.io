@@ -690,6 +690,37 @@
         return '<nav class="appbar__nav">' + items + "</nav>";
     }
 
+    /**
+     * Druhý řádek lišty. Stránky, které patří k sobě, ho mají stejný a liší se
+     * jen zvýrazněnou položkou – jinak člověk po prokliku ztratí cestu zpátky
+     * k sourozencům (přesně tohle vadilo u Vytížení týmu).
+     *
+     * @param {Array} polozky – [{ title, href, need }]
+     * @param {string} aktivni – href té, na které zrovna jsme
+     */
+    UI.paintSubbar = (polozky, aktivni) => {
+        const slot = document.getElementById("appSubbar");
+        if (!slot) return;
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            polozky.map(p => {
+                const gate = p.need ? ' data-need="' + esc(p.need) + '" hidden' : "";
+                return p.href === aktivni
+                    ? '<span class="subbar__cat"' + gate + ">" + esc(p.title) + "</span>"
+                    : '<a class="subbar__cat subbar__cat--up" href="' + esc(p.href) + '"' +
+                      gate + ">" + esc(p.title) + "</a>";
+            }).join("") +
+        "</div></div>";
+        // odkazy vznikly až teď, práva se na nich musí dorovnat
+        UI.paintUser();
+    };
+
+    /** Podlišta projektů – seznam, plán a správa patří k sobě. */
+    UI.PODLISTA_PROJEKTY = [
+        { title: "SEZNAM PROJEKTŮ", href: "projekty.html" },
+        { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view" },
+        { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" }
+    ];
+
     /** Nástroje vpravo nad lištou – vidět je ikona, popis vyjede po najetí. */
     function toolsHtml() {
         const tools = (window.KB_TOOLS || []).map(tool => {
@@ -821,6 +852,9 @@
                     icon("plus") + "<span>Nový výkaz</span></a>" +
                 '<a class="siderail__btn" href="ukoly.html?moje=1">' +
                     icon("tasks") + "<span>Moje úkoly</span></a>" +
+                // zakládání projektů je manažerská práce, proto až za úkoly
+                '<a class="siderail__btn" href="projekty.html#novy" data-need="zakazky.manage" hidden>' +
+                    icon("building") + "<span>Nový projekt</span></a>" +
                 '<a class="siderail__btn" href="nastaveni.html" data-need="vykaz.view" hidden>' +
                     icon("cog") + "<span>Nastavení</span></a>" +
                 '<div class="siderail__ja" data-rail-ja></div>' +

@@ -7,10 +7,74 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
+        /* ---------------------------------------------------- hlavička ----
+           Nadpis a tlačítko drží u sebe, celé u levého okraje. Stránka je
+           široká (--sirka-stranky až 1720 px), takže `space-between` by mezi
+           ně vecpal přes půl obrazovky prázdna a tlačítko by se hledalo očima
+           až u pravého kraje. Proto pevná mezera 18 px.
+           Popis jde pod celý řádek – je delší než jedna věta a vedle nadpisu
+           by tlačítko vystředil na prázdno místo na text. */
+        .hlava { display: flex; flex-direction: column; gap: 6px; }
+        .hlava__radek { display: flex; align-items: center; justify-content: flex-start;
+            gap: 18px; flex-wrap: wrap; }
+        /* výchozí okraje nadpisu a odstavce od prohlížeče nafouknou blok
+           na dvojnásobek – mezery si tu řídí `gap` */
+        .hlava__radek h2, .hlava__popis { margin: 0; }
+        .hlava__nadpis { font-size: 20px; font-weight: 900; line-height: 1.2; }
+        /* dlouhý řádek přes celou šířku se špatně čte a odtrhne se od nadpisu */
+        .hlava__popis { max-width: 860px; line-height: 1.6; }
+
+        /* ------------------------------------------------------- filtr ----
+           Zaškrtávátka nesou rovnou i barvu druhu, takže nahrazují bývalou
+           samostatnou legendu – dva řádky se stejnými sedmi slovy pod sebou
+           nic nepřidají. Primárně je zapnuté všechno; kdo chce vidět jen
+           dovolené, zbytek si odklikne. */
+        .filtr { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .filtr__druh { display: inline-flex; align-items: center; gap: 7px;
+            min-height: 32px; padding: 0 11px; border: 1px solid var(--line);
+            border-radius: 99px; background: var(--surface);
+            font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        .filtr__druh i { display: inline-block; flex: none; width: 10px; height: 10px;
+            border-radius: 3px; font-style: normal; }
+        /* vypnutý druh zešedne – ať je na první pohled vidět, že se něco neukazuje */
+        .filtr__druh:has(input:not(:checked)) { color: var(--dim); opacity: .6; }
+        .filtr__druh:hover { border-color: var(--accent-lt); }
+        /* Roletka „Kdo" zůstává hned za zaškrtávátky, ne u pravého kraje stránky.
+           Žádné vlastní odsazení zleva – na užším okně se filtr zalomí a každé
+           odsazení navíc by druhý řádek posunulo o kus vedle prvního. */
+        .filtr__kdo { display: inline-flex; align-items: center; gap: 7px; }
+        .filtr__popisek { font-size: 11.5px; font-weight: 800; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); }
+        .filtr__pole { width: auto; min-width: 190px; min-height: 32px;
+            padding: 4px 10px; font-size: 12.5px; }
+        /* stejná výška jako zaškrtávátka i roletka, ať řádek filtru nekouše */
+        .filtr__reset { min-height: 32px; padding: 0 12px; }
+
+        /* ------------------------------------------------------ formulář --
+           Pevné tři sloupce, ne `auto-fit`: při automatickém počtu si každý
+           typ pole vezme jinou šířku a řádky se rozjedou. `align-items: end`
+           srovná pole i zaškrtávátko na společnou spodní hranu. */
+        .kalform { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px; align-items: end; }
+        .kalform label { display: block; min-width: 0; }
+        /* `display:block` výše je autorský styl a přebil by `hidden` z prohlížeče –
+           bez tohohle by čas svítil i u celodenního záznamu */
+        .kalform label[hidden] { display: none; }
+        .kalform .field { width: 100%; }
+        .kalform__siroke { grid-column: 1 / -1; }
+        /* zaškrtávátko má stejnou výšku jako pole vedle, jinak by spodní hrany nesedly */
+        .kalform__prepinac { display: flex; align-items: center; gap: 8px;
+            min-height: 44px; cursor: pointer; }
+        .kalform__casy { display: flex; gap: 6px; }
+        .kalform__casy .field { min-width: 0; }
+        @media (max-width: 780px) { .kalform { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 520px) { .kalform { grid-template-columns: minmax(0, 1fr); } }
+
+        /* ------------------------------------------------------- mřížka --- */
         .kal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
         .kal--3 { grid-template-columns: repeat(3, 1fr); }
         .kal__hlava { font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
@@ -47,20 +111,17 @@
         .udcely { display: flex; align-items: center; gap: 5px; min-height: 22px;
             padding: 3px 8px; border-radius: 0; font-size: 11px; font-weight: 800;
             box-shadow: inset 4px 0 0 rgba(255, 255, 255, .55); }
-        .udcely__kdo { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+        /* Druh stojí vepředu a nekrátí se; ukrojí se až jméno za ním –
+           „Dovolená – Ja…" pořád nese tu podstatnou informaci. */
+        .udcely__druh { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
         .udcely__sep { flex: none; opacity: .7; }
-        .udcely__co { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+        .udcely__kdo { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
         /* hodinová mřížka pro týden a 3 dny: 6:00–20:00, řádek = hodina */
         .kal__hodiny { position: relative; height: 504px; /* 14 hodin × 36 px */
             background: repeating-linear-gradient(to bottom,
                 var(--line-soft) 0, var(--line-soft) 1px, transparent 1px, transparent 36px); }
         .kal__hodina { position: absolute; left: 2px; font-size: 9px; color: var(--dim); pointer-events: none; }
         .kal__hodiny .ud { position: absolute; left: 24px; right: 2px; white-space: normal; overflow: hidden; }
-        .kalform { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-        .kalform label > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
-            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-        .legenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; color: var(--muted); }
-        .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; font-style: normal; }
         @media (max-width: 760px) {
             .kal { grid-template-columns: repeat(1, 1fr); }
             .kal__hlava { display: none; }
@@ -77,21 +138,24 @@
 
 <main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
 
-    <div class="spread">
-        <div>
-            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Kalendář</h2>
-            <p class="small muted" style="margin-top:3px">
-                Dovolené, nemoci a školení celé firmy, termíny úkolů a milníky.
-            </p>
+    <div class="hlava">
+        <div class="hlava__radek">
+            <h2 class="hlava__nadpis">Kalendář</h2>
+            <button type="button" id="btnPridat" class="btn btn--primary">+ Přidat událost</button>
         </div>
-        <button type="button" id="btnPridat" class="btn btn--primary">+ Přidat událost</button>
+        <p class="hlava__popis small muted">
+            Dovolené, nemoci a školení celé firmy, termíny úkolů a milníky.
+            Tlačítkem <b>+ Přidat událost</b> se do kalendáře zapíše ručně to, co v žádném
+            výkazu není – porada, návštěva stavby, termín nebo dovolená zadaná dopředu;
+            dovolené a nemoci zapsané ve výkazu se sem propíšou samy.
+        </p>
     </div>
 
     <!-- přidání události -->
     <section id="pridani" class="card col" hidden style="gap:12px">
         <b>Nová událost</b>
         <div class="kalform">
-            <label><span>Typ</span>
+            <label><span class="label">Typ</span>
                 <select id="uTyp" class="field">
                     <option value="udalost">Událost</option>
                     <option value="dovolena">Dovolená</option>
@@ -99,16 +163,16 @@
                     <option value="skoleni">Školení</option>
                     <option value="homeoffice">Home office</option>
                 </select></label>
-            <label><span>Od</span><input type="date" id="uOd" class="field"></label>
-            <label><span>Do</span><input type="date" id="uDo" class="field"></label>
-            <label class="row" style="gap:8px;align-self:end;cursor:pointer;padding-bottom:8px">
+            <label><span class="label">Od</span><input type="date" id="uOd" class="field"></label>
+            <label><span class="label">Do</span><input type="date" id="uDo" class="field"></label>
+            <label class="kalform__prepinac">
                 <input type="checkbox" id="uCelyDen" checked> <b>Celý den</b></label>
-            <label id="uCasBox" hidden><span>Čas od–do</span>
-                <span class="row" style="gap:6px">
+            <label id="uCasBox" hidden><span class="label">Čas od–do</span>
+                <span class="kalform__casy">
                     <input type="time" id="uOdCas" class="field" step="900">
                     <input type="time" id="uDoCas" class="field" step="900">
                 </span></label>
-            <label style="grid-column:span 2"><span>Popis</span>
+            <label class="kalform__siroke"><span class="label">Popis</span>
                 <input type="text" id="uText" class="field" placeholder="co se děje"></label>
         </div>
         <div class="row" style="justify-content:flex-end;gap:10px">
@@ -131,25 +195,32 @@
             <button type="button" class="chip" data-pohled="tyden">Týden</button>
             <button type="button" class="chip" data-pohled="tri">3 dny</button>
         </div>
-        <!-- legenda nahoře, ať je vidět bez rolování i u celého měsíce -->
-        <div class="legenda">
-            <span><i class="ud--udalost"></i>událost</span>
-            <span><i class="ud--dovolena"></i>dovolená</span>
-            <span><i class="ud--nemoc"></i>nemoc</span>
-            <span><i class="ud--skoleni"></i>školení</span>
-            <span><i class="ud--homeoffice"></i>home office</span>
-            <span><i class="ud--ukol"></i>termín úkolu</span>
-            <span><i class="ud--milnik"></i>milník</span>
+
+        <!-- Filtr je zároveň legenda: u každého druhu svítí jeho barva.
+             Nahoře nad mřížkou, ať je vidět bez rolování i u celého měsíce. -->
+        <div class="filtr">
+            <label class="filtr__druh"><input type="checkbox" data-druh="udalost"><i class="ud--udalost"></i>Události</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="dovolena"><i class="ud--dovolena"></i>Dovolené</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="nemoc"><i class="ud--nemoc"></i>Nemoci</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="skoleni"><i class="ud--skoleni"></i>Školení</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="homeoffice"><i class="ud--homeoffice"></i>Home office</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="ukol"><i class="ud--ukol"></i>Termíny úkolů</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="milnik"><i class="ud--milnik"></i>Milníky</label>
+            <label class="filtr__kdo"><span class="filtr__popisek">Kdo</span>
+                <select id="fKdo" class="field filtr__pole"></select></label>
+            <button type="button" id="btnVse" class="btn btn--ghost btn--sm filtr__reset"
+                title="Vrátí filtr do výchozího stavu – vidět je zase všechno">Zobrazit vše</button>
         </div>
+
         <div id="mrizka"></div>
     </div>
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=51"></script>
-<script src="assets/js/ui.js?v=51"></script>
-<script src="assets/js/vykazy.js?v=51"></script>
-<script type="module" src="assets/js/store.js?v=51"></script>
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script src="assets/js/vykazy.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
 
 <script>
 (function () {
@@ -159,8 +230,10 @@
     const esc = (value) => window.KBUI.esc(value);
     const V = window.KBVYK;
 
-    const TYPY = { udalost: "událost", dovolena: "dovolená", nemoc: "nemoc",
-        skoleni: "školení", homeoffice: "home office" };
+    /* Popisky druhů s velkým písmenem – v kalendáři stojí druh na začátku
+       řádku („Dovolená – Jan Novák"), takže se píše jako začátek věty. */
+    const DRUHY = { udalost: "Událost", dovolena: "Dovolená", nemoc: "Nemoc",
+        skoleni: "Školení", homeoffice: "Home office" };
     const DNY_KRATCE = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
         "srpen", "září", "říjen", "listopad", "prosinec"];
@@ -191,28 +264,99 @@
         return n;
     }
 
+    /* ------------------------------------------------------------- filtr --
+       Primárně je vidět všechno – kalendář má napřed ukázat celý provoz firmy
+       a teprve pak se dá zúžit. Volba se drží v prohlížeči, aby se po každém
+       překreslení (a po návratu na stránku) nemusela klikat znovu. */
+
+    const FILTR_KLIC = "kb-kalendar-filtr";
+    const VYCHOZI_DRUHY = { udalost: true, dovolena: true, nemoc: true, skoleni: true,
+        homeoffice: true, ukol: true, milnik: true };
+
+    function vychoziFiltr() {
+        return { druhy: Object.assign({}, VYCHOZI_DRUHY), kdo: "" };
+    }
+
+    function nactiFiltr() {
+        try {
+            const ulozeno = JSON.parse(localStorage.getItem(FILTR_KLIC) || "{}");
+            return {
+                // výchozí hodnoty napřed: nově přidaný druh je zapnutý,
+                // i když si člověk filtr uložil ještě před jeho vznikem
+                druhy: Object.assign({}, VYCHOZI_DRUHY, ulozeno.druhy || {}),
+                kdo: String(ulozeno.kdo || "")
+            };
+        } catch (err) {
+            return vychoziFiltr();       // soukromé okno nebo rozbitý zápis
+        }
+    }
+
+    function ulozFiltr() {
+        try { localStorage.setItem(FILTR_KLIC, JSON.stringify(filtr)); }
+        catch (err) { /* soukromé okno – filtr prostě nepřežije zavření */ }
+    }
+
+    let filtr = nactiFiltr();
+
+    /* Neznámý druh (starší zápis s jinou hodnotou `typ`) se schová jen tehdy,
+       když ho někdo výslovně vypnul – jinak by se ztratil beze stopy. */
+    const druhZapnut = (druh) => filtr.druhy[druh] !== false;
+
+    /** Srovná zaškrtávátka podle uloženého filtru. */
+    function pouzijFiltr() {
+        document.querySelectorAll("[data-druh]").forEach(ch => {
+            ch.checked = druhZapnut(ch.dataset.druh);
+        });
+    }
+
+    /** Roletka lidí. Plní se až se seznamem uživatelů, ten chodí ze store. */
+    function naplnKdo() {
+        const lide = V.lide().map(u => ({ value: u.id, label: V.jmeno(u) }));
+        // vybraný člověk mohl mezitím skončit; roletka pak spadne na „Všichni"
+        if (filtr.kdo && lide.length && !lide.some(l => l.value === filtr.kdo)) filtr.kdo = "";
+        $("fKdo").innerHTML = V.options(lide, filtr.kdo, "Všichni");
+    }
+
     /* ------------------------------------------------ co v který den je */
 
+    /**
+     * Rozpad události na druh a jméno.
+     * Pořadí je schválně druh napřed a jméno za ním („Dovolená – Jan Novák").
+     * V kalendáři se očima hledá druh, ne jméno – stejné slovo na začátku
+     * všech řádků se najde rychleji než jméno schované až za ním.
+     * U obyčejné události je vepředu její popis, jméno zůstává za ním.
+     */
+    function popisUdalosti(u) {
+        // jméno raději z uid – uložené se mohlo mezitím změnit
+        const clovek = V.clovek(u.uid);
+        const kdo = clovek ? V.jmeno(clovek) : (u.osoba || "");
+        const druh = (u.typ || "udalost") === "udalost"
+            ? (u.text || DRUHY.udalost)
+            : (DRUHY[u.typ] || DRUHY.udalost) + (u.text ? " · " + u.text : "");
+        return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : "") };
+    }
+
     /* `kdo` a `co` jsou rozdělené schválně: celodenní pruh je sází zvlášť
-       (jméno tučně, druh za pomlčkou), zatímco v měsíci jde všechno do
+       (druh vepředu, jméno za pomlčkou), zatímco v měsíci jde všechno do
        jednoho řádku `text`. */
     function udalostiDne(den) {
         const out = [];
+
         (window.KB.kalendar || []).forEach(u => {
+            const typ = u.typ || "udalost";
+            if (!druhZapnut(typ)) return;
+            if (filtr.kdo && u.uid !== filtr.kdo) return;
             if ((u.od || "") <= den && den <= (u.do || u.od || "")) {
                 const cas = (!u.celyDen && u.odCas) ? u.odCas + " " : "";
-                // jméno raději z uid – uložené se mohlo mezitím změnit
-                const clovek = V.clovek(u.uid);
-                const co = u.typ === "udalost"
-                    ? (u.text || TYPY.udalost)
-                    : (TYPY[u.typ] || "událost") + (u.text ? " · " + u.text : "");
-                out.push({ typ: u.typ || "udalost", id: u.id, muj: u.uid === window.KB.currentUid(),
+                const p = popisUdalosti(u);
+                out.push({ typ: typ, id: u.id, muj: u.uid === window.KB.currentUid(),
                     odCas: u.celyDen ? "" : (u.odCas || ""), doCas: u.celyDen ? "" : (u.doCas || ""),
-                    kdo: clovek ? V.jmeno(clovek) : (u.osoba || ""), co: co,
-                    text: cas + (u.osoba ? u.osoba + " – " : "") + (u.text || TYPY[u.typ] || "událost") });
+                    kdo: p.kdo, co: p.druh, text: cas + p.popis });
             }
         });
-        (window.KB.ukoly || []).forEach(u => {
+
+        if (druhZapnut("ukol")) (window.KB.ukoly || []).forEach(u => {
+            if (filtr.kdo && (u.prirazeni || []).indexOf(filtr.kdo) === -1) return;
             if (u.termin === den && u.stav !== "hotovo") {
                 const text = "úkol: " + (u.nazev || "") +
                     ((u.prirazeni || []).length ? " – " + u.prirazeni.map(uid => {
@@ -221,13 +365,21 @@
                 out.push({ typ: "ukol", kdo: "", co: text, text: text });
             }
         });
-        (window.KB.milniky || []).forEach(m => {
+
+        if (druhZapnut("milnik")) (window.KB.milniky || []).forEach(m => {
+            /* Milník má lidi v poli `owners`, ale starší záznamy ho nemají
+               vyplněné. Kde chybí, nefiltruje se podle člověka vůbec – milník
+               zůstane vidět. Schovat ho jen proto, že u něj někdo zapomněl
+               vyplnit jména, by znamenalo ztratit termín odevzdání. */
+            if (filtr.kdo && (m.owners || []).length &&
+                m.owners.indexOf(filtr.kdo) === -1) return;
             if (m.datum === den && !m.hotovo) {
                 const text = "milník: " + (m.cinnost || "") +
                     (m.zakazka ? " (" + m.zakazka + ")" : "");
                 out.push({ typ: "milnik", kdo: "", co: text, text: text });
             }
         });
+
         return out;
     }
 
@@ -237,15 +389,16 @@
             ' title="' + esc(u.text) + '">' + esc(u.text) + "</button>";
     }
 
-    /** Celodenní pruh v týdnu a 3 dnech: kdo a co, přes celou šířku dne. */
+    /** Celodenní pruh v týdnu a 3 dnech: druh a za ním jméno, přes celou šířku dne. */
     function celodenniHtml(u) {
         const kdo = u.kdo
-            ? '<b class="udcely__kdo">' + esc(u.kdo) + '</b><span class="udcely__sep">—</span>'
+            ? '<span class="udcely__sep">–</span>' +
+              '<span class="udcely__kdo">' + esc(u.kdo) + "</span>"
             : "";
         return '<button type="button" class="ud udcely ud--' + esc(u.typ) + '"' +
             (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
-            ' title="' + esc(u.text) + '">' + kdo +
-            '<span class="udcely__co">' + esc(u.co || u.text) + "</span></button>";
+            ' title="' + esc(u.text) + '">' +
+            '<b class="udcely__druh">' + esc(u.co || u.text) + "</b>" + kdo + "</button>";
     }
 
     /* Bez času nevíme, kam do mřížky s tím sednout – patří to nahoru. */
@@ -377,7 +530,7 @@
         const u = (window.KB.kalendar || []).find(x => x.id === id);
         if (!u) return;
         const moje = u.uid === window.KB.currentUid();
-        const popis = (u.osoba ? u.osoba + " – " : "") + (u.text || TYPY[u.typ] || "událost") +
+        const popis = popisUdalosti(u).popis +
             " (" + V.czDatum(u.od) + (u.do && u.do !== u.od ? " až " + V.czDatum(u.do) : "") + ")";
         if (!moje && !window.KBUI.can("vykaz.view")) return void window.KBUI.toast(popis);
         if (confirm(popis + "\n\nSmazat tuhle událost?")) {
@@ -417,12 +570,34 @@
         });
         document.querySelectorAll("[data-pohled]").forEach(ch =>
             ch.addEventListener("click", () => { pohled = ch.dataset.pohled; vykresli(); }));
+
+        // filtr: klik = uložit volbu a hned překreslit, ať je změna vidět
+        document.querySelectorAll("[data-druh]").forEach(ch =>
+            ch.addEventListener("change", () => {
+                filtr.druhy[ch.dataset.druh] = ch.checked;
+                ulozFiltr();
+                vykresli();
+            }));
+        $("fKdo").addEventListener("change", () => {
+            filtr.kdo = $("fKdo").value;
+            ulozFiltr();
+            vykresli();
+        });
+        $("btnVse").addEventListener("click", () => {
+            filtr = vychoziFiltr();
+            ulozFiltr();
+            pouzijFiltr();
+            naplnKdo();
+            vykresli();
+        });
+        pouzijFiltr();
+
         document.addEventListener("click", (event) => {
             const ud = event.target.closest("[data-udalost]");
             if (ud) klikNaUdalost(ud.dataset.udalost);
         });
 
-        const obnov = () => { zapniSledovani(); vykresli(); };
+        const obnov = () => { zapniSledovani(); naplnKdo(); vykresli(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("kalendar", vykresli);

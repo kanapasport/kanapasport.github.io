@@ -8,11 +8,35 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Nastavení – Pasport Kaňa</title>
     <style>
+        /* Hlavička stránky: nadpis a hned vedle něj tlačítka, všechno doleva.
+           Stránka je široká (--sirka-stranky až 1720 px), takže rozhození na
+           opačné konce (justify-content:space-between) by mezi nadpis
+           a tlačítka udělalo přes půl obrazovky prázdna. */
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        /* Popis patří POD nadpis, ne vedle něj: na široké stránce by nadpisový
+           blok roztáhl na celou šířku a tlačítka by spadla na druhý řádek. */
+        .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
+
         /* Import je v podliště jako kotva – bez odsazení by skok skončil
            pod lepivou lištou a nadpis sekce by nebyl vidět. */
         #sekce-import { scroll-margin-top: 120px; }
+
+        .zamek__hlava { display: flex; align-items: flex-start; gap: 12px; }
+        .zamek__ikona { width: 26px; height: 26px; flex: none; color: var(--accent); }
+        /* Pevné tři sloupce, ne auto-fit: pole pak sedí na stejném místě bez
+           ohledu na to, jestli se zrovna odemyká, zakládá nebo mění heslo,
+           a formulář pod rukama nepřeskakuje. */
+        .zamek__mrizka {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px; align-items: end; max-width: 780px;
+        }
+        .zamek__mrizka label { display: block; min-width: 0; }
+        .zamek__mrizka .field { width: 100%; }
+        @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=51">
+    <link rel="stylesheet" href="assets/css/app.css?v=52">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -32,20 +56,78 @@
 
     <div id="obsah" hidden style="display:flex;flex-direction:column;gap:20px">
 
-        <div class="spread">
-            <div>
+        <div>
+            <div class="hlavicka">
                 <h2 style="font-size:20px;font-weight:900;line-height:1.2">Nastavení</h2>
-                <p class="small muted" style="margin-top:3px;line-height:1.6">
-                    Lidé a jejich sazby, účty a hesla, vzhled webu – přepíná se to v liště nahoře.
-                    Změna se projeví všem naráz. Číselníky projektů a úkolů sem nepatří,
-                    ty se spravují u projektů a u úkolů.
-                </p>
+                <div class="hlavicka__akce" id="zamekAkce" hidden>
+                    <button type="button" id="btnZamknout" class="btn btn--ghost btn--sm">Zamknout</button>
+                    <button type="button" id="btnZmenit" class="btn btn--ghost btn--sm" hidden>Změnit heslo k citlivým sekcím</button>
+                </div>
             </div>
-            <button type="button" id="btnUloz" class="btn btn--primary">Uložit sazby</button>
+            <p class="small muted hlavicka__popis">
+                Lidé a jejich sazby, účty a hesla, vzhled webu – přepíná se to v podliště.
+                Změna se projeví všem naráz. Číselníky projektů a úkolů sem nepatří,
+                ty se spravují u projektů a u úkolů.
+            </p>
         </div>
 
+        <!-- ============================================ ZÁMEK CITLIVÝCH SEKCÍ -->
+        <section class="card col zamek" id="zamek" style="padding:18px 20px;gap:14px" hidden>
+            <div class="zamek__hlava">
+                <svg class="zamek__ikona" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/>
+                </svg>
+                <div>
+                    <b id="zamekNadpis" style="font-size:16px"></b>
+                    <p class="small muted" id="zamekPopis" style="margin-top:4px;line-height:1.6"></p>
+                </div>
+            </div>
+
+            <!-- odemknutí: zámek už někdo založil -->
+            <div id="zamekOdemk" class="col" style="gap:12px" hidden>
+                <div class="zamek__mrizka">
+                    <label>
+                        <span class="label">Heslo k citlivým sekcím</span>
+                        <input type="password" id="zHeslo" class="field" autocomplete="off">
+                    </label>
+                </div>
+                <div class="row row--wrap" style="gap:10px">
+                    <button type="button" id="btnOdemknout" class="btn btn--primary">Odemknout</button>
+                </div>
+            </div>
+
+            <!-- založení i změna hesla: stejný formulář, jen se stávajícím
+                 heslem navíc (to se ověřuje, když už nějaké je) -->
+            <div id="zamekZmena" class="col" style="gap:12px" hidden>
+                <div class="zamek__mrizka">
+                    <label id="zStareBox">
+                        <span class="label">Stávající heslo</span>
+                        <input type="password" id="zStare" class="field" autocomplete="off">
+                    </label>
+                    <label>
+                        <span class="label">Nové heslo</span>
+                        <input type="password" id="zNove" class="field" autocomplete="off">
+                    </label>
+                    <label>
+                        <span class="label">Nové heslo znovu</span>
+                        <input type="password" id="zNove2" class="field" autocomplete="off">
+                    </label>
+                </div>
+                <div class="row row--wrap" style="gap:10px">
+                    <button type="button" id="btnZmenaUloz" class="btn btn--primary">Nastavit heslo</button>
+                    <button type="button" id="btnZmenaZrus" class="btn btn--ghost" hidden>Zrušit</button>
+                </div>
+            </div>
+
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Tohle <b>není</b> heslo k trezoru na stránce Uživatelé a hesla – tím se šifrují
+                uložená hesla lidí a je to jiná věc.
+            </p>
+        </section>
+
         <!-- ================================================== SAZBY -->
-        <section class="card col nastaveni" id="sekce-sazby">
+        <section class="card col nastaveni" id="sekce-sazby" hidden>
             <div class="nastaveni__hlava">
                 <div>
                     <b>Hodinové sazby</b>
@@ -59,6 +141,11 @@
                 a uloží se ta zapsaná — <b>změna sazby tady nikdy nepřepočítá starší výkazy</b>.
                 To je záměr: loňský přehled musí zůstat takový, jaký byl.
             </p>
+            <!-- jediné tlačítko na uložení, a to u sekce, které se týká -->
+            <div class="row row--wrap" style="gap:12px">
+                <button type="button" id="btnUloz" class="btn btn--primary">Uložit sazby</button>
+                <span id="stav" class="small muted"></span>
+            </div>
         </section>
 
         <!-- ============================================ IMPORT PROJEKTŮ -->
@@ -83,21 +170,16 @@
             </p>
         </section>
 
-        <div class="row" style="gap:10px;justify-content:flex-end">
-            <span id="stav" class="small muted" style="margin-right:auto"></span>
-            <button type="button" id="btnUloz2" class="btn btn--primary">Uložit sazby</button>
-        </div>
-
         <p class="tiny muted" style="text-align:center;line-height:1.6">
             Postupně sem přibude i zbytek nastavení webu.
         </p>
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=51"></script>
-<script src="assets/js/ui.js?v=51"></script>
-<script src="assets/js/vykazy.js?v=51"></script>
-<script type="module" src="assets/js/store.js?v=51"></script>
+<script src="assets/js/taxonomy.js?v=52"></script>
+<script src="assets/js/ui.js?v=52"></script>
+<script src="assets/js/vykazy.js?v=52"></script>
+<script type="module" src="assets/js/store.js?v=52"></script>
 
 <script>
 (function () {
@@ -120,29 +202,206 @@
         window.KB.watchVykazy();
     }
 
-    /**
-     * Druhý řádek lišty – rozcestník nastavení. Sazby jsou tahle stránka,
-     * proto nejsou odkaz; uživatelé a barvy jsou samostatné stránky a import
-     * je kotva o kus níž.
-     */
-    function paintSubbar() {
+    /* --------------------------------------------------------- podlišta ---
+       Druhý řádek lišty je na všech třech stránkách nastavení stejný a liší
+       se jen aktivní položkou. Michal na to narazil: z barev webu se nedalo
+       přeskočit jinam, protože tam podlišta chyběla. Nastavení samo v horní
+       liště není (bydlí ve svislém pásu), takže nahoře nic nesvítí. */
+
+    const PODLISTA = [
+        { klic: "sazby",     text: "HODINOVÉ SAZBY",    href: "nastaveni.html",              need: "vykaz.view" },
+        { klic: "uzivatele", text: "UŽIVATELÉ A HESLA", href: "uzivatele.html",              need: "users.manage" },
+        { klic: "barvy",     text: "BARVY WEBU",        href: "barvy.html",                  need: "web.design" },
+        { klic: "import",    text: "IMPORT DAT",        href: "nastaveni.html#sekce-import", need: "vykaz.view" }
+    ];
+
+    function paintPodlista(aktivni) {
         const slot = $("appSubbar");
         if (!slot) return;
+
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
-            '<span class="subbar__cat">HODINOVÉ SAZBY</span>' +
-            '<a class="subbar__cat subbar__cat--up" href="uzivatele.html" ' +
-                'data-need="users.manage" hidden>UŽIVATELÉ A HESLA</a>' +
-            '<a class="subbar__cat subbar__cat--up" href="barvy.html" ' +
-                'data-need="web.design" hidden>BARVY WEBU</a>' +
-            '<a class="subbar__cat subbar__cat--up" href="#sekce-import">IMPORT DAT</a>' +
+            PODLISTA.map(polozka => {
+                const prava = ' data-need="' + polozka.need + '" hidden';
+                /* Uvnitř nastavení je import jen kotva o kus níž – s celou
+                   adresou by prohlížeč zbytečně načetl stránku znovu. */
+                const cil = (aktivni === "sazby" && polozka.klic === "import")
+                    ? "#sekce-import" : polozka.href;
+                return polozka.klic === aktivni
+                    ? '<span class="subbar__cat"' + prava + ">" + esc(polozka.text) + "</span>"
+                    : '<a class="subbar__cat subbar__cat--up" href="' + esc(cil) + '"' +
+                      prava + ">" + esc(polozka.text) + "</a>";
+            }).join("") +
         "</div></div>";
+
         // odkazy vznikly až teď, práva se na nich musí dorovnat
         window.KBUI.paintUser();
+    }
+
+    /* ------------------------------------------- zámek citlivých sekcí ----
+       Sazby lidí jsou to nejcitlivější, co na webu je. Role je hlídá, ale to
+       nestačí – stačí odejít od odemčeného počítače. Proto se nevykreslí samy
+       od sebe a chce to ještě heslo navíc.
+
+       Odemčení si pamatuje sessionStorage, takže platí do zavření záložky
+       a přenese se i na Uživatele a hesla. Ukládá se do něj otisk hesla, ne
+       heslo: nic navíc tím neprozradíme (otisk je i v databázi) a hlavně se
+       odemčení samo zruší, jakmile hlavní správce heslo změní.
+
+       POZOR: tohle NENÍ heslo k trezoru na uzivatele.html. Trezor šifruje
+       uložená hesla lidí, tenhle zámek jen schovává obsah stránky. */
+
+    const ZAMEK_KLIC = "company_kb_zamek";
+    const ZAMEK_NADPIS = "Hodinové sazby jsou zamčené";
+
+    let zamekMeta = null;        // { salt, hash } z databáze, null = nikdo nezaložil
+    let zamekStav = "nacitam";   // nacitam | hotovo | chyba
+    let zamekNacteno = false;
+    let zamekNacita = false;
+    let zamekOdemceno = false;
+    let zmenaOtevrena = false;
+
+    const zamekPamet = () => {
+        try { return sessionStorage.getItem(ZAMEK_KLIC) || ""; } catch (err) { return ""; }
+    };
+
+    const zamekZapamatuj = (hash) => {
+        try {
+            if (hash) sessionStorage.setItem(ZAMEK_KLIC, hash);
+            else sessionStorage.removeItem(ZAMEK_KLIC);
+        } catch (err) { /* soukromý režim prohlížeče */ }
+    };
+
+    function paintZamek() {
+        const hlavni = window.KBUI.isOwner();
+        const zalozeno = !!zamekMeta;
+        // zakládat heslo smí jen hlavní správce a jen když ještě žádné není
+        const zakladat = !zalozeno && hlavni && zamekStav === "hotovo";
+        const kartaVidet = !zamekOdemceno || zmenaOtevrena;
+
+        $("zamek").hidden = !kartaVidet;
+        $("sekce-sazby").hidden = !zamekOdemceno;
+        $("zamekAkce").hidden = !zamekOdemceno;
+        $("btnZmenit").hidden = !hlavni || zmenaOtevrena;
+
+        $("zamekOdemk").hidden = !(kartaVidet && !zamekOdemceno && zalozeno);
+        $("zamekZmena").hidden = !(kartaVidet && (zakladat || zmenaOtevrena));
+        $("zStareBox").hidden = !zalozeno;
+        $("btnZmenaZrus").hidden = !zmenaOtevrena;
+        $("btnZmenaUloz").textContent = zalozeno ? "Uložit nové heslo" : "Nastavit heslo";
+
+        $("zamekNadpis").textContent = zmenaOtevrena
+            ? "Změna hesla k citlivým sekcím"
+            : (zalozeno ? ZAMEK_NADPIS : "Heslo k citlivým sekcím zatím není");
+
+        $("zamekPopis").textContent = zmenaOtevrena
+            ? "Nové heslo platí hned. Komu se stránka odemkla starým heslem, bude ho muset zadat znovu."
+            : zamekStav === "nacitam"
+                ? "Zjišťuji, jestli je zámek nastavený…"
+                : zamekStav === "chyba"
+                    ? "Nedaří se spojit s databází. Zkus stránku načíst znovu."
+                    : zalozeno
+                        ? "Odemčení platí do zavření záložky a přenese se i na Uživatele a hesla."
+                        : hlavni
+                            ? "Zvol heslo, kterým se budou citlivé sekce otevírat. Zapiš si ho – z databáze se zpětně přečíst nedá."
+                            : "Zámek zatím nikdo nezaložil. Ozvi se hlavnímu správci, ať heslo nastaví.";
+    }
+
+    /** Co se má stát, jakmile je odemčeno – teprve teď smí sazby do stránky. */
+    function poOdemceni() {
+        zapniSledovani();
+        naplnSazby();
+    }
+
+    async function nactiZamek() {
+        // dokud není jasné, že je to správce, nemá smysl se databáze ptát;
+        // `zamekNacita` brání tomu, aby se dotaz pustil dvakrát naráz
+        if (zamekNacteno || zamekNacita || !window.KBUI.can("vykaz.view")) return;
+        zamekNacita = true;
+        try {
+            zamekMeta = await window.KB.loadZamek();
+            zamekStav = "hotovo";
+            zamekNacteno = true;
+        } catch (err) {
+            // typicky ještě neproběhlo přihlášení – zkusí se znovu při kb-role
+            zamekStav = "chyba";
+        } finally {
+            zamekNacita = false;
+        }
+        zamekOdemceno = !!(zamekMeta && zamekMeta.hash && zamekPamet() === zamekMeta.hash);
+        paintZamek();
+        if (zamekOdemceno) poOdemceni();
+    }
+
+    async function odemkni() {
+        if (!zamekMeta) return void window.KBUI.toast("Zámek zatím není nastavený.", "warn");
+        const heslo = $("zHeslo").value;
+        if (!heslo) return void window.KBUI.toast("Zadej heslo.", "warn");
+
+        const otisk = await window.KBUI.hashPassword(heslo, zamekMeta.salt);
+        if (otisk !== zamekMeta.hash) return void window.KBUI.toast("Nesprávné heslo.", "error");
+
+        zamekOdemceno = true;
+        zamekZapamatuj(otisk);
+        $("zHeslo").value = "";
+        paintZamek();
+        poOdemceni();
+        window.KBUI.toast("Odemčeno do zavření záložky.");
+    }
+
+    function zamkni() {
+        zamekOdemceno = false;
+        zmenaOtevrena = false;
+        zamekZapamatuj("");
+        // sazby musí ze stránky pryč, ne se jen schovat pod display:none
+        naplnSazby();
+        paintZamek();
+        window.KBUI.toast("Zamčeno.");
+    }
+
+    /** Založení i změna hesla. Staré se ověřuje jen tehdy, když nějaké je. */
+    async function ulozZamek() {
+        if (!window.KBUI.isOwner()) return void window.KBUI.toast("Heslo mění jen hlavní správce.", "warn");
+
+        if (zamekMeta) {
+            const stare = await window.KBUI.hashPassword($("zStare").value, zamekMeta.salt);
+            if (stare !== zamekMeta.hash) return void window.KBUI.toast("Stávající heslo nesedí.", "error");
+        }
+
+        const nove = $("zNove").value;
+        if (nove.trim().length < 6) return void window.KBUI.toast("Zvol aspoň 6 znaků.", "warn");
+        if (nove !== $("zNove2").value) return void window.KBUI.toast("Hesla se neshodují.", "warn");
+
+        const salt = window.KBUI.newSalt();
+        const hash = await window.KBUI.hashPassword(nove, salt);
+        try {
+            await window.KB.saveZamek(salt, hash);
+        } catch (err) {
+            console.error(err);
+            return void window.KBUI.toast("Heslo se nepodařilo uložit.", "error");
+        }
+
+        zamekMeta = { salt: salt, hash: hash };
+        zamekStav = "hotovo";
+        zamekNacteno = true;
+        zamekOdemceno = true;
+        zmenaOtevrena = false;
+        zamekZapamatuj(hash);
+        ["zStare", "zNove", "zNove2"].forEach(id => { $(id).value = ""; });
+        paintZamek();
+        poOdemceni();
+        window.KBUI.toast("Heslo k citlivým sekcím uloženo.");
     }
 
     /* ------------------------------------------------------------ výpis */
 
     function naplnSazby() {
+        // dokud je zamčeno, nesmí být sazby ve stránce vůbec – schovat je
+        // přes display:none by nestačilo, v kódu stránky by pořád byly
+        if (!zamekOdemceno) {
+            $("sazby").innerHTML = "";
+            $("pocetSazeb").textContent = "";
+            return;
+        }
         if (upravovano) return;
         const sazby = window.KB.sazby || {};
         const lide = V.lide();
@@ -165,7 +424,7 @@
             if (value > 0) sazby[input.dataset.sazba] = value;
         });
 
-        [$("btnUloz"), $("btnUloz2")].forEach(b => { b.disabled = true; });
+        $("btnUloz").disabled = true;
         $("stav").textContent = "Ukládám…";
         try {
             /* Posílá se jedině klíč `sazby`. Rozpočty leží ve stejném dokumentu
@@ -179,7 +438,7 @@
             $("stav").textContent = "";
             window.KBUI.toast("Uložení selhalo – sazby mění jen správce.", "error");
         } finally {
-            [$("btnUloz"), $("btnUloz2")].forEach(b => { b.disabled = false; });
+            $("btnUloz").disabled = false;
         }
     }
 
@@ -288,19 +547,37 @@
         }
         $("stop").hidden = true;
         $("obsah").hidden = false;
-        zapniSledovani();
+        paintZamek();
         naplnSazby();
+        nactiZamek();
     }
 
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
-        paintSubbar();
+        paintPodlista("sazby");
 
         $("btnUloz").addEventListener("click", uloz);
-        $("btnUloz2").addEventListener("click", uloz);
         $("btnImportuj").addEventListener("click", importuj);
-        // jakmile někdo do formuláře sáhne, data z databáze už mu ho nepřepíšou
-        $("obsah").addEventListener("input", () => { upravovano = true; });
+
+        $("btnOdemknout").addEventListener("click", odemkni);
+        $("zHeslo").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); odemkni(); }
+        });
+        $("btnZamknout").addEventListener("click", zamkni);
+        $("btnZmenit").addEventListener("click", () => {
+            zmenaOtevrena = true;
+            paintZamek();
+            $(zamekMeta ? "zStare" : "zNove").focus();
+        });
+        $("btnZmenaZrus").addEventListener("click", () => {
+            zmenaOtevrena = false;
+            ["zStare", "zNove", "zNove2"].forEach(id => { $(id).value = ""; });
+            paintZamek();
+        });
+        $("btnZmenaUloz").addEventListener("click", ulozZamek);
+
+        // jakmile někdo do sazeb sáhne, data z databáze už mu je nepřepíšou
+        $("sazby").addEventListener("input", () => { upravovano = true; });
 
         document.addEventListener("kb-role", render);
         window.KB.on("users", () => { naplnSazby(); render(); });
