@@ -9,6 +9,49 @@
     <link rel="stylesheet" href="assets/css/app.css?v=51">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
+
+    <style>
+    /* ---- plátno přes většinu obrazovky ----
+       Tabule se nelistuje jako text, kreslí se do ní – proto nemá šířku
+       omezenou .wrapem a dolů sahá až k okraji okna. Kolik lišt nad ní
+       zrovna sedí se mění (zalomení nástrojů, podlišta, režim zvětšení),
+       takže výšku hlásí JS proměnnou --deska-nad. */
+    #boardView { width: 100%; }
+    #bStage {
+        height: calc(100vh - var(--deska-nad, 300px));
+        height: calc(100dvh - var(--deska-nad, 300px));   /* mobil: bez adresního řádku */
+        min-height: 320px;
+    }
+
+    /* ---- podlišta se seznamem tabulí ----
+       Při větším počtu tabulí se radši posouvá do strany, než aby se
+       zalomila na další řádek – každý řádek navíc ubírá z plátna. */
+    #appSubbar .subbar__left {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        padding-bottom: 2px;
+    }
+    #appSubbar .chip { flex: none; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    #appSubbar .subbar__cat { flex: none; }
+
+    /* ---- zvětšení ----
+       Zůstane jen červená lišta nahoře a svislý pás vlevo, zbytek zmizí.
+       Schválně bez Fullscreen API: prohlížeč nepřebírá okno, takže se dá
+       pořád normálně přepnout jinam a stav přežije i překreslení. */
+    body.deska-max .appbar__bar,
+    body.deska-max .appbar__sub { display: none; }
+
+    @media (max-width: 1120px), (hover: none) {
+        /* bez svislého pásu nese logo červený pruh a je vysoký –
+           ve zvětšení se z něj stane úzký proužek */
+        body.deska-max .appbar__bandin { min-height: 0; padding: 8px 14px; }
+        body.deska-max .appbar__logo img { height: 34px; }
+        body.deska-max .appbar__userbox { top: 50%; transform: translateY(-50%); }
+        body.deska-max .toolrail { display: none; }
+    }
+    </style>
 </head>
 <body>
 
@@ -80,6 +123,8 @@
 
             <div class="board__group board__group--end">
                 <span id="bStatus" class="tiny" style="color:var(--dim)">Načítám…</span>
+                <button type="button" id="bMax" class="btn btn--ghost btn--sm" aria-pressed="false"
+                        title="Schová lišty a nechá tabuli přes celou obrazovku">Zvětšit</button>
                 <a href="tabule.html" class="btn btn--ghost btn--sm">Všechny tabule</a>
             </div>
         </div>
@@ -223,6 +268,37 @@
               "Zatím tu není žádná tabule. Založ první tlačítkem vpravo nahoře.</div>";
     }
 
+    /* ------------------------------------- podlišta se seznamem tabulí ---
+       Přeskočit z tabule na tabuli je nejčastější pohyb po téhle stránce,
+       tak ať na to není potřeba chodit přes rozcestník. */
+
+    function paintSubbar() {
+        const slot = $("appSubbar");
+        if (!slot) return;
+
+        // Řadíme podle názvu, ne podle poslední změny jako KB.boards –
+        // jinak by tabule v liště poskakovaly pokaždé, když do některé
+        // někdo píše, a klikalo by se do nich vedle.
+        const boards = (window.KB.boards || []).slice().sort((a, b) =>
+            String(a.title || "").localeCompare(String(b.title || ""), "cs"));
+
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            '<a class="subbar__cat' + (boardId ? " subbar__cat--up" : "") + '" href="tabule.html">' +
+                "VŠECHNY TABULE</a>" +
+            (boards.length ? '<span class="subbar__sep"></span>' : "") +
+            boards.map(board =>
+                '<a class="chip' + (board.id === boardId ? " chip--active" : "") + '"' +
+                    ' href="tabule.html?id=' + encodeURIComponent(board.id) + '"' +
+                    ' title="' + esc(board.title || "Bez názvu") + '">' +
+                    esc(board.title || "Bez názvu") +
+                "</a>").join("") +
+        '</div><div class="subbar__right">' +
+            '<button type="button" class="btn btn--primary btn--sm" data-nova>+ Nová tabule</button>' +
+        "</div></div>";
+
+        sizeStage();   // podlišta mohla změnit výšku, plátno se přizpůsobí
+    }
+
     async function createBoard() {
         const title = (prompt("Název nové tabule:", "Nápady") || "").trim();
         if (!title) return;
@@ -238,6 +314,8 @@
     }
 
     document.addEventListener("click", async (event) => {
+        if (event.target.closest("[data-nova]")) return createBoard();
+
         const rename = event.target.closest("[data-rename]");
         if (rename) {
             const board = (window.KB.boards || []).find(b => b.id === rename.dataset.rename);
@@ -262,32 +340,71 @@
 
     /* --------------------------------------------------------------- start */
 
-    /** Plátno má zabrat zbytek okna pod lištou. */
+    /**
+     * Plátno má zabrat zbytek okna pod lištami. Výšku všeho nad ním
+     * (hlavička s podlištou + obě lišty nástrojů) neumíme napsat natvrdo –
+     * mění se zalomením tlačítek i režimem zvětšení – tak ji změříme
+     * a předáme do CSS, kde už si výšku dopočítá calc().
+     */
     function sizeStage() {
         const stage = $("bStage");
         if (!stage || $("boardView").hidden) return;
-        const top = stage.getBoundingClientRect().top + window.scrollY;
-        stage.style.height = Math.max(320, window.innerHeight - top - 12) + "px";
+        const nad = Math.round(stage.getBoundingClientRect().top + window.scrollY);
+        document.documentElement.style.setProperty("--deska-nad", nad + "px");
+    }
+
+    /* ------------------------------------------------ režim zvětšení ---
+       Přání Michala: „můžu si dát zvětšení a zbude tam jen nahoře lišta
+       červená, vlevo pás může být". Volba se pamatuje, protože kdo kreslí,
+       chce zvětšeno pokaždé – a zpět se dá stejným tlačítkem. */
+
+    const MAX_KLIC = "kb-tabule-zvetseno";
+
+    function setMax(on) {
+        document.body.classList.toggle("deska-max", on);
+        const button = $("bMax");
+        if (button) {
+            button.textContent = on ? "Zmenšit" : "Zvětšit";
+            button.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        try { localStorage.setItem(MAX_KLIC, on ? "1" : ""); } catch (err) { /* soukromé okno */ }
+        sizeStage();
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
-        window.KBUI.mountNav({ active: "tabule.html" });
+        window.KBUI.mountNav({ active: "tabule.html", subbar: true });
+        paintSubbar();
 
         if (!boardId) {
             $("listView").hidden = false;
             renderList();
             $("btnNewBoard").addEventListener("click", createBoard);
-            window.KB.on("boards", renderList);
+            window.KB.on("boards", () => { renderList(); paintSubbar(); });
             await window.KB.whenReady();
             renderList();
+            paintSubbar();
             return;
         }
 
         $("boardView").hidden = false;
+        window.KB.on("boards", paintSubbar);
+
+        let zvetseno = false;
+        try { zvetseno = !!localStorage.getItem(MAX_KLIC); } catch (err) { /* soukromé okno */ }
+        setMax(zvetseno);
+        $("bMax").addEventListener("click", () => setMax(!document.body.classList.contains("deska-max")));
+
         sizeStage();
         window.addEventListener("resize", sizeStage);
         window.addEventListener("orientationchange", () => setTimeout(sizeStage, 300));
         setTimeout(sizeStage, 300);   // po dopočítání lišty (zalomení tlačítek)
+        // lišty se zalamují i podle šířky obsahu (delší název tabule, přibylá
+        // tlačítka) – tohle chytí i změny, které resize okna nehlásí
+        if (window.ResizeObserver) {
+            const hlidac = new ResizeObserver(sizeStage);
+            document.querySelectorAll(".appbar, .board__bar, .board__selbar")
+                .forEach(el => hlidac.observe(el));
+        }
 
         await window.KB.whenReady();
         await window.KBBoard.open(boardId, {

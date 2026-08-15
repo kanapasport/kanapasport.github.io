@@ -13,12 +13,17 @@
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
         /* Nástěnka: dlaždice stejné velikosti (přání Michala) – proto pevná
-           výška karty a rolování uvnitř, ne podle délky obsahu. */
+           výška karty a rolování uvnitř, ne podle délky obsahu.
+           Dvě vedle sebe a druhé dvě pod nimi, i na širokém monitoru: čtyři
+           úzké sloupce ořezávaly názvy úkolů a jména víc, než kolik přinesly. */
         .nastenka { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        @media (min-width: 1500px) { .nastenka { grid-template-columns: repeat(4, 1fr); } }
         @media (max-width: 900px)  { .nastenka { grid-template-columns: 1fr; } }
-        .nastenka__karta { display: flex; flex-direction: column; gap: 8px; padding: 16px; height: 290px; }
+        .nastenka__karta { display: flex; flex-direction: column; gap: 8px; padding: 16px; height: 330px; }
         .nastenka__telo { overflow-y: auto; flex: 1; min-height: 0; padding-right: 2px; }
+        /* přepínač rozsahu v hlavičce karty – drobnější než běžný chip,
+           aby hlavička zůstala jednořádková i na užším okně */
+        .nastenka__prep { display: flex; align-items: center; gap: 6px; }
+        .nastenka__prep .chip { padding: 3px 9px; font-size: 11px; }
         .mujukol { display: flex; align-items: center; gap: 10px; padding: 9px 11px;
             border: 1px solid var(--line-soft); border-radius: var(--radius);
             background: var(--surface); cursor: pointer; text-align: left; font: inherit; width: 100%; }
@@ -77,7 +82,11 @@
             <div class="card nastenka__karta" id="wUkoly">
                 <div class="spread">
                     <b>Zadané úkoly</b>
-                    <a class="linkbtn" href="ukoly.html?moje=1">všechny →</a>
+                    <span class="nastenka__prep">
+                        <button type="button" class="chip" data-rozsah="moje">Moje</button>
+                        <button type="button" class="chip" data-rozsah="vse">Všechny</button>
+                        <a class="linkbtn" href="ukoly.html?moje=1">otevřít →</a>
+                    </span>
                 </div>
                 <div id="mojeUkoly" class="nastenka__telo col" style="gap:6px"></div>
             </div>
@@ -114,11 +123,13 @@
 <script src="assets/js/taxonomy.js?v=51"></script>
 <script src="assets/js/doc.js?v=51"></script>
 <script src="assets/js/ui.js?v=51"></script>
+<script src="assets/js/vykazy.js?v=51"></script>
 <script type="module" src="assets/js/store.js?v=51"></script>
 
 <script>
 (function () {
     const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
     const icon = (name) =>
         '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' + (window.KB_ICONS[name] || "") + "</svg>";
 
@@ -130,6 +141,9 @@
     const PCT_KROKY = [0, 25, 50, 75, 95, 100];
     let vybranyUkol = "";
     let sledovaniZapnuto = false;
+    // rozsah karty úkolů: "moje" | "vse"; drží se jen v paměti stránky,
+    // aby přepnutí přežilo překreslení, ale po načtení se začínalo od svých
+    let rozsahUkolu = "moje";
 
     function zapniSledovani() {
         if (sledovaniZapnuto || !window.KB.currentUid || !window.KB.currentUid()) return;
@@ -238,19 +252,38 @@
         ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
         : (u.stav === "hotovo" ? 100 : 0);
 
-    function mojeUkoly() {
-        const uid = window.KB.currentUid ? window.KB.currentUid() : "";
-        return (window.KB.ukoly || [])
-            .filter(u => u.stav !== "hotovo" && (u.prirazeni || []).indexOf(uid) !== -1);
+    const mojeUid = () => (window.KB.currentUid ? window.KB.currentUid() : "") || "";
+    const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
+    const jeMuj = (u) => (u.prirazeni || []).indexOf(mojeUid()) !== -1;
+
+    /**
+     * Co karta ukáže. „Moje" jsou úkoly, kde je přihlášený v `prirazeni`.
+     * „Všechny" je prostě celé `KB.ukoly` – manažerovi tam databáze pošle
+     * všechny úkoly, ostatním jen ty jejich (dotaz i pravidla to omezují),
+     * takže víc než svoje stejně neuvidí a přepínač jim nic neprozradí.
+     */
+    function seznamUkolu() {
+        return (window.KB.ukoly || []).filter(u => u.stav !== "hotovo" &&
+            (rozsahUkolu === "vse" || jeMuj(u)));
     }
 
     function renderNastenka() {
-        const seznam = mojeUkoly();
+        const seznam = seznamUkolu();
+        // po přepnutí rozsahu může vybraný úkol z výpisu zmizet – ať pak
+        // vpravo nesvítí TO-DO něčeho, co v seznamu vlevo není vidět
         if (!seznam.some(u => u.id === vybranyUkol)) vybranyUkol = seznam.length ? seznam[0].id : "";
+
+        document.querySelectorAll("[data-rozsah]").forEach(tlacitko => {
+            const zapnuto = tlacitko.dataset.rozsah === rozsahUkolu;
+            tlacitko.classList.toggle("chip--active", zapnuto);
+            tlacitko.setAttribute("aria-pressed", zapnuto ? "true" : "false");
+        });
 
         document.getElementById("mojeUkoly").innerHTML = seznam.map(u => {
             const pct = pctUkolu(u);
-            const meta = [u.projekt, u.termin ? "termín " + czDatum(u.termin) : ""]
+            // u cizího úkolu je potřeba vědět, komu patří – u svých je to zbytečné
+            const kdo = jeMuj(u) ? "" : (u.prirazeni || []).map(jmenoUid).filter(Boolean).join(", ");
+            const meta = [u.projekt, kdo, u.termin ? "termín " + czDatum(u.termin) : ""]
                 .filter(Boolean).join(" · ");
             return '<button type="button" class="mujukol' +
                 (u.id === vybranyUkol ? " je-vybrany" : "") + '" data-vyber="' + esc(u.id) + '">' +
@@ -280,7 +313,7 @@
     }
 
     async function zapisPct(todoId, pct) {
-        const u = mojeUkoly().find(x => x.id === vybranyUkol);
+        const u = seznamUkolu().find(x => x.id === vybranyUkol);
         if (!u) return;
         const todo = (u.todo || []).map(t => t.id === todoId
             ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
@@ -295,6 +328,8 @@
     }
 
     document.addEventListener("click", (event) => {
+        const rozsah = event.target.closest("[data-rozsah]");
+        if (rozsah) { rozsahUkolu = rozsah.dataset.rozsah; return void renderNastenka(); }
         const vyber = event.target.closest("[data-vyber]");
         if (vyber) { vybranyUkol = vyber.dataset.vyber; return void renderNastenka(); }
         const pct = event.target.closest("[data-npct]");

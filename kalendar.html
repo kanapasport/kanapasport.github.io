@@ -35,9 +35,22 @@
         .ud--ukol { background: #c26a00; }
         .ud--milnik { background: #b3006b; }
 
+        /* Celodenní záznam nemá kdy začít ani skončit, takže v mřížce nemá kam
+           sednout – drží se v pruhu nad ní. Výšku pruhu diktuje den s nejvíc
+           záznamy (--celodenni), aby mřížky sousedních dnů začínaly ve stejné
+           výšce a hodiny šly porovnat pohledem přes celý týden. */
+        .kal__celodenni { display: flex; flex-direction: column; gap: 3px;
+            margin: 3px -6px 0; padding-bottom: 6px; min-height: var(--celodenni, 22px);
+            border-bottom: 1px solid var(--line-soft); }
+        /* Přes celou šířku dne a natvrdo barevný: „tenhle den je pryč" musí
+           být vidět dřív, než se člověk začte do písmen. */
+        .udcely { display: flex; align-items: center; gap: 5px; min-height: 22px;
+            padding: 3px 8px; border-radius: 0; font-size: 11px; font-weight: 800;
+            box-shadow: inset 4px 0 0 rgba(255, 255, 255, .55); }
+        .udcely__kdo { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+        .udcely__sep { flex: none; opacity: .7; }
+        .udcely__co { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
         /* hodinová mřížka pro týden a 3 dny: 6:00–20:00, řádek = hodina */
-        .kal__celodenni { display: flex; flex-direction: column; gap: 3px; min-height: 22px;
-            padding-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
         .kal__hodiny { position: relative; height: 504px; /* 14 hodin × 36 px */
             background: repeating-linear-gradient(to bottom,
                 var(--line-soft) 0, var(--line-soft) 1px, transparent 1px, transparent 36px); }
@@ -53,6 +66,8 @@
             .kal__hlava { display: none; }
             .kal__den--cizi { display: none; }
             .kal__den { min-height: 0; }
+            /* dny jsou pod sebou, není co zarovnávat – pruh ať nedrží prázdno */
+            .kal__celodenni { min-height: 0; }
         }
     </style>
 </head>
@@ -150,7 +165,9 @@
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
         "srpen", "září", "říjen", "listopad", "prosinec"];
 
-    let pohled = "mesic";               // mesic | tyden | tri
+    /* Týden je to, co lidi na kalendáři opravdu čtou – kdo dnes a zítra není
+       a co se kdy děje. Měsíc je přehled na plánování, ne na každý den. */
+    let pohled = "tyden";               // mesic | tyden | tri
     let kotva = new Date();             // den, kolem kterého se kreslí
     let sledovaniZapnuto = false;
 
@@ -176,28 +193,39 @@
 
     /* ------------------------------------------------ co v který den je */
 
+    /* `kdo` a `co` jsou rozdělené schválně: celodenní pruh je sází zvlášť
+       (jméno tučně, druh za pomlčkou), zatímco v měsíci jde všechno do
+       jednoho řádku `text`. */
     function udalostiDne(den) {
         const out = [];
         (window.KB.kalendar || []).forEach(u => {
             if ((u.od || "") <= den && den <= (u.do || u.od || "")) {
                 const cas = (!u.celyDen && u.odCas) ? u.odCas + " " : "";
+                // jméno raději z uid – uložené se mohlo mezitím změnit
+                const clovek = V.clovek(u.uid);
+                const co = u.typ === "udalost"
+                    ? (u.text || TYPY.udalost)
+                    : (TYPY[u.typ] || "událost") + (u.text ? " · " + u.text : "");
                 out.push({ typ: u.typ || "udalost", id: u.id, muj: u.uid === window.KB.currentUid(),
                     odCas: u.celyDen ? "" : (u.odCas || ""), doCas: u.celyDen ? "" : (u.doCas || ""),
+                    kdo: clovek ? V.jmeno(clovek) : (u.osoba || ""), co: co,
                     text: cas + (u.osoba ? u.osoba + " – " : "") + (u.text || TYPY[u.typ] || "událost") });
             }
         });
         (window.KB.ukoly || []).forEach(u => {
             if (u.termin === den && u.stav !== "hotovo") {
-                out.push({ typ: "ukol", text: "úkol: " + (u.nazev || "") +
+                const text = "úkol: " + (u.nazev || "") +
                     ((u.prirazeni || []).length ? " – " + u.prirazeni.map(uid => {
                         const cl = V.clovek(uid); return cl ? (cl.first || V.jmeno(cl)) : "";
-                    }).filter(Boolean).join(", ") : "") });
+                    }).filter(Boolean).join(", ") : "");
+                out.push({ typ: "ukol", kdo: "", co: text, text: text });
             }
         });
         (window.KB.milniky || []).forEach(m => {
             if (m.datum === den && !m.hotovo) {
-                out.push({ typ: "milnik", text: "milník: " + (m.cinnost || "") +
-                    (m.zakazka ? " (" + m.zakazka + ")" : "") });
+                const text = "milník: " + (m.cinnost || "") +
+                    (m.zakazka ? " (" + m.zakazka + ")" : "");
+                out.push({ typ: "milnik", kdo: "", co: text, text: text });
             }
         });
         return out;
@@ -209,11 +237,34 @@
             ' title="' + esc(u.text) + '">' + esc(u.text) + "</button>";
     }
 
+    /** Celodenní pruh v týdnu a 3 dnech: kdo a co, přes celou šířku dne. */
+    function celodenniHtml(u) {
+        const kdo = u.kdo
+            ? '<b class="udcely__kdo">' + esc(u.kdo) + '</b><span class="udcely__sep">—</span>'
+            : "";
+        return '<button type="button" class="ud udcely ud--' + esc(u.typ) + '"' +
+            (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
+            ' title="' + esc(u.text) + '">' + kdo +
+            '<span class="udcely__co">' + esc(u.co || u.text) + "</span></button>";
+    }
+
+    /* Bez času nevíme, kam do mřížky s tím sednout – patří to nahoru. */
+    const minuty = (cas) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(cas || "");
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const jeCelodenni = (u) => minuty(u.odCas) === null;
+
+    /* Výška pruhu podle počtu záznamů: proužek 22 px, mezera 3, spodní odsazení
+       pruhu 6 a linka 1. Raději o pár pixelů víc – kdyby vyšla míň, nejplnější
+       den by pruh přerostl a mřížky sousedních dnů by se rozjely. */
+    const vyskaCelodennich = (pocet) => pocet ? pocet * 25 + 7 : 12;
+
     /* ------------------------------------------------------- vykreslení */
 
     function denHtml(d, moznosti) {
         const den = iso(d);
-        const seznam = udalostiDne(den);
+        const seznam = moznosti.seznam || udalostiDne(den);
         const hlava = '<span class="kal__cislo">' + d.getDate() + ". " + (d.getMonth() + 1) + "." +
             (moznosti.velky ? " · " + DNY_KRATCE[(d.getDay() + 6) % 7] : "") + "</span>";
         const obal = (vnitrek) => '<div class="kal__den' +
@@ -233,12 +284,8 @@
            sedí na své hodině; celodenní věci (dovolené, úkoly, milníky)
            zůstávají v pruhu nahoře. */
         const ZAC = 6, KON = 20, VYSKA_HODINY = 36;
-        const minuty = (cas) => {
-            const m = /^(\d{1,2}):(\d{2})$/.exec(cas || "");
-            return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-        };
         const celodenni = [], casovane = [];
-        seznam.forEach(u => (minuty(u.odCas) === null ? celodenni : casovane).push(u));
+        seznam.forEach(u => (jeCelodenni(u) ? celodenni : casovane).push(u));
 
         let hodiny = "";
         for (let h = ZAC; h <= KON; h += 2) {
@@ -255,9 +302,7 @@
                 'style="top:' + vrch.toFixed(0) + 'px;height:' + vyska.toFixed(0) + 'px" class="ud ');
         }).join("");
 
-        return obal('<div class="kal__celodenni">' +
-                (celodenni.map(udalostHtml).join("") || '<span class="kal__vic">&nbsp;</span>') +
-            "</div>" +
+        return obal('<div class="kal__celodenni">' + celodenni.map(celodenniHtml).join("") + "</div>" +
             '<div class="kal__hodiny">' + hodiny + "</div>");
     }
 
@@ -289,8 +334,18 @@
         $("obdobi").textContent = start.getDate() + ". " + (start.getMonth() + 1) + ". – " +
             konec.getDate() + ". " + (konec.getMonth() + 1) + ". " + konec.getFullYear();
 
-        let html = '<div class="kal' + (dnu === 3 ? " kal--3" : "") + '">';
-        for (let i = 0; i < dnu; i++) html += denHtml(posun(start, i), { velky: true });
+        // dny se počítají napřed: pruh celodenních musí být ve všech stejně vysoký
+        const dny = [];
+        for (let i = 0; i < dnu; i++) {
+            const d = posun(start, i);
+            dny.push({ d: d, seznam: udalostiDne(iso(d)) });
+        }
+        const nejvic = dny.reduce((max, den) =>
+            Math.max(max, den.seznam.filter(jeCelodenni).length), 0);
+
+        let html = '<div class="kal' + (dnu === 3 ? " kal--3" : "") +
+            '" style="--celodenni:' + vyskaCelodennich(nejvic) + 'px">';
+        dny.forEach(den => { html += denHtml(den.d, { velky: true, seznam: den.seznam }); });
         mrizka.innerHTML = html + "</div>";
     }
 

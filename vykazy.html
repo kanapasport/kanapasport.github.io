@@ -193,18 +193,16 @@
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Nemoc": "nemoc", "Školení": "skoleni" };
 
     /**
-     * Nabídka projektů do zápisu. Zaměstnanci se nabízí jen projekty, ke
-     * kterým je přiřazený (plus absence); dokud mu manažer žádný nepřiřadil,
-     * nabízí se ze setrvačnosti celý číselník, ať se dá zapisovat dál.
+     * Nabídka projektů do zápisu. Bere se z evidence projektů – manažerovi
+     * všechny otevřené, ostatním jen ty, ke kterým je přiřazený. Starý
+     * číselník `KB.zakazky` slouží už jen jako záloha, dokud projekty
+     * nejsou v databázi: sdílí ho ostrý web a nové projekty do něj
+     * schválně nepřibývají.
      */
     function nabidkaProjektu() {
-        let jmena;
-        if (window.KBUI.can("vykaz.view")) {
-            jmena = V.zakazky();
-        } else {
-            const moje = (window.KB.projektyDocs || []).filter(p => !p.uzavreno).map(p => p.nazev);
-            jmena = moje.length ? moje : V.zakazky();
-        }
+        const zEvidence = (window.KB.projektyDocs || [])
+            .filter(p => !p.uzavreno).map(p => p.nazev).filter(Boolean);
+        const jmena = zEvidence.length ? zEvidence : V.zakazky();
         return ABSENCE.concat(jmena.filter(z => !jeAbsence(z)));
     }
 
@@ -689,15 +687,18 @@
             filtr.tech, "Všechny technologie");
     }
 
-    /** Druhý řádek lišty – přepínač mezi zápisem a přehledem. */
+    /** Druhý řádek lišty – rozcestník všeho, co se počítá z výkazů. */
     function paintSubbar() {
         const slot = $("appSubbar");
         if (!slot) return;
+        // přehled i vytížení jsou o penězích a lidech celé firmy –
+        // zaměstnanci je ani nenabízíme, stejně by je databáze nevydala
+        const manazer = window.KBUI.can("vykaz.view");
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
             '<span class="subbar__cat">ZÁPIS A ZÁZNAMY</span>' +
-            // přehled je o penězích celé firmy – zaměstnanci ho ani nenabízíme
-            (window.KBUI.can("vykaz.view")
-                ? '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html">PŘEHLED LIDÍ A PENĚZ</a>'
+            (manazer
+                ? '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html">PŘEHLED LIDÍ A PENĚZ</a>' +
+                  '<a class="subbar__cat subbar__cat--up" href="vytizeni.html">VYTÍŽENÍ TÝMU</a>'
                 : "") +
         "</div></div>";
     }

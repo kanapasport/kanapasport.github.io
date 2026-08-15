@@ -11,21 +11,23 @@
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* Řádek historie. Mřížka s pevnými prvními sloupci, ne flex –
-           při flexu se šířka řídila obsahem a časy ani štítky pod sebou
-           nelícovaly, takže se seznam četl jako rozsypaný čaj. */
+        /* Řádek historie. Jedna sada tříd pro obě sekce na stránce: dokud
+           měla každá vlastní rozvržení, sloupce mezi nimi nelícovaly a stránka
+           se četla jako dvě různé tabulky nalepené pod sebe.
+
+           Sloupce jsou proto pevné a všude stejné: čas · štítek nebo jméno ·
+           text. Poslední je `minmax(0, 1fr)`, ne `1fr` – samotné `1fr` se
+           nesmrskne pod šířku obsahu, takže jeden dlouhý řádek bez mezer
+           rozstrkal mřížku celé sekce a levé okraje se rozjely. */
         .hist {
             display: grid;
-            grid-template-columns: 130px 90px 1fr;
+            grid-template-columns: 130px 150px minmax(0, 1fr);
             gap: 10px;
             align-items: baseline;
             padding: 5px 0;
             border-bottom: 1px dashed var(--line-soft);
         }
         .hist:last-child { border-bottom: none; }
-        /* Sloupec s přihlášením nemá štítek druhu: uprostřed je jméno
-           a vpravo doplňkový údaj, jak je to dávno. */
-        .hist--login { grid-template-columns: 130px 1fr auto; }
 
         .hist__cas {
             color: var(--muted);
@@ -33,20 +35,21 @@
             white-space: nowrap;
             font-variant-numeric: tabular-nums;   /* ať čísla drží šířku a sloupec se nechvěje */
         }
-        .hist__druh { text-align: center; }
-        .hist__text { min-width: 0; }             /* delší text se smí zalomit, ne roztáhnout mřížku */
-        .hist__kdy {
-            color: var(--muted);
-            font-size: 11.5px;
-            white-space: nowrap;
-            text-align: right;
+        /* Štítek i jméno začínají vlevo – zarovnání na střed by z pevného
+           sloupce udělalo sloupec, který se pod sebou nekryje. */
+        .hist__stitek {
+            min-width: 0;
+            text-align: left;
+            overflow-wrap: anywhere;
         }
+        /* Delší text se smí zalomit, ne roztáhnout mřížku. */
+        .hist__text { min-width: 0; overflow-wrap: anywhere; }
+        .hist__text--tichy { color: var(--muted); font-size: 11.5px; }
 
         /* Na mobilu se tři sloupce nevejdou a text by zbyl na proužek –
            radši pod sebe. */
         @media (max-width: 700px) {
-            .hist, .hist--login { grid-template-columns: 1fr; gap: 3px; }
-            .hist__druh, .hist__kdy { text-align: left; }
+            .hist { grid-template-columns: 1fr; gap: 3px; }
         }
     </style>
 </head>
@@ -59,8 +62,8 @@
     <div id="stop" class="card center" style="padding:44px 22px" hidden>
         <b style="font-size:17px">Reporty vidí jen manažeři.</b>
         <p class="small muted" style="margin-top:8px;line-height:1.6">
-            Jsou v nich hodinové sazby a peníze na projektech. Když si myslíš,
-            že sem patříš, ozvi se hlavnímu správci.
+            Je v nich vidět, kdo co na webu dělal a kdy se přihlásil. Když si
+            myslíš, že sem patříš, ozvi se hlavnímu správci.
         </p>
     </div>
 
@@ -68,31 +71,9 @@
         <div>
             <h2 style="font-size:20px;font-weight:900;line-height:1.2">Reporty</h2>
             <p class="small muted" style="margin-top:3px;line-height:1.6">
-                Manažerský rozcestník: pohledy na hodiny, peníze a plán na jednom místě
-                a pod nimi historie toho, kdo co na webu zapsal.
+                Záznam o tom, kdo co na webu udělal a kdy se kdo naposledy přihlásil.
+                Pohledy na hodiny, peníze a vytížení lidí najdeš u výkazů.
             </p>
-        </div>
-
-        <div class="tilegrid">
-            <div class="tile"><a class="tile__main" href="vytizeni.html">
-                <div class="tile__head"><div class="tile__title">VYTÍŽENÍ TÝMU</div></div>
-                <div class="tile__sub">Mřížka lidé × dny: kolik kdo který den odpracoval,
-                    přesčasy, absence a slabé dny barevně.</div>
-            </a></div>
-            <div class="tile"><a class="tile__main" href="gantt.html">
-                <div class="tile__head"><div class="tile__title">PLÁN PROJEKTŮ (GANTT)</div></div>
-                <div class="tile__sub">Časová osa projektů od začátku do konce
-                    s procenty hotovosti úkolů.</div>
-            </a></div>
-            <div class="tile"><a class="tile__main" href="vykazy-prehled.html">
-                <div class="tile__head"><div class="tile__title">PŘEHLED LIDÍ A PENĚZ</div></div>
-                <div class="tile__sub">Hodiny a částky po lidech, projektech, technologiích
-                    a druzích práce. Čerpání rozpočtů.</div>
-            </a></div>
-            <div class="tile"><a class="tile__main" href="vykazy.html">
-                <div class="tile__head"><div class="tile__title">ZÁZNAMY VÝKAZŮ</div></div>
-                <div class="tile__sub">Jednotlivé zápisy dní se všemi filtry a exportem do CSV.</div>
-            </a></div>
         </div>
 
         <!-- ============================================ HISTORIE AKTIVIT -->
@@ -175,27 +156,36 @@
         return clovek ? V.jmeno(clovek) : "—";
     }
 
+    /**
+     * Jeden řádek historie – tři sloupce, obě sekce stejně.
+     * Sloupce se drží i tehdy, když je prostřední nebo poslední prázdný;
+     * proto se buňky vypisují vždycky všechny.
+     */
+    const histRadek = (casText, stitek, text, tichy) =>
+        '<div class="hist">' +
+            '<span class="hist__cas">' + esc(casText) + "</span>" +
+            '<span class="hist__stitek">' + stitek + "</span>" +
+            '<span class="hist__text' + (tichy ? " hist__text--tichy" : "") + '">' + text + "</span>" +
+        "</div>";
+
     function renderAktivity() {
         document.getElementById("aktivity").innerHTML =
-            (window.KB.aktivity || []).map(a =>
-                '<div class="hist">' +
-                    '<span class="hist__cas">' + esc(cas(a.ms)) + "</span>" +
-                    '<span class="hist__druh"><span class="tag">' +
-                        esc(DRUHY[a.druh] || a.druh || "") + "</span></span>" +
-                    '<span class="hist__text"><b>' + esc(a.jmeno || "") + "</b> " +
-                        esc(a.text || "") + "</span>" +
-                "</div>").join("")
+            (window.KB.aktivity || []).map(a => histRadek(
+                cas(a.ms),
+                '<span class="tag">' + esc(DRUHY[a.druh] || a.druh || "") + "</span>",
+                "<b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "")
+            )).join("")
             || '<span class="tiny muted">Zatím žádné záznamy.</span>';
     }
 
     function renderPrihlaseni() {
         document.getElementById("prihlaseni").innerHTML =
-            (window.KB.logy || []).slice(0, POSLEDNICH_PRIHLASENI).map(z =>
-                '<div class="hist hist--login">' +
-                    '<span class="hist__cas">' + esc(cas(z.ms)) + "</span>" +
-                    '<span class="hist__text"><b>' + esc(kdoSePrihlasil(z)) + "</b></span>" +
-                    '<span class="hist__kdy">' + esc(predJakDlouho(z.ms)) + "</span>" +
-                "</div>").join("")
+            (window.KB.logy || []).slice(0, POSLEDNICH_PRIHLASENI).map(z => histRadek(
+                cas(z.ms),
+                "<b>" + esc(kdoSePrihlasil(z)) + "</b>",
+                esc(predJakDlouho(z.ms)),
+                true
+            )).join("")
             || '<span class="tiny muted">Zatím žádná přihlášení – ' +
                "seznam se plní sám, jak se lidé přihlašují.</span>";
     }

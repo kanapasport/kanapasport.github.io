@@ -252,17 +252,22 @@
            jen tlačítko přihlášení/odhlášení (přání Michala). Na úzkém okně
            bez pásu se jméno ukáže i nahoře, jinak by nebylo nikde. */
         document.querySelectorAll("[data-userbox]").forEach(box => {
+            // na širokém okně tohle schová CSS – jméno i odhlášení nese pás
             box.innerHTML = window.KB_USER
                 ? '<span class="appbar__jmeno-mobil">' + esc(window.KB_USER) + "</span>" +
                   '<button type="button" class="linkbtn" data-logout>Odhlásit</button>'
                 : '<button type="button" class="linkbtn" data-login>Přihlásit se</button>';
         });
+        /* Jméno, role a odhlášení sedí uprostřed spodku pásu – přání Michala.
+           Nahoře vpravo zůstane přihlašovací tlačítko jen pro nepřihlášené
+           a pro úzké okno, kde žádný pás není. */
         document.querySelectorAll("[data-rail-ja]").forEach(box => {
             const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES[3];
             box.innerHTML = window.KB_USER
-                ? "Přihlášen jako <b>" + esc(window.KB_USER) + "</b>" +
-                  '<span class="siderail__role">' + esc(role.title) + "</span>"
-                : "Nepřihlášen";
+                ? "<b>" + esc(window.KB_USER) + "</b>" +
+                  '<span class="siderail__role">' + esc(role.title) + "</span>" +
+                  '<button type="button" class="siderail__odhlasit" data-logout>Odhlásit se</button>'
+                : '<button type="button" class="siderail__odhlasit" data-login>Přihlásit se</button>';
         });
         document.querySelectorAll("[data-user-name]").forEach(el => {
             el.textContent = window.KB_USER || "nepřihlášen";
