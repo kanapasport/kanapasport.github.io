@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled BioPharm – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=58">
+    <link rel="stylesheet" href="assets/css/app.css?v=59">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -135,9 +135,9 @@
     </section>
 </main>
 
-<script src="assets/js/taxonomy.js?v=58"></script>
-<script src="assets/js/ui.js?v=58"></script>
-<script type="module" src="assets/js/store.js?v=58"></script>
+<script src="assets/js/taxonomy.js?v=59"></script>
+<script src="assets/js/ui.js?v=59"></script>
+<script type="module" src="assets/js/store.js?v=59"></script>
 
 <script>
 (function () {
@@ -373,6 +373,28 @@
         }
     }
 
+    /**
+     * Druhý řádek lišty – stejný rozcestník jako na ostatních stránkách
+     * výkazů, tady svítí PŘEHLED BP. Nahoře v liště svítí VÝKAZY, protože
+     * tam tahle stránka obsahem patří.
+     */
+    function paintSubbar() {
+        const slot = $("appSubbar");
+        if (!slot) return;
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            '<a class="subbar__cat subbar__cat--up" href="vykazy.html" ' +
+                'data-need="vykaz.otevrit" hidden>ZÁPIS A ZÁZNAMY</a>' +
+            '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html" ' +
+                'data-need="vykaz.view" hidden>PŘEHLED LIDÍ A PENĚZ</a>' +
+            '<a class="subbar__cat subbar__cat--up" href="vytizeni.html" ' +
+                'data-need="vykaz.view" hidden>VYTÍŽENÍ TÝMU</a>' +
+            '<span class="subbar__sep" data-need="vykaz.view" hidden></span>' +
+            '<span class="subbar__cat">PŘEHLED BP</span>' +
+        "</div></div>";
+        // odkazy vznikly až teď, práva se na nich musí dorovnat
+        window.KBUI.paintUser();
+    }
+
     /* ------------------------------------------------------------ zámek */
 
     async function otisk(heslo) {
@@ -414,7 +436,8 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        window.KBUI.mountNav({ active: "vykazy-bp.html" });
+        window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
+        paintSubbar();
 
         $("hesloOk").addEventListener("click", zkusHeslo);
         $("hesloPole").addEventListener("keydown", (e) => { if (e.key === "Enter") zkusHeslo(); });
@@ -427,7 +450,7 @@
             $("import").scrollIntoView({ behavior: "smooth" });
         });
 
-        document.addEventListener("kb-role", render);
+        document.addEventListener("kb-role", () => { paintSubbar(); render(); });
         window.KB.on("users", render);
         render();
     });

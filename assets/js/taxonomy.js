@@ -204,10 +204,10 @@ window.KB_TOOLS = [
     /* Historie úprav sem nepatří – je to tlačítko na stránce úkolů,
        kam obsahem náleží. Výkazy už mají vlastní položku v liště (KB_NAV),
        tak z ikon zmizely – dvakrát tu být nemusí. */
-    /* Přehled BioPharmy (vykazy-bp.html) tu SCHVÁLNĚ NENÍ a přidávat se nemá.
-       Otevírá se výhradně přímým odkazem, který má hlavní správce u sebe –
-       ať na něj nikdo nenarazí náhodou. Stránka se stejně brání sama:
-       právo vykaz.view, heslo navíc a pravidla databáze nad daty. */
+    /* Přehled BP (vykazy-bp.html) mezi ikonami není: bydlí v podliště
+       výkazů, za svislou čárkou a jen pro manažery (data-need="vykaz.view").
+       Stránka se navíc brání sama – heslo navíc a pravidla databáze
+       nad daty – takže odkaz sám o sobě nic neodemyká. */
     /* Nastavení, Uživatelé a Barvy webu už mezi ikonami nejsou – bydlí ve
        svislém pásu dole (Nastavení) a uvnitř Nastavení (Uživatelé, Barvy).
        Nahoře zůstávají jen nástroje k návodům. */
