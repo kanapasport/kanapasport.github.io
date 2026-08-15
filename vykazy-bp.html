@@ -6,8 +6,60 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
-    <title>Přehled BioPharm – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=59">
+    <title>Přehled BP – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=60">
+    <style>
+        /* Čísla i texty v tabulkách přehledu na střed – tabulka se čte
+           po sloupcích a při zarovnání doleva se oko na každém řádku vrací. */
+        #tabLide th, #tabLide td,
+        #tabRoky th, #tabRoky td { text-align: center; vertical-align: middle; }
+
+        /* Řádek člověka se rozbaluje, ať je to poznat i bez najetí myší. */
+        #tabLide tbody tr.bpclovek { cursor: pointer; }
+        #tabLide tbody tr.bpclovek th { font-weight: 800; }
+        .bpsipka { display: inline-block; margin-right: 6px; color: var(--dim); transition: transform .15s; }
+        tr.je-rozbaleny .bpsipka { transform: rotate(90deg); color: var(--accent); }
+
+        /* Rozpad po letech pod člověkem – tabulka v tabulce by se bila
+           s okolím, tak jsou to prosté řádky na tónovaném podkladu. */
+        .bproky { background: var(--accent-tint); }
+        .bproky__mrizka {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 2px 10px; max-width: 620px; margin: 0 auto;
+            font-size: 13px; font-variant-numeric: tabular-nums;
+        }
+        .bproky__hlava {
+            font-size: 11px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); padding-bottom: 4px;
+        }
+        .bproky__bunka { padding: 3px 0; }
+        .bproky__bunka--rok { font-weight: 800; }
+
+        /* Vysvětlivky pod tabulkou: jedno písmo, jedna velikost. Dřív to byl
+           jeden odstavec, ve kterém se střídal tučný text s netučným
+           a různé velikosti – Michalovi to trhalo oči. */
+        .bppozn {
+            margin: 10px 0 0; display: grid; gap: 4px 14px;
+            grid-template-columns: max-content minmax(0, 1fr);
+            font-size: 12.5px; line-height: 1.6; color: var(--text-soft);
+            max-width: 900px;
+        }
+        .bppozn dt { font-weight: 800; color: var(--text); }
+        .bppozn dd { margin: 0; }
+        .bppozn__tip { font-size: 12.5px; color: var(--dim); }
+
+        /* I v metodice ať je jedno písmo: zkratky zůstanou zvýrazněné
+           podbarvením, ne přepnutím do psacího stroje. */
+        #metodika code {
+            font-family: inherit; font-size: inherit; font-weight: 800;
+            background: var(--accent-tint); color: var(--accent);
+            border-radius: 4px; padding: 0 4px;
+        }
+        @media (max-width: 620px) {
+            .bppozn { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+            .bppozn dd { margin-bottom: 6px; }
+        }
+    </style>
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -58,7 +110,12 @@
             <section class="card bpkarta">
                 <div class="bpkarta__hlava">
                     <b>Podle druhu práce</b>
-                    <span class="small muted">co se na zakázce dělalo</span>
+                    <!-- tentýž koláč umí hodiny i peníze; sazby se liší člověk
+                         od člověka, takže podíly nevycházejí stejně -->
+                    <div class="row" style="gap:6px">
+                        <button type="button" class="chip chip--active" data-kolac="druhy" data-jednotka="hodin">Hodiny</button>
+                        <button type="button" class="chip" data-kolac="druhy" data-jednotka="kc">Peníze</button>
+                    </div>
                 </div>
                 <div class="bpkolac" id="kolacDruhy"></div>
             </section>
@@ -66,7 +123,10 @@
             <section class="card bpkarta">
                 <div class="bpkarta__hlava">
                     <b>Podle lidí</b>
-                    <span class="small muted">kdo kolik odpracoval</span>
+                    <div class="row" style="gap:6px">
+                        <button type="button" class="chip chip--active" data-kolac="lide" data-jednotka="hodin">Hodiny</button>
+                        <button type="button" class="chip" data-kolac="lide" data-jednotka="kc">Peníze</button>
+                    </div>
                 </div>
                 <div class="bpkolac" id="kolacLide"></div>
             </section>
@@ -83,18 +143,33 @@
 
         <!-- ================================================ LIDÉ -->
         <section>
-            <h3 style="font-size:16px;font-weight:900;margin:0 0 10px">Kdo co odpracoval</h3>
+            <div class="spread" style="margin:0 0 10px">
+                <h3 style="font-size:16px;font-weight:900;margin:0">Kdo co odpracoval</h3>
+                <span class="bppozn__tip">Klikni na člověka – rozbalí se mu roky</span>
+            </div>
             <div style="overflow-x:auto"><table id="tabLide" class="vyk"></table></div>
-            <p class="tiny muted" style="margin-top:8px;line-height:1.6">
-                <b>Sazba teď</b> = co má člověk zapsané ve svém posledním výkazu.
-                <b>⌀ na zakázce</b> = kolik mu na téhle zakázce v průměru vyšlo na hodinu;
-                bývá nižší, protože sazby v čase rostou a zakázka běží roky.
-                <b>Peníze se nepočítají ani z jednoho z těch dvou čísel</b> — každý den se násobí
-                sazbou zapsanou u toho dne a teprve to se sčítá.<br>
-                <b>Z jeho práce</b> = jak velkou část všeho, co ten člověk za ta léta vykázal,
-                spolkla tahle zakázka. <b>Odhad</b> = kolik jeho hodin sem nepřiřadil text ve výkazu,
-                ale dopočet podle okolních dnů.
-            </p>
+            <!-- Vysvětlivky ke sloupcům. Jeden odstavec = jeden pojem, všechno
+                 stejným písmem i velikostí; tučný je jen název sloupce. -->
+            <dl class="bppozn">
+                <dt>Sazba teď</dt>
+                <dd>co má člověk zapsané ve svém posledním výkazu.</dd>
+
+                <dt>⌀ na zakázce</dt>
+                <dd>kolik mu na téhle zakázce v průměru vyšlo na hodinu. Bývá nižší,
+                    protože sazby v čase rostou a zakázka běží roky.</dd>
+
+                <dt>Peníze</dt>
+                <dd>nepočítají se ani z jednoho z těch dvou čísel: každý den se násobí
+                    sazbou zapsanou u toho dne a teprve to se sčítá.</dd>
+
+                <dt>Z jeho práce</dt>
+                <dd>jak velkou část všeho, co ten člověk za ta léta vykázal,
+                    spolkla tahle zakázka.</dd>
+
+                <dt>Odhad</dt>
+                <dd>kolik jeho hodin sem nepřiřadil text ve výkazu, ale dopočet
+                    podle okolních dnů.</dd>
+            </dl>
         </section>
 
         <!-- ================================================ ROKY A KONTEXT -->
@@ -135,9 +210,9 @@
     </section>
 </main>
 
-<script src="assets/js/taxonomy.js?v=59"></script>
-<script src="assets/js/ui.js?v=59"></script>
-<script type="module" src="assets/js/store.js?v=59"></script>
+<script src="assets/js/taxonomy.js?v=60"></script>
+<script src="assets/js/ui.js?v=60"></script>
+<script type="module" src="assets/js/store.js?v=60"></script>
 
 <script>
 (function () {
@@ -215,6 +290,32 @@
             '<ul class="bpleg">' + legenda + "</ul>";
     }
 
+    /* ------------------------------------------------------ oba koláče ---
+       Hodiny říkají, kolik se na čem strávilo času; peníze co to stálo.
+       Nevychází to stejně – hodina zaměřování a hodina kreslení mají jinou
+       sazbu – a právě proto se to přepíná, ne dopočítává jedno z druhého. */
+
+    const jednotky = { druhy: "hodin", lide: "hodin" };
+
+    function kresliKolace() {
+        if (!data) return;
+        const c = data.celkem;
+
+        const vykresliJeden = (slot, polozky, klic) => {
+            const penize = jednotky[klic] === "kc";
+            $(slot).innerHTML = kolac(
+                polozky.map(p => ({ nazev: p.nazev, hodnota: penize ? p.kc : p.hodin })),
+                penize ? c.kc : c.hodin,
+                penize ? kc : hod);
+        };
+
+        vykresliJeden("kolacDruhy", data.podleDruhu.map(d => ({ nazev: d.nazev, hodin: d.hodin, kc: d.kc })), "druhy");
+        vykresliJeden("kolacLide", data.podleLidi.map(l => ({ nazev: l.jmeno, hodin: l.hodin, kc: l.kc })), "lide");
+
+        document.querySelectorAll("[data-kolac]").forEach(chip =>
+            chip.classList.toggle("chip--active", jednotky[chip.dataset.kolac] === chip.dataset.jednotka));
+    }
+
     /* ------------------------------------------------------- vykreslení */
 
     function vykresli() {
@@ -242,11 +343,7 @@
                 "z " + cislo(data.firma.hodin) + " h všech výkazů") +
             dlazdice("Z toho odhad", cislo(c.odhadPct) + " %", "dopočet podle okolních dnů");
 
-        /* koláče */
-        $("kolacDruhy").innerHTML = kolac(
-            data.podleDruhu.map(d => ({ nazev: d.nazev, hodnota: d.hodin })), c.hodin, hod);
-        $("kolacLide").innerHTML = kolac(
-            data.podleLidi.map(l => ({ nazev: l.jmeno, hodnota: l.hodin })), c.hodin, hod);
+        kresliKolace();
 
         /* měsíce */
         const maxM = Math.max.apply(null, data.podleMesicu.map(m => m.hodin));
@@ -265,10 +362,11 @@
                 '<th class="vyk__num">⌀&nbsp;na&nbsp;zakázce</th>' +
                 "<th>Na čem dělal</th>" +
                 '<th class="vyk__num">Z jeho práce</th><th class="vyk__num">Odhad</th></tr></thead><tbody>' +
-            data.podleLidi.map(l => {
+            data.podleLidi.map((l, i) => {
                 const nejvic = l.druhy.filter(d => d.h > 0).slice(0, 3)
                     .map(d => esc(d.nazev) + " " + Math.round(d.h)).join(" · ");
-                return "<tr><th scope=\"row\">" + esc(l.jmeno) + "</th>" +
+                return '<tr class="bpclovek" data-clovek="' + i + '" aria-expanded="false">' +
+                    '<th scope="row"><span class="bpsipka">›</span>' + esc(l.jmeno) + "</th>" +
                     '<td class="vyk__num">' + hod(l.hodin) + "</td>" +
                     '<td class="vyk__num">' + pct(l.hodin, c.hodin) + " %</td>" +
                     '<td class="vyk__num"><b>' + kc(l.kc) + "</b></td>" +
@@ -333,6 +431,62 @@
             "<p><b>Co v číslech není.</b> Rozpočet zakázky, protože v evidenci vyplněný není — " +
             "tenhle přehled tedy říká, co zakázka stála, ne jestli vychází.</p>";
     }
+
+    /* ------------------------------------------- rozpad člověka po letech --
+       Sazby v čase rostou, takže dva roky se stejnými hodinami mají jiné
+       peníze – kvůli tomu to rozbalování je. Data nesou roky až od srpna
+       2026; starší uložený přehled je ještě nemá a poznáme to podle chybějícího
+       pole (řekneme to na rovinu místo prázdné tabulky). */
+
+    function rozpadHtml(clovek) {
+        const roky = Array.isArray(clovek.roky) ? clovek.roky : null;
+        if (!roky || !roky.length) {
+            return '<div class="small muted" style="text-align:center;padding:4px 0">' +
+                "Rozpad po letech bude po nahrání nových dat přehledu." + "</div>";
+        }
+        const bunka = (obsah, extra) =>
+            '<div class="bproky__bunka' + (extra || "") + '">' + obsah + "</div>";
+        return '<div class="bproky__mrizka">' +
+            '<div class="bproky__hlava">Rok</div>' +
+            '<div class="bproky__hlava">Hodin</div>' +
+            '<div class="bproky__hlava">Kč</div>' +
+            '<div class="bproky__hlava">⌀ sazba</div>' +
+            roky.map(r =>
+                bunka(esc(r.rok), " bproky__bunka--rok") +
+                bunka(hod(r.hodin)) +
+                bunka(kc(r.kc)) +
+                bunka(r.sazba ? kc(r.sazba) + "/h" : "—")
+            ).join("") +
+        "</div>";
+    }
+
+    document.addEventListener("click", (event) => {
+        const radek = event.target.closest("tr.bpclovek");
+        if (!radek || !data) return;
+
+        const otevreno = radek.classList.toggle("je-rozbaleny");
+        radek.setAttribute("aria-expanded", otevreno ? "true" : "false");
+
+        const dalsi = radek.nextElementSibling;
+        if (!otevreno) {
+            if (dalsi && dalsi.classList.contains("bproky")) dalsi.remove();
+            return;
+        }
+        const clovek = data.podleLidi[Number(radek.dataset.clovek)];
+        if (!clovek) return;
+        const detail = document.createElement("tr");
+        detail.className = "bproky";
+        detail.innerHTML = '<td colspan="9">' + rozpadHtml(clovek) + "</td>";
+        radek.insertAdjacentElement("afterend", detail);
+    });
+
+    /* přepínač hodiny / peníze u obou koláčů */
+    document.addEventListener("click", (event) => {
+        const chip = event.target.closest("[data-kolac]");
+        if (!chip) return;
+        jednotky[chip.dataset.kolac] = chip.dataset.jednotka;
+        kresliKolace();
+    });
 
     /* --------------------------------------------------------- načtení */
 
