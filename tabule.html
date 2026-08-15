@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Tabule – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=57">
+    <link rel="stylesheet" href="assets/css/app.css?v=58">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 
@@ -52,9 +52,11 @@
 
 <div id="appHeader"></div>
 
-<!-- Bez ?id se rovnou otevře naposledy upravovaná tabule (podlišta nese
-     zbytek). Tohle je vidět jen tehdy, když žádná tabule ještě není. -->
-<main id="listView" class="wrap" hidden style="padding-top:30px;padding-bottom:60px">
+<!-- Výzva k založení první tabule. Schválně NENÍ <main>: přihlášení
+     odkrývá všechny <main> na stránce naráz, takže tahle hláška vyskakovala
+     i nad otevřenou tabulí („zatím tu není žádná tabule" a pod tím tabule).
+     Jako <div> si o svém zobrazení rozhoduje jen kód níž. -->
+<div id="listView" class="wrap" hidden style="padding-top:30px;padding-bottom:60px">
     <div class="card center" style="padding:38px 22px">
         <b style="font-size:16px">Zatím tu není žádná tabule.</b>
         <p class="small muted" style="margin:8px 0 16px;line-height:1.6">
@@ -62,7 +64,7 @@
         </p>
         <button id="btnNewBoard" class="btn btn--primary">+ Nová tabule</button>
     </div>
-</main>
+</div>
 
 <!-- ========================================================== TABULE ==== -->
 <main id="boardView" hidden>
@@ -213,11 +215,11 @@
 
 <input type="file" id="bFile" accept="image/*" hidden>
 
-<script src="assets/js/taxonomy.js?v=57"></script>
-<script src="assets/js/doc.js?v=57"></script>
-<script src="assets/js/ui.js?v=57"></script>
-<script src="assets/js/board.js?v=57"></script>
-<script type="module" src="assets/js/store.js?v=57"></script>
+<script src="assets/js/taxonomy.js?v=58"></script>
+<script src="assets/js/doc.js?v=58"></script>
+<script src="assets/js/ui.js?v=58"></script>
+<script src="assets/js/board.js?v=58"></script>
+<script type="module" src="assets/js/store.js?v=58"></script>
 
 <script>
 (function () {
@@ -374,10 +376,13 @@
         window.addEventListener("hashchange", () => location.reload());
 
         if (!boardId) {
-            /* Seznam s dlaždicemi zmizel (podlišta ho nahradila) – bez ?id
-               se rovnou otevře naposledy upravovaná tabule. Výzva k založení
-               zůstává jen pro chvíli, kdy žádná tabule neexistuje. */
+            /* Seznam s dlaždicemi zmizel (podlišta ho nahradila) – bez adresy
+               konkrétní tabule se rovnou otevře naposledy upravovaná. Výzva
+               k založení zůstává jen pro chvíli, kdy žádná tabule neexistuje.
+               Nepřihlášenému se neukazuje: ten nemá seznam tabulí načtený,
+               takže by mu to tvrdilo, že tu nic není. */
             $("btnNewBoard").addEventListener("click", createBoard);
+            const prihlasen = () => !!(window.KB.currentUid && window.KB.currentUid());
             const skoc = () => {
                 const boards = window.KB.boards || [];
                 if (boards.length) {
@@ -386,9 +391,11 @@
                 }
                 return false;
             };
-            window.KB.on("boards", () => { if (!skoc()) { $("listView").hidden = false; paintSubbar(); } });
+            const ukazVyzvu = () => { $("listView").hidden = !prihlasen(); };
+            document.addEventListener("kb-role", ukazVyzvu);
+            window.KB.on("boards", () => { if (!skoc()) { ukazVyzvu(); paintSubbar(); } });
             await window.KB.whenReady();
-            if (!skoc()) $("listView").hidden = false;
+            if (!skoc()) ukazVyzvu();
             paintSubbar();
             return;
         }
