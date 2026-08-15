@@ -974,6 +974,8 @@
             "-" + String(d.getDate()).padStart(2, "0");
     };
 
+    let quickSplneneVidet = false;
+
     function renderQuick() {
         const panel = document.getElementById("kbQuickPanel");
         const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
@@ -1000,8 +1002,6 @@
         const radek = (q, mujVzkaz) => {
             const poTerminu = !q.hotovo && q.doKdy && q.doKdy < dnesISO();
             return '<div class="quickrad' + (q.hotovo ? " quickrad--hotovo" : "") + '">' +
-                '<input type="checkbox" data-quick-hotovo="' + esc(q.id) + '"' +
-                    (q.hotovo ? " checked" : "") + ">" +
                 '<span class="quickrad__text">' + esc(q.text) +
                     '<span class="quickrad__kdo">' +
                         (mujVzkaz ? "pro " + esc(jmeno(q.proUid) || "?")
@@ -1010,17 +1010,35 @@
                             esc(czDatumKratke(q.doKdy)) + "</span>" : "") +
                     "</span>" +
                 "</span>" +
+                // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
+                (q.hotovo
+                    ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
+                        esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                    : '<button type="button" class="btn btn--sm quicksplnit" data-quick-hotovo="' +
+                        esc(q.id) + '">Splněno</button>') +
                 (q.odKoho === uid ? '<button type="button" class="linkbtn" data-quick-smaz="' +
                     esc(q.id) + '" title="Smazat">×</button>' : "") +
             "</div>";
         };
 
+        /* Splněné se schovávají – jinak by seznam jen rostl. Kdo je chce
+           vidět (nebo vrátit), rozklikne si je dole. */
+        const aktivniProMe = proMe.filter(q => !q.hotovo);
+        const aktivniOdeMe = odeMe.filter(q => !q.hotovo);
+        const splnene = proMe.concat(odeMe).filter(q => q.hotovo);
+
         panel.querySelector("[data-quick-seznam]").innerHTML =
-            (proMe.length
-                ? '<div class="quickpanel__nadpis">Pro mě</div>' + proMe.map(q => radek(q, false)).join("")
+            (aktivniProMe.length
+                ? '<div class="quickpanel__nadpis">Pro mě</div>' + aktivniProMe.map(q => radek(q, false)).join("")
                 : '<div class="quickpanel__prazdno">Žiješ šťastný život, nikdo po tobě nic nechce.</div>') +
-            (odeMe.length
-                ? '<div class="quickpanel__nadpis">Poslal jsem</div>' + odeMe.map(q => radek(q, true)).join("")
+            (aktivniOdeMe.length
+                ? '<div class="quickpanel__nadpis">Poslal jsem</div>' + aktivniOdeMe.map(q => radek(q, true)).join("")
+                : "") +
+            (splnene.length
+                ? '<button type="button" class="linkbtn" data-quick-splnene style="margin-top:14px">' +
+                    (quickSplneneVidet ? "Skrýt splněné" : "Zobrazit splněné Quick TO-DO (" + splnene.length + ")") +
+                  "</button>" +
+                  (quickSplneneVidet ? splnene.map(q => radek(q, q.odKoho === uid && q.proUid !== uid)).join("") : "")
                 : "");
 
         // odznak s počtem nesplněných na tlačítku v pásu
@@ -1052,6 +1070,19 @@
                 .catch(() => UI.toast("Smazání selhalo.", "error"));
             return;
         }
+        if (event.target.closest("[data-quick-splnene]")) {
+            quickSplneneVidet = !quickSplneneVidet;
+            renderQuick();
+            return;
+        }
+        // Splněno / Vrátit – tlačítkem, ne zaškrtávátkem
+        const hotovoBtn = event.target.closest("[data-quick-hotovo]");
+        if (hotovoBtn && hotovoBtn.tagName === "BUTTON") {
+            const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
+            if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, { hotovo: !hotovoBtn.dataset.zpet }))
+                .catch(() => UI.toast("Uložení selhalo.", "error"));
+            return;
+        }
         if (!event.target.closest("[data-quick-uloz]")) return;
 
         const panel = document.getElementById("kbQuickPanel");
@@ -1071,15 +1102,6 @@
             console.error(err);
             UI.toast("Odeslání selhalo.", "error");
         }
-    });
-
-    /* odškrtnutí hotovo – celý záznam, ať se cestou nic neztratí */
-    document.addEventListener("change", (event) => {
-        const box = event.target.closest("[data-quick-hotovo]");
-        if (!box) return;
-        const q = (window.KB.quicktodo || []).find(x => x.id === box.dataset.quickHotovo);
-        if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, { hotovo: box.checked }))
-            .catch(() => UI.toast("Uložení selhalo.", "error"));
     });
 
     document.addEventListener("keydown", (event) => {
@@ -1235,6 +1257,15 @@
             button.addEventListener("click", () => UI.copyAiPrompt(null, null, "skript"));
         });
     }
+
+    /* Kliknutí kamkoliv do datumového pole rozbalí rovnou kalendář – jinak
+       ho otevírá jen malá ikonka u kraje a lidi klikají do prázdna. */
+    document.addEventListener("click", (event) => {
+        const datum = event.target.closest('input[type="date"]');
+        if (datum && !datum.disabled && typeof datum.showPicker === "function") {
+            try { datum.showPicker(); } catch (err) { /* už je otevřený */ }
+        }
+    });
 
     // zavírání roletek – jednou pro celou stránku
     document.addEventListener("click", () => {
