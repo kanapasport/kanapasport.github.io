@@ -888,6 +888,7 @@
         if (mujDenZapnut || !window.KB || !window.KB.currentUid || !window.KB.currentUid()) return;
         mujDenZapnut = true;
         window.KB.watchQuickTodo();
+        window.KB.watchMojeProjekty();     // roletka projektů v Quick TO-DO
         if (!UI.can("vykaz.otevrit")) return;      // student výkazy nemá
         window.KB.watchMojeVykazy();
         window.KB.watchMojeUkoly();
@@ -923,7 +924,8 @@
                             '<select class="field" data-quick-komu aria-label="Komu"></select>' +
                             '<input type="date" class="field" data-quick-kdy aria-label="Do kdy">' +
                         "</div>" +
-                        '<button type="button" class="btn btn--primary" data-quick-uloz>Poslat vzkaz</button>' +
+                        '<select class="field" data-quick-projekt aria-label="Projekt"></select>' +
+                        '<button type="button" class="btn btn--primary" data-quick-uloz>Zadat quick to-do</button>' +
                     "</div>" +
                     '<div class="quickpanel__seznam" data-quick-seznam></div>' +
                 "</div>" +
@@ -981,7 +983,7 @@
         const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
         if (!panel || !uid) return;
 
-        // nabídka lidí (jen jednou, ať se nepřepisuje rozepsaný výběr)
+        // nabídky (jen jednou, ať se nepřepisuje rozepsaný výběr)
         const komu = panel.querySelector("[data-quick-komu]");
         const lide = (window.KB.users || []).filter(u => u.active !== false);
         if (lide.length && komu.options.length <= 1) {
@@ -989,6 +991,12 @@
                 '<option value="' + esc(u.id) + '"' + (u.id === uid ? " selected" : "") + ">" +
                 esc(((u.first || "") + " " + (u.last || "")).trim()) +
                 (u.id === uid ? " (já)" : "") + "</option>").join("");
+        }
+        const projektSel = panel.querySelector("[data-quick-projekt]");
+        const projekty = (window.KB.projektyDocs || []).filter(p => !p.uzavreno).map(p => p.nazev);
+        if (projekty.length && projektSel.options.length <= 1) {
+            projektSel.innerHTML = '<option value="">— bez projektu —</option>' + projekty.map(n =>
+                '<option value="' + esc(n) + '">' + esc(n) + "</option>").join("");
         }
 
         const jmeno = (id) => {
@@ -1006,6 +1014,7 @@
                     '<span class="quickrad__kdo">' +
                         (mujVzkaz ? "pro " + esc(jmeno(q.proUid) || "?")
                                   : "od " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
+                        (q.projekt ? ' · ' + esc(q.projekt) : '') +
                         (q.doKdy ? ' · <span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
                             esc(czDatumKratke(q.doKdy)) + "</span>" : "") +
                     "</span>" +
@@ -1093,11 +1102,13 @@
         try {
             await window.KB.saveQuickTodo(window.KB.newQuickId(), {
                 text: text, proUid: komu,
-                doKdy: panel.querySelector("[data-quick-kdy]").value
+                doKdy: panel.querySelector("[data-quick-kdy]").value,
+                projekt: panel.querySelector("[data-quick-projekt]").value
             });
             panel.querySelector("[data-quick-text]").value = "";
             panel.querySelector("[data-quick-kdy]").value = "";
-            UI.toast("Vzkaz odeslán.");
+            panel.querySelector("[data-quick-projekt]").value = "";
+            UI.toast("Quick to-do zadáno.");
         } catch (err) {
             console.error(err);
             UI.toast("Odeslání selhalo.", "error");

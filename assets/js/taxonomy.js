@@ -190,7 +190,7 @@ window.KB_NAV = [
     },
     { title: 'TABULE', href: 'tabule.html', icon: 'board' },
     // přehledy hodin a peněz – jen manažeři
-    { title: 'REPORTY', href: 'reporty.html', need: 'vykaz.view' }
+    { title: 'REPORT', href: 'reporty.html', need: 'vykaz.view' }
 ];
 
 /* ------------------------------------------------- nástroje (ikony) -----

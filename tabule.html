@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Tabule – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=55">
+    <link rel="stylesheet" href="assets/css/app.css?v=56">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 
@@ -213,11 +213,11 @@
 
 <input type="file" id="bFile" accept="image/*" hidden>
 
-<script src="assets/js/taxonomy.js?v=55"></script>
-<script src="assets/js/doc.js?v=55"></script>
-<script src="assets/js/ui.js?v=55"></script>
-<script src="assets/js/board.js?v=55"></script>
-<script type="module" src="assets/js/store.js?v=55"></script>
+<script src="assets/js/taxonomy.js?v=56"></script>
+<script src="assets/js/doc.js?v=56"></script>
+<script src="assets/js/ui.js?v=56"></script>
+<script src="assets/js/board.js?v=56"></script>
+<script type="module" src="assets/js/store.js?v=56"></script>
 
 <script>
 (function () {
@@ -239,6 +239,11 @@
        Přeskočit z tabule na tabuli je nejčastější pohyb po téhle stránce,
        tak ať na to není potřeba chodit přes rozcestník. */
 
+    /* Události `boards` chodí při každém uložení tahu (mění se updatedMs).
+       Podlišta se ale smí překreslit jen, když se změní seznam nebo názvy –
+       jinak při kreslení problikává a stránka poskakuje. */
+    let podlistaOtisk = "";
+
     function paintSubbar() {
         const slot = $("appSubbar");
         if (!slot) return;
@@ -248,6 +253,10 @@
         // někdo píše, a klikalo by se do nich vedle.
         const boards = (window.KB.boards || []).slice().sort((a, b) =>
             String(a.title || "").localeCompare(String(b.title || ""), "cs"));
+
+        const otisk = boards.map(b => b.id + "|" + (b.title || "")).join("¦");
+        if (otisk === podlistaOtisk) return;
+        podlistaOtisk = otisk;
 
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
             '<a class="subbar__cat' + (boardId ? " subbar__cat--up" : "") + '" href="tabule.html">' +
@@ -313,10 +322,16 @@
      * mění se zalomením tlačítek i režimem zvětšení – tak ji změříme
      * a předáme do CSS, kde už si výšku dopočítá calc().
      */
+    let posledniNad = -1;
+
     function sizeStage() {
         const stage = $("bStage");
         if (!stage || $("boardView").hidden) return;
         const nad = Math.round(stage.getBoundingClientRect().top + window.scrollY);
+        // zapisovat jen změnu – zápis hýbe rozvržením a ResizeObserver
+        // by se s ním jinak honil dokola (bliká celá stránka)
+        if (nad === posledniNad) return;
+        posledniNad = nad;
         document.documentElement.style.setProperty("--deska-nad", nad + "px");
     }
 
@@ -334,7 +349,6 @@
             button.setAttribute("aria-pressed", on ? "true" : "false");
             button.title = on ? "Vrátit lišty zpět" : "Vejít se do okna – schová lišty";
         }
-        try { localStorage.setItem(MAX_KLIC, on ? "1" : ""); } catch (err) { /* soukromé okno */ }
         sizeStage();
     }
 
@@ -365,9 +379,12 @@
         $("boardView").hidden = false;
         window.KB.on("boards", paintSubbar);
 
-        let zvetseno = false;
-        try { zvetseno = !!localStorage.getItem(MAX_KLIC); } catch (err) { /* soukromé okno */ }
-        setMax(zvetseno);
+        /* Zvětšení se schválně NEPAMATUJE: teď schovává úplně všechno
+           včetně lišt, a kdo by ho měl uložené z minula, otevřel by tabuli
+           „bez webu" a myslel si, že se stránka rozbila. Začíná se normálně
+           a zvětšuje se rohovým tlačítkem. */
+        try { localStorage.removeItem(MAX_KLIC); } catch (err) { /* soukromé okno */ }
+        setMax(false);
         $("bMax").addEventListener("click", () => setMax(!document.body.classList.contains("deska-max")));
 
         sizeStage();

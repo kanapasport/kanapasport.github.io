@@ -423,6 +423,7 @@ KB.saveQuickTodo = async (id, data) => {
         odKoho:  data.odKoho || KB.currentUid(),
         odKohoJmeno: data.odKohoJmeno || window.KB_USER || "",
         doKdy:   data.doKdy || "",
+        projekt: data.projekt || "",       // nepovinná vazba na projekt
         hotovo:  data.hotovo === true,
         ms:      data.ms || Date.now()
     }, { merge: true });

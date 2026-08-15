@@ -18,9 +18,6 @@
            blok roztáhl na celou šířku a tlačítka by spadla na druhý řádek. */
         .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
 
-        /* Import je v podliště jako kotva – bez odsazení by skok skončil
-           pod lepivou lištou a nadpis sekce by nebyl vidět. */
-        #sekce-import { scroll-margin-top: 120px; }
 
         .zamek__hlava { display: flex; align-items: flex-start; gap: 12px; }
         .zamek__ikona { width: 26px; height: 26px; flex: none; color: var(--accent); }
@@ -36,7 +33,7 @@
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=55">
+    <link rel="stylesheet" href="assets/css/app.css?v=56">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -148,27 +145,6 @@
             </div>
         </section>
 
-        <!-- ============================================ IMPORT PROJEKTŮ -->
-        <section class="card col nastaveni" id="sekce-import">
-            <div class="nastaveni__hlava">
-                <div>
-                    <b>Import projektů z Evidence</b>
-                    <span class="small muted">jednorázové nahrání souboru projekty-import.json</span>
-                </div>
-            </div>
-            <div class="row row--wrap" style="gap:10px">
-                <input type="file" id="importSoubor" class="field" accept=".json" style="max-width:340px">
-                <button type="button" id="btnImportuj" class="btn btn--primary btn--sm">Nahrát do databáze</button>
-                <span class="small muted" id="importStav"></span>
-            </div>
-            <p class="tiny muted" style="margin:0;line-height:1.6">
-                Soubor vyrobí nástroj <b>vytvorImport.js</b> mimo repozitář (viz JAK-NA-TO.md).
-                Založí neuzavřené zakázky jako projekty, propojení na firmy, budget budov
-                a pater a vzorové úkoly. Projekt, jehož číslo už v databázi je, se přeskočí —
-                import se dá pustit opakovaně a nic nezdvojí. Lidi k projektům připojíš
-                na stránce Projekty.
-            </p>
-        </section>
 
         <p class="tiny muted" style="text-align:center;line-height:1.6">
             Postupně sem přibude i zbytek nastavení webu.
@@ -176,10 +152,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=55"></script>
-<script src="assets/js/ui.js?v=55"></script>
-<script src="assets/js/vykazy.js?v=55"></script>
-<script type="module" src="assets/js/store.js?v=55"></script>
+<script src="assets/js/taxonomy.js?v=56"></script>
+<script src="assets/js/ui.js?v=56"></script>
+<script src="assets/js/vykazy.js?v=56"></script>
+<script type="module" src="assets/js/store.js?v=56"></script>
 
 <script>
 (function () {
@@ -212,7 +188,7 @@
         { klic: "sazby",     text: "HODINOVÉ SAZBY",    href: "nastaveni.html",              need: "vykaz.view" },
         { klic: "uzivatele", text: "UŽIVATELÉ A HESLA", href: "uzivatele.html",              need: "users.manage" },
         { klic: "barvy",     text: "BARVY WEBU",        href: "barvy.html",                  need: "web.design" },
-        { klic: "import",    text: "IMPORT DAT",        href: "nastaveni.html#sekce-import", need: "vykaz.view" }
+        { klic: "import",    text: "IMPORT DAT",        href: "import.html",                 need: "vykaz.view" }
     ];
 
     function paintPodlista(aktivni) {
@@ -222,10 +198,7 @@
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
             PODLISTA.map(polozka => {
                 const prava = ' data-need="' + polozka.need + '" hidden';
-                /* Uvnitř nastavení je import jen kotva o kus níž – s celou
-                   adresou by prohlížeč zbytečně načetl stránku znovu. */
-                const cil = (aktivni === "sazby" && polozka.klic === "import")
-                    ? "#sekce-import" : polozka.href;
+                const cil = polozka.href;
                 return polozka.klic === aktivni
                     ? '<span class="subbar__cat"' + prava + ">" + esc(polozka.text) + "</span>"
                     : '<a class="subbar__cat subbar__cat--up" href="' + esc(cil) + '"' +
@@ -442,101 +415,6 @@
         }
     }
 
-    /* ------------------------------------------------- import projektů ---
-       Jednorázové nahrání souboru z vytvorImport.js: projekty, propojení
-       na firmy, budget budov/pater a vzorové úkoly. Projekt se pozná podle
-       čísla a úkol podle názvu s projektem – co už existuje, se přeskočí. */
-
-    async function importuj() {
-        const soubor = $("importSoubor").files[0];
-        if (!soubor) return void window.KBUI.toast("Vyber soubor projekty-import.json.", "warn");
-
-        let data;
-        try { data = JSON.parse(await soubor.text()); }
-        catch (err) { return void window.KBUI.toast("Soubor nejde přečíst jako JSON.", "error"); }
-
-        const stav = (text) => { $("importStav").textContent = text; };
-        $("btnImportuj").disabled = true;
-        try {
-            // projekty a úkoly se sledují živě – kvůli přeskočení existujících
-            window.KB.watchProjekty();
-            window.KB.watchUkoly();
-            await new Promise(r => setTimeout(r, 1200));
-
-            const mameCisla = new Set((window.KB.projektyDocs || []).map(p => p.cislo).filter(Boolean));
-            const podleNazvu = new Map();
-
-            let zalozeno = 0, preskoceno = 0;
-            const seznam = Array.isArray(data.projekty) ? data.projekty : [];
-            for (const [i, p] of seznam.entries()) {
-                if (p.cislo && mameCisla.has(p.cislo)) { preskoceno++; continue; }
-                const id = window.KB.newProjektId() + "_" + i;
-                await window.KB.saveProjekt(id, {
-                    cislo: p.cislo || "", nazev: p.nazev || "Bez názvu",
-                    firma: p.firma || "", priorita: "nizka",
-                    poznamka: p.poznamka || "", lide: []
-                });
-                podleNazvu.set(p.nazev, id);
-                zalozeno++;
-                if (zalozeno % 25 === 0) stav(zalozeno + " / " + seznam.length + "…");
-            }
-
-            // propojení projekt → firma a budget budov/pater
-            const firmaMap = Object.assign({}, window.KB.firmaMap);
-            seznam.forEach(p => { if (p.firma) firmaMap[p.nazev] = p.firma; });
-            await window.KB.saveCiselnikZakazek({
-                firmaMap: firmaMap,
-                budget: Object.assign({}, window.KB.budgetCiselnik, data.budget || {})
-            });
-
-            // vzorové úkoly
-            let ukolu = 0;
-            const mameUkoly = new Set((window.KB.ukoly || []).map(u => u.projekt + "|" + u.nazev));
-            for (const u of (Array.isArray(data.ukoly) ? data.ukoly : [])) {
-                if (mameUkoly.has(u.projekt + "|" + u.nazev)) continue;
-                await window.KB.saveUkol(window.KB.newUkolId(), Object.assign({}, u, {
-                    projektId: podleNazvu.get(u.projekt) || "" }));
-                ukolu++;
-            }
-
-            /* Výkazy (třeba ukázková data): osoba se hledá podle jména
-               v seznamu lidí, sazba se bere z nastavení. Co už v databázi
-               je (stejný člověk, den, popis), se přeskočí. */
-            let vykazu = 0, bezCloveka = 0;
-            const seznamVykazu = Array.isArray(data.vykazy) ? data.vykazy : [];
-            if (seznamVykazu.length) {
-                window.KB.watchVykazy();
-                await new Promise(r => setTimeout(r, 1200));
-                const mameZapisy = new Set((window.KB.vykazy || [])
-                    .map(z => z.uid + "|" + z.datum + "|" + z.nazev));
-                const podleJmena = new Map(V.lide().map(u => [window.KBUI.fold(V.jmeno(u)), u.id]));
-
-                for (const z of seznamVykazu) {
-                    const uid = podleJmena.get(window.KBUI.fold(z.osoba || ""));
-                    if (!uid) { bezCloveka++; continue; }
-                    if (mameZapisy.has(uid + "|" + z.datum + "|" + z.nazev)) continue;
-                    await window.KB.saveVykaz(window.KB.newVykazId(), Object.assign({}, z, {
-                        uid: uid,
-                        sazba: Number((window.KB.sazby || {})[uid]) || 0
-                    }));
-                    vykazu++;
-                    if (vykazu % 20 === 0) stav("výkazy: " + vykazu + " / " + seznamVykazu.length + "…");
-                }
-            }
-
-            stav("Hotovo: " + zalozeno + " projektů (" + preskoceno + " už bylo), " + ukolu +
-                " úkolů" + (seznamVykazu.length ? ", " + vykazu + " výkazů" +
-                (bezCloveka ? " (" + bezCloveka + " bez nalezeného člověka)" : "") : "") + ".");
-            window.KBUI.toast("Import dokončen.");
-        } catch (err) {
-            console.error(err);
-            stav("Import selhal v průběhu – pusť ho znovu, hotové se nezdvojí.");
-            window.KBUI.toast("Import selhal.", "error");
-        } finally {
-            $("btnImportuj").disabled = false;
-        }
-    }
-
     /* -------------------------------------------------------------- start */
 
     function render() {
@@ -557,8 +435,6 @@
         paintPodlista("sazby");
 
         $("btnUloz").addEventListener("click", uloz);
-        $("btnImportuj").addEventListener("click", importuj);
-
         $("btnOdemknout").addEventListener("click", odemkni);
         $("zHeslo").addEventListener("keydown", (event) => {
             if (event.key === "Enter") { event.preventDefault(); odemkni(); }

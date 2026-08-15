@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=55">
+    <link rel="stylesheet" href="assets/css/app.css?v=56">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -240,11 +240,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=55"></script>
-<script src="assets/js/doc.js?v=55"></script>
-<script src="assets/js/ui.js?v=55"></script>
-<script src="assets/js/vykazy.js?v=55"></script>
-<script type="module" src="assets/js/store.js?v=55"></script>
+<script src="assets/js/taxonomy.js?v=56"></script>
+<script src="assets/js/doc.js?v=56"></script>
+<script src="assets/js/ui.js?v=56"></script>
+<script src="assets/js/vykazy.js?v=56"></script>
+<script type="module" src="assets/js/store.js?v=56"></script>
 
 <script>
 (function () {
@@ -496,6 +496,7 @@
                     '<span class="muted" style="display:block;font-size:12.5px">' +
                         (mujVzkaz ? "pro " + esc(jmenoUid(q.proUid) || "?")
                                   : "od " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
+                        (q.projekt ? " · " + esc(q.projekt) : "") +
                         termin(q) + "</span>" +
                 "</span>" +
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
@@ -604,6 +605,12 @@
                     radky.push({ barva: "#c26a00", text: "úkol: " + (u.nazev || "") });
                 }
             });
+            (window.KB.milniky || []).forEach(m => {
+                if (m.datum === iso && !m.hotovo) {
+                    radky.push({ barva: "#b3006b", text: "milník: " + (m.cinnost || "") +
+                        (m.zakazka ? " (" + m.zakazka + ")" : "") });
+                }
+            });
             if (radky.length) dny.push({ iso, popis: i === 0 ? "Dnes" : i === 1 ? "Zítra" : czDatum(iso), radky });
         }
 
@@ -617,7 +624,7 @@
                             '<i style="flex:none;width:9px;height:9px;border-radius:3px;background:' + r.barva + '"></i>' +
                             '<span class="truncate">' + esc(r.text) + "</span></span>").join("") +
                 "</div>").join("")
-            : '<span class="tiny muted">Nejbližších sedm dní je volných.</span>';
+            : '<span class="muted" style="font-size:14px">Nejbližších sedm dní je volných.</span>';
     }
 
     async function zapisPct(todoId, pct) {
@@ -714,6 +721,7 @@
         window.KB.on("aktivity", renderAktivita);
         window.KB.on("quicktodo", renderQuick);
         window.KB.on("kalendar", renderKalendarDlazdice);
+        window.KB.on("milniky", renderKalendarDlazdice);
 
         // přizpůsobení nástěnky
         document.getElementById("btnPrizpusob").addEventListener("click", () => {
