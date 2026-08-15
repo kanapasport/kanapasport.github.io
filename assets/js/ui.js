@@ -903,6 +903,11 @@
         const panel = document.createElement("div");
         panel.id = "kbQuickPanel";
         panel.className = "quickpanel no-print";
+        /* Skrytí i inline: kdyby se CSS načetlo pozdě nebo ze zastaralé
+           mezipaměti, panel by ležel přes pás jako neschovaný blok –
+           přesně to se Michalovi stalo. Inline hodnoty drží zavřený stav
+           nezávisle na souboru se styly. */
+        panel.style.pointerEvents = "none";
         panel.innerHTML =
             '<div class="quickpanel__stin" data-quick-zavri></div>' +
             '<div class="quickpanel__deska">' +
@@ -924,23 +929,38 @@
                 "</div>" +
             "</div>";
         document.body.appendChild(panel);
+        const deska = panel.querySelector(".quickpanel__deska");
+        deska.style.transform = "translateX(-102%)";
+        deska.style.visibility = "hidden";
+        panel.querySelector(".quickpanel__stin").style.opacity = "0";
     }
 
     /**
-     * Otevře nebo zavře panel. Posun se nastavuje rovnou na prvek, ne jen
-     * třídou: v jednom prohlížeči, na kterém jsme to zkoušeli, se změna
-     * třídy do rozvržení nepropsala a panel zůstal odsunutý za okrajem.
-     * Třída zůstává kvůli stínu a proklikávání.
+     * Otevře nebo zavře panel. Posun i poloha se nastavují rovnou na prvek,
+     * ne jen třídou: v jednom prohlížeči se změna třídy do rozvržení
+     * nepropsala a panel zůstal ležet přes pás. Levý okraj se měří z pásu –
+     * media query se nemusí trefit do všech kombinací šířky a zvětšení.
      */
     function prepniQuick(otevrit) {
         const panel = document.getElementById("kbQuickPanel");
         if (!panel) return;
         const deska = panel.querySelector(".quickpanel__deska");
         const stin = panel.querySelector(".quickpanel__stin");
+
+        /* pás je position:fixed, takže offsetParent je vždycky null –
+           viditelnost se musí číst ze spočteného stylu */
+        const pas = document.querySelector(".siderail");
+        const pasVidet = pas && getComputedStyle(pas).display !== "none";
+        deska.style.left = (pasVidet ? pas.offsetWidth : 0) + "px";
+
         panel.classList.toggle("je-otevreny", !!otevrit);
         panel.style.pointerEvents = otevrit ? "auto" : "none";
+        deska.style.visibility = "visible";
         deska.style.transform = otevrit ? "translateX(0)" : "translateX(-102%)";
         stin.style.opacity = otevrit ? "1" : "0";
+        if (!otevrit) setTimeout(() => {
+            if (!panel.classList.contains("je-otevreny")) deska.style.visibility = "hidden";
+        }, 260);
     }
 
     const czDatumKratke = (iso) => {

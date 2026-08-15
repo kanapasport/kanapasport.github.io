@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=53">
+    <link rel="stylesheet" href="assets/css/app.css?v=54">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -39,22 +39,37 @@
         .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
             text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
 
+        /* Sekce vypadají jako bloky nového výkazu (Michalovo přání „může to
+           být i takhle zabarvené"): červený pruh s bílým štítkem nahoře,
+           lehce tónované tělo, červený rámeček. */
+        .sblok { border: 1px solid var(--accent); border-radius: var(--radius-lg);
+            background: var(--accent-tint); overflow: hidden; }
+        .sblok__hlava { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 8px 14px; background: var(--accent); }
+        .sblok__stitek { font-size: 11px; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #fff; }
+        .sblok__telo { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+        /* pole na tónovaném podkladu potřebují plný bílý povrch */
+        .sblok .field { background: var(--surface); }
+
         /* Převzetí hodnot z jiného projektu sedí ve STEJNÉ buňce jako pole,
            ke kterému patří – tak roletka lícuje se sloupcem a je poznat,
            co se vlastně přebírá. */
         .prevzit { display: flex; gap: 6px; margin-top: 6px; }
         .prevzit select { flex: 1; min-width: 0; min-height: 36px; font-size: 12.5px; padding: 6px 10px; }
 
-        /* Sazba na projektu: jméno · přepínač · částka. Buňky skládá .fmr,
-           tohle je jen rámeček řádku a vzhled jeho obsahu. */
-        .sazbap { padding: 7px 10px; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+        /* Sazba na projektu: jeden řádek = jméno · přepínač · částka.
+           Bílý řádek na tónovaném podkladu, ať se dá číst jako seznam. */
+        .sazbap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+            padding: 8px 12px; border: 1px solid var(--line-soft);
+            border-radius: var(--radius); background: var(--surface); }
         .sazbap:focus-within { border-color: var(--accent); }
-        .sazbap__jmeno { font-size: 13px; }
-        .sazbap__jmeno span { display: block; font-size: 11px; color: var(--muted); }
-        /* přepínač je přizvednutý ke středu pole vedle sebe, ne na jeho dno */
-        .sazbap__prep { font-size: 12.5px; color: var(--text-soft); cursor: pointer;
-            white-space: nowrap; padding-bottom: 9px; }
-        .sazbap input[type="number"] { min-height: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+        .sazbap__jmeno { flex: 1 1 220px; min-width: 0; font-size: 13.5px; font-weight: 700; }
+        .sazbap__jmeno span { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+        .sazbap__prep { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px;
+            color: var(--text-soft); cursor: pointer; white-space: nowrap; }
+        .sazbap input[type="number"] { width: 110px; min-height: 36px; text-align: right;
+            font-variant-numeric: tabular-nums; }
         /* Vypnuté pole musí být na první pohled vypnuté – jinak do něj někdo
            píše a diví se, že se to neuloží. */
         .sazbap input[type="number"]:disabled { background: var(--bg); color: var(--dim); }
@@ -124,8 +139,9 @@
                     </section>
 
                     <!-- ------------------------------ rozpočet, firma, části -->
-                    <section class="card col" style="gap:12px">
-                        <b>Rozpočet, fakturace a části</b>
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Rozpočet, fakturace a části</span></div>
+                        <div class="sblok__telo">
                         <div class="fmr">
                             <label class="pole"><span class="popisek">Rozpočet (Kč)</span>
                                 <input type="number" id="fKc" class="field" min="0" placeholder="0"></label>
@@ -140,17 +156,17 @@
                             Části nejsou další projekty – je to rozdělení <b>jednoho</b> projektu
                             na kusy (etapy, budovy), mezi kterými se pak vybírá ve výkazu.
                         </p>
+                        </div>
                     </section>
 
                     <!-- ------------------- budovy, patra a technologie projektu -->
-                    <section class="card col" style="gap:12px">
-                        <div>
-                            <b>Budovy, patra a technologie</b>
-                            <p class="small muted" style="margin-top:3px;line-height:1.6">
-                                Platí jen pro tenhle projekt – každý má jiný počet budov i pater.
-                                Z těchhle seznamů se pak skládají úkoly.
-                            </p>
-                        </div>
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Budovy, patra a technologie</span></div>
+                        <div class="sblok__telo">
+                        <p class="small muted" style="margin:0;line-height:1.6">
+                            Platí jen pro tenhle projekt – každý má jiný počet budov i pater.
+                            Z těchhle seznamů se pak skládají úkoly.
+                        </p>
                         <div class="fmr">
                             <div class="pole">
                                 <span class="popisek">Budovy (oddělené čárkou)</span>
@@ -178,23 +194,23 @@
                             </div>
                         </div>
                         <p class="tiny muted" style="margin:0;line-height:1.6">
-                            Prázdné pole znamená, že platí společný seznam z Nastavení úkolů.
+                            Prázdné pole znamená, že platí vestavěná nabídka.
                             Roletka pod polem převezme hodnoty z jiného projektu, ať se to
                             nemusí ťukat pořád dokola.
                         </p>
+                        </div>
                     </section>
 
                     <!-- --------------------------------- sazby na projektu -->
-                    <section class="card col" style="gap:12px">
-                        <div>
-                            <b>Sazby na tomto projektu</b>
-                            <p class="small muted" style="margin-top:3px;line-height:1.6">
-                                Lidé přiřazení k projektu. Nezaškrtnuté = platí obecná sazba
-                                z Nastavení. Změna se týká jen nových zápisů, starší výkazy
-                                zůstanou takové, jaké byly.
-                            </p>
-                        </div>
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Sazby na tomto projektu</span></div>
+                        <div class="sblok__telo">
+                        <p class="small muted" style="margin:0;line-height:1.6">
+                            Nezaškrtnuté = platí obecná sazba z Nastavení. Změna se týká jen
+                            nových zápisů, starší výkazy zůstanou takové, jaké byly.
+                        </p>
                         <div id="sazbyLide" class="col" style="gap:6px"></div>
+                        </div>
                     </section>
 
                     <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
@@ -223,10 +239,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=53"></script>
-<script src="assets/js/ui.js?v=53"></script>
-<script src="assets/js/vykazy.js?v=53"></script>
-<script type="module" src="assets/js/store.js?v=53"></script>
+<script src="assets/js/taxonomy.js?v=54"></script>
+<script src="assets/js/ui.js?v=54"></script>
+<script src="assets/js/vykazy.js?v=54"></script>
+<script type="module" src="assets/js/store.js?v=54"></script>
 
 <script>
 (function () {
@@ -352,14 +368,23 @@
         const vlastniSazby = sazbyProjektu(p.nazev);
         const obecne = window.KB.sazby || {};
 
-        $("sazbyLide").innerHTML = (p.lide || []).map(uid => {
-            const clovek = V.clovek(uid);
-            const jmeno = clovek ? V.jmeno(clovek) : uid;
+        /* Vypisují se VŠICHNI aktivní lidé, ne jen přiřazení k projektu –
+           po importu z Evidence nemá přiřazení skoro nikdo a sekce byla
+           k ničemu („nemůžu nic zaškrtnout"). Přiřazení jsou nahoře
+           a označení, ať je vidět, kdo na projektu opravdu dělá. */
+        const prirazeni = new Set(p.lide || []);
+        const lide = V.lide().slice().sort((a, b) =>
+            (prirazeni.has(b.id) ? 1 : 0) - (prirazeni.has(a.id) ? 1 : 0)
+            || (a.last || "").localeCompare(b.last || "", "cs"));
+
+        $("sazbyLide").innerHTML = lide.map(u => {
+            const uid = u.id;
             const vlastni = Number(vlastniSazby[uid]) || 0;
             const obecna = Number(obecne[uid]) || 0;
 
             return '<div class="sazbap">' +
-                '<span class="sazbap__jmeno">' + esc(jmeno) +
+                '<span class="sazbap__jmeno">' + esc(V.jmeno(u)) +
+                    (prirazeni.has(uid) ? ' <span class="tag" style="margin-left:6px">na projektu</span>' : "") +
                     "<span>" + (obecna ? "obecná sazba " + esc(V.cislo(obecna)) + " Kč/h"
                                        : "obecná sazba není vyplněná") + "</span></span>" +
                 '<label class="sazbap__prep"><input type="checkbox" data-jina="' + esc(uid) + '"' +
@@ -368,8 +393,7 @@
                     (vlastni ? "" : " disabled") + ' value="' + (vlastni || "") + '">' +
                 '<span class="tiny muted">Kč/h</span>' +
             "</div>";
-        }).join("") ||
-            '<div class="tiny muted">K projektu zatím nikdo není přiřazený – lidi přidáš u projektu.</div>';
+        }).join("") || '<div class="tiny muted">V seznamu lidí zatím nikdo není.</div>';
     }
 
     function vykresliNastaveni() {
