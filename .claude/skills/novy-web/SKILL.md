@@ -67,3 +67,12 @@ plný odběr, o který si dál řekne stránka.
 - Po přejmenování zkontroluj, že nezůstal kód volající smazané prvky –
   `$("btnNeco").addEventListener` na neexistující prvek shodí celou
   inicializaci stránky a ta zůstane prázdná.
+- **Místní server (`npx serve`) s hezkými adresami zahazoval `?query`:**
+  `tabule.html?id=X` → 301 na `/tabule` bez id, stránka se přesměrovala
+  dokola („problikává a načítá se furt"). `serve.json` má proto
+  `cleanUrls:false` + přepis `/:stranka` → `/:stranka.html` (přepis
+  přežije i 301, které si prohlížeče pamatují napořád). Identita tabule
+  jede v `#deska=ID` – hash serveru nikdy nedojde, tak ho nemůže ztratit.
+  Když stránka po prokliku „neví", ověř nejdřív `location.search` naživo.
+- **Memoizace prvního vykreslení:** otisk inicializuj `null`, ne `""` –
+  prázdný stav má taky otisk `""` a první malování by se přeskočilo.
