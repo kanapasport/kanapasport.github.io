@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=66">
+    <link rel="stylesheet" href="assets/css/app.css?v=67">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -147,6 +147,29 @@
 
         <div id="souhrn" class="vyksum"></div>
 
+        <!-- Vytížení toho, čí výkazy jsou zrovna vidět. Stejná mřížka jako
+             Vytížení týmu, jen na jednoho člověka – ať se nemusí přepínat
+             na jinou stránku kvůli jednomu řádku. -->
+        <div id="vytizeniBox" class="card col" style="padding:14px 16px;gap:10px" hidden>
+            <div class="spread">
+                <b id="vytizeniNadpis" style="font-size:14px"></b>
+                <div class="row" style="gap:6px">
+                    <button type="button" class="btn btn--ghost btn--sm" id="vtZpet">‹</button>
+                    <span id="vtMesic" class="small" style="align-self:center;min-width:120px;text-align:center"></span>
+                    <button type="button" class="btn btn--ghost btn--sm" id="vtDal">›</button>
+                </div>
+            </div>
+            <div class="vt-wrap">
+                <table class="vt"><thead id="vtHlava"></thead><tbody id="vtTelo"></tbody></table>
+            </div>
+            <div class="tiny muted" style="line-height:1.7">
+                <span class="vt-leg-x vt--malo">méně než 7 h</span>
+                <span class="vt-leg-x vt--akorat">7–8 h</span>
+                <span class="vt-leg-x vt--hodne">víc než 8 h</span>
+                <span class="vt-leg-x vt--abs">A</span> dovolená, nemoc nebo školení
+            </div>
+        </div>
+
         <div id="prazdno" class="card center small muted" style="padding:40px" hidden>
             Pro tenhle výběr tu zatím žádný záznam není.
         </div>
@@ -186,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=66"></script>
-<script src="assets/js/ui.js?v=66"></script>
-<script src="assets/js/vykazy.js?v=66"></script>
-<script type="module" src="assets/js/store.js?v=66"></script>
+<script src="assets/js/taxonomy.js?v=67"></script>
+<script src="assets/js/ui.js?v=67"></script>
+<script src="assets/js/vykazy.js?v=67"></script>
+<script type="module" src="assets/js/store.js?v=67"></script>
 
 <script>
 (function () {
@@ -495,6 +518,68 @@
     }
 
     /** Přepočítá hodiny a částku pod položkou. */
+    /* ================================================ VYTÍŽENÍ ČLOVĚKA ==
+       Stejná mřížka jako na stránce Vytížení týmu, jen na jednoho člověka –
+       toho, čí výkazy jsou zrovna vidět. Manažer si rozkliknutím jiného
+       ve filtru „Kdo" prohlédne i jeho. */
+
+    let vtKotva = new Date();     // libovolný den zobrazeného měsíce
+
+    const vtIso = (d) => d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+    const vtHodiny = (h) => Number(h).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+
+    const VT_MESICE = ["leden", "únor", "březen", "duben", "květen", "červen",
+        "červenec", "srpen", "září", "říjen", "listopad", "prosinec"];
+
+    function vykresliVytizeni(uid) {
+        const box = $("vytizeniBox");
+        box.hidden = !uid;
+        if (!uid) return;
+
+        const clovek = V.clovek(uid);
+        $("vytizeniNadpis").textContent = "Vytížení – " + (clovek ? V.jmeno(clovek) : "");
+        $("vtMesic").textContent = VT_MESICE[vtKotva.getMonth()] + " " + vtKotva.getFullYear();
+
+        /* Počítá se ze VŠECH záznamů toho člověka, ne z vyfiltrovaných –
+           mřížka má ukázat, jak měl obsazený měsíc, ne kolik toho odvedl
+           na jednom projektu. Absence se počítá taky, jinak by dovolená
+           vypadala jako prázdný den. */
+        const hodiny = new Map();
+        const absence = new Set();
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.uid !== uid) return;
+            const k = z.datum;
+            if (z.absence === true || jeAbsence(z.zakazka)) return void absence.add(k);
+            hodiny.set(k, (hodiny.get(k) || 0) + (Number(z.hodiny) || 0));
+        });
+
+        const y = vtKotva.getFullYear(), m = vtKotva.getMonth();
+        const dnesIso = V.dnesISO();
+        const dny = [];
+        for (let c = 1; c <= new Date(y, m + 1, 0).getDate(); c++) {
+            const d = new Date(y, m, c);
+            dny.push({ iso: vtIso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6 });
+        }
+
+        $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + dny.map(x =>
+            '<th class="' + (x.vikend ? "vt--vik " : "") +
+            (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") + "</tr>";
+
+        $("vtTelo").innerHTML = "<tr><td>" + esc(clovek ? V.jmeno(clovek) : "") + "</td>" +
+            dny.map(x => {
+                const h = hodiny.get(x.iso) || 0;
+                let cls = x.vikend ? "vt--vik" : "";
+                let text = "";
+                if (absence.has(x.iso)) { cls = "vt--abs"; text = "A"; }
+                else if (h > 8)  { cls = "vt--hodne";  text = vtHodiny(h); }
+                else if (h >= 7) { cls = "vt--akorat"; text = vtHodiny(h); }
+                else if (h > 0)  { cls = "vt--malo";   text = vtHodiny(h); }
+                return '<td class="' + cls + '">' + esc(text) + "</td>";
+            }).join("") + "</tr>";
+    }
+
     /** Absence položky – zakázku má buď sama (okno úpravy), nebo blok nad ní. */
     function polozkaJeAbsence(box, p) {
         const blok = box.closest("[data-zblok]");
@@ -942,6 +1027,11 @@
         const zaznamy = V.vyber(zaklad, filtr).slice().sort((a, b) =>
             (b.datum || "").localeCompare(a.datum || "") || (a.od || "").localeCompare(b.od || ""));
 
+        /* Mřížka patří jednomu člověku. Zaměstnanec vidí vždycky sebe,
+           manažer toho, koho má ve filtru – bez výběru („Všichni lidé")
+           by nebylo čí vytížení ukazovat. */
+        vykresliVytizeni(spravce ? filtr.uid : window.KB.currentUid());
+
         const s = V.soucty(zaznamy);
         $("souhrn").innerHTML =
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
@@ -1290,6 +1380,16 @@
         });
 
         $("btnResetFiltr").addEventListener("click", resetFiltru);
+
+        // měsíc v mřížce vytížení se přepíná nezávisle na filtru období výše
+        $("vtZpet").addEventListener("click", () => {
+            vtKotva = new Date(vtKotva.getFullYear(), vtKotva.getMonth() - 1, 1);
+            render();
+        });
+        $("vtDal").addEventListener("click", () => {
+            vtKotva = new Date(vtKotva.getFullYear(), vtKotva.getMonth() + 1, 1);
+            render();
+        });
 
         $("btnEditZrus").addEventListener("click", () => { $("editOverlay").hidden = true; });
         $("btnEditUloz").addEventListener("click", ulozUpravu);
