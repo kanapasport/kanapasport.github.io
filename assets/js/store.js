@@ -1012,7 +1012,12 @@ function zaznamPayload(data) {
         od:       data.od || "",
         do:       data.do || "",
         pauza:    Math.max(0, Number(data.pauza) || 0),
-        hodiny:   KB.spocitejHodiny(data.od, data.do, data.pauza),
+        /* Celodenní absence se zapisuje jako 00:00–23:59, ale do fondu se
+           počítá jako běžná směna – jinak by týden dovolené udělal 120 hodin.
+           `hodinyPevne` proto přebije výpočet z časů. */
+        hodiny:   Number(data.hodinyPevne) > 0
+                    ? Number(data.hodinyPevne)
+                    : KB.spocitejHodiny(data.od, data.do, data.pauza),
         /* Oběd a kilometry patří k času, ne k tajným částkám – jsou to
            náhrady tomu, kdo pracoval, a ten si na ně musí umět sáhnout.
            Korunová hodnota se z nich dopočítá až v `castky`. */

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=61">
+    <link rel="stylesheet" href="assets/css/app.css?v=62">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -185,10 +185,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=61"></script>
-<script src="assets/js/ui.js?v=61"></script>
-<script src="assets/js/vykazy.js?v=61"></script>
-<script type="module" src="assets/js/store.js?v=61"></script>
+<script src="assets/js/taxonomy.js?v=62"></script>
+<script src="assets/js/ui.js?v=62"></script>
+<script src="assets/js/vykazy.js?v=62"></script>
+<script type="module" src="assets/js/store.js?v=62"></script>
 
 <script>
 (function () {
@@ -221,6 +221,12 @@
     const ABSENCE = ["Dovolená", "Nemoc", "Školení"];
     const jeAbsence = (nazev) => ABSENCE.indexOf(nazev) !== -1;
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Nemoc": "nemoc", "Školení": "skoleni" };
+
+    /* Celý den u absence. V časech stojí 00:00–23:59, ať je na první pohled
+       vidět, že je pryč celý den; do fondu se ale počítá jedna směna. */
+    const CELY_DEN_OD = "00:00";
+    const CELY_DEN_DO = "23:59";
+    const HODIN_ZA_DEN = 8;
 
     /* U absence se hodí vědět, kam člověk jede a kdo ho zastupuje – proto
        má poznámka jinou nápovědu než u běžné práce. */
@@ -483,10 +489,21 @@
     }
 
     /** Přepočítá hodiny a částku pod položkou. */
+    /** Absence položky – zakázku má buď sama (okno úpravy), nebo blok nad ní. */
+    function polozkaJeAbsence(box, p) {
+        const blok = box.closest("[data-zblok]");
+        return jeAbsence(p.zakazka || (blok ? ctiZblok(blok).zakazka : ""));
+    }
+
     function prepocti(box) {
         if (!box) return 0;
         const p = ctiPolozku(box);
-        const hodiny = window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+        // u absence se peníze neúčtují – ať formulář neslibuje, co se neuloží
+        if (polozkaJeAbsence(box, p)) p.sazba = 0;
+        // celý den je v časech 00:00–23:59, ale do fondu jde jedna směna
+        const hodiny = p.celyden
+            ? HODIN_ZA_DEN
+            : window.KB.spocitejHodiny(p.od, p.do, p.pauza);
         const castky = window.KB.spocitejCastky(Object.assign({}, p, { hodiny: hodiny }), p.sazba);
 
         box.querySelector("[data-vysledek-hod]").textContent = V.hod(hodiny);
@@ -560,9 +577,12 @@
     function soucetDne() {
         let hodiny = 0, castka = 0;
         prectiRadky().forEach(p => {
-            const h = window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+            // celý den se počítá jako jedna směna, ne jako 24 hodin v časech
+            const h = p.celyden
+                ? HODIN_ZA_DEN
+                : window.KB.spocitejHodiny(p.od, p.do, p.pauza);
             hodiny += h;
-            castka += h * p.sazba;
+            castka += h * (jeAbsence(p.zakazka) ? 0 : p.sazba);
         });
         $("denSoucet").innerHTML = hodiny
             ? "Celkem: <b>" + V.hod(hodiny) + "</b> · <b>" + V.kc(castka) + "</b>"
@@ -710,8 +730,10 @@
         p.projekt = ""; p.cinnost = ""; p.technologie = "";
         p.pauza = 0; p.obed = false; p.km = 0; p.sazba = 0;
         p.nazev = p.nazev || p.zakazka;
-        // do výkazu se počítá 8 hodin evidenčně, do kalendáře jde celý den
-        if (p.celyden) { p.od = "07:00"; p.do = "15:00"; }
+        /* Celý den je opravdu celý den: 00:00–23:59. Do fondu se ale počítá
+           jedna směna (8 h) – kdo je týden na dovolené, nemá odpracováno
+           120 hodin. Proto `hodinyPevne` vedle časů. */
+        if (p.celyden) { p.od = CELY_DEN_OD; p.do = CELY_DEN_DO; p.hodinyPevne = HODIN_ZA_DEN; }
         return p;
     }
 
@@ -1059,7 +1081,7 @@
         const zapnuto = !!box.querySelector('[data-f="celyden"]:checked');
         box.querySelectorAll("[data-cas]").forEach(input => {
             input.disabled = zapnuto;
-            if (zapnuto) input.value = input.dataset.f === "od" ? "07:00" : "15:00";
+            if (zapnuto) input.value = input.dataset.f === "od" ? CELY_DEN_OD : CELY_DEN_DO;
         });
         prepocti(box);
         if (radkyBox().contains(box)) soucetDne();

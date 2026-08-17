@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=61">
+    <link rel="stylesheet" href="assets/css/app.css?v=62">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -76,6 +76,7 @@
             box-shadow: inset 4px 0 0 rgba(255, 255, 255, .55); }
         /* Druh stojí vepředu a nekrátí se; ukrojí se až jméno za ním –
            „Dovolená – Ja…" pořád nese tu podstatnou informaci. */
+        .udcely__cas { flex: none; opacity: .85; font-variant-numeric: tabular-nums; }
         .udcely__druh { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
         .udcely__sep { flex: none; opacity: .7; }
         .udcely__kdo { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
@@ -170,10 +171,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=61"></script>
-<script src="assets/js/ui.js?v=61"></script>
-<script src="assets/js/vykazy.js?v=61"></script>
-<script type="module" src="assets/js/store.js?v=61"></script>
+<script src="assets/js/taxonomy.js?v=62"></script>
+<script src="assets/js/ui.js?v=62"></script>
+<script src="assets/js/vykazy.js?v=62"></script>
+<script type="module" src="assets/js/store.js?v=62"></script>
 
 <script>
 (function () {
@@ -357,9 +358,14 @@
             ? '<span class="udcely__sep">–</span>' +
               '<span class="udcely__kdo">' + esc(u.kdo) + "</span>"
             : "";
+        /* Půldenní nepřítomnost stojí v pruhu taky, jen si nese čas – jinak
+           by z „Nemoc – Jan Novák" nešlo poznat, že přišel po obědě. */
+        const cas = (!celaDelka(u) && u.odCas)
+            ? '<span class="udcely__cas">' + esc(u.odCas + "–" + (u.doCas || "")) + "</span>"
+            : "";
         return '<button type="button" class="ud udcely ud--' + esc(u.typ) + '"' +
             (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
-            ' title="' + esc(u.text) + '">' +
+            ' title="' + esc(u.text) + '">' + cas +
             '<b class="udcely__druh">' + esc(u.co || u.text) + "</b>" + kdo + "</button>";
     }
 
@@ -369,13 +375,18 @@
         return m ? Number(m[1]) * 60 + Number(m[2]) : null;
     };
 
-    /* Nahoru patří i to, co sice čas má, ale pokrývá celý den – dovolená
-       zapsaná jako 00:00–23:59 by jinak zaplnila mřížku odshora dolů a
-       skutečná práce by se pod ní ztratila. */
-    const jeCelodenni = (u) => {
-        const od = minuty(u.odCas);
+    /* Nepřítomnost patří do pruhu nahoře vždycky, i když má časy.
+       Dovolená ani nemoc není schůzka – je to stav celého dne a v hodinové
+       mřížce jen zabírá místo skutečné práci. Půlden se pozná podle času,
+       který se u takového záznamu dopíše do popisku.
+       Bere to i starší zápisy, které se ukládaly jako 07:00–15:00. */
+    const ABSENCE = { dovolena: true, nemoc: true, skoleni: true };
+    const jeCelodenni = (u) => ABSENCE[u.typ] === true || minuty(u.odCas) === null;
+
+    /** Celý den = od půlnoci do půlnoci; jinak je to jen část dne. */
+    const celaDelka = (u) => {
+        const od = minuty(u.odCas), doM = minuty(u.doCas);
         if (od === null) return true;
-        const doM = minuty(u.doCas);
         return od === 0 && doM !== null && doM >= 23 * 60 + 59;
     };
 
@@ -529,7 +540,7 @@
 
     function detailHtml(u) {
         const p = popisUdalosti(u);
-        const cely = jeCelodenni({ odCas: u.celyDen ? "" : u.odCas, doCas: u.doCas });
+        const cely = u.celyDen === true || celaDelka({ odCas: u.odCas, doCas: u.doCas });
         const obdobi = V.czDatum(u.od) +
             (u.do && u.do !== u.od ? " – " + V.czDatum(u.do) : "");
 
