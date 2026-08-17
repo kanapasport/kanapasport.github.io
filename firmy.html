@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Správa firem – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=65">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Rozvržení i bloky jsou schválně stejné jako ve Správě projektů –
+           vlevo seznam, vpravo údaje vybraného. Kdo umí jednu stránku,
+           umí i druhou. */
+        .sprava { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
+        @media (max-width: 980px) { .sprava { grid-template-columns: 1fr; } }
+
+        .seznam { padding: 12px; gap: 10px; }
+        .seznam__vypis { display: flex; flex-direction: column; gap: 2px; max-height: 640px; overflow: auto; }
+        .prjbtn { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+            background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 8px 10px; }
+        .prjbtn:hover { background: var(--bg-soft); }
+        .prjbtn.je-vybrany { background: var(--accent-tint); border-color: var(--accent-lt); }
+        .prjbtn b { display: block; font-size: 13.5px; font-weight: 800; line-height: 1.3; }
+        .prjbtn span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+        .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+
+        /* Blok = červený rám s tónovanou hlavičkou, stejně jako zápis výkazu
+           a nastavení projektu. */
+        .sblok { border: 1px solid var(--accent); border-radius: var(--radius-lg);
+            background: var(--accent-tint); overflow: hidden; }
+        .sblok__hlava { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 8px 14px; background: var(--accent); }
+        .sblok__stitek { font-size: 11px; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #fff; }
+        .sblok__telo { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+        .sblok .field { background: var(--surface); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Správu firem vidí jen manažeři.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou tu kontakty a fakturační údaje. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+
+        <div>
+            <div class="spread">
+                <div style="min-width:0">
+                    <h2 style="font-size:20px;font-weight:900;line-height:1.2">Správa firem</h2>
+                    <p class="small muted" style="margin-top:3px;line-height:1.6">
+                        Komu se fakturuje. Seznam je společný pro celý web – nabízí se
+                        u projektu i ve výkazu.
+                    </p>
+                </div>
+                <div class="row" style="gap:8px;flex:none">
+                    <button type="button" id="btnNova" class="btn btn--primary btn--sm">+ Nová firma</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sprava">
+            <!-- ------------------------------------------------ seznam firem -->
+            <aside class="card col seznam">
+                <input type="search" id="hledat" class="field" placeholder="Hledat firmu…">
+                <div id="seznamVypis" class="seznam__vypis"></div>
+                <span class="tiny muted" id="pocet"></span>
+            </aside>
+
+            <!-- ------------------------------------------------ údaje firmy -->
+            <div>
+                <div id="prazdno" class="card center" style="padding:34px 22px" hidden>
+                    <b>Vyber vlevo firmu</b>
+                    <p class="small muted" style="margin-top:6px;line-height:1.6">
+                        Nebo založ novou tlačítkem vpravo nahoře.
+                    </p>
+                </div>
+
+                <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+
+                    <!-- .card sama o sobě nemá vnitřní odsazení – stejné jako
+                         v tělech bloků pod tím, ať nadpis lícuje s poli. -->
+                    <section class="card" style="padding:12px 14px">
+                        <div class="spread">
+                            <div style="min-width:0">
+                                <h2 id="fNazevNadpis" style="margin:0;font-size:19px;font-weight:900;line-height:1.25"></h2>
+                                <p class="small muted" id="fPodtitul" style="margin:3px 0 0"></p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Údaje firmy</span></div>
+                        <div class="sblok__telo">
+                        <div class="fmr">
+                            <label class="pole"><span class="popisek">Název</span>
+                                <input type="text" id="fNazev" class="field" placeholder="Skanska"></label>
+                            <label class="pole"><span class="popisek">IČO</span>
+                                <input type="text" id="fIco" class="field" placeholder="12345678"></label>
+                            <label class="pole"><span class="popisek">DIČ</span>
+                                <input type="text" id="fDic" class="field" placeholder="CZ12345678"></label>
+                            <label class="pole fmr__cely"><span class="popisek">Adresa</span>
+                                <input type="text" id="fAdresa" class="field"></label>
+                        </div>
+                        </div>
+                    </section>
+
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Kontakt</span></div>
+                        <div class="sblok__telo">
+                        <div class="fmr">
+                            <label class="pole"><span class="popisek">Kontaktní osoba</span>
+                                <input type="text" id="fKontakt" class="field"></label>
+                            <label class="pole"><span class="popisek">E-mail</span>
+                                <input type="email" id="fEmail" class="field"></label>
+                            <label class="pole"><span class="popisek">Telefon</span>
+                                <input type="tel" id="fTelefon" class="field"></label>
+                        </div>
+                        </div>
+                    </section>
+
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Poznámka</span></div>
+                        <div class="sblok__telo">
+                        <textarea id="fPoznamka" rows="3" class="field"
+                                  placeholder="Splatnost faktur, na koho se obracet, cokoliv dalšího…"></textarea>
+                        </div>
+                    </section>
+
+                    <!-- na jakých projektech firma je – jen pro přehled, needituje se -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Projekty této firmy</span></div>
+                        <div class="sblok__telo">
+                        <div id="fProjekty" class="row row--wrap" style="gap:7px"></div>
+                        </div>
+                    </section>
+
+                    <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+                        <span id="stav" class="small muted" style="margin-right:auto"></span>
+                        <button type="button" id="btnSmaz" class="btn btn--ghost" style="color:var(--danger)">Odebrat firmu</button>
+                        <button type="button" id="btnUloz" class="btn btn--primary">Uložit firmu</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=65"></script>
+<script src="assets/js/ui.js?v=65"></script>
+<script src="assets/js/vykazy.js?v=65"></script>
+<script type="module" src="assets/js/store.js?v=65"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    let vybrana = "";        // název vybrané firmy ("" = nic)
+    let novaFirma = false;   // zakládá se nová, ještě není v seznamu
+    let dotknuto = false;    // rozepsaná změna se nepřepisuje daty z databáze
+
+    const detail = (nazev) => (window.KB.firmyDetail || {})[nazev] || {};
+
+    /* ------------------------------------------------------------- seznam */
+
+    function vykresliSeznam() {
+        const hledane = ($("hledat").value || "").trim().toLowerCase();
+        const firmy = V.firmy()
+            .filter(f => !hledane || f.toLowerCase().indexOf(hledane) !== -1)
+            .sort((a, b) => a.localeCompare(b, "cs"));
+
+        $("seznamVypis").innerHTML = firmy.map(f => {
+            const d = detail(f);
+            const pod = [d.kontakt, d.ico ? "IČO " + d.ico : ""].filter(Boolean).join(" · ");
+            return '<button type="button" class="prjbtn' + (f === vybrana ? " je-vybrany" : "") +
+                '" data-firma="' + esc(f) + '"><b>' + esc(f) + "</b>" +
+                (pod ? "<span>" + esc(pod) + "</span>" : "") + "</button>";
+        }).join("") || '<div class="tiny muted" style="padding:8px 10px">Zatím žádná firma.</div>';
+
+        $("pocet").textContent = V.pocet(firmy.length, ["firma", "firmy", "firem"]);
+    }
+
+    /* -------------------------------------------------------------- panel */
+
+    function vykresliPanel() {
+        const je = !!vybrana || novaFirma;
+        $("panel").hidden = !je;
+        $("prazdno").hidden = je;
+        if (!je) return;
+
+        $("fNazevNadpis").textContent = novaFirma ? "Nová firma" : (vybrana || "");
+        const naProjektech = projektyFirmy(vybrana);
+        $("fPodtitul").textContent = novaFirma
+            ? "Vyplň údaje a ulož."
+            : V.pocet(naProjektech.length, ["projekt", "projekty", "projektů"]);
+
+        if (dotknuto) return;
+
+        const d = detail(vybrana);
+        $("fNazev").value = novaFirma ? "" : (vybrana || "");
+        $("fIco").value = d.ico || "";
+        $("fDic").value = d.dic || "";
+        $("fAdresa").value = d.adresa || "";
+        $("fKontakt").value = d.kontakt || "";
+        $("fEmail").value = d.email || "";
+        $("fTelefon").value = d.telefon || "";
+        $("fPoznamka").value = d.poznamka || "";
+
+        $("fProjekty").innerHTML = naProjektech.map(p =>
+            '<a class="tag" href="sprava.html?id=' + encodeURIComponent(p.id) + '">' +
+            esc(p.nazev || "Bez názvu") + "</a>").join("") ||
+            '<span class="tiny muted">Zatím na žádném projektu.</span>';
+
+        $("btnSmaz").hidden = novaFirma;
+    }
+
+    /** Projekty, kterým se fakturuje téhle firmě. */
+    function projektyFirmy(nazev) {
+        if (!nazev) return [];
+        const mapa = window.KB.firmaMap || {};
+        return (window.KB.projektyDocs || []).filter(p =>
+            (mapa[p.nazev] || p.firma || "") === nazev);
+    }
+
+    /* ------------------------------------------------------------ uložení */
+
+    async function uloz() {
+        const novyNazev = $("fNazev").value.trim();
+        if (!novyNazev) return void window.KBUI.toast("Firma potřebuje název.", "warn");
+
+        const stary = novaFirma ? "" : vybrana;
+        const seznam = V.firmy().slice();
+
+        if (stary && stary !== novyNazev && seznam.indexOf(novyNazev) !== -1) {
+            return void window.KBUI.toast("Firma „" + novyNazev + "“ už v seznamu je.", "warn");
+        }
+        if (!stary && seznam.indexOf(novyNazev) !== -1) {
+            return void window.KBUI.toast("Firma „" + novyNazev + "“ už v seznamu je.", "warn");
+        }
+
+        // přejmenování: v seznamu se nahradí, nová se přidá na konec
+        const novySeznam = stary
+            ? seznam.map(f => (f === stary ? novyNazev : f))
+            : seznam.concat([novyNazev]);
+
+        const detaily = Object.assign({}, window.KB.firmyDetail);
+        if (stary && stary !== novyNazev) delete detaily[stary];
+        detaily[novyNazev] = {
+            ico: $("fIco").value.trim(),
+            dic: $("fDic").value.trim(),
+            adresa: $("fAdresa").value.trim(),
+            kontakt: $("fKontakt").value.trim(),
+            email: $("fEmail").value.trim(),
+            telefon: $("fTelefon").value.trim(),
+            poznamka: $("fPoznamka").value.trim()
+        };
+
+        /* Přejmenováním firmy se musí přepsat i to, komu se fakturuje –
+           jinak by projekty ukazovaly na název, který už neexistuje. */
+        const mapa = Object.assign({}, window.KB.firmaMap);
+        if (stary && stary !== novyNazev) {
+            Object.keys(mapa).forEach(projekt => {
+                if (mapa[projekt] === stary) mapa[projekt] = novyNazev;
+            });
+        }
+
+        $("btnUloz").disabled = true;
+        $("stav").textContent = "Ukládám…";
+        try {
+            await window.KB.saveCiselnikZakazek({
+                firmy: novySeznam, firmyDetail: detaily, firmaMap: mapa
+            });
+            vybrana = novyNazev;
+            novaFirma = false;
+            dotknuto = false;
+            $("stav").textContent = "Uloženo.";
+            vykresli();
+            window.KBUI.toast("Firma uložena.");
+        } catch (err) {
+            console.error(err);
+            $("stav").textContent = "";
+            window.KBUI.toast("Uložení selhalo – firmy mění jen manažer.", "error");
+        } finally {
+            $("btnUloz").disabled = false;
+        }
+    }
+
+    async function smaz() {
+        if (!vybrana) return;
+        const naProjektech = projektyFirmy(vybrana);
+        if (naProjektech.length && !confirm("Firma „" + vybrana + "“ je u " +
+                naProjektech.length + " projektů.\n\nOdebrat ji ze seznamu?")) return;
+        if (!naProjektech.length && !confirm("Odebrat firmu „" + vybrana + "“?")) return;
+
+        const detaily = Object.assign({}, window.KB.firmyDetail);
+        delete detaily[vybrana];
+
+        try {
+            await window.KB.saveCiselnikZakazek({
+                firmy: V.firmy().filter(f => f !== vybrana),
+                firmyDetail: detaily
+            });
+            vybrana = "";
+            dotknuto = false;
+            vykresli();
+            window.KBUI.toast("Firma odebrána.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Odebrání selhalo.", "error");
+        }
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    function vykresli() {
+        const smi = window.KBUI.can("vykaz.view");
+        $("stop").hidden = smi;
+        $("obsah").hidden = !smi;
+        if (!smi) return;
+
+        // firmy chodí s číselníkem zakázek, ten se posílá všem přihlášeným
+        vykresliSeznam();
+        vykresliPanel();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "projekty.html", subbar: true });
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "firmy.html");
+
+        $("hledat").addEventListener("input", vykresliSeznam);
+
+        $("seznamVypis").addEventListener("click", (event) => {
+            const tlacitko = event.target.closest("[data-firma]");
+            if (!tlacitko) return;
+            vybrana = tlacitko.dataset.firma;
+            novaFirma = false;
+            dotknuto = false;
+            vykresli();
+        });
+
+        $("btnNova").addEventListener("click", () => {
+            vybrana = "";
+            novaFirma = true;
+            dotknuto = false;
+            vykresliSeznam();
+            vykresliPanel();
+            $("fNazev").focus();
+        });
+
+        // jakmile někdo do formuláře sáhne, data z databáze mu ho nepřepíšou
+        $("panel").addEventListener("input", () => { dotknuto = true; });
+        $("btnUloz").addEventListener("click", uloz);
+        $("btnSmaz").addEventListener("click", smaz);
+
+        /* Podlišta se překresluje s rolí – při načtení stránky ještě z databáze
+           nedorazila a položky s `need` by zůstaly schované. */
+        document.addEventListener("kb-role", () => {
+            window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "firmy.html");
+            vykresli();
+        });
+        window.KB.on("zakazky", vykresli);
+        window.KB.on("projekty-docs", vykresli);
+        window.KB.on("users", vykresli);
+        vykresli();
+    });
+})();
+</script>
+</body>
+</html>

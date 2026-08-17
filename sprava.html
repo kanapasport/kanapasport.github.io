@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=64">
+    <link rel="stylesheet" href="assets/css/app.css?v=65">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -73,6 +73,24 @@
         /* Vypnuté pole musí být na první pohled vypnuté – jinak do něj někdo
            píše a diví se, že se to neuloží. */
         .sazbap input[type="number"]:disabled { background: var(--bg); color: var(--dim); }
+
+        /* Lidé na projektu: zaškrtávátka jako štítky. Vybraný zčervená, ať je
+           na první pohled vidět, kdo na projektu je – stejné jako dřív na
+           Seznamu projektů, odkud se to sem přestěhovalo. */
+        .prjlide { display: flex; flex-wrap: wrap; gap: 7px; }
+        .prjlide label { display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 11px; border: 1px solid var(--line); border-radius: 99px;
+            font-size: 12.5px; cursor: pointer; background: var(--surface); }
+        .prjlide label:has(input:checked) { background: var(--accent-tint);
+            border-color: var(--accent-lt); color: var(--accent); font-weight: 700; }
+        .vybervse { border: none; background: none; font: inherit; font-size: 11.5px;
+            font-weight: 700; color: var(--accent); cursor: pointer; padding: 2px 6px; }
+
+        /* Ukončení projektu je rozhodnutí, ne vyplňované pole – proto tlačítko
+           a ne zaškrtávátko mezi údaji. Zapnutý stav je tmavší, ať se pozná
+           i bez čtení textu. */
+        .jehotov { border-color: var(--ok); }
+        .jehotov--zap { background: #0f5533; border-color: #0f5533; }
     </style>
 </head>
 <body>
@@ -138,9 +156,62 @@
                                 <p class="small muted" id="pPodtitul" style="margin:3px 0 0"></p>
                             </div>
                             <div class="row" style="gap:8px;flex:none">
-                                <a id="odkazProjekt" class="btn btn--ghost btn--sm" href="projekty.html">Otevřít projekt →</a>
                                 <a id="odkazUkoly" class="btn btn--ghost btn--sm" href="ukoly.html">Úkoly projektu →</a>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- ------------------------------------ údaje projektu --
+                         Dřív se tohle vyplňovalo na samostatné stránce Seznam
+                         projektů a zbytek nastavení tady. Dvě místa pro jeden
+                         projekt nedávala smysl – všechno je teď pohromadě. -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Údaje projektu</span></div>
+                        <div class="sblok__telo">
+                        <div class="fmr">
+                            <label class="pole"><span class="popisek">Číslo</span>
+                                <input type="text" id="pCislo" class="field" placeholder="2026-021"></label>
+                            <label class="pole"><span class="popisek">Název</span>
+                                <input type="text" id="pNazevPole" class="field" placeholder="Pasport budovy…"></label>
+                            <label class="pole"><span class="popisek">Priorita</span>
+                                <select id="pPriorita" class="field">
+                                    <option value="nizka">Nízká</option>
+                                    <option value="stredni" selected>Střední</option>
+                                    <option value="vysoka">Vysoká</option>
+                                    <option value="resit-okamzite">Řešit okamžitě</option>
+                                </select></label>
+                            <label class="pole"><span class="popisek">Začátek</span>
+                                <input type="date" id="pZacatek" class="field"></label>
+                            <label class="pole"><span class="popisek">Konec</span>
+                                <input type="date" id="pKonec" class="field"></label>
+                            <label class="pole fmr__cely"><span class="popisek">Poznámka</span>
+                                <input type="text" id="pPoznamka" class="field"></label>
+                        </div>
+                        <div class="row row--wrap" style="gap:10px;align-items:center">
+                            <button type="button" id="btnHotov" class="btn btn--ok jehotov"
+                                    aria-pressed="false">Projekt je hotov</button>
+                            <span class="tiny muted">Hotový projekt se schová z výběru ve výkazech.</span>
+                        </div>
+                        </div>
+                    </section>
+
+                    <!-- ------------------------------------------ kdo na tom dělá -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Kdo na projektu dělá</span></div>
+                        <div class="sblok__telo">
+                        <div>
+                            <span class="label">Manažeři projektu (může jich být víc)</span>
+                            <div id="pManazeri" class="prjlide"></div>
+                        </div>
+                        <div>
+                            <span class="label">Přiřazení lidé (vidí projekt a píšou na něj výkazy)
+                                <button type="button" class="vybervse" data-vse="pLide">vybrat vše</button></span>
+                            <div id="pLide" class="prjlide"></div>
+                        </div>
+                        <p class="tiny muted" style="margin:0;line-height:1.6">
+                            Sazby níž se nabízejí <b>jen u přiřazených lidí</b> – u koho tady
+                            nezaškrtneš, u toho není co na tomhle projektu nastavovat.
+                        </p>
                         </div>
                     </section>
 
@@ -227,28 +298,15 @@
             </div>
         </div>
 
-        <!-- =========================================== SPOLEČNÉ: FIRMY -->
-        <section class="card col" style="gap:12px">
-            <div>
-                <b>Firmy</b>
-                <p class="small muted" style="margin-top:3px;line-height:1.6">
-                    Společný číselník pro všechny projekty – nabízí se výš u fakturace
-                    i ve výkazech. Jedna firma na řádek.
-                </p>
-            </div>
-            <textarea id="fFirmy" rows="4" class="field"></textarea>
-            <div class="row" style="gap:10px;justify-content:flex-end">
-                <span id="stavFirmy" class="small muted" style="margin-right:auto"></span>
-                <button type="button" id="btnFirmy" class="btn btn--ghost">Uložit firmy</button>
-            </div>
-        </section>
+        <!-- Firmy se spravují na vlastní stránce (podlišta SPRÁVA FIREM) –
+             je toho u nich víc než jen název. -->
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=64"></script>
-<script src="assets/js/ui.js?v=64"></script>
-<script src="assets/js/vykazy.js?v=64"></script>
-<script type="module" src="assets/js/store.js?v=64"></script>
+<script src="assets/js/taxonomy.js?v=65"></script>
+<script src="assets/js/ui.js?v=65"></script>
+<script src="assets/js/vykazy.js?v=65"></script>
+<script type="module" src="assets/js/store.js?v=65"></script>
 
 <script>
 (function () {
@@ -265,7 +323,6 @@
 
     let vybrany = "";            // id vybraného projektu
     let dotknuto = false;        // sáhl už někdo do formuláře?
-    let firmyDotknuty = false;
     let sledovaniZapnuto = false;
     let hledani = "";
 
@@ -374,14 +431,13 @@
         const vlastniSazby = sazbyProjektu(p.nazev);
         const obecne = window.KB.sazby || {};
 
-        /* Vypisují se VŠICHNI aktivní lidé, ne jen přiřazení k projektu –
-           po importu z Evidence nemá přiřazení skoro nikdo a sekce byla
-           k ničemu („nemůžu nic zaškrtnout"). Přiřazení jsou nahoře
-           a označení, ať je vidět, kdo na projektu opravdu dělá. */
-        const prirazeni = new Set(p.lide || []);
-        const lide = V.lide().slice().sort((a, b) =>
-            (prirazeni.has(b.id) ? 1 : 0) - (prirazeni.has(a.id) ? 1 : 0)
-            || (a.last || "").localeCompare(b.last || "", "cs"));
+        /* Sazby jen u lidí přiřazených k projektu – u koho se nahoří
+           nezaškrtne, u toho není co na tomhle projektu nastavovat.
+           Bere se to živě ze zaškrtávátek, ne z uloženého projektu, aby
+           seznam odpovídal tomu, co je zrovna nahoře vybrané. */
+        const prirazeni = vybraniLide(p);
+        const lide = V.lide().filter(u => prirazeni.has(u.id))
+            .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
 
         $("sazbyLide").innerHTML = lide.map(u => {
             const uid = u.id;
@@ -390,7 +446,6 @@
 
             return '<div class="sazbap">' +
                 '<span class="sazbap__jmeno">' + esc(V.jmeno(u)) +
-                    (prirazeni.has(uid) ? ' <span class="tag" style="margin-left:6px">na projektu</span>' : "") +
                     "<span>" + (obecna ? "obecná sazba " + esc(V.cislo(obecna)) + " Kč/h"
                                        : "obecná sazba není vyplněná") + "</span></span>" +
                 '<label class="sazbap__prep"><input type="checkbox" data-jina="' + esc(uid) + '"' +
@@ -399,7 +454,53 @@
                     (vlastni ? "" : " disabled") + ' value="' + (vlastni || "") + '">' +
                 '<span class="tiny muted">Kč/h</span>' +
             "</div>";
-        }).join("") || '<div class="tiny muted">V seznamu lidí zatím nikdo není.</div>';
+        }).join("") ||
+            '<div class="tiny muted">Nikdo není přiřazený – zaškrtni lidi v bloku ' +
+            "<b>Kdo na projektu dělá</b> a sazby se objeví tady.</div>";
+    }
+
+    /* ------------------------------------------------ údaje a lidé projektu */
+
+    /** Kdo je na projektu vybraný – ze zaškrtávátek, dokud se nepřekreslí. */
+    function vybraniLide(p) {
+        const box = $("pLide");
+        if (box && box.querySelector("input")) {
+            return new Set(Array.from(box.querySelectorAll("input:checked")).map(ch => ch.value));
+        }
+        return new Set((p && p.lide) || []);
+    }
+
+    let hotovoStav = false;
+
+    function nastavHotov(zapnuto) {
+        hotovoStav = !!zapnuto;
+        const b = $("btnHotov");
+        b.classList.toggle("jehotov--zap", hotovoStav);
+        b.setAttribute("aria-pressed", hotovoStav ? "true" : "false");
+        b.textContent = hotovoStav ? "Projekt je hotov ✓" : "Projekt je hotov";
+    }
+
+    function naplnUdaje(p) {
+        $("pCislo").value = p.cislo || "";
+        $("pNazevPole").value = p.nazev || "";
+        $("pZacatek").value = p.zacatek || "";
+        $("pKonec").value = p.konec || "";
+        $("pPriorita").value = p.priorita || "stredni";
+        $("pPoznamka").value = p.poznamka || "";
+        nastavHotov(p.uzavreno === true);
+
+        const chipy = (seznam, vybrani) => seznam.map(u =>
+            '<label><input type="checkbox" value="' + esc(u.id) + '"' +
+            (vybrani.has(u.id) ? " checked" : "") + "> " + esc(V.jmeno(u)) + "</label>").join("");
+
+        // manažerů může být víc; starší projekty měly jen jednoho v `manazer`
+        const manazeri = V.lide().filter(u => u.role === "spravce" || u.role === "hlavni-spravce");
+        $("pManazeri").innerHTML = chipy(manazeri,
+            new Set(p.manazeri || (p.manazer ? [p.manazer] : [])))
+            || '<span class="tiny muted">V seznamu není žádný manažer.</span>';
+
+        $("pLide").innerHTML = chipy(V.lide(), new Set(p.lide || []))
+            || '<span class="tiny muted">V seznamu lidí zatím nikdo není.</span>';
     }
 
     function vykresliNastaveni() {
@@ -412,11 +513,12 @@
         $("pNazev").textContent = nazev || "Bez názvu";
         $("pPodtitul").textContent = [p.cislo, (window.KB.firmaMap || {})[nazev] || p.firma || "",
             p.uzavreno ? "ukončený" : ""].filter(Boolean).join(" · ");
-        $("odkazProjekt").href = "projekty.html?id=" + encodeURIComponent(p.id);
         $("odkazUkoly").href = "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(nazev));
 
         // rozepsanou změnu nepřepisujeme daty, která zrovna dotečou z databáze
         if (dotknuto) return;
+
+        naplnUdaje(p);
 
         const rozpocet = V.rozpocet(nazev);
         $("fKc").value = rozpocet.kc || "";
@@ -433,11 +535,6 @@
         naplnZdroje(nazev);
 
         naplnSazby(p);
-    }
-
-    function naplnFirmy() {
-        if (firmyDotknuty) return;
-        $("fFirmy").value = V.firmy().join("\n");
     }
 
     /* ------------------------------------------------------------ ovládání */
@@ -515,9 +612,32 @@
             delete budget[nazev];   // prázdné mapy v číselníku jen překáží
         }
 
+        /* Údaje projektu se ukládají spolu s nastavením – je to jeden projekt
+           a jedno tlačítko. Název se posílá takový, jaký je v poli; při
+           přejmenování se ale klíče číselníků výš skládaly ještě podle toho
+           starého, tak se přejmenování řeší až po nich. */
+        const novyNazev = $("pNazevPole").value.trim();
+        const udaje = {
+            cislo: $("pCislo").value.trim(),
+            nazev: novyNazev || nazev,
+            firma: $("fFirma").value,
+            manazeri: Array.from($("pManazeri").querySelectorAll("input:checked")).map(ch => ch.value),
+            zacatek: $("pZacatek").value,
+            konec: $("pKonec").value,
+            stav: p.stav || "",
+            priorita: $("pPriorita").value,
+            uzavreno: hotovoStav,
+            lide: Array.from($("pLide").querySelectorAll("input:checked")).map(ch => ch.value),
+            poznamka: $("pPoznamka").value.trim(),
+            createdMs: p.createdMs,
+            createdBy: p.createdBy
+        };
+        if (!udaje.nazev) return void window.KBUI.toast("Projekt potřebuje název.", "warn");
+
         $("btnUloz").disabled = true;
         $("stav").textContent = "Ukládám…";
         try {
+            await window.KB.saveProjekt(p.id, udaje);
             await window.KB.saveVykazNastaveni({ rozpocty: rozpocty });
             await window.KB.saveCiselnikZakazek({
                 projekty: casti, firmaMap: firmaMap, budget: budget
@@ -532,24 +652,6 @@
             window.KBUI.toast("Uložení selhalo – nastavení mění jen manažer.", "error");
         } finally {
             $("btnUloz").disabled = false;
-        }
-    }
-
-    async function ulozFirmy() {
-        const firmy = $("fFirmy").value.split("\n").map(f => f.trim()).filter(Boolean);
-        $("btnFirmy").disabled = true;
-        $("stavFirmy").textContent = "Ukládám…";
-        try {
-            await window.KB.saveCiselnikZakazek({ firmy: firmy });
-            firmyDotknuty = false;
-            $("stavFirmy").textContent = "Uloženo.";
-            window.KBUI.toast("Firmy uloženy.");
-        } catch (err) {
-            console.error(err);
-            $("stavFirmy").textContent = "";
-            window.KBUI.toast("Uložení selhalo – číselník mění jen manažer.", "error");
-        } finally {
-            $("btnFirmy").disabled = false;
         }
     }
 
@@ -572,7 +674,6 @@
         zapniSledovani();
         vykresliSeznam();
         vykresliNastaveni();
-        naplnFirmy();
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -593,20 +694,37 @@
         $("panel").addEventListener("change", (event) => {
             dotknuto = true;
             const prepinac = event.target.closest("[data-jina]");
-            if (prepinac) prepniSazbu(prepinac);
+            if (prepinac) return void prepniSazbu(prepinac);
+
+            // přibyl/ubyl člověk na projektu → sazby se hned přeskládají
+            if (event.target.closest("#pLide")) naplnSazby(vybranyProjekt() || {});
         });
         $("panel").addEventListener("click", (event) => {
             const tlacitko = event.target.closest("[data-prevzit]");
-            if (tlacitko) prevezmi(tlacitko.dataset.prevzit);
+            if (tlacitko) return void prevezmi(tlacitko.dataset.prevzit);
+
+            if (event.target.closest("#btnHotov")) {
+                dotknuto = true;
+                return void nastavHotov(!hotovoStav);
+            }
+
+            const vse = event.target.closest("[data-vse]");
+            if (vse) {
+                dotknuto = true;
+                const box = $(vse.dataset.vse);
+                const pole = Array.from(box.querySelectorAll("input"));
+                // druhé kliknutí výběr zase zruší – jinak není cesta zpátky
+                const zapnout = pole.some(ch => !ch.checked);
+                pole.forEach(ch => { ch.checked = zapnout; });
+                naplnSazby(vybranyProjekt() || {});
+            }
         });
         $("btnUloz").addEventListener("click", uloz);
 
-        $("fFirmy").addEventListener("input", () => { firmyDotknuty = true; });
-        $("btnFirmy").addEventListener("click", ulozFirmy);
 
         document.addEventListener("kb-role", render);
         window.KB.on("projekty-docs", () => { vykresliSeznam(); vykresliNastaveni(); });
-        window.KB.on("zakazky", () => { vykresliNastaveni(); naplnFirmy(); });
+        window.KB.on("zakazky", vykresliNastaveni);
         window.KB.on("vykazy-meta", vykresliNastaveni);
         window.KB.on("users", render);
 

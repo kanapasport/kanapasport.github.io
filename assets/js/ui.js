@@ -716,10 +716,12 @@
     };
 
     /** Podlišta projektů – seznam, plán a správa patří k sobě. */
+    /* Seznam projektů tu byl zdvojený se Správou – jeden projekt se vyplňoval
+       na dvou místech. Zůstala Správa, kde je všechno pohromadě. */
     UI.PODLISTA_PROJEKTY = [
-        { title: "SEZNAM PROJEKTŮ", href: "projekty.html" },
+        { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" },
         { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view" },
-        { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" }
+        { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view" }
     ];
 
     /** Nástroje vpravo nad lištou – vidět je ikona, popis vyjede po najetí. */

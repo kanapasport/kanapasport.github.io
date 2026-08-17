@@ -98,6 +98,7 @@ const KB = {
        data i pravidla databáze. `projekty` níž jsou tedy ČÁSTI projektu. */
     projekty: {},           // části projektu: { "BioPharma": ["Etapa 1", "Etapa 2"] }
     firmaMap: {},           // projekt → firma, které se fakturuje (doplní se ve výkazu samo)
+    firmyDetail: {},        // firma → { ico, kontakt, email, telefon, adresa, poznamka }
     budgetCiselnik: {},     // projekt → { budovy, patra } pro skládání úkolů
     projektyDocs: [],       // hlavičky projektů (private/projekty/seznam) – dle práv
     ukoly: [],              // úkoly s TO-DO rozpadem (private/ukoly/seznam) – dle práv
@@ -299,6 +300,12 @@ try {
             KB.firmy = Array.isArray(data.firmy) ? data.firmy : [];
             // propojení projekt → firma; výběr projektu pak doplní firmu sám
             KB.firmaMap = (data.firmaMap && typeof data.firmaMap === "object") ? data.firmaMap : {};
+            /* Podrobnosti k firmám leží vedle jejich seznamu, ne místo něj:
+               `firmy` zůstává prostým polem názvů, které čtou roletky všude
+               po webu, a `firmyDetail` je k nim mapa údajů. Až se bude
+               zapisovat víc, přibývá to sem a jinde se nic měnit nemusí. */
+            KB.firmyDetail = (data.firmyDetail && typeof data.firmyDetail === "object")
+                ? data.firmyDetail : {};
             /* budget číselník: projekt → { budovy: ["G61"], patra: ["1NP"] } –
                z něj se skládají úkoly (technologie × budova × patro) */
             KB.budgetCiselnik = (data.budget && typeof data.budget === "object") ? data.budget : {};
@@ -1122,7 +1129,7 @@ KB.saveCiselnikZakazek = async (patch) => {
     requireDb();
 
     const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
-    ["names", "closed", "groups", "projekty", "firmy", "firmaMap", "budget"].forEach(klic => {
+    ["names", "closed", "groups", "projekty", "firmy", "firmaMap", "firmyDetail", "budget"].forEach(klic => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
     await setDoc(metaDoc("zakazky"), payload, { merge: true });
