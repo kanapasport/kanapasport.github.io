@@ -432,6 +432,10 @@ KB.saveQuickTodo = async (id, data) => {
         odKoho:  data.odKoho || KB.currentUid(),
         odKohoJmeno: data.odKohoJmeno || window.KB_USER || "",
         doKdy:   data.doKdy || "",
+        /* „Co nejdříve" je zvláštní stav, ne datum – kdo neví, do kdy to má
+           být, by jinak musel vymyslet termín, který stejně nic neznamená.
+           Řadí se před všechny termíny. */
+        asap:    data.asap === true,
         projekt: data.projekt || "",       // nepovinná vazba na projekt
         hotovo:  data.hotovo === true,
         ms:      data.ms || Date.now()

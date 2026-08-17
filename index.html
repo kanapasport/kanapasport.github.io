@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=65">
+    <link rel="stylesheet" href="assets/css/app.css?v=66">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -281,11 +281,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=65"></script>
-<script src="assets/js/doc.js?v=65"></script>
-<script src="assets/js/ui.js?v=65"></script>
-<script src="assets/js/vykazy.js?v=65"></script>
-<script type="module" src="assets/js/store.js?v=65"></script>
+<script src="assets/js/taxonomy.js?v=66"></script>
+<script src="assets/js/doc.js?v=66"></script>
+<script src="assets/js/ui.js?v=66"></script>
+<script src="assets/js/vykazy.js?v=66"></script>
+<script type="module" src="assets/js/store.js?v=66"></script>
 
 <script>
 (function () {
@@ -535,11 +535,19 @@
         const odeMe = vse.filter(q => q.odKoho === uid && q.proUid !== uid);
 
         const termin = (q) => {
+            if (q.asap) return ' · <span class="quickrad__asap">co nejdříve</span>';
             if (!q.doKdy) return "";
             const poTerminu = !q.hotovo && q.doKdy < V.dnesISO();
             return ' · <span style="' + (poTerminu ? "color:var(--danger);font-weight:700" : "") +
                 '">do ' + esc(czDatum(q.doKdy)) + "</span>";
         };
+
+        /* Stejné řazení jako v panelu: „co nejdříve" nahoru, pak termíny
+           od nejbližšího, nakonec vzkazy bez termínu. */
+        const naporadi = (a, b) =>
+            (b.asap ? 1 : 0) - (a.asap ? 1 : 0) ||
+            (a.doKdy ? 0 : 1) - (b.doKdy ? 0 : 1) ||
+            (a.doKdy || "").localeCompare(b.doKdy || "");
 
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' + (q.hotovo ? " qtrad--hotovo" : "") + '">' +
@@ -563,8 +571,8 @@
             "</div>";
 
         /* Splněné se schovávají a seznam zůstává čistý; rozkliknou se dole. */
-        const aktivniProMe = proMe.filter(q => !q.hotovo);
-        const aktivniOdeMe = odeMe.filter(q => !q.hotovo);
+        const aktivniProMe = proMe.filter(q => !q.hotovo).sort(naporadi);
+        const aktivniOdeMe = odeMe.filter(q => !q.hotovo).sort(naporadi);
         const splnene = proMe.concat(odeMe).filter(q => q.hotovo);
 
         document.getElementById("quickSeznam").innerHTML =
