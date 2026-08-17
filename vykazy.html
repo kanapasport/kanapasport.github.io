@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=60">
+    <link rel="stylesheet" href="assets/css/app.css?v=61">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -45,6 +45,9 @@
         .celyden { display: none; align-items: center; gap: 7px; font-size: 13px;
             cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
         .zblok--absence .celyden, .polozka--absence .celyden { display: flex; }
+        /* Rozsah dnů dává smysl jen u absence – běžný záznam je vždycky jeden den. */
+        .datumdo { display: none; }
+        .zblok--absence .datumdo, .polozka--absence .datumdo { display: block; }
         .zblok--absence .zblok__grid > div:has([data-z="projekt"]),
         .zblok--absence .polozka__grid > div:not(.polozka__nazev),
         .zblok--absence .priplatky,
@@ -182,10 +185,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=60"></script>
-<script src="assets/js/ui.js?v=60"></script>
-<script src="assets/js/vykazy.js?v=60"></script>
-<script type="module" src="assets/js/store.js?v=60"></script>
+<script src="assets/js/taxonomy.js?v=61"></script>
+<script src="assets/js/ui.js?v=61"></script>
+<script src="assets/js/vykazy.js?v=61"></script>
+<script type="module" src="assets/js/store.js?v=61"></script>
 
 <script>
 (function () {
@@ -320,9 +323,13 @@
                       V.options(V.firmy(), d.firma || "", "— vyber —") + "</select></div>"
             : "";
 
+        /* U absence se dá zadat rozsah – týden dovolené je jeden zápis, ne pět.
+           Prázdné „do" znamená jediný den, takže se běžné zadání nezmění. */
         const datumCast = o.sDatem
             ? '<div class="polozka__datum"><label class="label">Datum</label>' +
-                  '<input type="date" class="field" data-f="datum" value="' + esc(d.datum || "") + '"></div>'
+                  '<input type="date" class="field" data-f="datum" value="' + esc(d.datum || "") + '"></div>' +
+              '<div class="polozka__datum datumdo"><label class="label">Do dne (nepovinné)</label>' +
+                  '<input type="date" class="field" data-f="datumDo" value="' + esc(d.datumDo || "") + '"></div>'
             : "";
 
         // absence poznáme u okna úpravy rovnou z dat – blok dne řeší třídu sám
@@ -436,6 +443,14 @@
             const el = box.querySelector('[data-zapni="' + klic + '"]');
             return !!(el && el.checked);
         };
+        /* „Celý den" je obyčejné pole formuláře (`data-f`), ne příplatek –
+           přes `zapnuto()` se nikdy nenašlo a vracelo se natvrdo false. Kvůli
+           tomu chodily do kalendáře i celodenní absence s časem 07:00–15:00
+           a stavěly se doprostřed mřížky mezi skutečnou práci. */
+        const zaskrtnuto = (klic) => {
+            const el = box.querySelector('[data-f="' + klic + '"]');
+            return !!(el && el.checked);
+        };
 
         return {
             nazev: val("nazev").trim(),
@@ -445,10 +460,11 @@
             cinnost: val("cinnost"),
             technologie: val("technologie"),
             datum: val("datum"),
+            datumDo: val("datumDo"),
             ukolId: val("ukolId"),
             od: val("od"),
             do: val("do"),
-            celyden: zapnuto("celyden"),
+            celyden: zaskrtnuto("celyden"),
             pauza: zapnuto("pauza") ? (Number(val("pauza")) || 0) : 0,
             obed: zapnuto("obed"),
             km: zapnuto("km") ? (Number(val("km")) || 0) : 0,
@@ -660,6 +676,16 @@
             if (pole.dataset.auto === "1") { pole.value = ""; delete pole.dataset.auto; }
             return;
         }
+        /* Absence je skoro vždycky na celý den – zaškrtne se sama, kdo má jen
+           půlku, si to odškrtne. Sahá se na to jen při přepnutí na absenci,
+           ať se ručně odškrtnuté políčko nevrátí zpátky pod rukama. */
+        const celyden = box.querySelector('[data-f="celyden"]');
+        if (celyden && !celyden.dataset.dotknuto) {
+            celyden.checked = true;
+            celyden.dataset.dotknuto = "1";
+            prepniCelyDen(box);
+        }
+
         if (pole.value && pole.dataset.auto !== "1") return;   // ruční text má přednost
         pole.value = absenceText(druh, uid);
         pole.dataset.auto = "1";
@@ -684,23 +710,50 @@
         p.projekt = ""; p.cinnost = ""; p.technologie = "";
         p.pauza = 0; p.obed = false; p.km = 0; p.sazba = 0;
         p.nazev = p.nazev || p.zakazka;
+        // do výkazu se počítá 8 hodin evidenčně, do kalendáře jde celý den
         if (p.celyden) { p.od = "07:00"; p.do = "15:00"; }
         return p;
     }
 
-    /** Absence se propíše i do kalendáře, ať ji vidí celá firma. */
-    function zapisDoKalendare(p, uid, jmeno) {
+    /** Dny od–do včetně, ale jen pracovní: týden dovolené je pět dnů, ne sedm. */
+    function pracovniDny(odIso, doIso) {
+        const dny = [];
+        const konec = doIso && doIso > odIso ? doIso : odIso;
+        const d = new Date(odIso + "T00:00:00");
+        const posledni = new Date(konec + "T00:00:00");
+
+        while (d <= posledni && dny.length < 200) {   // pojistka proti překlepu v roce
+            const den = d.getDay();
+            if (den !== 0 && den !== 6) {
+                dny.push(d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(d.getDate()).padStart(2, "0"));
+            }
+            d.setDate(d.getDate() + 1);
+        }
+        return dny.length ? dny : [odIso];
+    }
+
+    /**
+     * Absence se propíše i do kalendáře, ať ji vidí celá firma.
+     * Celý den se ukládá jako 00:00–23:59: v kalendáři pak stojí v pruhu
+     * nahoře a neplete se do hodinové mřížky mezi skutečnou práci.
+     */
+    function zapisDoKalendare(p, uid, jmeno, vykazId) {
         return window.KB.saveUdalost(window.KB.newUdalostId(), {
             typ: TYP_ABSENCE[p.zakazka] || "udalost",
             uid: uid,
             osoba: jmeno,
             od: p.datum,
-            do: p.datum,
+            do: p.datumDo && p.datumDo > p.datum ? p.datumDo : p.datum,
             celyDen: !!p.celyden,
-            odCas: p.celyden ? "" : p.od,
-            doCas: p.celyden ? "" : p.do,
-            text: p.zakazka,
-            zdroj: "vykaz"
+            odCas: p.celyden ? "00:00" : p.od,
+            doCas: p.celyden ? "23:59" : p.do,
+            /* Druh nese `typ`, takže do textu patří jen to, co druh nedoplní.
+               Jinak by v kalendáři stálo „Nemoc · Nemoc". */
+            text: "",
+            zdroj: "vykaz",
+            vykazId: vykazId || ""
         });
     }
 
@@ -723,18 +776,33 @@
         // zaměstnanec ukládá jen čas, sazbu a částku k tomu doplní správce
         const uloz = window.KBUI.can("vykaz.view") ? window.KB.saveVykaz : window.KB.saveMujVykaz;
 
+        /* Absence se do výkazu rozpadne na jednotlivé pracovní dny – hodiny se
+           musí sečíst za každý den zvlášť. Do kalendáře jde naopak jedna
+           událost přes celý rozsah, ať v něm dovolená drží pohromadě. */
+        const kZapisu = [];
+        polozky.forEach(p => {
+            const dny = p.absence ? pracovniDny(p.datum, p.datumDo) : [p.datum];
+            dny.forEach((den, i) => kZapisu.push({
+                data: Object.assign({}, p, { datum: den, uid: uid, osoba: jmeno }),
+                prvni: i === 0,
+                puvodni: p
+            }));
+        });
+
         try {
-            await Promise.all(polozky.map(p => uloz(window.KB.newVykazId(),
-                Object.assign({}, p, { uid: uid, osoba: jmeno }))));
+            const idcka = await Promise.all(kZapisu.map(z =>
+                uloz(window.KB.newVykazId(), z.data)));
 
             // dovolené, nemoci a školení navíc do kalendáře; bez zdržování zápisu
-            Promise.all(polozky.filter(p => p.absence)
-                .map(p => zapisDoKalendare(p, uid, jmeno)))
+            Promise.all(kZapisu
+                .map((z, i) => (z.puvodni.absence && z.prvni)
+                    ? zapisDoKalendare(z.puvodni, uid, jmeno, idcka[i]) : null)
+                .filter(Boolean))
                 .catch(err => console.warn("Zápis do kalendáře se nepovedl:", err));
 
-            window.KBUI.toast(polozky.length === 1
+            window.KBUI.toast(kZapisu.length === 1
                 ? "Záznam uložen."
-                : "Uloženo " + V.pocet(polozky.length, ["záznam", "záznamy", "záznamů"]) + ".");
+                : "Uloženo " + V.pocet(kZapisu.length, ["záznam", "záznamy", "záznamů"]) + ".");
             radkyBox().innerHTML = "";
             pridejBlok();
         } catch (err) {
@@ -986,6 +1054,8 @@
 
     /** Celý den u absence: časy se předvyplní na 8 hodin a zamknou. */
     function prepniCelyDen(box) {
+        const prepinac = box.querySelector('[data-f="celyden"]');
+        if (prepinac) prepinac.dataset.dotknuto = "1";
         const zapnuto = !!box.querySelector('[data-f="celyden"]:checked');
         box.querySelectorAll("[data-cas]").forEach(input => {
             input.disabled = zapnuto;
@@ -1182,6 +1252,21 @@
         /* Role dorazí až s daty o lidech – do té doby je z člověka „zaměstnanec"
            a podlišta by manažerovi zůstala bez přehledu a vytížení. */
         document.addEventListener("kb-role", () => { paintSubbar(); render(); });
+
+        /* Proklik z kalendáře: `?upravit=ID` rovnou otevře opravu toho zápisu.
+           Čeká se na data – po načtení stránky ještě žádná nejsou. Adresa se
+           pak uklidí, ať se okno neotevřelo znovu po obnovení stránky. */
+        const kUprave = new URLSearchParams(location.search).get("upravit");
+        if (kUprave) {
+            const zkusOtevrit = () => {
+                if (!(window.KB.vykazy || []).some(v => v.id === kUprave)) return;
+                window.KB.off("vykazy", zkusOtevrit);
+                history.replaceState(null, "", location.pathname);
+                otevriUpravu(kUprave);
+            };
+            window.KB.on("vykazy", zkusOtevrit);
+        }
+
         window.KB.on("vykazy", render);
         window.KB.on("vykazy-meta", () => { naplnFiltry(); nastavVychoziSazbu(true); });
         window.KB.on("users", render);

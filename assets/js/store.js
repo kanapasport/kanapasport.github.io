@@ -116,6 +116,8 @@ const KB = {
 window.KB = KB;
 
 KB.on = (event, handler) => bus.addEventListener(event, handler);
+/** Odhlášení posluchače – pro jednorázové akce, které se mají stát jen jednou. */
+KB.off = (event, handler) => bus.removeEventListener(event, handler);
 const emit = (event, detail) => bus.dispatchEvent(new CustomEvent(event, { detail }));
 
 let db = null;
@@ -1353,6 +1355,10 @@ KB.saveUdalost = async (id, data) => {
         doCas:   data.doCas || "",
         text:    data.text || "",
         zdroj:   data.zdroj || "",
+        /* U absence z výkazu si držíme, ze kterého zápisu vznikla – z kalendáře
+           se pak dá skočit rovnou na jeho opravu. Mazat se smí jen tam, aby
+           nezůstal výkaz bez události nebo naopak. */
+        vykazId: data.vykazId || "",
         createdMs: data.createdMs || Date.now(),
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
