@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=69">
+    <link rel="stylesheet" href="assets/css/app.css?v=70">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -281,11 +281,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=69"></script>
-<script src="assets/js/doc.js?v=69"></script>
-<script src="assets/js/ui.js?v=69"></script>
-<script src="assets/js/vykazy.js?v=69"></script>
-<script type="module" src="assets/js/store.js?v=69"></script>
+<script src="assets/js/taxonomy.js?v=70"></script>
+<script src="assets/js/doc.js?v=70"></script>
+<script src="assets/js/ui.js?v=70"></script>
+<script src="assets/js/vykazy.js?v=70"></script>
+<script type="module" src="assets/js/store.js?v=70"></script>
 
 <script>
 (function () {
@@ -561,17 +561,19 @@
                 '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
                     '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:12.5px">' +
-                        (mujVzkaz
-                            ? "Zadal: já"
-                            : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
-                        (q.projekt ? " · " + esc(q.projekt) : "") +
+                        /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
+                           zopakování toho, co už tam stojí – vynechává se. */
+                        (mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
+                        (q.projekt ? (mujVzkaz ? "" : " · ") + esc(q.projekt) : "") +
                         termin(q) +
                         // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
                         (spoluucast(q).length
-                            ? "<br>Spoluúčast: " + esc(spoluucast(q).join(", ")) : "") +
+                            ? (mujVzkaz ? "" : "<br>") + "Spoluúčast: " +
+                              esc(spoluucast(q).join(", ")) : "") +
                         (q.hotovo && q.hotovoKdo
-                            ? '<br><span class="quickrad__splnil">splnil ' +
-                              esc(q.hotovoKdo) + "</span>" : "") +
+                            ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
+                              (q.hotovoMs ? " · " + esc(czDatum(new Date(q.hotovoMs)
+                                  .toISOString().slice(0, 10))) : "") + "</span>" : "") +
                     "</span>" +
                 "</span>" +
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
@@ -600,7 +602,7 @@
                 : "") +
             (splnene.length
                 ? '<button type="button" class="linkbtn" data-quick-splnene-tile style="margin-top:12px">' +
-                    (quickSplneneTile ? "Skrýt splněné" : "Zobrazit splněné Quick TO-DO (" + splnene.length + ")") +
+                    (quickSplneneTile ? "Skrýt historii" : "Historie – splněné (" + splnene.length + ")") +
                   "</button>" +
                   (quickSplneneTile
                       ? splnene.map(q => radek(q, q.odKoho === uid && q.proUid !== uid)).join("") : "")

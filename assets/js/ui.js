@@ -1091,17 +1091,19 @@
             return '<div class="quickrad' + (q.hotovo ? " quickrad--hotovo" : "") + '">' +
                 '<span class="quickrad__text">' + esc(q.text) +
                     '<span class="quickrad__kdo">' +
-                        (mujVzkaz ? "pro " + esc(ostatni.join(", ") || "?")
-                                  : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
-                        (!mujVzkaz && ostatni.length
-                            ? "<br>Spoluúčast: " + esc(ostatni.join(", ")) : "") +
+                        /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
+                           zopakování toho, co už tam stojí – vynechává se. */
+                        (mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
+                        (ostatni.length
+                            ? (mujVzkaz ? "" : "<br>") + "Spoluúčast: " + esc(ostatni.join(", ")) : "") +
                         (q.projekt ? ' · ' + esc(q.projekt) : '') +
                         (q.asap ? ' · <span class="quickrad__asap">co nejdříve</span>' : "") +
                         (q.doKdy ? ' · <span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
                             esc(czDatumKratke(q.doKdy)) + "</span>" : "") +
                         (q.hotovo && q.hotovoKdo
-                            ? '<br><span class="quickrad__splnil">splnil ' +
-                              esc(q.hotovoKdo) + "</span>" : "") +
+                            ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
+                              (q.hotovoMs ? " · " + esc(czDatumKratke(new Date(q.hotovoMs)
+                                  .toISOString().slice(0, 10))) : "") + "</span>" : "") +
                     "</span>" +
                 "</span>" +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
@@ -1137,7 +1139,7 @@
                 : "") +
             (splnene.length
                 ? '<button type="button" class="linkbtn" data-quick-splnene style="margin-top:14px">' +
-                    (quickSplneneVidet ? "Skrýt splněné" : "Zobrazit splněné Quick TO-DO (" + splnene.length + ")") +
+                    (quickSplneneVidet ? "Skrýt historii" : "Historie – splněné (" + splnene.length + ")") +
                   "</button>" +
                   (quickSplneneVidet ? splnene.map(q => radek(q, q.odKoho === uid && q.proUid !== uid)).join("") : "")
                 : "");

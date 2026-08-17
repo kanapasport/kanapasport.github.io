@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=69">
+    <link rel="stylesheet" href="assets/css/app.css?v=70">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -105,6 +105,9 @@
         .detail__radek span { flex: none; width: 66px; color: var(--muted);
             font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
         .detail__radek b { font-weight: 800; }
+        /* popisky v úpravě – stejné jako ve Správě projektů */
+        .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -163,18 +166,51 @@
 <div id="detailOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
     <div class="card col" style="padding:0;max-width:420px;width:100%;gap:0;overflow:hidden">
         <div id="detailObsah"></div>
+        <!-- Úprava rovnou v kalendáři. Používá se u záznamů, které nemají
+             svůj výkaz (starší nebo osiřelé po smazaném zápisu) – ty se
+             jinam opravit nedají a jinak by v kalendáři visely napořád. -->
+        <div id="detailUprava" hidden style="padding:0 18px 4px;display:flex;flex-direction:column;gap:10px">
+            <div class="fmr">
+                <label class="pole"><span class="popisek">Druh</span>
+                    <select id="uTyp" class="field">
+                        <option value="dovolena">Dovolená</option>
+                        <option value="nemoc">Nemoc</option>
+                        <option value="skoleni">Školení</option>
+                        <option value="homeoffice">Home office</option>
+                        <option value="udalost">Událost</option>
+                    </select></label>
+                <label class="pole"><span class="popisek">Od dne</span>
+                    <input type="date" id="uOd" class="field"></label>
+                <label class="pole"><span class="popisek">Do dne</span>
+                    <input type="date" id="uDo" class="field"></label>
+            </div>
+            <label class="row" style="gap:7px;font-size:13px;cursor:pointer">
+                <input type="checkbox" id="uCely"> <b>Celý den</b></label>
+            <div class="fmr" id="uCasyBox">
+                <label class="pole"><span class="popisek">Od</span>
+                    <input type="text" id="uOdCas" class="field" placeholder="07:00"></label>
+                <label class="pole"><span class="popisek">Do</span>
+                    <input type="text" id="uDoCas" class="field" placeholder="15:00"></label>
+            </div>
+            <label class="pole"><span class="popisek">Popis (nepovinné)</span>
+                <input type="text" id="uText" class="field"></label>
+        </div>
+
         <div class="row" style="gap:10px;padding:14px 18px;border-top:1px solid var(--line)">
             <button type="button" id="btnNaVykaz" class="btn btn--primary btn--sm" hidden>Upravit ve výkazu</button>
+            <button type="button" id="btnUprav" class="btn btn--primary btn--sm" hidden>Upravit</button>
+            <button type="button" id="btnUpravUloz" class="btn btn--primary btn--sm" hidden>Uložit</button>
+            <button type="button" id="btnUpravSmaz" class="btn btn--ghost btn--sm" style="color:var(--danger)" hidden>Smazat</button>
             <div class="grow"></div>
             <button type="button" id="btnDetailZavri" class="btn btn--ghost btn--sm">Zavřít</button>
         </div>
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=69"></script>
-<script src="assets/js/ui.js?v=69"></script>
-<script src="assets/js/vykazy.js?v=69"></script>
-<script type="module" src="assets/js/store.js?v=69"></script>
+<script src="assets/js/taxonomy.js?v=70"></script>
+<script src="assets/js/ui.js?v=70"></script>
+<script src="assets/js/vykazy.js?v=70"></script>
+<script type="module" src="assets/js/store.js?v=70"></script>
 
 <script>
 (function () {
@@ -572,16 +608,90 @@
 
         $("detailObsah").innerHTML = detailHtml(u);
 
+        upravovanaId = id;
+        $("detailUprava").hidden = true;
+        $("btnUpravUloz").hidden = true;
+
         /* Opravovat se chodí do výkazu – tam ta data patří. Manažer smí
-           i cizí, ostatní jen svoje. Starší události `vykazId` nemají,
-           tam tlačítko nemá kam vést. */
-        const smi = u.vykazId &&
-            (window.KBUI.can("vykaz.view") || u.uid === window.KB.currentUid());
+           i cizí, ostatní jen svoje. */
+        const moje = u.uid === window.KB.currentUid();
+        const spravce = window.KBUI.can("vykaz.view");
         const naVykaz = $("btnNaVykaz");
-        naVykaz.hidden = !smi;
+        naVykaz.hidden = !(u.vykazId && (spravce || moje));
         naVykaz.dataset.vykaz = u.vykazId || "";
 
+        /* Bez `vykazId` není kam skočit – takový záznam se opravuje i maže
+           rovnou tady, jinak by v kalendáři visel napořád. Smí to manažer
+           a majitel záznamu. */
+        const osirely = !u.vykazId && (spravce || moje);
+        $("btnUprav").hidden = !osirely;
+        $("btnUpravSmaz").hidden = !osirely;
+
         $("detailOverlay").hidden = false;
+    }
+
+    let upravovanaId = "";
+
+    /** Rozbalí formulář a naplní ho tím, co je v události. */
+    function otevriUpravu() {
+        const u = (window.KB.kalendar || []).find(x => x.id === upravovanaId);
+        if (!u) return;
+
+        $("uTyp").value = u.typ || "udalost";
+        $("uOd").value = u.od || "";
+        $("uDo").value = u.do || u.od || "";
+        $("uText").value = (u.text || "").trim();
+
+        const cely = u.celyDen === true || celaDelka({ odCas: u.odCas, doCas: u.doCas });
+        $("uCely").checked = cely;
+        $("uOdCas").value = cely ? "" : (u.odCas || "");
+        $("uDoCas").value = cely ? "" : (u.doCas || "");
+        $("uCasyBox").hidden = cely;
+
+        $("detailUprava").hidden = false;
+        $("btnUprav").hidden = true;
+        $("btnUpravUloz").hidden = false;
+    }
+
+    async function ulozUpravu() {
+        const u = (window.KB.kalendar || []).find(x => x.id === upravovanaId);
+        if (!u) return;
+
+        const cely = $("uCely").checked;
+        const od = $("uOd").value;
+        if (!od) return void window.KBUI.toast("Doplň datum.", "warn");
+
+        try {
+            await window.KB.saveUdalost(u.id, Object.assign({}, u, {
+                typ: $("uTyp").value,
+                od: od,
+                do: $("uDo").value && $("uDo").value > od ? $("uDo").value : od,
+                celyDen: cely,
+                odCas: cely ? "00:00" : $("uOdCas").value.trim(),
+                doCas: cely ? "23:59" : $("uDoCas").value.trim(),
+                text: $("uText").value.trim()
+            }));
+            $("detailOverlay").hidden = true;
+            window.KBUI.toast("Záznam upraven.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo – cizí záznam mění jen manažer.", "error");
+        }
+    }
+
+    async function smazUdalost() {
+        const u = (window.KB.kalendar || []).find(x => x.id === upravovanaId);
+        if (!u) return;
+        const p = popisUdalosti(u);
+        if (!confirm("Smazat z kalendáře „" + p.popis + "“ (" + V.czDatum(u.od) + ")?")) return;
+        try {
+            await window.KB.deleteUdalost(u.id);
+            $("detailOverlay").hidden = true;
+            window.KBUI.toast("Záznam smazán.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Smazání selhalo – cizí záznam maže jen manažer.", "error");
+        }
     }
 
     /** Dvojklik i tlačítko v detailu: otevřít ten zápis ve výkazu k opravě. */
@@ -652,6 +762,11 @@
         });
 
         $("btnDetailZavri").addEventListener("click", () => { $("detailOverlay").hidden = true; });
+        $("btnUprav").addEventListener("click", otevriUpravu);
+        $("btnUpravUloz").addEventListener("click", ulozUpravu);
+        $("btnUpravSmaz").addEventListener("click", smazUdalost);
+        // časy dávají smysl jen u části dne
+        $("uCely").addEventListener("change", () => { $("uCasyBox").hidden = $("uCely").checked; });
         $("btnNaVykaz").addEventListener("click", (event) => naVykaz(event.currentTarget.dataset.vykaz));
         $("detailOverlay").addEventListener("click", (event) => {
             if (event.target === $("detailOverlay")) $("detailOverlay").hidden = true;
