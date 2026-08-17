@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=63">
+    <link rel="stylesheet" href="assets/css/app.css?v=64">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -85,9 +85,10 @@
                     Podle nich se pak počítají peníze na projektu.
                 </p>
             </div>
+            <!-- Firmy a sazby patří do Nastavení, ne sem: tahle stránka je
+                 o zapisování a prohlížení, ne o číselnících. -->
             <div class="row" style="gap:8px">
                 <button id="btnZapis" class="btn btn--primary btn--sm">Přidat výkaz</button>
-                <a id="btnCiselniky" class="btn btn--ghost btn--sm" href="nastaveni.html">Firmy a sazby</a>
             </div>
         </div>
 
@@ -185,10 +186,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=63"></script>
-<script src="assets/js/ui.js?v=63"></script>
-<script src="assets/js/vykazy.js?v=63"></script>
-<script type="module" src="assets/js/store.js?v=63"></script>
+<script src="assets/js/taxonomy.js?v=64"></script>
+<script src="assets/js/ui.js?v=64"></script>
+<script src="assets/js/vykazy.js?v=64"></script>
+<script type="module" src="assets/js/store.js?v=64"></script>
 
 <script>
 (function () {
@@ -210,6 +211,11 @@
        nefiltruje – prázdná roletka „Všechny části" jen mátla. */
     const filtr = { od: "", do: "", uid: "", zakazka: "", firma: "",
                     cinnost: "", tech: "", text: "" };
+
+    /* Stránka začíná u vlastní práce. Manažer si cizí lidi nafiltruje, ale
+       otevřít se mu má to jeho – celá firma patří do Celkového přehledu. */
+    const vychoziOsoba = () => (window.KB.currentUid && window.KB.currentUid()) || "";
+    let osobaNastavena = false;
 
     /* ================================================= FORMULÁŘ ZÁZNAMU ==
        Tentýž kus formuláře slouží pro nový záznam dne i pro úpravu
@@ -851,6 +857,7 @@
     /** Zruší všechna zúžení naráz – po pár filtrech se to jinak rozklikává. */
     function resetFiltru() {
         ["uid", "zakazka", "firma", "cinnost", "tech", "text"].forEach(k => { filtr[k] = ""; });
+        filtr.uid = vychoziOsoba();     // zpátky na „moje výkazy", ne na celou firmu
         window.KBUI.setSearch("");
         document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
         document.querySelector('[data-obdobi="mesic"]').classList.add("chip--active");
@@ -858,6 +865,8 @@
     }
 
     function naplnFiltry() {
+        /* Stránka je primárně „moje výkazy" – i manažerovi. Cizí lidi si
+           nafiltruje, ale výchozí pohled je jeho vlastní práce, ne celá firma. */
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
         $("fZakazka").innerHTML = V.options(V.zakazky().concat(ABSENCE), filtr.zakazka, "Všechny projekty");
@@ -880,9 +889,9 @@
         // zaměstnanci je ani nenabízíme, stejně by je databáze nevydala
         const manazer = window.KBUI.can("vykaz.view");
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
-            '<span class="subbar__cat">ZÁPIS A ZÁZNAMY</span>' +
+            '<span class="subbar__cat">PŘEHLED VÝKAZŮ</span>' +
             (manazer
-                ? '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html">PŘEHLED LIDÍ A PENĚZ</a>' +
+                ? '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html">CELKOVÝ PŘEHLED</a>' +
                   '<a class="subbar__cat subbar__cat--up" href="vytizeni.html">VYTÍŽENÍ TÝMU</a>' +
                   /* Za čárkou schválně: přehled BP nepočítá z výkazů na tomhle
                      webu, je to hotový sesbíraný přehled odvedené práce
@@ -910,13 +919,27 @@
         const spravce = window.KBUI.can("vykaz.view");
         $("fOsoba").hidden = !spravce;
         $("btnCsv").hidden = !spravce;
-        $("btnCiselniky").hidden = !spravce;
         $("dOsobaBox").hidden = !spravce;
 
         zapniSledovani();
+
+        // až se ví, kdo je přihlášený, nastav filtr na něj – ale jen jednou,
+        // ať to nepřepisuje volbu, kterou si člověk mezitím udělal
+        if (!osobaNastavena && vychoziOsoba()) {
+            filtr.uid = vychoziOsoba();
+            osobaNastavena = true;
+        }
         naplnFiltry();
 
-        const zaznamy = V.vyber(window.KB.vykazy || [], filtr).slice().sort((a, b) =>
+        /* Kdo nesmí vidět cizí, dostane výhradně svoje – a to i v náhledu
+           „prohlížím web jako zaměstnanec". Náhled totiž mění jen vykreslení;
+           data pořád chodí podle skutečného účtu, takže hlavnímu správci
+           zůstávaly v paměti výkazy všech a stránka je ukazovala. */
+        const zaklad = spravce
+            ? (window.KB.vykazy || [])
+            : (window.KB.vykazy || []).filter(z => z.uid === window.KB.currentUid());
+
+        const zaznamy = V.vyber(zaklad, filtr).slice().sort((a, b) =>
             (b.datum || "").localeCompare(a.datum || "") || (a.od || "").localeCompare(b.od || ""));
 
         const s = V.soucty(zaznamy);

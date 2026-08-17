@@ -145,7 +145,8 @@
            cizích zápisů, bez sazeb a bez exportu. Hlídá to i databáze
            (firestore.rules), ne jen schované tlačítko. */
         "zamestnanec": ["ukol.create", "ukol.edit", "navod.create", "vykaz.otevrit"],
-        "student":     ["ukol.edit", "navod.create"]
+        // student si taky zapisuje odpracovaný čas – jen svůj, jako zaměstnanec
+        "student":     ["ukol.edit", "navod.create", "vykaz.otevrit"]
     };
 
     /** Souhrn pro obrazovku správy – co která role smí. */

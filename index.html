@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=63">
+    <link rel="stylesheet" href="assets/css/app.css?v=64">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -76,6 +76,10 @@
         .ntodo--p100 { background: var(--p100-bg); }
         .ntodo__text { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; }
         .ntodo--p100 .ntodo__text { text-decoration: line-through; opacity: .75; }
+        /* Posuvník vedle procent – tažením se skočí kamkoliv, bez klikání
+           přes všechny kroky. Užší na mobilu, ať zbyde místo na text. */
+        .ntodo__slider { flex: none; width: 96px; accent-color: var(--accent); cursor: pointer; }
+        @media (max-width: 620px) { .ntodo__slider { width: 62px; } }
         .ntodo__pcts { display: flex; gap: 4px; flex-wrap: wrap; }
         .ntodo__pct { border: 1px solid rgba(0, 0, 0, .12); background: rgba(255, 255, 255, .7);
             border-radius: 99px; padding: 3px 8px; font-size: 11px; font-weight: 700;
@@ -277,11 +281,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=63"></script>
-<script src="assets/js/doc.js?v=63"></script>
-<script src="assets/js/ui.js?v=63"></script>
-<script src="assets/js/vykazy.js?v=63"></script>
-<script type="module" src="assets/js/store.js?v=63"></script>
+<script src="assets/js/taxonomy.js?v=64"></script>
+<script src="assets/js/doc.js?v=64"></script>
+<script src="assets/js/ui.js?v=64"></script>
+<script src="assets/js/vykazy.js?v=64"></script>
+<script type="module" src="assets/js/store.js?v=64"></script>
 
 <script>
 (function () {
@@ -296,6 +300,11 @@
        `todo` a `stav` (KB.ulozUkolPostup), víc pravidla nedovolí. */
 
     const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+    /* Posuvník jede po pětkách a výsledek se přichytí na nejbližší krok
+       stupnice – jinak by vznikala procenta, která tlačítka neumí ukázat. */
+    const POSUVNIK_KROK = 5;
+    const naKrok = (hodnota) => PCT_KROKY.reduce((nej, p) =>
+        Math.abs(p - hodnota) < Math.abs(nej - hodnota) ? p : nej, PCT_KROKY[0]);
     let vybranyUkol = "";
     let sledovaniZapnuto = false;
     // rozsah karty úkolů: "moje" | "vse"; drží se jen v paměti stránky,
@@ -496,12 +505,19 @@
                 /* Výchozí je jedno číslo jako na starém webu – kliknutím
                    se posune po krocích. Podrobnou řadu si každý zapne sám
                    a volba mu zůstane (localStorage). */
+                /* Posuvník je v obou stylech: tažením se dá skočit kamkoliv
+                   bez klikání přes všechny kroky. Drží se stejné stupnice
+                   jako tlačítka, takže z něj nevypadne hodnota mimo řadu. */
+                const posuvnik = '<input type="range" class="ntodo__slider" min="0" max="100" ' +
+                    'step="' + POSUVNIK_KROK + '" value="' + pct + '" ' +
+                    'data-nslider="' + esc(t.id) + '" title="Táhni pro nastavení procent">';
+
                 const ovladani = podrobne()
-                    ? '<span class="ntodo__pcts">' + PCT_KROKY.map(p =>
+                    ? posuvnik + '<span class="ntodo__pcts">' + PCT_KROKY.map(p =>
                         '<button type="button" class="ntodo__pct' + (pct === p ? " je-aktivni" : "") +
                         '" data-npct="' + p + '" data-ntodo="' + esc(t.id) + '">' + p + "&nbsp;%</button>").join("") +
                       "</span>"
-                    : '<button type="button" class="ntodo__cyklus" data-ncyklus="' + esc(t.id) +
+                    : posuvnik + '<button type="button" class="ntodo__cyklus" data-ncyklus="' + esc(t.id) +
                       '" title="Klikni pro další krok">' + pct + " %</button>";
                 return '<div class="ntodo ntodo--' + pctUroven(pct) + '">' +
                     '<span class="ntodo__text">' + esc(t.text) + "</span>" + ovladani + "</div>";
@@ -721,6 +737,10 @@
         const pct = event.target.closest("[data-npct]");
         if (pct) return void zapisPct(pct.dataset.ntodo, Number(pct.dataset.npct));
 
+        // posuvník: zapisuje se až po puštění, ne při každém pixelu tažení
+        const slider = event.target.closest("[data-nslider]");
+        if (slider) return;
+
         // klik na číslo posune procenta na další krok – jako na starém webu
         const cyklus = event.target.closest("[data-ncyklus]");
         if (cyklus) {
@@ -735,6 +755,25 @@
         }
         const prep = event.target.closest("#prepPodrobne");
         if (prep) { nastavPodrobne(!podrobne()); renderNastenka(); }
+    });
+
+    /* Posuvník: během tažení se jen obarvuje řádek, do databáze se zapíše
+       až po puštění. Zápis při každém pixelu by překresloval seznam pod
+       prstem a poslal by desítky zbytečných zápisů. */
+    document.addEventListener("input", (event) => {
+        const slider = event.target.closest("[data-nslider]");
+        if (!slider) return;
+        const radek = slider.closest(".ntodo");
+        const pct = naKrok(Number(slider.value) || 0);
+        radek.className = "ntodo ntodo--" + pctUroven(pct);
+        const cislo = radek.querySelector(".ntodo__cyklus");
+        if (cislo) cislo.textContent = pct + " %";
+    });
+
+    document.addEventListener("change", (event) => {
+        const slider = event.target.closest("[data-nslider]");
+        if (!slider) return;
+        zapisPct(slider.dataset.nslider, naKrok(Number(slider.value) || 0));
     });
 
     /* ---------------------------------------------------------- hledání */
