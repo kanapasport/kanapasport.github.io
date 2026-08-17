@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=62">
+    <link rel="stylesheet" href="assets/css/app.css?v=63">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -185,10 +185,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=62"></script>
-<script src="assets/js/ui.js?v=62"></script>
-<script src="assets/js/vykazy.js?v=62"></script>
-<script type="module" src="assets/js/store.js?v=62"></script>
+<script src="assets/js/taxonomy.js?v=63"></script>
+<script src="assets/js/ui.js?v=63"></script>
+<script src="assets/js/vykazy.js?v=63"></script>
+<script type="module" src="assets/js/store.js?v=63"></script>
 
 <script>
 (function () {
@@ -761,22 +761,26 @@
      * Celý den se ukládá jako 00:00–23:59: v kalendáři pak stojí v pruhu
      * nahoře a neplete se do hodinové mřížky mezi skutečnou práci.
      */
-    function zapisDoKalendare(p, uid, jmeno, vykazId) {
-        return window.KB.saveUdalost(window.KB.newUdalostId(), {
+    function udalostZVykazu(p, uid, jmeno) {
+        return {
             typ: TYP_ABSENCE[p.zakazka] || "udalost",
             uid: uid,
             osoba: jmeno,
             od: p.datum,
             do: p.datumDo && p.datumDo > p.datum ? p.datumDo : p.datum,
             celyDen: !!p.celyden,
-            odCas: p.celyden ? "00:00" : p.od,
-            doCas: p.celyden ? "23:59" : p.do,
+            odCas: p.celyden ? CELY_DEN_OD : p.od,
+            doCas: p.celyden ? CELY_DEN_DO : p.do,
             /* Druh nese `typ`, takže do textu patří jen to, co druh nedoplní.
                Jinak by v kalendáři stálo „Nemoc · Nemoc". */
             text: "",
-            zdroj: "vykaz",
-            vykazId: vykazId || ""
-        });
+            zdroj: "vykaz"
+        };
+    }
+
+    function zapisDoKalendare(p, uid, jmeno, vykazId) {
+        return window.KB.saveUdalost(window.KB.newUdalostId(),
+            Object.assign(udalostZVykazu(p, uid, jmeno), { vykazId: vykazId || "" }));
     }
 
     async function ulozDen() {
@@ -1015,14 +1019,18 @@
 
         const uid = $("eOsoba").value;
         const u = V.clovek(uid);
+        const jmeno = u ? V.jmeno(u) : (puvodni.osoba || "");
+        const datum = $("eDatum").value;
+
         try {
             await window.KB.saveVykaz(editId, Object.assign({}, p, {
                 uid: uid,
-                osoba: u ? V.jmeno(u) : (puvodni.osoba || ""),
-                datum: $("eDatum").value,
+                osoba: jmeno,
+                datum: datum,
                 createdMs: puvodni.createdMs,
                 createdBy: puvodni.createdBy
             }));
+            await srovnejKalendar(Object.assign({}, p, { datum: datum }), uid, jmeno);
             $("editOverlay").hidden = true;
             window.KBUI.toast("Záznam upraven.");
         } catch (err) {
@@ -1031,13 +1039,38 @@
         }
     }
 
+    /** Událost v kalendáři patřící k tomuhle zápisu, pokud nějaká vznikla. */
+    const udalostZapisu = (vykazId) =>
+        (window.KB.kalendar || []).find(x => x.vykazId === vykazId) || null;
+
+    /**
+     * Po úpravě zápisu srovná i kalendář. Řeší všechny tři přechody:
+     * absence zůstala (přepsat), přestala jí být (událost pryč) a naopak
+     * se jí stala (událost přibude). Bez toho zůstávala v kalendáři viset
+     * dovolená na původním datu, i když se zápis přesunul jinam.
+     */
+    async function srovnejKalendar(p, uid, jmeno) {
+        const stara = udalostZapisu(editId);
+
+        if (!p.absence) {
+            if (stara) await window.KB.deleteUdalost(stara.id).catch(() => {});
+            return;
+        }
+        // stejné id = přepis, nové id = přírůstek; obojí umí saveUdalost
+        await window.KB.saveUdalost(stara ? stara.id : window.KB.newUdalostId(),
+            Object.assign(udalostZVykazu(p, uid, jmeno), { vykazId: editId }));
+    }
+
     async function smazZapis() {
         const z = (window.KB.vykazy || []).find(v => v.id === editId);
         if (!z) return;
         if (!confirm("Opravdu smazat záznam „" + (z.nazev || "") + "“ ze dne " +
                      V.czDatum(z.datum) + "?")) return;
         try {
+            // s absencí zmizí i její událost, ať v kalendáři nezůstane viset
+            const udalost = udalostZapisu(editId);
             await window.KB.deleteVykaz(editId);
+            if (udalost) await window.KB.deleteUdalost(udalost.id).catch(() => {});
             $("editOverlay").hidden = true;
             window.KBUI.toast("Záznam smazán.");
         } catch (err) {

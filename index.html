@@ -8,14 +8,14 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=62">
+    <link rel="stylesheet" href="assets/css/app.css?v=63">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
         /* Nástěnka: dlaždice stejné velikosti (přání Michala) – proto pevná
            výška karty a rolování uvnitř, ne podle délky obsahu.
-           Šest dlaždic ve dvou sloupcích (2×3), i na širokém monitoru: víc
-           úzkých sloupců ořezávalo názvy úkolů a jména víc, než kolik přineslo. */
+           Dlaždice ve dvou sloupcích i na širokém monitoru: víc úzkých sloupců
+           ořezávalo názvy úkolů a jména víc, než kolik přineslo. */
         .nastenka { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         @media (max-width: 900px)  { .nastenka { grid-template-columns: 1fr; } }
         /* Dlaždice mají hlavičku jako blok nového výkazu: červený pruh
@@ -99,6 +99,26 @@
             padding: 10px 14px 0; }
         .todonazev span { font-size: 12.5px; font-weight: 400; color: var(--muted); }
 
+        /* Milníky: řádek jako zadaný úkol, jen místo procent je vlevo datum.
+           Termín je to, co se hledá očima první, tak stojí vepředu a nekrátí
+           se; ukrojí se až název za ním. */
+        .milrad { display: flex; align-items: center; gap: 11px; padding: 7px 10px;
+            border-radius: var(--radius); background: var(--bg-soft);
+            border: 1px solid var(--line-soft); text-decoration: none; color: inherit; }
+        .milrad:hover { border-color: var(--accent-lt); background: var(--surface); }
+        .milrad__datum { flex: none; width: 88px; font-size: 13px; font-weight: 900;
+            line-height: 1.25; font-variant-numeric: tabular-nums; }
+        .milrad__datum span { display: block; font-size: 11px; font-weight: 700;
+            color: var(--muted); text-transform: lowercase; }
+        .milrad__nazev { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.35;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .milrad__meta { display: block; font-size: 11.5px; color: var(--muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* prošlý termín červeně – stejně jako přečerpaný rozpočet ve výkazech */
+        .milrad--pozde { background: #fdecec; border-color: #f5c2c2; }
+        .milrad--pozde .milrad__datum { color: #b91c1c; }
+        .milrad--pozde .milrad__datum span { color: #b91c1c; }
+
         /* Quick TO-DO: vzkaz s fajfkou vlevo; hotové řádky blednou, ať oči
            táhnou jen ty, co ještě čekají. */
         .qt { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0;
@@ -107,6 +127,15 @@
         .qt__fajfka { flex: none; width: 15px; height: 15px; margin-top: 3px; cursor: pointer; }
         .qt__text { font-weight: 700; font-size: 13.5px; line-height: 1.4; }
         .qt--hotovy .qt__text { color: var(--muted); text-decoration: line-through; font-weight: 600; }
+
+        /* Splněné Quick TO-DO zezelená, stejně jako hotové patro nebo uzavřená
+           zakázka. Přeškrtnutí k tomu nepatří – barva to řekne sama a text
+           zůstane čitelný, kdyby se k němu někdo vracel. */
+        .qtrad { gap: 9px; padding: 6px 0; align-items: center;
+            border-bottom: 1px dashed var(--line-soft); }
+        .qtrad--hotovo { background: var(--p100-bg); border-bottom-color: transparent;
+            border-radius: var(--radius); padding: 6px 10px; margin-bottom: 3px; }
+        .qtrad--hotovo .muted { color: var(--p100-fg); opacity: .8; }
         .qt__meta { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
         /* prošlý termín červeně – stejný odstín jako přečerpaný rozpočet ve výkazech */
         .qt__meta--pozde { color: #b91c1c; font-weight: 700; }
@@ -176,6 +205,8 @@
             <label class="row" style="gap:6px;cursor:pointer">
                 <input type="checkbox" data-widget="quick" checked> Quick TO-DO</label>
             <label class="row" style="gap:6px;cursor:pointer">
+                <input type="checkbox" data-widget="milniky" checked> Milníky</label>
+            <label class="row" style="gap:6px;cursor:pointer">
                 <input type="checkbox" data-widget="kalendar" checked> Kalendář</label>
             <label class="row" style="gap:6px;cursor:pointer">
                 <input type="checkbox" data-widget="online" checked> Kdo tu byl</label>
@@ -213,6 +244,12 @@
                 </div>
                 <div id="quickSeznam" class="nastenka__telo"></div>
             </div>
+            <div class="card nastenka__karta" id="wMilniky">
+                <div class="nastenka__hlava" data-otevri="milniky.html" title="Otevřít milníky">
+                    <b>Milníky — nejbližší termíny</b>
+                </div>
+                <div id="milnikySeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
             <div class="card nastenka__karta" id="wKalendar">
                 <div class="nastenka__hlava" data-otevri="kalendar.html" title="Otevřít kalendář">
                     <b>Kalendář — dnes a nejbližší dny</b>
@@ -240,11 +277,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=62"></script>
-<script src="assets/js/doc.js?v=62"></script>
-<script src="assets/js/ui.js?v=62"></script>
-<script src="assets/js/vykazy.js?v=62"></script>
-<script type="module" src="assets/js/store.js?v=62"></script>
+<script src="assets/js/taxonomy.js?v=63"></script>
+<script src="assets/js/doc.js?v=63"></script>
+<script src="assets/js/ui.js?v=63"></script>
+<script src="assets/js/vykazy.js?v=63"></script>
+<script type="module" src="assets/js/store.js?v=63"></script>
 
 <script>
 (function () {
@@ -286,8 +323,8 @@
 
     const VOLBY_KLIC = "kb-nastenka";
 
-    const VYCHOZI_VOLBY = { ukoly: true, todo: true, quick: true, kalendar: true,
-        online: true, aktivita: true };
+    const VYCHOZI_VOLBY = { ukoly: true, todo: true, quick: true, milniky: true,
+        kalendar: true, online: true, aktivita: true };
 
     function nactiVolby() {
         try { return Object.assign({}, VYCHOZI_VOLBY,
@@ -299,7 +336,7 @@
         const volby = nactiVolby();
         document.querySelectorAll("[data-widget]").forEach(ch => { ch.checked = volby[ch.dataset.widget] !== false; });
         // karta s data-need se skrývá i podle práv (paintUser), tady jen podle volby
-        [["ukoly", "wUkoly"], ["todo", "wTodo"], ["quick", "wQuick"],
+        [["ukoly", "wUkoly"], ["todo", "wTodo"], ["quick", "wQuick"], ["milniky", "wMilniky"],
          ["kalendar", "wKalendar"], ["online", "wOnline"], ["aktivita", "wAktivita"]]
             .forEach(([klic, id]) => {
                 const karta = document.getElementById(id);
@@ -489,10 +526,9 @@
         };
 
         const radek = (q, mujVzkaz) =>
-            '<div class="row" style="gap:9px;padding:6px 0;border-bottom:1px dashed var(--line-soft);align-items:center">' +
+            '<div class="row qtrad' + (q.hotovo ? " qtrad--hotovo" : "") + '">' +
                 '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
-                    "<span style=\"" + (q.hotovo ? "text-decoration:line-through;color:var(--muted)" : "font-weight:700") + "\">" +
-                        esc(q.text) + "</span>" +
+                    '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:12.5px">' +
                         (mujVzkaz ? "pro " + esc(jmenoUid(q.proUid) || "?")
                                   : "od " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
@@ -627,6 +663,41 @@
             : '<span class="muted" style="font-size:14px">Nejbližších sedm dní je volných.</span>';
     }
 
+    /**
+     * Nejbližší milníky. Bez omezení na týden – termín odevzdání za měsíc
+     * je pořád to, kvůli čemu se plánuje, a v kalendáři by ještě nebyl vidět.
+     * Prošlé nesplněné zůstávají nahoře a červeně: zmizet by neměly.
+     */
+    function renderMilniky() {
+        const dnes = V.dnesISO();
+        const seznam = (window.KB.milniky || [])
+            .filter(m => m.datum && !m.hotovo)
+            .sort((a, b) => a.datum.localeCompare(b.datum))
+            .slice(0, 8);
+
+        document.getElementById("milnikySeznam").innerHTML = seznam.map(m => {
+            const pozde = m.datum < dnes;
+            const zbyva = Math.round((new Date(m.datum + "T00:00:00") -
+                new Date(dnes + "T00:00:00")) / 86400000);
+            const kdy = pozde ? "po termínu"
+                : zbyva === 0 ? "dnes" : zbyva === 1 ? "zítra" : "za " + zbyva + " dní";
+
+            const kdo = (m.owners || []).map(jmenoUid).filter(Boolean).join(", ");
+            const meta = [m.zakazka, kdo].filter(Boolean).join(" · ");
+
+            return '<a class="milrad' + (pozde ? " milrad--pozde" : "") +
+                '" href="milniky.html" title="Otevřít milníky">' +
+                '<span class="milrad__datum">' + esc(czDatum(m.datum)) +
+                    '<span>' + esc(kdy) + "</span></span>" +
+                '<span class="grow" style="min-width:0">' +
+                    '<span class="milrad__nazev">' + esc(m.cinnost || "Bez názvu") + "</span>" +
+                    (meta ? '<span class="milrad__meta">' + esc(meta) + "</span>" : "") +
+                "</span>" +
+            "</a>";
+        }).join("") || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+            "Žádný nadcházející milník. Termíny odevzdání zadávají manažeři na stránce Milníky.</div>";
+    }
+
     async function zapisPct(todoId, pct) {
         const u = seznamUkolu().find(x => x.id === vybranyUkol);
         if (!u) return;
@@ -713,7 +784,7 @@
 
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
-            renderQuick(); renderKalendarDlazdice(); };
+            renderQuick(); renderKalendarDlazdice(); renderMilniky(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice(); });
@@ -721,7 +792,7 @@
         window.KB.on("aktivity", renderAktivita);
         window.KB.on("quicktodo", renderQuick);
         window.KB.on("kalendar", renderKalendarDlazdice);
-        window.KB.on("milniky", renderKalendarDlazdice);
+        window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky(); });
 
         // přizpůsobení nástěnky
         document.getElementById("btnPrizpusob").addEventListener("click", () => {
