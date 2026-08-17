@@ -84,6 +84,70 @@
         ACCENT_VARS.forEach(name => document.documentElement.style.removeProperty(name));
     };
 
+    /* Zvolená barva se drží v prohlížeči a platí na všech stránkách –
+       výchozí (petrolejovou z app.css) tím jde přebít třeba zpátky na
+       původní červenou. Aplikuje se hned při načtení, ať stránka neblikne. */
+
+    const AKCENT_KLIC = "kb-akcent";
+
+    UI.ulozAkcent = (hex) => {
+        try {
+            if (hex) localStorage.setItem(AKCENT_KLIC, hex);
+            else localStorage.removeItem(AKCENT_KLIC);
+        } catch (err) { /* soukromý režim */ }
+    };
+    UI.ulozenyAkcent = () => {
+        try { return localStorage.getItem(AKCENT_KLIC) || ""; } catch (err) { return ""; }
+    };
+
+    (() => {
+        const hex = UI.ulozenyAkcent();
+        if (/^#[\da-f]{6}$/i.test(hex)) UI.applyAccent(hex);
+    })();
+
+    /* ------------------------------------------- zámek citlivých sekcí ----
+       Odemčení sazeb a hesel vydrží jen chvíli. Kdo odejde od počítače,
+       nenechá je otevřené – po třech minutách bez práce se heslo chce znovu.
+       Každá práce se stránkou platnost prodlouží (hlídá se dole). */
+
+    UI.ZAMEK_PLATNOST = 3 * 60 * 1000;
+
+    UI.zamekPamet = (klic) => {
+        try {
+            const surove = sessionStorage.getItem(klic);
+            if (!surove) return "";
+            const data = JSON.parse(surove);
+            if (!data || (Date.now() - (data.ms || 0)) > UI.ZAMEK_PLATNOST) {
+                sessionStorage.removeItem(klic);
+                return "";
+            }
+            return data.v || "";
+        } catch (err) {
+            // starý formát (holý hash) nebo rozbitý zápis – radši znovu heslo
+            try { sessionStorage.removeItem(klic); } catch (e) {}
+            return "";
+        }
+    };
+
+    UI.zamekZapamatuj = (klic, hodnota) => {
+        try {
+            if (hodnota) sessionStorage.setItem(klic, JSON.stringify({ v: hodnota, ms: Date.now() }));
+            else sessionStorage.removeItem(klic);
+        } catch (err) { /* soukromý režim */ }
+    };
+
+    /* Práce se stránkou prodlužuje odemčení – tříminutovka je od poslední
+       akce, ne od zadání hesla. Jinak by se sekce zamkla člověku pod rukama
+       uprostřed vyplňování. */
+    UI.zamekObnovujPri = (klic) => {
+        const obnov = () => {
+            const hodnota = UI.zamekPamet(klic);
+            if (hodnota) UI.zamekZapamatuj(klic, hodnota);
+        };
+        document.addEventListener("pointerdown", obnov);
+        document.addEventListener("keydown", obnov);
+    };
+
     /* ------------------------------------------------------------- toast */
 
     UI.toast = (message, tone) => {

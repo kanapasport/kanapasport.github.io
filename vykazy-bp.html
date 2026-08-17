@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled BP – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=74">
+    <link rel="stylesheet" href="assets/css/app.css?v=75">
     <style>
         /* Čísla i texty v tabulkách přehledu na střed – tabulka se čte
            po sloupcích a při zarovnání doleva se oko na každém řádku vrací. */
@@ -86,7 +86,7 @@
         </svg>
         <b style="font-size:16px">Přehled je navíc pod heslem</b>
         <p class="small muted" style="line-height:1.6;margin:0">
-            Zadej heslo k přehledu zakázky. Platí do zavření záložky.
+            Zadej heslo k přehledu zakázky. Platí tři minuty od poslední práce.
         </p>
         <input type="password" id="hesloPole" class="field" placeholder="heslo" autocomplete="off">
         <div id="hesloChyba" class="tiny" style="color:var(--danger);min-height:16px"></div>
@@ -210,9 +210,9 @@
     </section>
 </main>
 
-<script src="assets/js/taxonomy.js?v=74"></script>
-<script src="assets/js/ui.js?v=74"></script>
-<script type="module" src="assets/js/store.js?v=74"></script>
+<script src="assets/js/taxonomy.js?v=75"></script>
+<script src="assets/js/ui.js?v=75"></script>
+<script type="module" src="assets/js/store.js?v=75"></script>
 
 <script>
 (function () {
@@ -564,7 +564,7 @@
             $("hesloPole").select();
             return;
         }
-        try { sessionStorage.setItem(KLIC, "1"); } catch (e) { /* soukromý režim */ }
+        window.KBUI.zamekZapamatuj(KLIC, "1");
         $("zamek").hidden = true;
         nacti();
     }
@@ -578,10 +578,12 @@
             return;
         }
         $("stop").hidden = true;
-        let odemceno = false;
-        try { odemceno = sessionStorage.getItem(KLIC) === "1"; } catch (e) { /* soukromý režim */ }
+        // tříminutová platnost od poslední práce – pak se chce heslo znovu
+        const odemceno = window.KBUI.zamekPamet(KLIC) === "1";
         if (!odemceno) {
             $("zamek").hidden = false;
+            $("obsah").hidden = true;
+            $("import").hidden = true;
             setTimeout(() => $("hesloPole").focus(), 60);
             return;
         }
@@ -592,6 +594,12 @@
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
         paintSubbar();
+
+        // práce se stránkou prodlužuje odemčení; pak se zamkne samo
+        window.KBUI.zamekObnovujPri(KLIC);
+        setInterval(() => {
+            if ($("zamek").hidden && window.KBUI.zamekPamet(KLIC) !== "1") render();
+        }, 15000);
 
         $("hesloOk").addEventListener("click", zkusHeslo);
         $("hesloPole").addEventListener("keydown", (e) => { if (e.key === "Enter") zkusHeslo(); });

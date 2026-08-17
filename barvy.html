@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#c8102e">
     <title>Barvy webu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=74">
+    <link rel="stylesheet" href="assets/css/app.css?v=75">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -71,7 +71,8 @@
         </div>
         <p class="small muted hlavicka__popis">
             Posuvníky nebo hotové odstíny mění barvu rovnou v celé stránce – včetně lišty nahoře.
-            Zkoušení platí <b>jen tady a jen dokud stránku nezavřeš</b>; ostatním se nic nemění.
+            Zkoušení platí jen tady; tlačítkem <b>Používat tuhle barvu</b> se volba zapne
+            na celém webu v tomhle prohlížeči. Ostatním lidem zůstává výchozí.
         </p>
     </div>
 
@@ -113,15 +114,25 @@
                 <div id="contrast" class="tiny" style="margin-top:10px;line-height:1.5"></div>
             </div>
 
+            <div>
+                <span class="label">Moje uložené barvy</span>
+                <div class="swatches" id="vlastni"></div>
+                <button type="button" id="btnUlozVlastni" class="btn btn--ghost btn--sm"
+                        style="margin-top:6px">+ Uložit současnou barvu</button>
+            </div>
+
             <div class="col" style="gap:8px">
                 <div class="row" style="gap:8px">
-                    <button id="btnCss" class="btn btn--primary btn--sm grow">Zkopírovat CSS</button>
-                    <button id="btnReset" class="btn btn--ghost btn--sm grow">Vrátit původní</button>
+                    <button id="btnPouzit" class="btn btn--primary btn--sm grow">Používat tuhle barvu</button>
+                    <button id="btnReset" class="btn btn--ghost btn--sm grow">Vrátit výchozí</button>
+                </div>
+                <div class="row" style="gap:8px">
+                    <button id="btnCss" class="btn btn--ghost btn--sm grow">Zkopírovat CSS</button>
                 </div>
                 <div class="tiny muted" style="line-height:1.5">
-                    Míchání platí <b>jen na téhle stránce</b> a po zavření zmizí – firemní
-                    červená je daná. Až budeš rozhodnutý, pošli mi hex a zapíšu ho
-                    natrvalo do <code>app.css</code> pro všechny.
+                    <b>Používat tuhle barvu</b> ji zapne v tomhle prohlížeči na celém webu
+                    a vydrží i po zavření. Ostatním lidem zůstává výchozí – tu mění jen
+                    zápis do <code>app.css</code>.
                 </div>
             </div>
         </section>
@@ -206,10 +217,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=74"></script>
-<script src="assets/js/doc.js?v=74"></script>
-<script src="assets/js/ui.js?v=74"></script>
-<script type="module" src="assets/js/store.js?v=74"></script>
+<script src="assets/js/taxonomy.js?v=75"></script>
+<script src="assets/js/doc.js?v=75"></script>
+<script src="assets/js/ui.js?v=75"></script>
+<script type="module" src="assets/js/store.js?v=75"></script>
 
 <script>
 (function () {
@@ -250,24 +261,38 @@
         window.KBUI.paintUser();
     }
 
+    const VYCHOZI = "#1d556d";
+
     const PRESETS = [
-        { name: "Pasport (současná)", hex: "#c8102e" },
-        { name: "Signální",           hex: "#e01b24" },
-        { name: "Korálová",           hex: "#ef3340" },
-        { name: "Malinová",           hex: "#d21e50" },
-        { name: "Cihlová",            hex: "#b23a2b" },
-        { name: "Vínová",             hex: "#a4161a" },
-        { name: "Bordó",              hex: "#7d1128" },
-        { name: "Kaštanová",          hex: "#8c2f27" },
-        { name: "Ferrari",            hex: "#d40000" },
-        { name: "Tlumená cihla",      hex: "#9e2a2b" },
-        { name: "Rubín",              hex: "#b01030" },
-        { name: "Tmavá krev",         hex: "#6d0f1a" }
+        { name: "Pasport modrá (výchozí)", hex: VYCHOZI },
+        { name: "Pasport červená",         hex: "#c8102e" },
+        { name: "Petrolejová světlá",      hex: "#2882a9" },
+        { name: "Půlnoční",                hex: "#133949" },
+        { name: "Lesní",                   hex: "#1d6d4a" },
+        { name: "Vínová",                  hex: "#a4161a" },
+        { name: "Bordó",                   hex: "#7d1128" },
+        { name: "Cihlová",                 hex: "#b23a2b" },
+        { name: "Grafitová",               hex: "#37474f" },
+        { name: "Fialová",                 hex: "#5b2a86" }
     ];
+
+    /* Vlastní barvy, které si člověk uloží – jen jeho a jen v tomhle
+       prohlížeči, stejně jako zvolená barva webu. */
+    const VLASTNI_KLIC = "kb-barvy-vlastni";
+    const nactiVlastni = () => {
+        try {
+            const data = JSON.parse(localStorage.getItem(VLASTNI_KLIC) || "[]");
+            return Array.isArray(data) ? data : [];
+        } catch (err) { return []; }
+    };
+    const ulozVlastni = (seznam) => {
+        try { localStorage.setItem(VLASTNI_KLIC, JSON.stringify(seznam.slice(0, 16))); }
+        catch (err) { /* soukromý režim */ }
+    };
 
     // hex si držíme přesně, HSL je jen pro posuvníky (jinak by se barva
     // zaokrouhlením při každém překreslení nepatrně posouvala)
-    let current = "#c8102e";
+    let current = window.KBUI.ulozenyAkcent() || VYCHOZI;
     let hsl = window.KBUI.hexToHsl(current);
 
     const hex = () => current;
@@ -332,7 +357,25 @@
         const allowed = window.KBUI.can("web.design");
         $("denied").hidden = allowed;
         $("app").hidden = !allowed;
-        if (!allowed) window.KBUI.resetAccent();
+        // bez práv se vrací uložená volba, ne rozmíchaná zkouška
+        if (!allowed) {
+            const ulozena = window.KBUI.ulozenyAkcent();
+            if (ulozena) window.KBUI.applyAccent(ulozena);
+            else window.KBUI.resetAccent();
+        }
+    }
+
+    function vykresliVlastni() {
+        const seznam = nactiVlastni();
+        $("vlastni").innerHTML = seznam.map((b, i) =>
+            '<button type="button" class="swatch" data-hex="' + esc(b.hex) + '">' +
+                '<span class="swatch__color" style="background:' + esc(b.hex) + '"></span>' +
+                '<span class="swatch__name">' + esc(b.name) + "</span>" +
+                '<span class="swatch__hex">' + esc(b.hex) + "</span>" +
+            "</button>" +
+            '<button type="button" class="linkbtn" data-smaz-vlastni="' + i +
+                '" title="Smazat uloženou barvu">&times;</button>').join("") ||
+            '<span class="tiny muted">Zatím žádná – namíchej a ulož si ji.</span>';
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
@@ -371,11 +414,40 @@
             if (/^#?[\da-f]{6}$/i.test($("hex").value.trim())) setHex($("hex").value);
         });
 
-        $("btnReset").addEventListener("click", () => {
-            window.KBUI.resetAccent();
-            setHex("#c8102e");
-            window.KBUI.toast("Zpátky na původní červenou.");
+        $("btnPouzit").addEventListener("click", () => {
+            window.KBUI.ulozAkcent(hex());
+            window.KBUI.toast("Barva se teď používá na celém webu (v tomhle prohlížeči).");
         });
+
+        $("btnReset").addEventListener("click", () => {
+            window.KBUI.ulozAkcent("");
+            window.KBUI.resetAccent();
+            setHex(VYCHOZI);
+            window.KBUI.toast("Zpátky na výchozí barvu webu.");
+        });
+
+        $("btnUlozVlastni").addEventListener("click", () => {
+            const nazev = (prompt("Jak se má barva jmenovat?", "") || "").trim();
+            if (!nazev) return;
+            const seznam = nactiVlastni().filter(b => b.name !== nazev);
+            seznam.unshift({ name: nazev, hex: hex() });
+            ulozVlastni(seznam);
+            vykresliVlastni();
+            window.KBUI.toast("Barva uložena mezi tvoje.");
+        });
+
+        $("vlastni").addEventListener("click", (event) => {
+            const smaz = event.target.closest("[data-smaz-vlastni]");
+            if (smaz) {
+                const seznam = nactiVlastni();
+                seznam.splice(Number(smaz.dataset.smazVlastni), 1);
+                ulozVlastni(seznam);
+                return void vykresliVlastni();
+            }
+            const button = event.target.closest(".swatch");
+            if (button) setHex(button.dataset.hex);
+        });
+        vykresliVlastni();
 
         $("btnCss").addEventListener("click", async () => {
             const vars = window.KBUI.accentVars(hex());

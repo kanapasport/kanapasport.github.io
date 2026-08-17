@@ -123,6 +123,13 @@ všech 18 stránek vrací 200.
 - **„Zapsat výkaz z úkolu"** u rozdělaného úkolu – předvyplní projekt,
   úkol, druh i název (`vykazy.html?ukol=ID`).
 - **Enter přepíná zaškrtávátka** (dřív jen mezerník).
+- **Výchozí barva je petrolejová `#1d556d`** (app.css); červená `#c8102e`
+  je předvolba „Pasport červená" na Barvách webu. „Používat tuhle barvu"
+  volbu drží v prohlížeči (localStorage `kb-akcent`, aplikuje ui.js hned
+  při načtení); vlastní namíchané barvy se ukládají pod jménem.
+- **Zámek citlivých sekcí platí 3 minuty od poslední práce** (sazby, hesla,
+  Přehled BP), pak se chce heslo znovu. Helpery `KBUI.zamekPamet /
+  zamekZapamatuj / zamekObnovujPri` v ui.js.
 
 ---
 

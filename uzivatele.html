@@ -31,7 +31,7 @@
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=74">
+    <link rel="stylesheet" href="assets/css/app.css?v=75">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -263,10 +263,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=74"></script>
-<script src="assets/js/doc.js?v=74"></script>
-<script src="assets/js/ui.js?v=74"></script>
-<script type="module" src="assets/js/store.js?v=74"></script>
+<script src="assets/js/taxonomy.js?v=75"></script>
+<script src="assets/js/doc.js?v=75"></script>
+<script src="assets/js/ui.js?v=75"></script>
+<script type="module" src="assets/js/store.js?v=75"></script>
 
 <script>
 (function () {
@@ -337,16 +337,10 @@
     let zamekOdemceno = false;
     let zmenaOtevrena = false;
 
-    const zamekPamet = () => {
-        try { return sessionStorage.getItem(ZAMEK_KLIC) || ""; } catch (err) { return ""; }
-    };
-
-    const zamekZapamatuj = (hash) => {
-        try {
-            if (hash) sessionStorage.setItem(ZAMEK_KLIC, hash);
-            else sessionStorage.removeItem(ZAMEK_KLIC);
-        } catch (err) { /* soukromý režim prohlížeče */ }
-    };
+    /* Odemčení má tříminutovou platnost od poslední práce se stránkou
+       (KBUI.zamekPamet) – kdo odejde od počítače, nenechá hesla otevřená. */
+    const zamekPamet = () => window.KBUI.zamekPamet(ZAMEK_KLIC);
+    const zamekZapamatuj = (hash) => window.KBUI.zamekZapamatuj(ZAMEK_KLIC, hash);
 
     function paintZamek() {
         const hlavni = window.KBUI.isOwner();
@@ -376,7 +370,7 @@
                 : zamekStav === "chyba"
                     ? "Nedaří se spojit s databází. Zkus stránku načíst znovu."
                     : zalozeno
-                        ? "Odemčení platí do zavření záložky a přenese se i na hodinové sazby v nastavení."
+                        ? "Odemčení platí tři minuty od poslední práce a přenese se i na hodinové sazby v nastavení."
                         : hlavni
                             ? "Zvol heslo, kterým se budou citlivé sekce otevírat. Zapiš si ho – z databáze se zpětně přečíst nedá."
                             : "Zámek zatím nikdo nezaložil. Ozvi se hlavnímu správci, ať heslo nastaví.";
@@ -1015,6 +1009,16 @@
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
+        // práce se stránkou prodlužuje odemčení; bez ní se po třech
+        // minutách sekce zase zamkne a heslo se chce znovu
+        window.KBUI.zamekObnovujPri(ZAMEK_KLIC);
+        setInterval(() => {
+            if (zamekOdemceno && !zamekPamet()) {
+                zamekOdemceno = false;
+                paintZamek();
+            }
+        }, 15000);
+
         // v horní liště nastavení není (bydlí ve svislém pásu), zato podlišta
         // je stejná na sazbách, uživatelích i barvách
         window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
