@@ -63,9 +63,12 @@
        vyplňování se stejně zaokrouhluje. Nabídka je proto pevná: 00:00–23:45
        po 15 minutách, jedna pro celou stránku (odkazuje se na ni `list=`). */
 
+    /* Nabízí se jen pracovní část dne (6:00–18:00). Mimo ni se pracuje
+       výjimečně a kdo potřebuje, čas si napíše – zápis se pak srovná stejně
+       jako vybraný. Kratší seznam se dá projet očima. */
     V.CASY = (() => {
         const out = [];
-        for (let m = 0; m < 24 * 60; m += 15) {
+        for (let m = 6 * 60; m <= 18 * 60; m += 15) {
             out.push(String(Math.floor(m / 60)).padStart(2, "0") + ":" +
                      String(m % 60).padStart(2, "0"));
         }

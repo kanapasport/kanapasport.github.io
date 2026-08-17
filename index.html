@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=70">
+    <link rel="stylesheet" href="assets/css/app.css?v=71">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -281,11 +281,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=70"></script>
-<script src="assets/js/doc.js?v=70"></script>
-<script src="assets/js/ui.js?v=70"></script>
-<script src="assets/js/vykazy.js?v=70"></script>
-<script type="module" src="assets/js/store.js?v=70"></script>
+<script src="assets/js/taxonomy.js?v=71"></script>
+<script src="assets/js/doc.js?v=71"></script>
+<script src="assets/js/ui.js?v=71"></script>
+<script src="assets/js/vykazy.js?v=71"></script>
+<script type="module" src="assets/js/store.js?v=71"></script>
 
 <script>
 (function () {
@@ -538,11 +538,12 @@
         const proMe = vse.filter(jeProMe);
         const odeMe = vse.filter(q => q.odKoho === uid && !jeProMe(q));
 
+        // vrací jen samotný kus, oddělovač doplní ten, kdo řádek skládá
         const termin = (q) => {
-            if (q.asap) return ' · <span class="quickrad__asap">co nejdříve</span>';
+            if (q.asap) return '<span class="quickrad__asap">co nejdříve</span>';
             if (!q.doKdy) return "";
             const poTerminu = !q.hotovo && q.doKdy < V.dnesISO();
-            return ' · <span style="' + (poTerminu ? "color:var(--danger);font-weight:700" : "") +
+            return '<span style="' + (poTerminu ? "color:var(--danger);font-weight:700" : "") +
                 '">do ' + esc(czDatum(q.doKdy)) + "</span>";
         };
 
@@ -563,13 +564,16 @@
                     '<span class="muted" style="display:block;font-size:12.5px">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
                            zopakování toho, co už tam stojí – vynechává se. */
-                        (mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
-                        (q.projekt ? (mujVzkaz ? "" : " · ") + esc(q.projekt) : "") +
-                        termin(q) +
+                        /* Oddělovač se dává jen MEZI kusy, ne před první –
+                           u vlastního vzkazu chybí „Zadal:" a řádek by jinak
+                           začínal osamocenou tečkou. */
+                        [ mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?"),
+                          q.projekt ? esc(q.projekt) : "",
+                          termin(q)
+                        ].filter(Boolean).join(" · ") +
                         // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
                         (spoluucast(q).length
-                            ? (mujVzkaz ? "" : "<br>") + "Spoluúčast: " +
-                              esc(spoluucast(q).join(", ")) : "") +
+                            ? "<br>Spoluúčast: " + esc(spoluucast(q).join(", ")) : "") +
                         (q.hotovo && q.hotovoKdo
                             ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatum(new Date(q.hotovoMs)

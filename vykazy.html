@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=70">
+    <link rel="stylesheet" href="assets/css/app.css?v=71">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=70"></script>
-<script src="assets/js/ui.js?v=70"></script>
-<script src="assets/js/vykazy.js?v=70"></script>
-<script type="module" src="assets/js/store.js?v=70"></script>
+<script src="assets/js/taxonomy.js?v=71"></script>
+<script src="assets/js/ui.js?v=71"></script>
+<script src="assets/js/vykazy.js?v=71"></script>
+<script type="module" src="assets/js/store.js?v=71"></script>
 
 <script>
 (function () {
@@ -531,6 +531,33 @@
     }
 
     /** Přepočítá hodiny a částku pod položkou. */
+    /* =================================================== SKRYTÉ PENÍZE ==
+       Peníze se nezobrazí samy. Kdo si zapisuje výkaz v kanceláři a někdo
+       mu stojí za zády, nechce mít sazbu a vydělek rovnou na obrazovce –
+       odkryje si je tlačítkem v rohu dlaždice a stejným je zase schová.
+       Není to zabezpečení, jen slušnost k okolí; data má stejně jen ten,
+       komu je databáze vydá. */
+
+    let penizeVidet = false;
+
+    function penizeDlazdice(label, value, note, money) {
+        return '<div class="card vyktile vyktile--tajne' + (money ? " vyktile--money" : "") + '">' +
+            '<button type="button" class="vyktile__oko" data-penize-prepni></button>' +
+            '<div class="vyktile__label">' + esc(label) + "</div>" +
+            '<div class="vyktile__value"><span class="tajne">' + value + "</span>" +
+                '<span class="tajne__zastup">•••</span></div>' +
+            (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
+        "</div>";
+    }
+
+    /** Projede stránku a nastaví, co je vidět a co zastupují tečky. */
+    function pouzijSkryti() {
+        document.body.classList.toggle("penize-videt", penizeVidet);
+        document.querySelectorAll("[data-penize-prepni]").forEach(b => {
+            b.textContent = penizeVidet ? "skrýt" : "zobrazit";
+        });
+    }
+
     /* ================================================ VYTÍŽENÍ ČLOVĚKA ==
        Stejná mřížka jako na stránce Vytížení týmu, jen na jednoho člověka –
        toho, čí výkazy jsou zrovna vidět. Manažer si rozkliknutím jiného
@@ -1046,13 +1073,21 @@
         vykresliVytizeni(spravce ? filtr.uid : window.KB.currentUid());
 
         const s = V.soucty(zaznamy);
+
+        /* Pořadí: odpracováno, dny, pak teprve peníze. „Napříč lidmi" dává
+           smysl jen u výběru přes víc lidí – u vlastního výkazu je to matoucí. */
+        const vicLidi = spravce && !filtr.uid;
+
         $("souhrn").innerHTML =
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
-            (spravce ? V.dlazdice("Vyfakturováno", V.kc(s.castka), "", true) : "") +
-            V.dlazdice("Odpracovaných dní", V.cislo(s.dny), spravce ? "napříč lidmi" : "") +
+            V.dlazdice("Odpracovaných dní", V.cislo(s.dny), vicLidi ? "napříč lidmi" : "") +
             (spravce
-                ? V.dlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr")
+                ? penizeDlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
+                  penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
                 : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady"));
+
+        // po překreslení se peníze zase schovají, dokud si je někdo nevyžádá
+        pouzijSkryti();
 
         $("prazdno").hidden = !!zaznamy.length;
         $("tabulkaWrap").hidden = !zaznamy.length;
@@ -1082,7 +1117,7 @@
                 return '<tr class="vyk__den"><td colspan="' + sloupcu + '">' +
                         "<b>" + esc(V.czDatum(datum)) + "</b>" +
                         "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
-                            (spravce ? " · " + V.kc(den.castka) : "") + "</span>" +
+                            (spravce ? " · <span class=\"tajne\">" + V.kc(den.castka) + "</span><span class=\"tajne__zastup\">•••</span>" : "") + "</span>" +
                     "</td></tr>" + radky.map(radek).join("");
             }).join("") +
             "</tbody>";
@@ -1108,8 +1143,8 @@
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
                 '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
                 (spravce
-                    ? '<td class="vyk__num">' + V.cislo(z.sazba) + "</td>" +
-                      '<td class="vyk__num"><b>' + V.kc(z.castka) + "</b></td>"
+                    ? '<td class="vyk__num">' + "<span class=\"tajne\">" + V.cislo(z.sazba) + "</span><span class=\"tajne__zastup\">•••</span>" + "</td>" +
+                      '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
                     : "") +
                 '<td class="vyk__akce">' +
                     '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>' +
@@ -1317,10 +1352,20 @@
        jednou vybere 7:00, roletka ukazuje už jen 7:00. Proto se pole při
        vstupu vyprázdní (nabídka je zase celá) a když člověk nic nenapíše
        ani nevybere, při odchodu se mu původní čas vrátí. */
+    /* Vyprázdnit se musí UŽ PŘI STISKU. Prohlížeč si obsah nabídky zamkne
+       ve chvíli, kdy ji otevírá – to je na `mousedown`, tedy dřív, než
+       stihne doběhnout `focusin`. Proto se to při prvním kliknutí ukazovalo
+       zúžené a teprve napodruhé celé. */
+    const uvolniNabidku = (el) => {
+        if (el.dataset.puvodni === undefined) el.dataset.puvodni = el.value;
+        el.value = "";
+    };
+
+    document.addEventListener("mousedown", (event) => {
+        if (event.target.matches("[data-cas]")) uvolniNabidku(event.target);
+    });
     document.addEventListener("focusin", (event) => {
-        if (!event.target.matches("[data-cas]")) return;
-        event.target.dataset.puvodni = event.target.value;
-        event.target.value = "";
+        if (event.target.matches("[data-cas]")) uvolniNabidku(event.target);
     });
     document.addEventListener("focusout", (event) => {
         if (!event.target.matches("[data-cas]")) return;
@@ -1408,6 +1453,14 @@
         });
 
         $("btnResetFiltr").addEventListener("click", resetFiltru);
+
+        // odkrytí peněz platí pro celou stránku – dlaždice i tabulku
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest("[data-penize-prepni]")) return;
+            penizeVidet = !penizeVidet;
+            pouzijSkryti();
+        });
+        pouzijSkryti();
 
         // měsíc v mřížce vytížení se přepíná nezávisle na filtru období výše
         $("vtZpet").addEventListener("click", () => {

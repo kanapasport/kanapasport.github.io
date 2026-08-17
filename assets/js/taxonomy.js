@@ -169,7 +169,7 @@ window.KB_NAV = [
     /* Výkazy se vykreslí jen tomu, kdo na ně má právo; studentům zmizí. */
     { title: 'VÝKAZY', href: 'vykazy.html', need: 'vykaz.otevrit' },
     // roletka se naplní otevřenými projekty z databáze (viz projektyMenu v ui.js)
-    { title: 'PROJEKTY', href: 'projekty.html', projekty: true },
+    { title: 'PROJEKTY', href: 'sprava.html', projekty: true },
     // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
     { title: 'ÚKOLY', href: 'ukoly.html', tasks: true },
     { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },

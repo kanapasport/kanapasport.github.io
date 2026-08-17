@@ -598,10 +598,10 @@
             .slice(0, 12)
             .map(p => ({
                 title: ((p.cislo ? p.cislo + " " : "") + (p.nazev || "")).trim(),
-                href: "projekty.html?id=" + encodeURIComponent(p.id)
+                href: "sprava.html?id=" + encodeURIComponent(p.id)
             }));
         return otevrene.length
-            ? [{ title: "VŠECHNY PROJEKTY", href: "projekty.html" }].concat(otevrene)
+            ? [{ title: "SPRÁVA PROJEKTŮ", href: "sprava.html" }].concat(otevrene)
             : null;
     }
 
@@ -864,7 +864,7 @@
                 '<a class="siderail__btn" href="ukoly.html?moje=1">' +
                     icon("tasks") + "<span>Moje úkoly</span></a>" +
                 // zakládání projektů je manažerská práce, proto až za úkoly
-                '<a class="siderail__btn" href="projekty.html#novy" data-need="zakazky.manage" hidden>' +
+                '<a class="siderail__btn" href="sprava.html#novy" data-need="zakazky.manage" hidden>' +
                     icon("building") + "<span>Nový projekt</span></a>" +
                 '<a class="siderail__btn" href="nastaveni.html" data-need="vykaz.view" hidden>' +
                     icon("cog") + "<span>Nastavení</span></a>" +
@@ -1093,13 +1093,16 @@
                     '<span class="quickrad__kdo">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
                            zopakování toho, co už tam stojí – vynechává se. */
-                        (mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
-                        (ostatni.length
-                            ? (mujVzkaz ? "" : "<br>") + "Spoluúčast: " + esc(ostatni.join(", ")) : "") +
-                        (q.projekt ? ' · ' + esc(q.projekt) : '') +
-                        (q.asap ? ' · <span class="quickrad__asap">co nejdříve</span>' : "") +
-                        (q.doKdy ? ' · <span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
-                            esc(czDatumKratke(q.doKdy)) + "</span>" : "") +
+                        /* Oddělovač se dává jen MEZI kusy, ne před první –
+                           u vlastního vzkazu chybí „Zadal:" a řádek by jinak
+                           začínal osamocenou tečkou. */
+                        [ mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
+                          q.projekt ? esc(q.projekt) : "",
+                          q.asap ? '<span class="quickrad__asap">co nejdříve</span>' : "",
+                          q.doKdy ? '<span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
+                            esc(czDatumKratke(q.doKdy)) + "</span>" : ""
+                        ].filter(Boolean).join(" · ") +
+                        (ostatni.length ? "<br>Spoluúčast: " + esc(ostatni.join(", ")) : "") +
                         (q.hotovo && q.hotovoKdo
                             ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatumKratke(new Date(q.hotovoMs)
