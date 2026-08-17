@@ -999,6 +999,41 @@
 
     let quickSplneneVidet = false;
 
+    /* ------------------------------------------------ pípnutí na nový vzkaz
+       Krátký tón, když PŘI OTEVŘENÉ stránce přistane nový quick to-do pro mě.
+       Co existovalo už před načtením stránky, nepípá – od toho je okno
+       „Co je nového" po přihlášení. */
+
+    const casNacteni = Date.now();
+    let quickZname = null;   // null = první vykreslení, ještě nepípat
+
+    function pipni() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.06, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+            osc.start(); osc.stop(ctx.currentTime + 0.31);
+        } catch (err) { /* bez zvuku se dá žít */ }
+    }
+
+    function ohlasNove(proMe) {
+        const ted = new Set(proMe.filter(q => !q.hotovo).map(q => q.id));
+        if (quickZname !== null) {
+            const novy = proMe.find(q => !q.hotovo && !quickZname.has(q.id) &&
+                (q.ms || 0) > casNacteni);
+            if (novy) {
+                pipni();
+                UI.toast("Nový quick to-do od " + (novy.odKohoJmeno || "?") +
+                    ": " + novy.text.slice(0, 60));
+            }
+        }
+        quickZname = ted;
+    }
+
     /* ----------------------------------------------- oblíbené party lidí ---
        Kdo posílá pořád dokola tomu samému hloučku, si ho uloží pod jménem
        a příště ho nasadí jedním ťuknutím. Je to osobní zvyk jednoho člověka
@@ -1081,6 +1116,8 @@
 
         const proMe = vse.filter(jeProMe);
         const odeMe = vse.filter(q => q.odKoho === uid && !jeProMe(q));
+
+        ohlasNove(proMe);
 
         const radek = (q, mujVzkaz) => {
             const poTerminu = !q.hotovo && q.doKdy && q.doKdy < dnesISO();
@@ -1276,6 +1313,16 @@
 
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") prepniQuick(false);
+
+        /* Enter přepíná zaškrtávátko stejně jako mezerník. Tab mezi štítky
+           lidí funguje, ale Enter na nich nedělal nic – kdo jede z klávesnice,
+           čekal potvrzení Enterem (Správa projektů, Quick TO-DO, výkazy). */
+        if (event.key === "Enter" && event.target &&
+            event.target.matches && event.target.matches('input[type="checkbox"]')) {
+            event.preventDefault();
+            event.target.checked = !event.target.checked;
+            event.target.dispatchEvent(new Event("change", { bubbles: true }));
+        }
     });
 
     function renderMujDen() {

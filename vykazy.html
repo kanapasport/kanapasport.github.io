@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=73">
+    <link rel="stylesheet" href="assets/css/app.css?v=74">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=73"></script>
-<script src="assets/js/ui.js?v=73"></script>
-<script src="assets/js/vykazy.js?v=73"></script>
-<script type="module" src="assets/js/store.js?v=73"></script>
+<script src="assets/js/taxonomy.js?v=74"></script>
+<script src="assets/js/ui.js?v=74"></script>
+<script src="assets/js/vykazy.js?v=74"></script>
+<script type="module" src="assets/js/store.js?v=74"></script>
 
 <script>
 (function () {
@@ -1162,8 +1162,17 @@
         editId = id;
         $("eDatum").value = z.datum || "";
         $("eOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })), z.uid, "");
-        $("editRadek").innerHTML = polozkaHtml(z, { sZakazkou: true });
-        prepocti($("editRadek").querySelector("[data-polozka]"));
+
+        /* Výkaz si příznak „celý den" nenese – pozná se z časů 00:00–23:59.
+           Bez odvození se okno otevřelo s odškrtnutým políčkem, počítalo
+           24 hodin a hlásilo „přes 16 hodin – není to překlep?" u obyčejné
+           celodenní dovolené. */
+        const celyden = z.od === CELY_DEN_OD && z.do === CELY_DEN_DO;
+        $("editRadek").innerHTML = polozkaHtml(Object.assign({}, z, { celyden: celyden }),
+            { sZakazkou: true });
+        const box = $("editRadek").querySelector("[data-polozka]");
+        if (celyden) prepniCelyDen(box);
+        prepocti(box);
         $("editOverlay").hidden = false;
     }
 
@@ -1524,6 +1533,38 @@
                 otevriUpravu(kUprave);
             };
             window.KB.on("vykazy", zkusOtevrit);
+        }
+
+        /* Proklik z úkolu: `?ukol=ID` otevře nový výkaz s předvyplněným
+           projektem, úkolem, druhem a názvem – ať se to samé nepřepisuje
+           ručně. Čeká se, až úkoly dorazí z databáze. */
+        const zUkolu = new URLSearchParams(location.search).get("ukol");
+        if (zUkolu) {
+            const predvypln = () => {
+                const u = (window.KB.ukoly || []).find(x => x.id === zUkolu);
+                if (!u) return;
+                window.KB.off("ukoly", predvypln);
+                history.replaceState(null, "", location.pathname);
+
+                $("btnZapis").click();
+                const blok = radkyBox().querySelector("[data-zblok]");
+                const sel = blok.querySelector('[data-z="zakazka"]');
+                sel.value = u.projekt || "";
+                sel.dispatchEvent(new Event("input", { bubbles: true }));
+
+                const box = blok.querySelector("[data-polozka]");
+                const nastav = (klic, hodnota) => {
+                    const el = box.querySelector('[data-f="' + klic + '"]');
+                    if (el && hodnota) el.value = hodnota;
+                };
+                nastav("ukolId", zUkolu);
+                nastav("nazev", u.nazev);
+                nastav("cinnost", u.druh);
+                nastav("technologie", u.technologie);
+                prepocti(box);
+            };
+            window.KB.on("ukoly", predvypln);
+            predvypln();
         }
 
         window.KB.on("vykazy", render);

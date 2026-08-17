@@ -1,6 +1,6 @@
 # Předání – nová verze webu Pasport Kaňa
 
-Stav k 17. 8. 2026, větev **`novy-web`**, poslední commit `4d30b5d`,
+Stav k 17. 8. 2026, větev **`novy-web`**, poslední commit viz git log,
 verze souborů `?v=71`.
 
 ---
@@ -106,6 +106,23 @@ všech 18 stránek vrací 200.
 - Dlaždice **Milníky** (nejbližší termíny, prošlé červeně nahoře).
 - TO-DO má **posuvník** v obou stylech zapisování procent.
 - Splněné Quick TO-DO **zezelená** místo přeškrtnutí.
+- **„Co je nového"** – okno po přihlášení s úkoly a vzkazy od minulé
+  návštěvy (laťka v localStorage na člověka; první návštěva nic nevypíše).
+  Nový quick to-do při otevřené stránce **pípne** a vyskočí toast.
+- **„Upozornění pro kontrolu"** (jen manažeři): přes 14 h za den, zápisy
+  přes sebe, práce v den celodenní absence. Prázdná = vše v pořádku.
+
+### Provoz
+
+- **Záloha a obnova** na Importu dat: projekty, úkoly, výkazy, kalendář
+  a číselníky do JSON a zpátky. Obnova přepisuje dokumenty ze souboru;
+  co v souboru není, zůstane. Návody a tabule kryje starý export
+  na stránce Uživatelé.
+- **Historie aktivit** kryje i mazání výkazů, změny sazeb/rozpočtů
+  a kalendář.
+- **„Zapsat výkaz z úkolu"** u rozdělaného úkolu – předvyplní projekt,
+  úkol, druh i název (`vykazy.html?ukol=ID`).
+- **Enter přepíná zaškrtávátka** (dřív jen mezerník).
 
 ---
 
@@ -143,6 +160,11 @@ všech 18 stránek vrací 200.
     člověk, původní den) se při úpravě zakládala druhá a stará zůstala viset.
 15. **Zaškrtávátko čtené přes špatný selektor tiše vrací `false`.**
     „Celý den" se hledal přes `data-zapni` (příplatky), ale je to `data-f`.
+16. **Výkaz si příznak „celý den" nenese** – pozná se z časů 00:00–23:59.
+    Okno úpravy si ho musí odvodit, jinak počítá 24 h a hlásí překlep.
+17. **Zvuk jde přehrát až po gestu uživatele** – prohlížeč blokuje audio
+    do prvního kliknutí. Pípnutí na nový vzkaz je proto v `try` a po
+    přihlášení (což gesto je) už funguje.
 
 ---
 

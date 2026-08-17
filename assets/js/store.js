@@ -1126,8 +1126,12 @@ KB.saveMujVykaz = async (id, data) => {
 KB.deleteVykaz = async (id) => {
     if (authReady) await authReady;
     requireDb();
+    // co se maže, se do historie píše PŘED smazáním – potom už není co číst
+    const z = KB.vykazy.find(v => v.id === id);
     await deleteDoc(vykazDoc(id));
     await deleteDoc(castkaDoc(id)).catch(() => {});
+    KB.zapisAktivitu("vykaz", "smazal výkaz " + (z ? (z.datum || "") + " – " +
+        (z.osoba || "") + " (" + (z.nazev || "") + ")" : id));
 };
 
 /**
@@ -1143,6 +1147,10 @@ KB.saveVykazNastaveni = async (patch) => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
     await setDoc(vykazyMeta(), payload, { merge: true });
+    /* Změna sazeb a rozpočtů jsou peníze – v historii nesmí chybět,
+       i když se z logu nepozná konkrétní číslo (na to je záloha). */
+    KB.zapisAktivitu("vykaz", "změnil nastavení výkazů (" +
+        Object.keys(patch).join(", ") + ")");
 };
 
 /**
@@ -1401,13 +1409,79 @@ KB.saveUdalost = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
+    KB.zapisAktivitu("kalendar", "uložil událost " + (data.typ || "udalost") +
+        " " + (data.od || "") + (data.osoba ? " – " + data.osoba : ""));
     return id;
 };
 
 KB.deleteUdalost = async (id) => {
     if (authReady) await authReady;
     requireDb();
+    const u = (KB.kalendar || []).find(x => x.id === id);
     await deleteDoc(kalendarDoc(id));
+    KB.zapisAktivitu("kalendar", "smazal událost " + (u ? (u.typ || "") + " " +
+        (u.od || "") + (u.osoba ? " – " + u.osoba : "") : id));
+};
+
+/* ---------------------------------------------------------------- záloha --
+   Provozní data (projekty, úkoly, výkazy, kalendář, číselníky) do jednoho
+   JSON a zpátky. Návody a tabule tu schválně nejsou – ty umí starý export
+   na stránce Uživatelé a nesou obrázky, které by soubor nafoukly.
+
+   Obnova PŘEPISUJE dokumenty ze souboru; co v souboru není, v databázi
+   zůstane. Je to tedy „vrátit, co se pokazilo", ne „vrátit čas". */
+
+const ZALOHA_CESTY = [
+    ["projekty",         ["private", "projekty", "seznam"]],
+    ["projekty-finance", ["private", "projekty", "finance"]],
+    ["ukoly",            ["private", "ukoly", "seznam"]],
+    ["vykazy",           ["private", "vykazy", "zaznamy"]],
+    ["vykazy-castky",    ["private", "vykazy", "castky"]],
+    ["vykazy-ciselniky", ["private", "vykazy", "ciselniky"]],
+    ["kalendar",         ["public", "data", "kalendar"]],
+    ["meta",             ["public", "data", "meta"]]
+];
+
+KB.exportZaloha = async (onProgress) => {
+    if (authReady) await authReady;
+    requireDb();
+
+    const kolekce = {};
+    for (const [nazev, cesta] of ZALOHA_CESTY) {
+        if (onProgress) onProgress(nazev);
+        const snap = await getDocs(collection(db, "artifacts", APP_ID, cesta[0], cesta[1], cesta[2]));
+        const dokumenty = {};
+        snap.forEach(d => { dokumenty[d.id] = d.data(); });
+        kolekce[nazev] = dokumenty;
+    }
+    return {
+        _info: "Záloha provozních dat Pasport Kaňa (bez návodů, tabulí a hesel).",
+        _vytvoreno: new Date().toISOString(),
+        _kdo: window.KB_USER || "",
+        kolekce: kolekce
+    };
+};
+
+KB.obnovZalohu = async (zaloha, onProgress) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!zaloha || !zaloha.kolekce) throw new Error("Tohle není soubor se zálohou.");
+
+    let zapsano = 0;
+    for (const [nazev, cesta] of ZALOHA_CESTY) {
+        const dokumenty = zaloha.kolekce[nazev];
+        if (!dokumenty) continue;
+        const idcka = Object.keys(dokumenty);
+        for (let i = 0; i < idcka.length; i++) {
+            if (onProgress && i % 20 === 0) onProgress(nazev + " " + (i + 1) + "/" + idcka.length);
+            await setDoc(doc(db, "artifacts", APP_ID, cesta[0], cesta[1], cesta[2], idcka[i]),
+                dokumenty[idcka[i]]);
+            zapsano++;
+        }
+    }
+    KB.zapisAktivitu("vykaz", "obnovil data ze zálohy z " + (zaloha._vytvoreno || "?") +
+        " (" + zapsano + " dokumentů)");
+    return zapsano;
 };
 
 /* ------------------------------------------------------------------- logy */

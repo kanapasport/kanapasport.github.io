@@ -11,7 +11,7 @@
         /* Popis patří POD nadpis – stejně jako v ostatních stránkách nastavení. */
         .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=73">
+    <link rel="stylesheet" href="assets/css/app.css?v=74">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -61,13 +61,38 @@
             </p>
         </section>
 
+        <!-- ========================================== ZÁLOHA A OBNOVA -->
+        <section class="card col nastaveni" id="sekce-zaloha">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Záloha a obnova</b>
+                    <span class="small muted">provozní data do souboru a zpátky</span>
+                </div>
+            </div>
+            <div class="row row--wrap" style="gap:10px">
+                <button type="button" id="btnZaloha" class="btn btn--primary btn--sm">Stáhnout zálohu</button>
+                <span class="small muted" id="zalohaStav"></span>
+            </div>
+            <div class="row row--wrap" style="gap:10px">
+                <input type="file" id="obnovaSoubor" class="field" accept=".json" style="max-width:340px">
+                <button type="button" id="btnObnova" class="btn btn--ghost btn--sm">Obnovit ze zálohy</button>
+                <span class="small muted" id="obnovaStav"></span>
+            </div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Záloha nese projekty, úkoly, výkazy, kalendář a číselníky – <b>ne</b> návody,
+                tabule a hesla (na návody a tabule je export na stránce Uživatelé).
+                Obnova <b>přepíše</b> dokumenty tím, co je v souboru; co v souboru není,
+                v databázi zůstane. Zálohuj si pravidelně – tohle je jediná cesta zpátky.
+            </p>
+        </section>
+
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=73"></script>
-<script src="assets/js/ui.js?v=73"></script>
-<script src="assets/js/vykazy.js?v=73"></script>
-<script type="module" src="assets/js/store.js?v=73"></script>
+<script src="assets/js/taxonomy.js?v=74"></script>
+<script src="assets/js/ui.js?v=74"></script>
+<script src="assets/js/vykazy.js?v=74"></script>
+<script type="module" src="assets/js/store.js?v=74"></script>
 
 <script>
 (function () {
@@ -214,11 +239,61 @@
         $("obsah").hidden = false;
     }
 
+    /* ------------------------------------------------- záloha a obnova --- */
+
+    async function stahniZalohu() {
+        $("btnZaloha").disabled = true;
+        try {
+            const data = await window.KB.exportZaloha(t => { $("zalohaStav").textContent = "Stahuji " + t + "…"; });
+            const dnes = new Date().toISOString().slice(0, 10);
+            V.stahni(JSON.stringify(data), "pasport-kana-provoz-" + dnes + ".json",
+                "application/json;charset=utf-8");
+            $("zalohaStav").textContent = "Staženo.";
+        } catch (err) {
+            console.error(err);
+            $("zalohaStav").textContent = "";
+            window.KBUI.toast("Záloha selhala – zkus to znovu.", "error");
+        } finally {
+            $("btnZaloha").disabled = false;
+        }
+    }
+
+    async function obnovZalohu() {
+        const soubor = $("obnovaSoubor").files[0];
+        if (!soubor) return void window.KBUI.toast("Nejdřív vyber soubor se zálohou.", "warn");
+
+        let data;
+        try { data = JSON.parse(await soubor.text()); }
+        catch (err) { return void window.KBUI.toast("Soubor se nedá přečíst jako JSON.", "error"); }
+        if (!data.kolekce) return void window.KBUI.toast("Tohle není soubor se zálohou.", "error");
+
+        const pocet = Object.values(data.kolekce)
+            .reduce((s, k) => s + Object.keys(k || {}).length, 0);
+        if (!confirm("Obnovit " + pocet + " dokumentů ze zálohy z " +
+            (data._vytvoreno || "?").slice(0, 10) + "?\n\nSoučasné verze těch dokumentů se PŘEPÍŠOU.")) return;
+
+        $("btnObnova").disabled = true;
+        try {
+            const zapsano = await window.KB.obnovZalohu(data,
+                t => { $("obnovaStav").textContent = t; });
+            $("obnovaStav").textContent = "Hotovo – obnoveno " + zapsano + " dokumentů.";
+            window.KBUI.toast("Obnova dokončena.");
+        } catch (err) {
+            console.error(err);
+            $("obnovaStav").textContent = "";
+            window.KBUI.toast("Obnova selhala – " + (err.message || "zkus to znovu."), "error");
+        } finally {
+            $("btnObnova").disabled = false;
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
         paintPodlista("import");
 
         $("btnImportuj").addEventListener("click", importuj);
+        $("btnZaloha").addEventListener("click", stahniZalohu);
+        $("btnObnova").addEventListener("click", obnovZalohu);
 
         document.addEventListener("kb-role", () => { render(); paintPodlista("import"); });
         render();
