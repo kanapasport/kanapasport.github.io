@@ -803,11 +803,28 @@
         return '<div class="toolrail">' + tools + "</div>";
     }
 
-    function searchHtml() {
+    /* Na kterých stránkách má hledání smysl.
+       Jinde v liště jen viselo a po Enteru odskočilo do návodů – vypadalo to,
+       že hledá v tom, na co se člověk zrovna dívá, a přitom nehledalo nic.
+       Návody: hledá v nich. Výkazy: filtrují si vlastní tabulku (UI.onSearch). */
+    const STRANKY_S_HLEDANIM = [
+        "index.html", "navody.html", "navod.html", "uvod.html",
+        "vykazy.html", "vykazy-prehled.html"
+    ];
+
+    const maHledani = (active) => STRANKY_S_HLEDANIM.indexOf(active) !== -1;
+
+    function searchHtml(active) {
+        if (!maHledani(active)) return "";
+        // výkazy si pole berou na filtrování své tabulky, návody hledají návody
+        const vykazy = active.indexOf("vykazy") === 0;
+        const popis = vykazy ? "Filtrovat výkazy…" : "Hledat v návodech…";
         return '<div class="searchbox">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">' +
                 '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>' +
-            '<input id="kbSearch" type="search" autocomplete="off" placeholder="Hledat…" aria-label="Hledat">' +
+            '<input id="kbSearch" type="search" autocomplete="off" placeholder="' + popis +
+                '" aria-label="' + popis + '">' +
+            '<div class="searchbox__vysledky" id="kbSearchOut" hidden></div>' +
         "</div>";
     }
 
@@ -857,7 +874,7 @@
 
                 '<div class="appbar__bar"><div class="appbar__barin">' +
                     navHtml(active) +
-                    searchHtml() +
+                    searchHtml(active) +
                 "</div></div>" +
 
                 // druhý řádek lišty – stránka si ho naplní sama (filtry kategorie)
@@ -1619,13 +1636,54 @@
 
         input.addEventListener("input", () => {
             if (searchHandler) searchHandler(input.value.trim());
+            else napovez(input.value.trim());
         });
         input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") return void schovejNapovedu();
             if (event.key !== "Enter") return;
             const value = input.value.trim();
-            // stránky bez vlastního hledání pošlou dotaz do přehledu návodů
-            if (!searchHandler && value) location.href = "navody.html?q=" + encodeURIComponent(value);
+            if (searchHandler || !value) return;
+            /* Enter otevře první nalezený návod – to je skoro vždycky ten
+               hledaný. Když nic nesedí, aspoň se ukáže celý přehled. */
+            const prvni = document.querySelector("#kbSearchOut a");
+            location.href = prvni ? prvni.getAttribute("href")
+                                  : "navody.html?q=" + encodeURIComponent(value);
         });
+
+        // klik mimo hledání nabídku zavře, jinak by visela přes stránku
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest(".searchbox")) schovejNapovedu();
+        });
+    }
+
+    /* ------------------------------------------------ našeptávač návodů ---
+       Stránky bez vlastního hledání (detail návodu, úvod) rovnou ukazují,
+       co se našlo. Klik jde na ten návod – dřív se muselo naslepo odentrovat
+       do přehledu a hledat znovu očima. */
+
+    function schovejNapovedu() {
+        const out = document.getElementById("kbSearchOut");
+        if (out) { out.hidden = true; out.innerHTML = ""; }
+    }
+
+    function napovez(dotaz) {
+        const out = document.getElementById("kbSearchOut");
+        if (!out) return;
+        if (dotaz.length < 2) return schovejNapovedu();
+
+        const nalezene = UI.searchGuides((window.KB && window.KB.guides) || [], dotaz);
+        out.hidden = false;
+        out.innerHTML = nalezene.length
+            ? nalezene.slice(0, 8).map(g =>
+                '<a href="navod.html?id=' + encodeURIComponent(g.id) + '">' +
+                    "<b>" + UI.highlight(g.title || "Bez názvu", dotaz) + "</b>" +
+                    (g.desc ? "<span>" + esc(g.desc) + "</span>" : "") +
+                "</a>").join("") +
+              (nalezene.length > 8
+                ? '<a class="searchbox__vic" href="navody.html?q=' + encodeURIComponent(dotaz) + '">' +
+                  "Zobrazit všech " + nalezene.length + " nálezů</a>" : "")
+            : '<span class="searchbox__nic">Nic nenalezeno. ' +
+              '<a href="navody.html">Projít celou databázi</a></span>';
     }
 
     /* --------------------------------------------------------- stav cloudu */

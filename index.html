@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=75">
+    <link rel="stylesheet" href="assets/css/app.css?v=76">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -323,11 +323,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=75"></script>
-<script src="assets/js/doc.js?v=75"></script>
-<script src="assets/js/ui.js?v=75"></script>
-<script src="assets/js/vykazy.js?v=75"></script>
-<script type="module" src="assets/js/store.js?v=75"></script>
+<script src="assets/js/taxonomy.js?v=76"></script>
+<script src="assets/js/doc.js?v=76"></script>
+<script src="assets/js/ui.js?v=76"></script>
+<script src="assets/js/vykazy.js?v=76"></script>
+<script type="module" src="assets/js/store.js?v=76"></script>
 
 <script>
 (function () {
@@ -745,15 +745,26 @@
             if (radky.length) dny.push({ iso, popis: i === 0 ? "Dnes" : i === 1 ? "Zítra" : czDatum(iso), radky });
         }
 
+        /* Nabitý den (porada, dvě dovolené, tři úkoly) by dlaždici natáhl
+           na půl obrazovky. Od pěti řádků se proto sází do dvou sloupců –
+           ale jen když jsou názvy krátké, jinak by se všechno ořízlo
+           a nepřehlednost by byla horší než délka. */
+        const doSloupcu = (radky) =>
+            radky.length > 4 && radky.every(r => r.text.length <= 34);
+
         document.getElementById("kalendarSeznam").innerHTML = dny.length
             ? dny.map(den =>
                 '<div style="padding:5px 0;border-bottom:1px dashed var(--line-soft)">' +
                     '<span class="muted" style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase">' +
                         esc(den.popis) + "</span>" +
+                    '<div style="' + (doSloupcu(den.radky)
+                        ? "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));column-gap:14px"
+                        : "") + '">' +
                     den.radky.map(r =>
                         '<span class="row" style="gap:8px;padding:3px 0;font-size:14.5px">' +
                             '<i style="flex:none;width:9px;height:9px;border-radius:3px;background:' + r.barva + '"></i>' +
                             '<span class="truncate">' + esc(r.text) + "</span></span>").join("") +
+                    "</div>" +
                 "</div>").join("")
             : '<span class="muted" style="font-size:14px">Nejbližších sedm dní je volných.</span>';
     }

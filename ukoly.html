@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=75">
+    <link rel="stylesheet" href="assets/css/app.css?v=76">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -22,6 +22,15 @@
         .ukol__radek { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .ukol__nazev { font-weight: 900; font-size: 14.5px; }
         .ukol__meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+        /* zápis výkazu rovnou z řádku úkolu – bez rozbalování;
+           na úzkém okně zůstanou jen hodiny, text by lámal řádek */
+        .ukol__vykaz { flex: none; display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 11px; border-radius: 99px; font-size: 12.5px; font-weight: 800;
+            text-decoration: none; white-space: nowrap;
+            color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-lt); }
+        .ukol__vykaz:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+        .ukol__vykaz svg { width: 14px; height: 14px; flex: none; }
+        @media (max-width: 720px) { .ukol__vykaz span { display: none; } .ukol__vykaz { padding: 5px 8px; } }
         .ukol__pct { flex: none; font-weight: 900; font-size: 14px; width: 46px; text-align: right; }
         .ukol__prubeh { flex: none; width: 130px; height: 8px; border-radius: 99px; background: var(--bg); overflow: hidden; }
         .ukol__prubeh i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
@@ -161,10 +170,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=75"></script>
-<script src="assets/js/ui.js?v=75"></script>
-<script src="assets/js/vykazy.js?v=75"></script>
-<script type="module" src="assets/js/store.js?v=75"></script>
+<script src="assets/js/taxonomy.js?v=76"></script>
+<script src="assets/js/ui.js?v=76"></script>
+<script src="assets/js/vykazy.js?v=76"></script>
+<script type="module" src="assets/js/store.js?v=76"></script>
 
 <script>
 (function () {
@@ -196,6 +205,11 @@
     /* Fajfka do zaškrtávátka – stejná jako na staré stránce postupu práce. */
     const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
         '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M5 13l4 4L19 7"/></svg>';
+
+    /* Hodiny do tlačítka „Zapsat výkaz" v hlavičce úkolu. */
+    const HODINY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9" stroke-width="2"/>' +
+        '<path stroke-linecap="round" stroke-width="2" d="M12 7v5l3.5 2"/></svg>';
 
     const params = new URLSearchParams(location.search);
     let pohled = params.get("moje") ? "moje" : (params.get("zak") ? "zak" : "moje");
@@ -355,6 +369,14 @@
                     '<div class="ukol__meta">' + esc(meta) +
                         (u.termin ? (meta ? " · " : "") + "termín " + esc(V.czDatum(u.termin)) : "") +
                     "</div></div>" +
+                /* Zápis výkazu je nejčastější důvod, proč se člověk k úkolu
+                   vrací – proto stojí rovnou v hlavičce, ne až v patě uvnitř.
+                   Do výkazu se předvyplní projekt, úkol i druh. */
+                (window.KBUI.can("vykaz.otevrit") && u.stav !== "hotovo"
+                    ? '<a class="ukol__vykaz" href="vykazy.html?ukol=' + encodeURIComponent(u.id) +
+                        '" title="Zapsat odpracovaný čas na tenhle úkol">' + HODINY +
+                        "<span>Zapsat výkaz</span></a>"
+                    : "") +
                 '<span class="ukol__prubeh"><i style="width:' + pct + '%"></i></span>' +
                 '<span class="ukol__pct">' + pct + " %</span>" +
             "</div>" +
@@ -364,11 +386,8 @@
                     '<div class="ukol__pata">' +
                         '<span class="tiny muted">' + (u.poznamka ? esc(u.poznamka) : "") + "</span>" +
                         '<span class="row" style="gap:8px">' +
-                        // z rozdělaného úkolu rovnou do výkazu – projekt,
-                        // úkol i druh se předvyplní, ať se nepíšou dvakrát
-                        (window.KBUI.can("vykaz.otevrit") && u.stav !== "hotovo"
-                            ? '<a class="btn btn--sm btn--ghost" href="vykazy.html?ukol=' +
-                                encodeURIComponent(u.id) + '">Zapsat výkaz z úkolu</a>' : "") +
+                        // „Zapsat výkaz" je nahoře v hlavičce, ať se kvůli
+                        // němu nemusí úkol rozbalovat – tady už podruhé není
                         (smiPsat && u.stav !== "hotovo"
                             ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
                         (window.KBUI.can("ukol.delete")
@@ -631,7 +650,9 @@
             if (pohledBtn) { pohled = pohledBtn.dataset.pohled; return void vykresli(); }
 
             const rozbal = event.target.closest("[data-rozbal]");
-            if (rozbal && !event.target.closest("button")) {
+            // odkaz „Zapsat výkaz" sedí uvnitř hlavičky – klik na něj vede
+            // do výkazů, ne na rozbalení úkolu
+            if (rozbal && !event.target.closest("button, a")) {
                 const id = rozbal.dataset.rozbal;
                 otevrene.has(id) ? otevrene.delete(id) : otevrene.add(id);
                 return void vykresli();

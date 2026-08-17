@@ -120,6 +120,10 @@ KB.on = (event, handler) => bus.addEventListener(event, handler);
 /** Odhlášení posluchače – pro jednorázové akce, které se mají stát jen jednou. */
 KB.off = (event, handler) => bus.removeEventListener(event, handler);
 const emit = (event, detail) => bus.dispatchEvent(new CustomEvent(event, { detail }));
+/* Ruční vyvolání události – používá se při zkoušení stránek bez databáze
+   (nastrčí se data do KB.boards apod. a stránka se překreslí, jako by
+   dorazila z Firestore). V provozu se nevolá. */
+KB.emit = emit;
 
 let db = null;
 let auth = null;
@@ -854,15 +858,44 @@ KB.newBoardId = () => "board_" + Date.now() + "_" + Math.floor(Math.random() * 1
 KB.saveBoardMeta = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
-    await setDoc(boardDoc(id), {
+    const zaklad = {
         title: data.title || "Bez názvu",
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || "",
         createdMs: data.createdMs || Date.now(),
-        createdBy: data.createdBy || window.KB_USER || ""
-    }, { merge: true });
+        createdBy: data.createdBy || window.KB_USER || "",
+        createdUid: data.createdUid || KB.currentUid() || ""
+    };
+    /* Viditelnost se zapisuje jen když ji volající řeší – jinak by se
+       při přejmenování shodila zpátky na „všichni". */
+    if (data.viditelnost) {
+        zaklad.viditelnost = data.viditelnost === "vybrani" ? "vybrani" : "vsichni";
+        zaklad.proUids = Array.isArray(data.proUids) ? data.proUids.slice() : [];
+    }
+    await setDoc(boardDoc(id), zaklad, { merge: true });
     return id;
 };
+
+/**
+ * Vidí tenhle člověk tuhle tabuli?
+ *
+ * POZOR – tohle je pořádek, ne zámek. Tabule leží v `public/data`, kde má
+ * podle pravidel čtení každý přihlášený, takže omezení platí ve webu, ne
+ * v databázi. Na opravdu citlivé věci je potřeba tabule nejdřív přestěhovat
+ * mimo `public/data` (jako výkazy) – do té doby sem takové věci nepatří.
+ */
+KB.tabuleViditelna = (board) => {
+    if (!board) return false;
+    if (board.viditelnost !== "vybrani") return true;      // starší tabule = pro všechny
+    const uid = KB.currentUid();
+    if (!uid) return false;
+    if (board.createdUid === uid) return true;              // zakladatel o ni nepřijde
+    if (window.KBUI && window.KBUI.isAdmin && window.KBUI.isAdmin()) return true;   // manažer vidí všechny
+    return Array.isArray(board.proUids) && board.proUids.indexOf(uid) !== -1;
+};
+
+/** Tabule, které smí přihlášený vidět – v pořadí od naposledy upravované. */
+KB.tabuleProMne = () => (KB.boards || []).filter(KB.tabuleViditelna);
 
 /** Uloží prvky tabule. `stamp` pozná vlastní zápis od cizího při živé synchronizaci. */
 KB.saveBoard = async (id, elements, stamp) => {

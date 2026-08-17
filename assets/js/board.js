@@ -1288,9 +1288,29 @@
         applyView();
     }
 
+    /* Obrázek se ukládá jako text (data URL) do vlastního dokumentu a ten má
+       v databázi strop 1 MB. Sken celé stránky se do něj po prvním zmenšení
+       nemusí vejít, tak se to zkusí ještě dvakrát nahrubo – lepší drobet
+       měkčí obrázek než hláška „uložení selhalo" nad hotovou poznámkou. */
+    const STROP = 900 * 1024;          // rezerva na zbytek dokumentu
+    const STUPNE = [[1200, 0.75], [1000, 0.6], [800, 0.5]];
+
+    async function zmensPodStrop(file) {
+        let posledni = null;
+        for (const [sirka, kvalita] of STUPNE) {
+            posledni = await window.KBUI.compressImage(file, sirka, kvalita);
+            if (posledni.dataUrl.length <= STROP) return posledni;
+        }
+        return null;
+    }
+
     async function pasteImage(file) {
         try {
-            const result = await window.KBUI.compressImage(file, 1200, 0.75);
+            const result = await zmensPodStrop(file);
+            if (!result) {
+                return window.KBUI.toast(
+                    "Obrázek je i po zmenšení moc velký. Vlož radši výřez, ne celou stránku.", "warn");
+            }
             const imgId = window.KB.newImageId();
             await window.KB.saveBoardImage(S.id, imgId, result.dataUrl, { w: result.w, h: result.h });
             S.images[imgId] = result.dataUrl;

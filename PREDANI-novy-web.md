@@ -112,6 +112,18 @@ všech 18 stránek vrací 200.
 - **„Upozornění pro kontrolu"** (jen manažeři): přes 14 h za den, zápisy
   přes sebe, práce v den celodenní absence. Prázdná = vše v pořádku.
 
+### Tabule
+
+- **Mazání, přejmenování a viditelnost** jsou v podliště u otevřené tabule.
+  Mazání chce opsat název – jde i s obsahem a obrázky, zpátky to nevrátí.
+- **„Kdo ji vidí"**: buď všichni, nebo vybraní lidé. Zamčená tabule má
+  v liště visací zámek; zakladatel a manažeři ji vidí vždycky.
+  **Není to zámek na data** – tabule leží v `public/data`, kde má čtení
+  každý přihlášený. Na opravdu citlivé věci by se musely přestěhovat
+  mimo `public/data` jako výkazy.
+- Obrázek se před uložením zmenší (1200 px), a kdyby se do dokumentu
+  nevešel, zkusí se ještě dvakrát nahrubo (1000/800 px).
+
 ### Provoz
 
 - **Záloha a obnova** na Importu dat: projekty, úkoly, výkazy, kalendář
@@ -130,6 +142,14 @@ všech 18 stránek vrací 200.
 - **Zámek citlivých sekcí platí 3 minuty od poslední práce** (sazby, hesla,
   Přehled BP), pak se chce heslo znovu. Helpery `KBUI.zamekPamet /
   zamekZapamatuj / zamekObnovujPri` v ui.js.
+- **„Zapsat výkaz" je v hlavičce úkolu**, ne až v rozbaleném těle.
+- **Ve Správě projektů se skupiny Otevřené / Hotové sbalují** (volba
+  v prohlížeči). Ve sbalené skupině zůstane vidět vybraný projekt.
+- **Hledání v liště je jen na stránkách, kde něco dělá** – seznam
+  `STRANKY_S_HLEDANIM` v ui.js. Na návodech našeptává nálezy a klik
+  otevře návod; na výkazech filtruje tabulku.
+- **Dlaždice kalendáře sází do dvou sloupců** od pátého řádku, a jen
+  když jsou názvy krátké.
 
 ---
 

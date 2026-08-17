@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Tabule – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=75">
+    <link rel="stylesheet" href="assets/css/app.css?v=76">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 
@@ -215,11 +215,45 @@
 
 <input type="file" id="bFile" accept="image/*" hidden>
 
-<script src="assets/js/taxonomy.js?v=75"></script>
-<script src="assets/js/doc.js?v=75"></script>
-<script src="assets/js/ui.js?v=75"></script>
-<script src="assets/js/board.js?v=75"></script>
-<script type="module" src="assets/js/store.js?v=75"></script>
+<!-- ===================================================== KDO TABULI VIDÍ ==
+     Zamčená tabule zmizí ostatním z lišty. Není to zámek na data (tabule
+     leží v public/data, kde má čtení každý přihlášený) – je to pořádek,
+     ať se lidem v liště nekupí cizí pracovní plochy. -->
+<div id="kdoOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:520px;width:100%;gap:0;overflow:hidden;max-height:82vh">
+        <div style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Kdo tuhle tabuli vidí
+        </div>
+        <div style="padding:14px 18px;overflow-y:auto">
+            <label class="row" style="gap:9px;cursor:pointer;padding:5px 0">
+                <input type="radio" name="kdoRezim" value="vsichni" checked>
+                <span><b>Všichni ve firmě</b><br>
+                    <span class="tiny muted">Tabule je v liště každému, kdo se přihlásí.</span></span>
+            </label>
+            <label class="row" style="gap:9px;cursor:pointer;padding:5px 0">
+                <input type="radio" name="kdoRezim" value="vybrani">
+                <span><b>Jen vybraní lidé</b><br>
+                    <span class="tiny muted">Ostatním se v liště neukáže. Manažeři a zakladatel ji vidí vždycky.</span></span>
+            </label>
+            <div id="kdoLide" class="quickpanel__lide" style="margin-top:12px"></div>
+            <p class="tiny muted" style="margin:14px 0 0;line-height:1.6">
+                Pozor: schová se jen v liště. Kdo umí do databáze, obsah si přečte –
+                na opravdu citlivé věci to zatím není.
+            </p>
+        </div>
+        <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
+            <div class="grow"></div>
+            <button type="button" id="btnKdoZrus" class="btn btn--sm btn--ghost">Zrušit</button>
+            <button type="button" id="btnKdoUloz" class="btn btn--primary btn--sm">Uložit</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=76"></script>
+<script src="assets/js/doc.js?v=76"></script>
+<script src="assets/js/ui.js?v=76"></script>
+<script src="assets/js/board.js?v=76"></script>
+<script type="module" src="assets/js/store.js?v=76"></script>
 
 <script>
 (function () {
@@ -241,6 +275,12 @@
     })();
 
     /* ------------------------------------------------------ seznam tabulí */
+
+    /* Visací zámek u názvu tabule, která není pro všechny. */
+    const ZAMEK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"' +
+        ' style="width:11px;height:11px;flex:none;margin-right:5px;vertical-align:-1px">' +
+        '<rect x="5" y="11" width="14" height="9" rx="2" stroke-width="2.4"/>' +
+        '<path stroke-width="2.4" stroke-linecap="round" d="M8 11V8a4 4 0 018 0v3"/></svg>';
 
     const stamp = (ms) => {
         if (!ms) return "";
@@ -266,10 +306,12 @@
         // Řadíme podle názvu, ne podle poslední změny jako KB.boards –
         // jinak by tabule v liště poskakovaly pokaždé, když do některé
         // někdo píše, a klikalo by se do nich vedle.
-        const boards = (window.KB.boards || []).slice().sort((a, b) =>
+        const boards = window.KB.tabuleProMne().slice().sort((a, b) =>
             String(a.title || "").localeCompare(String(b.title || ""), "cs"));
 
-        const otisk = boards.map(b => b.id + "|" + (b.title || "")).join("¦");
+        const otevrena = boards.find(b => b.id === boardId) || null;
+        const otisk = boards.map(b => b.id + "|" + (b.title || "") + "|" +
+            (b.viditelnost || "") + "|" + (b.proUids || []).join(",")).join("¦");
         if (otisk === podlistaOtisk) return;
         podlistaOtisk = otisk;
 
@@ -280,10 +322,19 @@
             boards.map(board =>
                 '<a class="chip' + (board.id === boardId ? " chip--active" : "") + '"' +
                     ' href="tabule.html#deska=' + encodeURIComponent(board.id) + '"' +
-                    ' title="' + esc(board.title || "Bez názvu") + '">' +
+                    ' title="' + esc(board.title || "Bez názvu") +
+                        (board.viditelnost === "vybrani" ? " · vidí jen vybraní lidé" : "") + '">' +
+                    (board.viditelnost === "vybrani" ? ZAMEK : "") +
                     esc(board.title || "Bez názvu") +
                 "</a>").join("") +
         '</div><div class="subbar__right">' +
+            /* Správa se týká otevřené tabule – bez ní by tlačítka neměla co
+               přejmenovat ani smazat, tak se ukážou až v otevřené tabuli. */
+            (otevrena
+                ? '<button type="button" class="btn btn--sm btn--ghost" data-rename="' + esc(otevrena.id) + '">Přejmenovat</button>' +
+                  '<button type="button" class="btn btn--sm btn--ghost" data-kdo="' + esc(otevrena.id) + '">Kdo ji vidí</button>' +
+                  '<button type="button" class="btn btn--sm btn--ghost" data-del="' + esc(otevrena.id) + '">Smazat</button>'
+                : "") +
             '<button type="button" class="btn btn--primary btn--sm" data-nova>+ Nová tabule</button>' +
         "</div></div>";
 
@@ -304,8 +355,67 @@
         }
     }
 
+    /* ------------------------------------------------- kdo tabuli vidí --- */
+
+    let kdoProId = "";
+
+    function otevriKdo(id) {
+        const board = (window.KB.boards || []).find(b => b.id === id);
+        if (!board) return;
+        kdoProId = id;
+
+        const uid = window.KB.currentUid();
+        const PORADI = { "hlavni-spravce": 0, "spravce": 1, "zamestnanec": 2, "student": 3 };
+        // zakladatel v seznamu není – o svou tabuli přijít nemůže
+        const lide = (window.KB.users || [])
+            .filter(u => u.active !== false && u.id !== uid)
+            .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
+                            (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
+                            (a.last || "").localeCompare(b.last || "", "cs"));
+        const vybrani = Array.isArray(board.proUids) ? board.proUids : [];
+
+        $("kdoLide").innerHTML = lide.map(u =>
+            '<label><input type="checkbox" value="' + esc(u.id) + '"' +
+                (vybrani.indexOf(u.id) !== -1 ? " checked" : "") + "> " +
+            esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("") ||
+            '<span class="tiny muted">Zatím tu není nikdo další.</span>';
+
+        const rezim = board.viditelnost === "vybrani" ? "vybrani" : "vsichni";
+        document.querySelectorAll('[name="kdoRezim"]').forEach(r => { r.checked = r.value === rezim; });
+        prekresliKdo();
+        $("kdoOverlay").hidden = false;
+    }
+
+    /** Seznam lidí má smysl jen u „jen vybraní" – jinak se zašedne. */
+    function prekresliKdo() {
+        const vybrani = document.querySelector('[name="kdoRezim"]:checked');
+        const zap = vybrani && vybrani.value === "vybrani";
+        $("kdoLide").style.opacity = zap ? "1" : ".4";
+        $("kdoLide").querySelectorAll("input").forEach(i => { i.disabled = !zap; });
+    }
+
+    async function ulozKdo() {
+        const rezim = (document.querySelector('[name="kdoRezim"]:checked') || {}).value || "vsichni";
+        const proUids = Array.from($("kdoLide").querySelectorAll("input:checked")).map(i => i.value);
+        try {
+            await window.KB.saveBoardMeta(kdoProId, { viditelnost: rezim, proUids: proUids });
+            $("kdoOverlay").hidden = true;
+            podlistaOtisk = null;   // viditelnost se změnila, lišta se musí přemalovat
+            paintSubbar();
+            window.KBUI.toast(rezim === "vybrani"
+                ? "Tabuli teď vidí jen vybraní lidé."
+                : "Tabuli vidí všichni.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
     document.addEventListener("click", async (event) => {
         if (event.target.closest("[data-nova]")) return createBoard();
+
+        const kdo = event.target.closest("[data-kdo]");
+        if (kdo) return otevriKdo(kdo.dataset.kdo);
 
         const rename = event.target.closest("[data-rename]");
         if (rename) {
@@ -313,16 +423,26 @@
             const title = (prompt("Nový název tabule:", board ? board.title : "") || "").trim();
             if (!title) return;
             await window.KB.saveBoardMeta(rename.dataset.rename, { title: title });
+            podlistaOtisk = null;
+            paintSubbar();
             return window.KBUI.toast("Přejmenováno.");
         }
 
         const del = event.target.closest("[data-del]");
         if (del) {
             const board = (window.KB.boards || []).find(b => b.id === del.dataset.del);
-            if (!confirm('Opravdu smazat tabuli „' + (board ? board.title : "") + '" i s obsahem?')) return;
+            /* Tabule se maže i s obsahem a obrázky – zpátky se to nevrátí,
+               tak ať se název opíše ručně, ne že se to odklikne omylem. */
+            const nazev = board ? (board.title || "Bez názvu") : "";
+            const opis = prompt('Smazání tabule „' + nazev + '" i s obsahem nejde vzít zpět.\n' +
+                "Pro potvrzení opiš její název:", "");
+            if (opis === null) return;
+            if (opis.trim() !== nazev.trim()) return window.KBUI.toast("Název nesedí, nemažu.", "warn");
             try {
                 await window.KB.deleteBoard(del.dataset.del);
                 window.KBUI.toast("Tabule smazána.");
+                // mazala se právě otevřená tabule – zůstalo by prázdné plátno
+                if (del.dataset.del === boardId) location.href = "tabule.html";
             } catch (err) {
                 window.KBUI.toast("Smazání selhalo.", "error");
             }
@@ -371,6 +491,11 @@
         window.KBUI.mountNav({ active: "tabule.html", subbar: true });
         paintSubbar();
 
+        document.querySelectorAll('[name="kdoRezim"]').forEach(r =>
+            r.addEventListener("change", prekresliKdo));
+        $("btnKdoZrus").addEventListener("click", () => { $("kdoOverlay").hidden = true; });
+        $("btnKdoUloz").addEventListener("click", ulozKdo);
+
         /* Přepnutí tabule v podliště mění jen část adresy za # – to samo
            o sobě stránku nepřenačte, tak se o to postaráme. */
         window.addEventListener("hashchange", () => location.reload());
@@ -384,7 +509,7 @@
             $("btnNewBoard").addEventListener("click", createBoard);
             const prihlasen = () => !!(window.KB.currentUid && window.KB.currentUid());
             const skoc = () => {
-                const boards = window.KB.boards || [];
+                const boards = window.KB.tabuleProMne();
                 if (boards.length) {
                     location.replace("tabule.html#deska=" + encodeURIComponent(boards[0].id));
                     return true;
@@ -424,6 +549,16 @@
         }
 
         await window.KB.whenReady();
+
+        /* Odkaz na zamčenou tabuli (přeposlaný, ze záložek) nemá vést do
+           plátna, kam ten člověk nepatří. Hlídá se až tady, po dorazení dat –
+           dokud tabuli neznáme, nemá se podle čeho rozhodnout. */
+        const otevirana = (window.KB.boards || []).find(b => b.id === boardId);
+        if (otevirana && !window.KB.tabuleViditelna(otevirana)) {
+            window.KBUI.toast("Tuhle tabuli nemáš zpřístupněnou.", "warn");
+            return void setTimeout(() => { location.href = "tabule.html"; }, 1200);
+        }
+
         await window.KBBoard.open(boardId, {
             stage: $("bStage"), world: $("bWorld"), svg: $("bSvg"), html: $("bHtml"),
             title: $("bTitle"), status: $("bStatus"), selbar: null, selinfo: $("bSelInfo"),
