@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=72">
+    <link rel="stylesheet" href="assets/css/app.css?v=73">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -83,15 +83,33 @@
         .kal__hodiny { position: relative; height: 504px; /* 14 hodin × 36 px */
             background: repeating-linear-gradient(to bottom,
                 var(--line-soft) 0, var(--line-soft) 1px, transparent 1px, transparent 36px); }
-        .kal__hodina { position: absolute; left: 2px; font-size: 9px; color: var(--dim); pointer-events: none; }
-        .kal__hodiny .ud { position: absolute; left: 24px; right: 2px; white-space: normal; overflow: hidden; }
+        .kal__hodiny .ud { position: absolute; white-space: normal; overflow: hidden; }
+
+        /* ---------------------------------------------------- osa času ---
+           Čísla hodin stála dřív v každém dni, kde se pletla přes linky
+           i přes bloky a ubírala dnu šířku. Teď jsou jednou vlevo ve vlastním
+           sloupci. Osa má stejnou stavbu jako den (číslo · pruh · hodiny),
+           takže se sama srovná do stejné výšky. */
+        .kal--hodinovy { grid-template-columns: 46px repeat(7, minmax(0, 1fr)); }
+        .kal--hodinovy.kal--3 { grid-template-columns: 46px repeat(3, minmax(0, 1fr)); }
+        /* Průhledný rámeček je tu schválně: den má `border: 1px` a bez něj by
+           osa začínala o pixel výš a čísla by seděla vedle linek. */
+        .kal__osa { display: flex; flex-direction: column; gap: 3px;
+            border: 1px solid transparent; padding: 5px 0; font-size: 12px; }
+        .kal__osa .kal__celodenni { border-bottom: none; margin: 3px 0 0; }
+        .kal__hodiny--osa { background: none; }
+        .kal__hodina { position: absolute; right: 6px; font-size: 10px;
+            color: var(--muted); pointer-events: none; font-variant-numeric: tabular-nums; }
+
         @media (max-width: 760px) {
-            .kal { grid-template-columns: repeat(1, 1fr); }
+            .kal, .kal--hodinovy, .kal--hodinovy.kal--3 { grid-template-columns: repeat(1, 1fr); }
             .kal__hlava { display: none; }
             .kal__den--cizi { display: none; }
             .kal__den { min-height: 0; }
             /* dny jsou pod sebou, není co zarovnávat – pruh ať nedrží prázdno */
             .kal__celodenni { min-height: 0; }
+            /* osa nad prvním dnem by na úzkém displeji jen zabírala řádek */
+            .kal__osa { display: none; }
         }
 
         /* ------------------------------------------------------ detail ---
@@ -206,10 +224,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=72"></script>
-<script src="assets/js/ui.js?v=72"></script>
-<script src="assets/js/vykazy.js?v=72"></script>
-<script type="module" src="assets/js/store.js?v=72"></script>
+<script src="assets/js/taxonomy.js?v=73"></script>
+<script src="assets/js/ui.js?v=73"></script>
+<script src="assets/js/vykazy.js?v=73"></script>
+<script type="module" src="assets/js/store.js?v=73"></script>
 
 <script>
 (function () {
@@ -475,6 +493,24 @@
 
     /* ------------------------------------------------------- vykreslení */
 
+    /**
+     * Osa s časy nalevo od mřížky. Má stejnou vnitřní stavbu jako den
+     * (číslo dne · pruh celodenních · hodiny), jen prázdnou – tím se sama
+     * srovná do stejné výšky a čísla sedí na svých linkách bez dopočítávání.
+     */
+    function osaHtml(zac, kon, vyskaHodiny) {
+        let popisky = "";
+        for (let h = zac; h <= kon; h += 2) {
+            popisky += '<span class="kal__hodina" style="top:' +
+                ((h - zac) * vyskaHodiny - 6) + 'px">' + h + ":00</span>";
+        }
+        return '<div class="kal__osa">' +
+            '<span class="kal__cislo">&nbsp;</span>' +
+            '<div class="kal__celodenni"></div>' +
+            '<div class="kal__hodiny kal__hodiny--osa">' + popisky + "</div>" +
+        "</div>";
+    }
+
     function denHtml(d, moznosti) {
         const den = iso(d);
         const seznam = moznosti.seznam || udalostiDne(den);
@@ -500,20 +536,16 @@
         const celodenni = [], casovane = [];
         seznam.forEach(u => (jeCelodenni(u) ? celodenni : casovane).push(u));
 
-        let hodiny = "";
-        for (let h = ZAC; h <= KON; h += 2) {
-            hodiny += '<span class="kal__hodina" style="top:' +
-                ((h - ZAC) * VYSKA_HODINY - 5) + 'px">' + h + ":00</span>";
-        }
-        hodiny += rozvrhni(casovane, ZAC, KON).map(u => {
+        /* Časy se píšou jednou vlevo do vlastní osy (viz `osaHtml`), ne do
+           každého dne – čísla se pletla přes linky i přes bloky a ubírala
+           dnu šířku. Blok tak může jít od kraje ke kraji. */
+        const hodiny = rozvrhni(casovane, ZAC, KON).map(u => {
             const vrch = (u._od - ZAC * 60) / 60 * VYSKA_HODINY;
             const vyska = (u._do - u._od) / 60 * VYSKA_HODINY - 2;
-            /* Souběžné události si rozdělí šířku dne na stejné sloupce.
-               Pruh začíná za popisky hodin (24 px) a 2 px vpravo zbývají
-               na okraj – `sloupec` je celková šířka jednoho místa. */
-            const sloupec = "((100% - 26px) / " + u._sloupcu + ")";
+            // souběžné události si rozdělí šířku dne na stejné sloupce
+            const sloupec = "((100% - 4px) / " + u._sloupcu + ")";
             const styl = "top:" + vrch.toFixed(0) + "px;height:" + vyska.toFixed(0) + "px;" +
-                "left:calc(24px + " + u._sloupec + " * " + sloupec + ");" +
+                "left:calc(2px + " + u._sloupec + " * " + sloupec + ");" +
                 "width:calc(" + sloupec + " - 2px);right:auto";
             return udalostHtml(u).replace('class="ud ', 'style="' + styl + '" class="ud ');
         }).join("");
@@ -559,8 +591,9 @@
         const nejvic = dny.reduce((max, den) =>
             Math.max(max, den.seznam.filter(jeCelodenni).length), 0);
 
-        let html = '<div class="kal' + (dnu === 3 ? " kal--3" : "") +
-            '" style="--celodenni:' + vyskaCelodennich(nejvic) + 'px">';
+        let html = '<div class="kal kal--hodinovy' + (dnu === 3 ? " kal--3" : "") +
+            '" style="--celodenni:' + vyskaCelodennich(nejvic) + 'px">' +
+            osaHtml(6, 20, 36);
         dny.forEach(den => { html += denHtml(den.d, { velky: true, seznam: den.seznam }); });
         mrizka.innerHTML = html + "</div>";
     }
