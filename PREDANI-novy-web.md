@@ -54,8 +54,9 @@ všech 18 stránek vrací 200.
 
 ### Kalendář
 
-- Nepřítomnost (dovolená, nemoc, školení) je **vždycky v pruhu nahoře**, ne
-  v hodinové mřížce – i když má časy. Půlden se pozná podle času v popisku.
+- V pruhu nahoře jsou **jen celodenní** věci. Půldenní dovolená (7–13) patří
+  do mřížky na svoje hodiny – jinak by z ní nešlo poznat, kdy člověk byl
+  a kdy nebyl.
 - Celý den se ukládá jako **00:00–23:59**, do fondu se ale počítá jedna
   směna (`hodinyPevne`), jinak by týden dovolené udělal 120 hodin.
 - Souběžné události si **rozdělí šířku dne na sloupce** (`rozvrhni`).
