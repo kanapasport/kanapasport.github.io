@@ -232,7 +232,8 @@ try {
             if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
             if (logyOdber) { try { logyOdber(); } catch (e) {} logyOdber = null; }
             quickOdbery.forEach(stop => { try { stop(); } catch (e) {} });
-            quickOdbery = []; quickPrijate = []; quickOdeslane = []; KB.quicktodo = [];
+            quickOdbery = []; quickPrijate = []; quickPrijateSkupina = [];
+            quickOdeslane = []; KB.quicktodo = [];
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
@@ -394,11 +395,12 @@ KB.zapisAktivitu = (druh, text) => {
 
 let quickOdbery = [];
 let quickPrijate = [];
+let quickPrijateSkupina = [];
 let quickOdeslane = [];
 
 function slejQuick() {
     const mapa = new Map();
-    quickPrijate.concat(quickOdeslane).forEach(q => mapa.set(q.id, q));
+    quickPrijate.concat(quickPrijateSkupina, quickOdeslane).forEach(q => mapa.set(q.id, q));
     KB.quicktodo = Array.from(mapa.values())
         .sort((a, b) => (a.hotovo ? 1 : 0) - (b.hotovo ? 1 : 0)
             || (a.doKdy || "9999").localeCompare(b.doKdy || "9999")
@@ -411,6 +413,13 @@ KB.watchQuickTodo = async () => {
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || quickOdbery.length) return;
     const uid = auth.currentUser.uid;
+    /* Dva dotazy na přijaté: `proUids` je dnešní podoba (vzkaz může mít víc
+       adresátů), `proUid` drží starší záznamy z doby, kdy měl každý svůj
+       vlastní dokument. Sléváme je podle id, takže se nezdvojí. */
+    quickOdbery.push(onSnapshot(query(quickCol(), where("proUids", "array-contains", uid)), (s) => {
+        quickPrijateSkupina = []; s.forEach(d => quickPrijateSkupina.push({ id: d.id, ...d.data() }));
+        slejQuick();
+    }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
     quickOdbery.push(onSnapshot(query(quickCol(), where("proUid", "==", uid)), (s) => {
         quickPrijate = []; s.forEach(d => quickPrijate.push({ id: d.id, ...d.data() }));
         slejQuick();
@@ -426,9 +435,19 @@ KB.newQuickId = () => "qt_" + Date.now() + "_" + Math.floor(Math.random() * 1000
 KB.saveQuickTodo = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
+
+    /* Jeden vzkaz = jeden dokument, i když je pro víc lidí. Dřív se zakládal
+       zvlášť pro každého, takže se v přehledu objevil čtyřikrát a splnění
+       jednoho o ostatních nevědělo. `proUids` drží všechny adresáty;
+       `proUid` zůstává kvůli starším záznamům a je v něm ten první. */
+    const komu = Array.isArray(data.proUids) && data.proUids.length
+        ? data.proUids.slice()
+        : [data.proUid || KB.currentUid()];
+
     await setDoc(quickDoc(id), {
         text:    String(data.text || "").slice(0, 300),
-        proUid:  data.proUid || KB.currentUid(),
+        proUids: komu,
+        proUid:  komu[0],
         odKoho:  data.odKoho || KB.currentUid(),
         odKohoJmeno: data.odKohoJmeno || window.KB_USER || "",
         doKdy:   data.doKdy || "",
@@ -438,6 +457,9 @@ KB.saveQuickTodo = async (id, data) => {
         asap:    data.asap === true,
         projekt: data.projekt || "",       // nepovinná vazba na projekt
         hotovo:  data.hotovo === true,
+        // u společného vzkazu je potřeba vědět, kdo ho odškrtl za všechny
+        hotovoKdo: data.hotovoKdo || "",
+        hotovoMs:  data.hotovoMs || 0,
         ms:      data.ms || Date.now()
     }, { merge: true });
     return id;

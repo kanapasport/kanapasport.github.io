@@ -200,18 +200,27 @@ service cloud.firestore {
     // Schválně MIMO `private` – tam má správce plošné čtení, kdežto tohle
     // má vidět jen autor a adresát. Nikdo jiný, ani manažer.
     match /artifacts/firemni-kb-app/osobni/quicktodo/seznam/{id} {
-      allow read: if clen() && (resource.data.proUid == request.auth.uid
-                                || resource.data.odKoho == request.auth.uid);
+      /* Vzkaz může mít víc adresátů – `proUids`. Starší záznamy mají jen
+         `proUid`, proto se hlídají obě podoby. Splní-li společný vzkaz
+         kdokoliv z adresátů, zhasne všem, takže update musí smět každý
+         z nich – ne jen ten, komu „patří". */
+      allow read: if clen() && (resource.data.odKoho == request.auth.uid
+                                || resource.data.proUid == request.auth.uid
+                                || (resource.data.proUids is list
+                                    && request.auth.uid in resource.data.proUids));
       allow create: if clen() && request.resource.data.odKoho == request.auth.uid;
-      // adresát smí odškrtnout hotovo, autor upravit i smazat; přeposlat
-      // vzkaz jinému člověku nejde – dvojice odKoho/proUid se měnit nesmí
+      // přeposlat vzkaz jinému nejde – adresáti ani autor se měnit nesmí
       allow update: if clen()
-                       && (resource.data.proUid == request.auth.uid
-                           || resource.data.odKoho == request.auth.uid)
-                       && request.resource.data.proUid == resource.data.proUid
+                       && (resource.data.odKoho == request.auth.uid
+                           || resource.data.proUid == request.auth.uid
+                           || (resource.data.proUids is list
+                               && request.auth.uid in resource.data.proUids))
+                       && request.resource.data.proUids == resource.data.proUids
                        && request.resource.data.odKoho == resource.data.odKoho;
       allow delete: if clen() && (resource.data.odKoho == request.auth.uid
-                                  || resource.data.proUid == request.auth.uid);
+                                  || resource.data.proUid == request.auth.uid
+                                  || (resource.data.proUids is list
+                                      && request.auth.uid in resource.data.proUids));
     }
 
     // všechno ostatní zavřené

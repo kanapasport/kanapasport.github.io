@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=67">
+    <link rel="stylesheet" href="assets/css/app.css?v=69">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -164,17 +164,17 @@
     <div class="card col" style="padding:0;max-width:420px;width:100%;gap:0;overflow:hidden">
         <div id="detailObsah"></div>
         <div class="row" style="gap:10px;padding:14px 18px;border-top:1px solid var(--line)">
-            <button type="button" id="btnNaVykaz" class="btn btn--primary btn--sm" hidden>Otevřít ve výkazu</button>
+            <button type="button" id="btnNaVykaz" class="btn btn--primary btn--sm" hidden>Upravit ve výkazu</button>
             <div class="grow"></div>
             <button type="button" id="btnDetailZavri" class="btn btn--ghost btn--sm">Zavřít</button>
         </div>
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=67"></script>
-<script src="assets/js/ui.js?v=67"></script>
-<script src="assets/js/vykazy.js?v=67"></script>
-<script type="module" src="assets/js/store.js?v=67"></script>
+<script src="assets/js/taxonomy.js?v=69"></script>
+<script src="assets/js/ui.js?v=69"></script>
+<script src="assets/js/vykazy.js?v=69"></script>
+<script type="module" src="assets/js/store.js?v=69"></script>
 
 <script>
 (function () {
@@ -289,13 +289,18 @@
         /* Vlastní text se připojí jen tehdy, když opravdu něco přidává.
            Absence z výkazu měly v textu název druhu, takže vycházelo
            „Nemoc · Nemoc" – druh nese `typ`, opisovat ho není k čemu. */
+        /* V mřížce stojí jen DRUH a jméno – „Dovolená – Jan Novák". Vlastní
+           popis se sem nepřidává, i když si ho někdo vyplní: rozhodilo by to
+           jednotný vzhled pruhu a stejně se nevejde. Text je vidět v detailu
+           po rozkliknutí. */
         const vlastni = (u.text || "").trim();
-        const prinasi = vlastni && vlastni.toLowerCase() !== nazevDruhu.toLowerCase();
-
         const druh = (u.typ || "udalost") === "udalost"
             ? (vlastni || DRUHY.udalost)
-            : nazevDruhu + (prinasi ? " · " + vlastni : "");
-        return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : "") };
+            : nazevDruhu;
+
+        return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : ""),
+                 vlastni: vlastni && vlastni.toLowerCase() !== nazevDruhu.toLowerCase()
+                          ? vlastni : "" };
     }
 
     /* `kdo` a `co` jsou rozdělené schválně: celodenní pruh je sází zvlášť
@@ -555,7 +560,8 @@
                 radek("Kdo", p.kdo) +
                 radek("Kdy", obdobi) +
                 radek("Čas", cely ? "celý den" : ((u.odCas || "") + " – " + (u.doCas || ""))) +
-                radek("Popis", (u.text || "").trim()) +
+                // vlastní popis patří sem, v mřížce by jen rozbil jednotný pruh
+                radek("Popis", p.vlastni) +
                 radek("Zdroj", u.zdroj === "vykaz" ? "zapsáno z výkazu" : "") +
             "</div>";
     }
@@ -566,10 +572,13 @@
 
         $("detailObsah").innerHTML = detailHtml(u);
 
-        /* Na opravu se dá skočit jen u zápisu z výkazu, který svůj výkaz zná.
-           Starší události `vykazId` nemají – tam tlačítko nedává co nabídnout. */
+        /* Opravovat se chodí do výkazu – tam ta data patří. Manažer smí
+           i cizí, ostatní jen svoje. Starší události `vykazId` nemají,
+           tam tlačítko nemá kam vést. */
+        const smi = u.vykazId &&
+            (window.KBUI.can("vykaz.view") || u.uid === window.KB.currentUid());
         const naVykaz = $("btnNaVykaz");
-        naVykaz.hidden = !u.vykazId;
+        naVykaz.hidden = !smi;
         naVykaz.dataset.vykaz = u.vykazId || "";
 
         $("detailOverlay").hidden = false;

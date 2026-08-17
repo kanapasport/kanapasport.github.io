@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=67">
+    <link rel="stylesheet" href="assets/css/app.css?v=69">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=67"></script>
-<script src="assets/js/ui.js?v=67"></script>
-<script src="assets/js/vykazy.js?v=67"></script>
-<script type="module" src="assets/js/store.js?v=67"></script>
+<script src="assets/js/taxonomy.js?v=69"></script>
+<script src="assets/js/ui.js?v=69"></script>
+<script src="assets/js/vykazy.js?v=69"></script>
+<script type="module" src="assets/js/store.js?v=69"></script>
 
 <script>
 (function () {
@@ -248,6 +248,9 @@
        bez části, bez činnosti a bez peněz, jen datum a čas (nebo celý den).
        Evidují se, ale do součtů odpracovaných hodin se nepočítají. */
     const ABSENCE = ["Dovolená", "Nemoc", "Školení"];
+    /* Režie, která se nevykazuje na konkrétní zakázku. Není to absence –
+       je to odpracovaný čas, jen bez projektu. */
+    const ADMINISTRATIVA = "Administrativa";
     const jeAbsence = (nazev) => ABSENCE.indexOf(nazev) !== -1;
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Nemoc": "nemoc", "Školení": "skoleni" };
 
@@ -273,7 +276,14 @@
         const zEvidence = (window.KB.projektyDocs || [])
             .filter(p => !p.uzavreno).map(p => p.nazev).filter(Boolean);
         const jmena = zEvidence.length ? zEvidence : V.zakazky();
-        return ABSENCE.concat(jmena.filter(z => !jeAbsence(z)));
+
+        /* Administrativa se nabízí vždycky – režie se odpracuje na každé
+           zakázce a nikdo ji nechce zakládat jako projekt. Firma se k ní
+           doplní z `firmaMap` stejně jako u ostatních; nastavuje se tím,
+           že se v číselníku firem přiřadí k projektu „Administrativa". */
+        const zvlastni = ABSENCE.concat([ADMINISTRATIVA]);
+        return zvlastni.concat(
+            jmena.filter(z => !jeAbsence(z) && z !== ADMINISTRATIVA));
     }
 
     /**
@@ -407,10 +417,13 @@
                 // u dovolené, nemoci a školení: celý den = 8 hodin evidenčně
                 '<label class="celyden"><input type="checkbox" data-f="celyden"' +
                     (d.celyden ? " checked" : "") + "> <b>Celý den</b></label>" +
-                // sazba je peníze – zaměstnanci ji nenabízíme, doplní ji správce
+                /* Sazba se jen ukazuje. Platí ta z projektu (nebo obecná)
+                   a přepisovat ji u jednoho záznamu by tiše rozešlo výkaz
+                   s tím, co je nastavené ve Správě projektů. */
                 (window.KBUI.can("vykaz.view")
                     ? '<div><label class="label">Sazba (Kč/h)</label>' +
-                          '<input type="number" class="field" data-f="sazba" min="0" step="10" ' +
+                          '<input type="number" class="field" data-f="sazba" ' +
+                              'readonly tabindex="-1" title="Nastavuje se u projektu ve Správě projektů" ' +
                               'value="' + (d.sazba ? Number(d.sazba) : "") + '"></div>'
                     : "") +
             "</div>" +
@@ -954,7 +967,7 @@
            nafiltruje, ale výchozí pohled je jeho vlastní práce, ne celá firma. */
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
-        $("fZakazka").innerHTML = V.options(V.zakazky().concat(ABSENCE), filtr.zakazka, "Všechny projekty");
+        $("fZakazka").innerHTML = V.options(nabidkaProjektu(), filtr.zakazka, "Všechny projekty");
         $("fFirma").innerHTML = V.options(V.firmy(), filtr.firma, "Všechny firmy");
         $("fCinnost").innerHTML = V.options(V.cinnosti(), filtr.cinnost, "Všechny druhy vypracování");
         $("fTech").innerHTML = V.options(
@@ -1143,7 +1156,7 @@
                 createdMs: puvodni.createdMs,
                 createdBy: puvodni.createdBy
             }));
-            await srovnejKalendar(Object.assign({}, p, { datum: datum }), uid, jmeno);
+            await srovnejKalendar(Object.assign({}, p, { datum: datum }), uid, jmeno, puvodni);
             $("editOverlay").hidden = true;
             window.KBUI.toast("Záznam upraven.");
         } catch (err) {
@@ -1152,9 +1165,24 @@
         }
     }
 
-    /** Událost v kalendáři patřící k tomuhle zápisu, pokud nějaká vznikla. */
-    const udalostZapisu = (vykazId) =>
-        (window.KB.kalendar || []).find(x => x.vykazId === vykazId) || null;
+    /**
+     * Událost v kalendáři patřící k tomuhle zápisu.
+     *
+     * Nejdřív podle `vykazId`. Události zapsané dřív, než se `vykazId` začalo
+     * ukládat, ho nemají – ty se poznají podle toho, že vznikly z výkazu,
+     * patří témuž člověku a začínají v původní den zápisu. Bez téhle
+     * záložky se při úpravě zakládala druhá událost a v kalendáři zůstala
+     * viset stará i nová.
+     */
+    function udalostZapisu(vykazId, puvodni) {
+        const vse = window.KB.kalendar || [];
+        const podleId = vse.find(x => x.vykazId === vykazId);
+        if (podleId) return podleId;
+
+        if (!puvodni || !puvodni.datum) return null;
+        return vse.find(x => x.zdroj === "vykaz" && !x.vykazId &&
+            x.uid === puvodni.uid && (x.od || "") === puvodni.datum) || null;
+    }
 
     /**
      * Po úpravě zápisu srovná i kalendář. Řeší všechny tři přechody:
@@ -1162,8 +1190,8 @@
      * se jí stala (událost přibude). Bez toho zůstávala v kalendáři viset
      * dovolená na původním datu, i když se zápis přesunul jinam.
      */
-    async function srovnejKalendar(p, uid, jmeno) {
-        const stara = udalostZapisu(editId);
+    async function srovnejKalendar(p, uid, jmeno, puvodni) {
+        const stara = udalostZapisu(editId, puvodni);
 
         if (!p.absence) {
             if (stara) await window.KB.deleteUdalost(stara.id).catch(() => {});
@@ -1181,7 +1209,7 @@
                      V.czDatum(z.datum) + "?")) return;
         try {
             // s absencí zmizí i její událost, ať v kalendáři nezůstane viset
-            const udalost = udalostZapisu(editId);
+            const udalost = udalostZapisu(editId, z);
             await window.KB.deleteVykaz(editId);
             if (udalost) await window.KB.deleteUdalost(udalost.id).catch(() => {});
             $("editOverlay").hidden = true;

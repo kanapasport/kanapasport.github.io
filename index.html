@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=67">
+    <link rel="stylesheet" href="assets/css/app.css?v=69">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -281,11 +281,11 @@
     </footer>
 </main>
 
-<script src="assets/js/taxonomy.js?v=67"></script>
-<script src="assets/js/doc.js?v=67"></script>
-<script src="assets/js/ui.js?v=67"></script>
-<script src="assets/js/vykazy.js?v=67"></script>
-<script type="module" src="assets/js/store.js?v=67"></script>
+<script src="assets/js/taxonomy.js?v=69"></script>
+<script src="assets/js/doc.js?v=69"></script>
+<script src="assets/js/ui.js?v=69"></script>
+<script src="assets/js/vykazy.js?v=69"></script>
+<script type="module" src="assets/js/store.js?v=69"></script>
 
 <script>
 (function () {
@@ -531,8 +531,12 @@
     function renderQuick() {
         const uid = mojeUid();
         const vse = window.KB.quicktodo || [];
-        const proMe = vse.filter(q => q.proUid === uid);
-        const odeMe = vse.filter(q => q.odKoho === uid && q.proUid !== uid);
+        // adresáti jsou v `proUids`; starší záznamy mají jen `proUid`
+        const adresati = (q) => (q.proUids && q.proUids.length) ? q.proUids : [q.proUid];
+        const jeProMe = (q) => adresati(q).indexOf(uid) !== -1;
+
+        const proMe = vse.filter(jeProMe);
+        const odeMe = vse.filter(q => q.odKoho === uid && !jeProMe(q));
 
         const termin = (q) => {
             if (q.asap) return ' · <span class="quickrad__asap">co nejdříve</span>';
@@ -549,15 +553,26 @@
             (a.doKdy ? 0 : 1) - (b.doKdy ? 0 : 1) ||
             (a.doKdy || "").localeCompare(b.doKdy || "");
 
+        const spoluucast = (q) => adresati(q).filter(x => x !== uid)
+            .map(jmenoUid).filter(Boolean);
+
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' + (q.hotovo ? " qtrad--hotovo" : "") + '">' +
                 '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
                     '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:12.5px">' +
-                        (mujVzkaz ? "pro " + esc(jmenoUid(q.proUid) || "?")
-                                  : "od " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
+                        (mujVzkaz
+                            ? "Zadal: já"
+                            : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?")) +
                         (q.projekt ? " · " + esc(q.projekt) : "") +
-                        termin(q) + "</span>" +
+                        termin(q) +
+                        // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
+                        (spoluucast(q).length
+                            ? "<br>Spoluúčast: " + esc(spoluucast(q).join(", ")) : "") +
+                        (q.hotovo && q.hotovoKdo
+                            ? '<br><span class="quickrad__splnil">splnil ' +
+                              esc(q.hotovoKdo) + "</span>" : "") +
+                    "</span>" +
                 "</span>" +
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
                 (q.hotovo
@@ -604,7 +619,13 @@
         const hotovoBtn = event.target.closest("#quickSeznam [data-quick-hotovo]");
         if (hotovoBtn) {
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
-            if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, { hotovo: !hotovoBtn.dataset.zpet }))
+            // u společného vzkazu se zapíše, kdo ho odškrtl za všechny
+            const jeHotovo = !hotovoBtn.dataset.zpet;
+            if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, {
+                hotovo: jeHotovo,
+                hotovoKdo: jeHotovo ? (window.KB_USER || "") : "",
+                hotovoMs: jeHotovo ? Date.now() : 0
+            }))
                 .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
             return;
         }

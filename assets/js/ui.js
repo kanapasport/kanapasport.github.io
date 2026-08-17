@@ -1047,12 +1047,20 @@
 
         // nabídky (jen jednou, ať se nepřepisuje rozepsaný výběr)
         const komu = panel.querySelector("[data-quick-komu]");
-        const lide = (window.KB.users || []).filter(u => u.active !== false);
+        /* Sebe si zadavatel nezaškrtává – vzkaz vidí v seznamu tak jako tak,
+           protože ho poslal. Řadí se manažeři, pak zaměstnanci, pak studenti;
+           nadpisy k tomu netřeba, stačí, že to drží pohromadě. */
+        const PORADI = { "hlavni-spravce": 0, "spravce": 1, "zamestnanec": 2, "student": 3 };
+        const lide = (window.KB.users || [])
+            .filter(u => u.active !== false && u.id !== uid)
+            .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
+                            (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
+                            (a.last || "").localeCompare(b.last || "", "cs"));
+
         if (lide.length && !komu.querySelector("input")) {
             komu.innerHTML = lide.map(u =>
                 '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
-                esc(((u.first || "") + " " + (u.last || "")).trim()) +
-                (u.id === uid ? " (já)" : "") + "</label>").join("");
+                esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
         }
         vykresliOblibene();
         const projektSel = panel.querySelector("[data-quick-projekt]");
@@ -1067,20 +1075,33 @@
             return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
         };
         const vse = window.KB.quicktodo || [];
-        const proMe = vse.filter(q => q.proUid === uid);
-        const odeMe = vse.filter(q => q.odKoho === uid && q.proUid !== uid);
+        // adresáti jsou v `proUids`; starší záznamy mají jen `proUid`
+        const adresati = (q) => (q.proUids && q.proUids.length) ? q.proUids : [q.proUid];
+        const jeProMe = (q) => adresati(q).indexOf(uid) !== -1;
+
+        const proMe = vse.filter(jeProMe);
+        const odeMe = vse.filter(q => q.odKoho === uid && !jeProMe(q));
 
         const radek = (q, mujVzkaz) => {
             const poTerminu = !q.hotovo && q.doKdy && q.doKdy < dnesISO();
+            /* U společného vzkazu se vypisuje, s kým na tom člověk je –
+               sebe v tom seznamu vidět nepotřebuje. */
+            const ostatni = adresati(q).filter(x => x !== uid).map(jmeno).filter(Boolean);
+
             return '<div class="quickrad' + (q.hotovo ? " quickrad--hotovo" : "") + '">' +
                 '<span class="quickrad__text">' + esc(q.text) +
                     '<span class="quickrad__kdo">' +
-                        (mujVzkaz ? "pro " + esc(jmeno(q.proUid) || "?")
-                                  : "od " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
+                        (mujVzkaz ? "pro " + esc(ostatni.join(", ") || "?")
+                                  : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?")) +
+                        (!mujVzkaz && ostatni.length
+                            ? "<br>Spoluúčast: " + esc(ostatni.join(", ")) : "") +
                         (q.projekt ? ' · ' + esc(q.projekt) : '') +
                         (q.asap ? ' · <span class="quickrad__asap">co nejdříve</span>' : "") +
                         (q.doKdy ? ' · <span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
                             esc(czDatumKratke(q.doKdy)) + "</span>" : "") +
+                        (q.hotovo && q.hotovoKdo
+                            ? '<br><span class="quickrad__splnil">splnil ' +
+                              esc(q.hotovoKdo) + "</span>" : "") +
                     "</span>" +
                 "</span>" +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
@@ -1159,8 +1180,15 @@
         const hotovoBtn = event.target.closest("[data-quick-hotovo]");
         if (hotovoBtn && hotovoBtn.tagName === "BUTTON") {
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
-            if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, { hotovo: !hotovoBtn.dataset.zpet }))
-                .catch(() => UI.toast("Uložení selhalo.", "error"));
+            if (q) {
+                // u společného vzkazu se zapíše, kdo ho odškrtl za všechny
+                const hotovo = !hotovoBtn.dataset.zpet;
+                window.KB.saveQuickTodo(q.id, Object.assign({}, q, {
+                    hotovo: hotovo,
+                    hotovoKdo: hotovo ? (window.KB_USER || "") : "",
+                    hotovoMs: hotovo ? Date.now() : 0
+                })).catch(() => UI.toast("Uložení selhalo.", "error"));
+            }
             return;
         }
         if (!event.target.closest("[data-quick-uloz]")) return;
@@ -1176,14 +1204,14 @@
         const projekt = panel.querySelector("[data-quick-projekt]").value;
 
         try {
-            /* Každý adresát dostane vlastní vzkaz – odškrtává si ho sám
-               a jeden hotový nesmí zhasnout ostatním. */
-            await Promise.all(komu.map(proUid => window.KB.saveQuickTodo(window.KB.newQuickId(), {
-                text: text, proUid: proUid,
+            /* Jeden vzkaz pro všechny vybrané – je to společný úkol. Kdo ho
+               odškrtne, odškrtne ho všem a ostatním zmizí ze seznamu. */
+            await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+                text: text, proUids: komu,
                 doKdy: asap ? "" : doKdy,   // „co nejdříve" termín nemá
                 asap: asap,
                 projekt: projekt
-            })));
+            });
 
             panel.querySelector("[data-quick-text]").value = "";
             panel.querySelector("[data-quick-kdy]").value = "";
@@ -1193,7 +1221,7 @@
                 .forEach(ch => { ch.checked = false; });
 
             UI.toast(komu.length === 1 ? "Quick to-do zadáno."
-                : "Quick to-do zadáno " + komu.length + " lidem.");
+                : "Společný quick to-do zadán " + komu.length + " lidem.");
         } catch (err) {
             console.error(err);
             UI.toast("Odeslání selhalo.", "error");
