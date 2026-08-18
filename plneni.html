@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Plnění projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=82">
+    <link rel="stylesheet" href="assets/css/app.css?v=83">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -54,10 +54,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=82"></script>
-<script src="assets/js/ui.js?v=82"></script>
-<script src="assets/js/vykazy.js?v=82"></script>
-<script type="module" src="assets/js/store.js?v=82"></script>
+<script src="assets/js/taxonomy.js?v=83"></script>
+<script src="assets/js/ui.js?v=83"></script>
+<script src="assets/js/vykazy.js?v=83"></script>
+<script type="module" src="assets/js/store.js?v=83"></script>
 
 <script>
 (function () {
@@ -79,6 +79,14 @@
 
     const ukolyProjektu = (p) => (window.KB.ukoly || [])
         .filter(u => u.projektId === p.id || u.projekt === (p.nazev || ""));
+
+    /* Hodiny technologií: uložené u projektu; BioPharma má výchozí čísla
+       z excelového budgetu, dokud si neuloží vlastní. */
+    function techBudgetyProjektu(nazev) {
+        const ulozene = ((window.KB.rozpocty || {})[nazev] || {}).techBudgety || {};
+        if (Object.keys(ulozene).length) return ulozene;
+        return /biopharm/i.test(nazev) ? V.BIOPHARM_TECH_HODINY : {};
+    }
 
     const odpracovanoUkolu = (id) => (window.KB.vykazy || [])
         .filter(z => z.ukolId === id && z.absence !== true)
@@ -115,7 +123,7 @@
         const b = (window.KB.budgetCiselnik || {})[nazev] || {};
         const matice = V.maticePlneni(ukoly, budgety, {
             budovy: b.budovy || [], patra: b.patra || [], technologie: b.technologie || []
-        }, false, ((window.KB.rozpocty || {})[nazev] || {}).techBudgety || {});
+        }, false, techBudgetyProjektu(nazev));
 
         return '<section class="pl">' +
             '<div class="pl__hlava">' +

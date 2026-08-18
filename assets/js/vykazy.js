@@ -153,13 +153,23 @@
      * `klikaci: true` udělá z buněk tlačítka s data-mx="budova|tech|patro"
      * (prázdná buňka zakládá úkol) – bez toho je matice jen na čtení.
      */
+    /* Hodiny na technologie BioPharmy z listu Biopharm_hub_zprac__technologie
+       (Budget zakázek Pasport.ods, celkem 19 950 h kreslení). Používá se jako
+       výchozí hodnota, dokud si projekt neuloží vlastní čísla. */
+    V.BIOPHARM_TECH_HODINY = { STAVBA: 2200, HRM: 40, SLN: 1935, SLB: 800,
+        MAR: 800, ZAR: 30, VZT: 1935, HAS: 600, PLYN: 1935, RLM: 1935,
+        TER: 1935, CHLAD: 1935, VODA: 1935, KAN: 1935 };
+
     /**
      * @param {Object} [techBudgety] – { TER: 1935, … }: celkové hodiny na
      *   technologii. Když jsou předané, přibude vpravo blok Budget /
      *   Ukrojeno / Zbývá – ukrojeno je součet budgetů úkolů té technologie.
      *   `klikaci` z Budgetu udělá editovatelné pole (data-techbud="TER").
+     * @param {Object} [volby] – { rezim: "pct"|"zbyva", odpracovano: fn(id)→h }.
+     *   „zbyva" místo % TO-DO ukáže v buňce zbývající hodiny (budget úkolů
+     *   buňky − odpracováno z výkazů) – červeně, když je buňka přes.
      */
-    V.maticePlneni = (ukoly, budgety, osy, klikaci, techBudgety) => {
+    V.maticePlneni = (ukoly, budgety, osy, klikaci, techBudgety, volby) => {
         const esc = window.KBUI.esc;
         const budovy = osy.budovy || [], patra = osy.patra || [], technologie = osy.technologie || [];
         if (!budovy.length || !patra.length || !technologie.length) return "";
@@ -186,12 +196,26 @@
             const pct = vaha ? Math.round(soucet / vaha)
                 : Math.round(moje.reduce((x, u) => x + V.pctUkolu(u), 0) / moje.length);
             const nazvy = moje.map(u => esc(u.nazev)).join(", ");
+
+            let obsah, trida;
+            if ((volby || {}).rezim === "zbyva") {
+                // zbývající hodiny buňky: budget úkolů − odpracováno z výkazů
+                const budget = moje.reduce((x, u) =>
+                    x + (Number(((budgety || {})[u.id] || {}).budgetHodin) || 0), 0);
+                const odprac = volby.odpracovano
+                    ? moje.reduce((x, u) => x + volby.odpracovano(u.id), 0) : 0;
+                const zbyva = budget - odprac;
+                obsah = (Math.round(zbyva * 10) / 10).toLocaleString("cs-CZ") + "&nbsp;h";
+                trida = zbyva < 0 ? "mx__bunka--pres" : "mx__bunka--" + uroven(pct);
+            } else {
+                obsah = pct + "&nbsp;%";
+                trida = "mx__bunka--" + uroven(pct);
+            }
             return klikaci
-                ? '<td><button type="button" class="mx__bunka mx__bunka--' + uroven(pct) +
-                    '" data-mx="' + klic + '" title="' + nazvy +
-                    ' – dalším kliknutím založíš další úkol">' + pct + "&nbsp;%</button></td>"
-                : '<td><span class="mx__bunka mx__bunka--' + uroven(pct) + '" title="' + nazvy + '">' +
-                    pct + "&nbsp;%</span></td>";
+                ? '<td><button type="button" class="mx__bunka ' + trida +
+                    '" data-mx="' + klic + '" title="' + nazvy + '">' + obsah + "</button></td>"
+                : '<td><span class="mx__bunka ' + trida + '" title="' + nazvy + '">' +
+                    obsah + "</span></td>";
         };
 
         /* pravý blok: hodiny technologie, z nich ukrajují budgety úkolů */

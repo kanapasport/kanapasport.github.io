@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=82">
+    <link rel="stylesheet" href="assets/css/app.css?v=83">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -95,11 +95,12 @@
         /* Ukončení projektu je rozhodnutí, ne vyplňované pole – proto tlačítko
            a ne zaškrtávátko mezi údaji. Zapnutý stav je tmavší, ať se pozná
            i bez čtení textu. */
-        /* sbalovací pruh sekce – celý je tlačítko */
-        .sblok__hlava--sbal { width: 100%; border: 0; cursor: pointer; font: inherit; text-align: left; }
-        .sblok__hlava--sbal:hover { background: var(--accent-dark); }
-        .sblok__sipka { color: #fff; font-size: 13px; transition: transform .15s; }
-        .sblok__hlava--sbal[aria-expanded="false"] .sblok__sipka { transform: rotate(-90deg); }
+        /* Každý modrý pruh sekce je sbalovací – kliknutím se tělo schová
+           a volba se pamatuje. Nahoře je Zobrazit vše / Skrýt vše. */
+        #panel .sblok__hlava { cursor: pointer; }
+        #panel .sblok__hlava:hover { background: var(--accent-dark); }
+        .sblok__sipka { margin-left: auto; color: #fff; font-size: 13px; transition: transform .15s; }
+        .sblok__hlava[aria-expanded="false"] .sblok__sipka { transform: rotate(-90deg); }
 
         /* řádek projektu = tlačítko výběru + hvězdička oblíbených */
         .prjradek { display: flex; align-items: stretch; gap: 2px; }
@@ -183,6 +184,11 @@
                             </div>
                         </div>
                     </section>
+
+                    <div class="row" style="gap:12px;justify-content:flex-end">
+                        <button type="button" class="linkbtn" data-sekce-vse="zobrazit">Zobrazit vše</button>
+                        <button type="button" class="linkbtn" data-sekce-vse="skryt">Skrýt vše</button>
+                    </div>
 
                     <!-- ------------------------------------ údaje projektu --
                          Dřív se tohle vyplňovalo na samostatné stránce Seznam
@@ -301,11 +307,6 @@
                             Roletka pod polem převezme hodnoty z jiného projektu, ať se to
                             nemusí ťukat pořád dokola.
                         </p>
-                        <div class="row row--wrap" style="gap:8px">
-                            <button type="button" class="btn btn--ghost btn--sm" data-biopharm
-                                title="Budovy G61 a G62, patra 3PP–6NP a 14 technologií z listu Biopharm_HUB">
-                                Předvyplnit podle budgetu BioPharm</button>
-                        </div>
                         </div>
                     </section>
 
@@ -341,13 +342,9 @@
                     <!-- --------------------------------- sazby na projektu --
                          Sbalené a až dole: budgety jsou nadřazené, sazby se
                          řeší jednou za čas. Rozbalí se kliknutím na pruh. -->
-                    <section class="sblok" id="sekceSazby">
-                        <button type="button" class="sblok__hlava sblok__hlava--sbal" aria-expanded="false"
-                                data-sbal="sazbyTelo">
-                            <span class="sblok__stitek">Sazby na tomto projektu</span>
-                            <span class="sblok__sipka">▾</span>
-                        </button>
-                        <div class="sblok__telo" id="sazbyTelo" hidden>
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Sazby na tomto projektu</span></div>
+                        <div class="sblok__telo">
                         <p class="small muted" style="margin:0;line-height:1.6">
                             Nezaškrtnuté = platí obecná sazba z Nastavení. Změna se týká jen
                             nových zápisů, starší výkazy zůstanou takové, jaké byly.
@@ -374,7 +371,7 @@
      Budget se rovnou zapíše do tajné kolekce, do dokumentu úkolu nikdy. -->
 <div id="ukolOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
     <div class="card col" style="padding:0;max-width:560px;width:100%;gap:0;overflow:hidden;max-height:88vh">
-        <div style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+        <div id="nuNadpis" style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
             Nový úkol
         </div>
         <div style="padding:14px 18px;overflow-y:auto" class="col">
@@ -404,10 +401,25 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=82"></script>
-<script src="assets/js/ui.js?v=82"></script>
-<script src="assets/js/vykazy.js?v=82"></script>
-<script type="module" src="assets/js/store.js?v=82"></script>
+<!-- ================================================= ÚKOLY V BUŇCE ==
+     Klik na buňku matice s úkoly: nejdřív výběr – upravit některý stávající,
+     nebo založit další. Rovnou do zakládání se jde jen z prázdné buňky. -->
+<div id="bunkaOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:560px;width:100%;gap:0;overflow:hidden;max-height:85vh">
+        <div id="bunkaNadpis" style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em"></div>
+        <div id="bunkaSeznam" style="padding:12px 18px;overflow-y:auto" class="col"></div>
+        <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
+            <button type="button" id="bunkaNovy" class="btn btn--primary btn--sm">+ Založit další úkol</button>
+            <div class="grow"></div>
+            <button type="button" id="bunkaZavri" class="btn btn--sm btn--ghost">Zavřít</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=83"></script>
+<script src="assets/js/ui.js?v=83"></script>
+<script src="assets/js/vykazy.js?v=83"></script>
+<script type="module" src="assets/js/store.js?v=83"></script>
 
 <script>
 (function () {
@@ -704,6 +716,7 @@
         $("panel").hidden = !p;
         $("prazdno").hidden = !!p;
         if (!p) return;
+        pripravSekce();   // šipky a zapamatované sbalení sekcí
 
         const nazev = p.nazev || "";
         $("pNazev").textContent = nazev || "Bez názvu";
@@ -743,6 +756,12 @@
        velké tlačítko dole se jich netýká, aby rozepsaná čísla nepadala
        s ukládáním celého projektu. */
 
+    /* Co ukazují buňky matice: % TO-DO, nebo zbývající hodiny. */
+    let mxRezim = (() => {
+        try { return localStorage.getItem("kb-sprava-mxrezim") || "pct"; }
+        catch (err) { return "pct"; }
+    })();
+
     const ukolyProjektu = (p) => (window.KB.ukoly || [])
         .filter(u => u.projektId === p.id || u.projekt === (p.nazev || ""));
 
@@ -752,11 +771,13 @@
         .filter(z => z.ukolId === id && z.absence !== true)
         .reduce((sum, z) => sum + (Number(z.hodiny) || 0), 0);
 
-    function vykresliBudget(p) {
+    function vykresliBudget(p, force) {
         if (!p) return;
         /* Rozepsané číslo v tabulce nesmí přepsat příchod dat – překreslí se,
-           až člověk z pole odejde (další datová událost to dorovná). */
-        if (document.activeElement && document.activeElement.closest &&
+           až člověk z pole odejde. `force` je pro vlastní uložení: fokus je
+           tou dobou na tlačítku Uložit (taky uvnitř tabulky) a bez výjimky
+           by se Ukrojeno a Zbývá neaktualizovaly až do obnovení stránky. */
+        if (!force && document.activeElement && document.activeElement.closest &&
             document.activeElement.closest("#budgetUkoly, #matice")) return;
 
         const budgety = window.KB.ukolBudgety || {};
@@ -779,7 +800,7 @@
         // ---- tabulka úkolů ----
         $("budgetUkoly").innerHTML = ukoly.length
             ? '<table class="bu"><thead><tr><th>Úkol</th><th>Lidé</th>' +
-              '<th class="num">Hotovo</th><th class="num">Odprac.</th>' +
+              '<th class="num">Hotovo (TO-DO)</th><th class="num">Odprac.</th>' +
               '<th class="num">Budget h</th><th class="num">Rezerva h</th><th></th></tr></thead><tbody>' +
               ukoly.map(u => {
                 const b = budgety[u.id] || {};
@@ -797,8 +818,13 @@
                         (Number(b.budgetHodin) || "") + '"></td>' +
                     '<td class="num"><input type="number" class="field" min="0" data-bud="rezerva" value="' +
                         (Number(b.rezervaHodin) || "") + '"></td>' +
-                    '<td><button type="button" class="btn btn--sm btn--ghost" data-buuloz="' +
-                        esc(u.id) + '">Uložit</button></td>' +
+                    '<td><span class="row" style="gap:4px;justify-content:flex-end">' +
+                        '<button type="button" class="btn btn--sm btn--ghost" data-buuloz="' +
+                            esc(u.id) + '">Uložit</button>' +
+                        '<button type="button" class="btn btn--sm btn--ghost" data-buedit="' +
+                            esc(u.id) + '">Upravit</button>' +
+                        '<button type="button" class="btn btn--sm btn--ghost" data-budel="' +
+                            esc(u.id) + '" style="color:var(--danger)">Smazat</button></span></td>' +
                 "</tr>";
               }).join("") + "</tbody></table>"
             : '<p class="tiny muted" style="margin:0">Projekt zatím nemá úkoly – založ je z matice níž.</p>';
@@ -819,14 +845,28 @@
         /* Budgety technologií: uložené v rozpočtu projektu (tajný číselník),
            přes ně rozepsané, ale ještě neuložené hodnoty z polí – jinak by
            je každý příchod dat z databáze smazal zpod rukou. */
+        const ulozene = ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgety || {};
+        /* BioPharma má výchozí hodiny z excelového budgetu (list
+           zprac__technologie) – platí, dokud si projekt neuloží vlastní.
+           Prvním uložením projektu se zapíšou do databáze. */
         const techBudgety = Object.assign({},
-            ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgety);
+            (!Object.keys(ulozene).length && /biopharm/i.test(p.nazev || ""))
+                ? V.BIOPHARM_TECH_HODINY : ulozene);
         document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
             if (pole.value !== "") techBudgety[pole.dataset.techbud] = Number(pole.value) || 0;
         });
-        $("matice").innerHTML = V.maticePlneni(ukoly, budgety, osy, true, techBudgety) ||
-            '<p class="tiny muted" style="margin:0">' +
-            "Matice se vykreslí, až budou vyplněné budovy, patra a technologie výš.</p>";
+        const prepinac = '<div class="row" style="gap:6px;margin-bottom:8px">' +
+            '<button type="button" class="chip' + (mxRezim === "pct" ? " chip--active" : "") +
+                '" data-mxrezim="pct">% TO-DO</button>' +
+            '<button type="button" class="chip' + (mxRezim === "zbyva" ? " chip--active" : "") +
+                '" data-mxrezim="zbyva">Zbývá hodin</button></div>';
+
+        const telo = V.maticePlneni(ukoly, budgety, osy, true, techBudgety,
+            { rezim: mxRezim, odpracovano: odpracovanoUkolu });
+        $("matice").innerHTML = telo
+            ? prepinac + telo
+            : '<p class="tiny muted" style="margin:0">' +
+              "Matice se vykreslí, až budou vyplněné budovy, patra a technologie výš.</p>";
     }
 
     async function ulozBudgetRadek(id) {
@@ -838,39 +878,127 @@
                 rezervaHodin: Number(radek.querySelector('[data-bud="rezerva"]').value) || 0
             });
             window.KBUI.toast("Budget úkolu uložen.");
-            vykresliBudget(vybranyProjekt());
+            vykresliBudget(vybranyProjekt(), true);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Uložení budgetu selhalo.", "error");
         }
     }
 
-    /* ------------------------------------------------ nový úkol z matice */
+    /* ------------------------------------- nový a upravovaný úkol z matice */
 
-    let novyUkolOsy = null;   // { budova, tech, patro }
+    let novyUkolOsy = null;      // { budova, tech, patro }
+    let upravovanyUkolId = "";   // prázdné = zakládá se nový
+
+    function naplnDialogLidi(p, zaskrtnuti) {
+        const prirazeni = vybraniLide(p);
+        const lide = V.lide().filter(u => prirazeni.has(u.id))
+            .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+        $("nuLide").innerHTML = lide.map(u =>
+            '<label><input type="checkbox" value="' + esc(u.id) + '"' +
+            ((zaskrtnuti || []).indexOf(u.id) !== -1 ? " checked" : "") + "> " +
+            esc(V.jmeno(u)) + "</label>").join("") ||
+            '<span class="tiny muted">Na projektu nikdo není – zaškrtni lidi v bloku Kdo na projektu dělá.</span>';
+    }
 
     function otevriNovyUkol(klic) {
         const p = vybranyProjekt();
         if (!p) return;
         const [budova, tech, patro] = klic.split("|");
         novyUkolOsy = { budova: budova, tech: tech, patro: patro };
+        upravovanyUkolId = "";
 
+        $("nuNadpis").textContent = "Nový úkol";
         $("nuNazev").value = budova + " – " + tech + " – " + patro;
         $("nuDruh").innerHTML = V.options(V.cinnosti(), "ArcGIS", "— vyber —");
         $("nuTermin").value = "";
         $("nuBudget").value = "";
         $("nuRezerva").value = "";
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
+        naplnDialogLidi(p, []);
 
-        const prirazeni = vybraniLide(p);
-        const lide = V.lide().filter(u => prirazeni.has(u.id))
-            .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
-        $("nuLide").innerHTML = lide.map(u =>
-            '<label><input type="checkbox" value="' + esc(u.id) + '"> ' + esc(V.jmeno(u)) + "</label>").join("") ||
-            '<span class="tiny muted">Na projektu nikdo není – zaškrtni lidi v bloku Kdo na projektu dělá.</span>';
-
+        $("bunkaOverlay").hidden = true;
         $("ukolOverlay").hidden = false;
         $("nuNazev").focus();
+    }
+
+    /** Stejný dialog, ale předvyplněný stávajícím úkolem. */
+    function otevriUpravuUkolu(id) {
+        const p = vybranyProjekt();
+        const u = (window.KB.ukoly || []).find(x => x.id === id);
+        if (!p || !u) return;
+        novyUkolOsy = { budova: u.budova || "", tech: u.technologie || "", patro: u.patro || "" };
+        upravovanyUkolId = id;
+
+        const b = (window.KB.ukolBudgety || {})[id] || {};
+        $("nuNadpis").textContent = "Upravit úkol";
+        $("nuNazev").value = u.nazev || "";
+        $("nuDruh").innerHTML = V.options(V.cinnosti(), u.druh || "", "— vyber —");
+        $("nuTermin").value = u.termin || "";
+        $("nuBudget").value = Number(b.budgetHodin) || "";
+        $("nuRezerva").value = Number(b.rezervaHodin) || "";
+        $("nuOsy").textContent = "Projekt " + (p.nazev || "") +
+            [u.budova, u.technologie, u.patro].filter(Boolean).map(x => " · " + x).join("");
+        naplnDialogLidi(p, u.prirazeni || []);
+
+        $("bunkaOverlay").hidden = true;
+        $("ukolOverlay").hidden = false;
+        $("nuNazev").focus();
+    }
+
+    /* ------------------------------------------------- okno buňky matice ---
+       Buňka s úkoly nejdřív nabídne, co s nimi – rovnou zakládat nový by
+       znemožnilo se ke stávajícím dostat. */
+
+    let bunkaKlic = "";
+
+    function otevriBunku(klic) {
+        const p = vybranyProjekt();
+        if (!p) return;
+        const [budova, tech, patro] = klic.split("|");
+        const moje = ukolyProjektu(p).filter(u =>
+            u.budova === budova && u.patro === patro && u.technologie === tech);
+        if (!moje.length) return void otevriNovyUkol(klic);
+
+        bunkaKlic = klic;
+        const budgety = window.KB.ukolBudgety || {};
+        $("bunkaNadpis").textContent = budova + " · " + tech + " · " + patro;
+        $("bunkaSeznam").innerHTML = moje.map(u => {
+            const b = budgety[u.id] || {};
+            const lide = (u.prirazeni || []).map(uid => {
+                const clovek = (window.KB.users || []).find(x => x.id === uid);
+                return clovek ? (clovek.last || clovek.first || "?") : "?";
+            }).join(", ");
+            const popis = [pctUkolu(u) + " % TO-DO",
+                (Number(b.budgetHodin) ? "budget " + V.cislo(b.budgetHodin) + " h" : ""),
+                lide].filter(Boolean).join(" · ");
+            return '<div class="sazbap">' +
+                '<span class="sazbap__jmeno">' + esc(u.nazev || "Bez názvu") +
+                    "<span>" + esc(popis) + "</span></span>" +
+                '<button type="button" class="btn btn--sm btn--ghost" data-buedit="' +
+                    esc(u.id) + '">Upravit</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
+                    'data-budel="' + esc(u.id) + '">Smazat</button>' +
+            "</div>";
+        }).join("");
+        $("bunkaOverlay").hidden = false;
+    }
+
+    /** Smazání úkolu – z tabulky i z okna buňky. Výkazy na něj zůstávají. */
+    async function smazUkol(id) {
+        const u = (window.KB.ukoly || []).find(x => x.id === id);
+        if (!u) return;
+        if (!confirm('Smazat úkol „' + (u.nazev || "Bez názvu") + '" i s TO-DO rozpadem?' +
+            String.fromCharCode(10) + "Zapsané výkazy zůstávají, jen přijdou o vazbu na úkol.")) return;
+        try {
+            await window.KB.deleteUkol(id);
+            $("bunkaOverlay").hidden = true;
+            window.KBUI.toast("Úkol smazán.");
+            vykresliBudget(vybranyProjekt(), true);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Smazání selhalo.", "error");
+        }
     }
 
     async function zalozNovyUkol() {
@@ -879,10 +1007,17 @@
         const nazev = $("nuNazev").value.trim();
         if (!nazev) return void window.KBUI.toast("Úkol potřebuje název.", "warn");
 
+        /* Úprava jede stejným dialogem: saveUkol zapisuje celý dokument,
+           takže se TO-DO, stav a původ musí poslat znovu – jinak by je
+           uložení smazalo. */
+        const stavajici = upravovanyUkolId
+            ? (window.KB.ukoly || []).find(x => x.id === upravovanyUkolId) : null;
+
         $("nuUloz").disabled = true;
         try {
-            const id = window.KB.newUkolId();
+            const id = upravovanyUkolId || window.KB.newUkolId();
             await window.KB.saveUkol(id, {
+                importId: stavajici ? stavajici.importId : "",
                 projektId: p.id,
                 projekt: p.nazev || "",
                 nazev: nazev,
@@ -892,19 +1027,23 @@
                 patro: novyUkolOsy.patro,
                 prirazeni: Array.from($("nuLide").querySelectorAll("input:checked")).map(ch => ch.value),
                 termin: $("nuTermin").value,
-                todo: []
+                stav: stavajici ? stavajici.stav : "otevreny",
+                todo: stavajici ? (stavajici.todo || []) : [],
+                poznamka: stavajici ? stavajici.poznamka : "",
+                createdMs: stavajici ? stavajici.createdMs : undefined,
+                createdBy: stavajici ? stavajici.createdBy : undefined
             });
-            const budget = Number($("nuBudget").value) || 0;
-            const rezerva = Number($("nuRezerva").value) || 0;
-            if (budget || rezerva) {
-                await window.KB.ulozUkolBudget(id, { budgetHodin: budget, rezervaHodin: rezerva });
-            }
+            await window.KB.ulozUkolBudget(id, {
+                budgetHodin: Number($("nuBudget").value) || 0,
+                rezervaHodin: Number($("nuRezerva").value) || 0
+            });
             $("ukolOverlay").hidden = true;
-            window.KBUI.toast("Úkol založen.");
-            vykresliBudget(p);
+            window.KBUI.toast(upravovanyUkolId ? "Úkol upraven." : "Úkol založen.");
+            upravovanyUkolId = "";
+            vykresliBudget(p, true);
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Založení úkolu selhalo.", "error");
+            window.KBUI.toast("Uložení úkolu selhalo.", "error");
         } finally {
             $("nuUloz").disabled = false;
         }
@@ -962,6 +1101,61 @@
             if (vybrane.length) mapa[radek.dataset.techclovek] = vybrane;
         });
         return mapa;
+    }
+
+    /* ------------------------------------------------- sbalování sekcí ---
+       Každý modrý pruh v panelu sbalí a rozbalí svou sekci; volba se drží
+       v prohlížeči podle názvu sekce. Výchozí jsou sazby sbalené – řeší se
+       jednou za čas a budgety jsou jim nadřazené. */
+    const SEKCE_KLIC = "kb-sprava-sekce";
+
+    const sekceSlug = (hlava) => window.KBUI.slug(
+        (hlava.querySelector(".sblok__stitek") || {}).textContent || "");
+
+    function stavSekci() {
+        try { return JSON.parse(localStorage.getItem(SEKCE_KLIC)) || {}; }
+        catch (err) { return {}; }
+    }
+
+    function ulozStavSekci(stav) {
+        try { localStorage.setItem(SEKCE_KLIC, JSON.stringify(stav)); } catch (err) {}
+    }
+
+    function pripravSekce() {
+        const stav = stavSekci();
+        document.querySelectorAll("#panel .sblok").forEach(sekce => {
+            const hlava = sekce.querySelector(".sblok__hlava");
+            const telo = sekce.querySelector(".sblok__telo");
+            if (!hlava || !telo || hlava.querySelector(".sblok__sipka")) return;
+            hlava.insertAdjacentHTML("beforeend", '<span class="sblok__sipka">▾</span>');
+            const slug = sekceSlug(hlava);
+            const otevrena = slug in stav ? !!stav[slug] : slug !== "sazby-na-tomto-projektu";
+            telo.hidden = !otevrena;
+            hlava.setAttribute("aria-expanded", otevrena ? "true" : "false");
+        });
+    }
+
+    function prepniSekci(hlava) {
+        const telo = hlava.closest(".sblok").querySelector(".sblok__telo");
+        if (!telo) return;
+        telo.hidden = !telo.hidden;
+        hlava.setAttribute("aria-expanded", telo.hidden ? "false" : "true");
+        const stav = stavSekci();
+        stav[sekceSlug(hlava)] = !telo.hidden;
+        ulozStavSekci(stav);
+    }
+
+    function sekceVse(otevrit) {
+        const stav = stavSekci();
+        document.querySelectorAll("#panel .sblok").forEach(sekce => {
+            const hlava = sekce.querySelector(".sblok__hlava");
+            const telo = sekce.querySelector(".sblok__telo");
+            if (!hlava || !telo) return;
+            telo.hidden = !otevrit;
+            hlava.setAttribute("aria-expanded", otevrit ? "true" : "false");
+            stav[sekceSlug(hlava)] = otevrit;
+        });
+        ulozStavSekci(stav);
     }
 
     /* ------------------------------------------------------------ ovládání */
@@ -1155,39 +1349,10 @@
             if (event.target.id === "fTech") naplnTechLide(vybranyProjekt() || {});
         });
         $("panel").addEventListener("click", (event) => {
-            // sbalovací pruh (sazby) – rozbalí a sbalí tělo sekce
-            const sbal = event.target.closest("[data-sbal]");
-            if (sbal) {
-                const telo = $(sbal.dataset.sbal);
-                telo.hidden = !telo.hidden;
-                sbal.setAttribute("aria-expanded", telo.hidden ? "false" : "true");
-                return;
-            }
-
-            /* Předvyplnění BioPharm: budovy, patra a technologie z listu
-               Biopharm_HUB (Budget zakázek Pasport.ods). Jen vyplní pole –
-               uložit se to musí velkým tlačítkem, jako každá změna. */
-            if (event.target.closest("[data-biopharm]")) {
-                dotknuto = true;
-                $("fBudovy").value = "G61, G62";
-                $("fPatra").value = "3PP, 2PP, 1PP, 1NP, 2NP, 3NP, 4NP, 5NP, 6NP, Zbytek";
-                $("fTech").value = "STAVBA, HRM, SLN, SLB, MAR, ZAR, VZT, HAS, PLYN, RLM, TER, CHLAD, VODA, KAN";
-                naplnTechLide(vybranyProjekt() || {});
-                vykresliBudget(vybranyProjekt());
-                /* hodiny na technologie z listu Biopharm_hub_zprac__technologie
-                   (celkem 19 950 h kreslení) – zapíšou se do polí matice
-                   a uloží velkým tlačítkem */
-                const BIOPHARM_HODINY = { STAVBA: 2200, HRM: 40, SLN: 1935, SLB: 800,
-                    MAR: 800, ZAR: 30, VZT: 1935, HAS: 600, PLYN: 1935, RLM: 1935,
-                    TER: 1935, CHLAD: 1935, VODA: 1935, KAN: 1935 };
-                document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
-                    if (BIOPHARM_HODINY[pole.dataset.techbud] && pole.value === "") {
-                        pole.value = BIOPHARM_HODINY[pole.dataset.techbud];
-                    }
-                });
-                window.KBUI.toast("Předvyplněno podle budgetu BioPharm – ještě to ulož.");
-                return;
-            }
+            const vseSekce = event.target.closest("[data-sekce-vse]");
+            if (vseSekce) return void sekceVse(vseSekce.dataset.sekceVse === "zobrazit");
+            const hlava = event.target.closest(".sblok__hlava");
+            if (hlava) return void prepniSekci(hlava);
 
             const tlacitko = event.target.closest("[data-prevzit]");
             if (tlacitko) return void prevezmi(tlacitko.dataset.prevzit);
@@ -1210,15 +1375,27 @@
         });
         $("btnUloz").addEventListener("click", uloz);
 
-        // budget úkolů se ukládá po řádcích, matice zakládá úkoly
+        // budget úkolů se ukládá po řádcích; buňka matice otevírá výběr
         document.addEventListener("click", (event) => {
             const radek = event.target.closest("[data-buuloz]");
             if (radek) return void ulozBudgetRadek(radek.dataset.buuloz);
+            const uprav = event.target.closest("[data-buedit]");
+            if (uprav) return void otevriUpravuUkolu(uprav.dataset.buedit);
+            const smaz = event.target.closest("[data-budel]");
+            if (smaz) return void smazUkol(smaz.dataset.budel);
+            const prepni = event.target.closest("[data-mxrezim]");
+            if (prepni) {
+                mxRezim = prepni.dataset.mxrezim;
+                try { localStorage.setItem("kb-sprava-mxrezim", mxRezim); } catch (err) {}
+                return void vykresliBudget(vybranyProjekt(), true);
+            }
             const bunka = event.target.closest("[data-mx]");
-            if (bunka) return void otevriNovyUkol(bunka.dataset.mx);
+            if (bunka) return void otevriBunku(bunka.dataset.mx);
         });
         $("nuZrus").addEventListener("click", () => { $("ukolOverlay").hidden = true; });
         $("nuUloz").addEventListener("click", zalozNovyUkol);
+        $("bunkaZavri").addEventListener("click", () => { $("bunkaOverlay").hidden = true; });
+        $("bunkaNovy").addEventListener("click", () => { if (bunkaKlic) otevriNovyUkol(bunkaKlic); });
         /* Zápis v tabulce budgetů nemá shazovat ochranu formuláře projektu –
            ukládá se vlastním tlačítkem, ne velkým dole. */
         $("budgetUkoly").addEventListener("input", (ev) => ev.stopPropagation());

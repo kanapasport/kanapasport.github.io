@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=82">
+    <link rel="stylesheet" href="assets/css/app.css?v=83">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -103,8 +103,6 @@
                  zvlášť, a to ve Správě projektů – tady se už jen čtou -->
             <a href="sprava.html" class="btn btn--ghost" data-need="zakazky.manage" hidden
                 title="Budovy, patra a technologie se nastavují u každého projektu zvlášť">Správa projektů</a>
-            <button type="button" id="btnImport" class="btn btn--ghost" data-need="ukol.delete" hidden
-                title="Převezme úkoly ze staré stránky Postup práce">Převzít starý postup práce</button>
         </div>
     </div>
 
@@ -172,10 +170,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=82"></script>
-<script src="assets/js/ui.js?v=82"></script>
-<script src="assets/js/vykazy.js?v=82"></script>
-<script type="module" src="assets/js/store.js?v=82"></script>
+<script src="assets/js/taxonomy.js?v=83"></script>
+<script src="assets/js/ui.js?v=83"></script>
+<script src="assets/js/vykazy.js?v=83"></script>
+<script type="module" src="assets/js/store.js?v=83"></script>
 
 <script>
 (function () {
@@ -568,49 +566,6 @@
         }
     }
 
-    /* --------------------------------------- převzetí starého postupu ---
-       Stará stránka Postup práce má úkoly v jiné kolekci. Tohle je převede:
-       zakázka → projekt, skupina → druh, podúkoly s procenty → TO-DO.
-       Už převzaté se poznají podle `importId` a podruhé se nevezmou. */
-
-    async function prevezmiStare() {
-        const stare = window.KB.tasks || [];
-        if (!stare.length) return void window.KBUI.toast("Starý postup práce je prázdný.");
-        const uzMame = new Set((window.KB.ukoly || []).map(u => u.importId).filter(Boolean));
-        const DRUHY = { "ARCGIS": "ArcGIS", "SKENY": "Skeny", "FOCENÍ": "Focení", "TABULKY": "Tabulky" };
-
-        let prevzato = 0;
-        $("btnImport").disabled = true;
-        try {
-            for (const t of stare) {
-                if (uzMame.has(t.id)) continue;
-                await window.KB.saveUkol(window.KB.newUkolId(), {
-                    importId: t.id,
-                    projekt: t.zakazka || "Bez projektu",
-                    nazev: t.title || "Bez názvu",
-                    druh: DRUHY[(t.skupina || "").toUpperCase()] || "",
-                    prirazeni: t.owners || [],
-                    termin: t.deadline || "",
-                    stav: t.done ? "hotovo" : "otevreny",
-                    todo: (t.subtasks || []).map(s => ({
-                        id: s.id || ("td_" + Math.random().toString(36).slice(2)),
-                        text: s.title || "", pct: Number(s.percent) || 0,
-                        by: s.by || "", ms: s.ms || 0
-                    })),
-                    poznamka: (t.notes || []).map(n => n.text).filter(Boolean).join(" · ").slice(0, 400),
-                    createdMs: t.createdMs, createdBy: t.createdBy
-                });
-                prevzato++;
-            }
-            window.KBUI.toast(prevzato ? "Převzato " + prevzato + " úkolů." : "Všechno už je převzaté.");
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast("Převzetí selhalo v průběhu – zkus to znovu, hotové se nezdvojí.", "error");
-        } finally {
-            $("btnImport").disabled = false;
-        }
-    }
-
     /* -------------------------------------------------------------- start */
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -620,7 +575,6 @@
         $("btnNovy").addEventListener("click", () => naplnTvorbu(null));
         $("btnZrusit").addEventListener("click", () => { $("tvorba").hidden = true; });
         $("btnUlozit").addEventListener("click", ulozUkol);
-        $("btnImport").addEventListener("click", prevezmiStare);
         $("btnRozbal").addEventListener("click", prepniRozbaleniVsech);
         $("btnSmazat").addEventListener("click", async () => {
             if (!editovanyId) return;

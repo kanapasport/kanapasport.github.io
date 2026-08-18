@@ -179,6 +179,20 @@ všech 18 stránek vrací 200.
   1935, SLB/MAR 800, HAS 600, HRM 40, ZAR 30).
 - **Tabulka úkolů projektu nemá sloupec Kde** (je v názvu úkolu) a lidé
   v „Kdo dělá kterou technologii" jsou po rolích (studenti dole).
+- **Každá sekce Správy se sbalí kliknutím na modrý pruh** (volba se
+  pamatuje, `kb-sprava-sekce`); nahoře Zobrazit vše / Skrýt vše.
+- **Buňka matice s úkoly otevře výběr** (upravit/smazat stávající, nebo
+  založit další); rovnou do zakládání jde jen prázdná buňka. Dialog
+  úkolu umí i úpravu – při ní se musí znovu poslat todo a stav, jinak
+  by je saveUkol smazal. V tabulce úkolů je Uložit · Upravit · Smazat.
+- **Matice má přepínač % TO-DO / Zbývá hodin** (budget úkolů buňky minus
+  odpracováno; červeně přečerpané). Volba v `kb-sprava-mxrezim`.
+- **BioPharma má vestavěné výchozí hodiny technologií**
+  (`V.BIOPHARM_TECH_HODINY` ve vykazy.js, z listu zprac__technologie) –
+  platí, dokud si projekt neuloží vlastní; tlačítko Předvyplnit je pryč.
+- **Smazané jednorázové nástroje:** Převzít starý postup práce (úkoly).
+  Zbývají: Import projektů + ukázkové výkazy (Import dat) a Přesun tabulí
+  – smazat po dokončení přesunu.
 - **Výkaz má Budovu a Patro** (roletky z nastavení projektu; projekty bez
   budov je nemají) – ať se dá sečíst, kolik hodin stálo patro.
 - **Výkaz nabízí jen moje úkoly.** Výpomoc na cizím: stránka Úkoly & TO-DO
