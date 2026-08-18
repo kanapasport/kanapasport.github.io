@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=77">
+    <link rel="stylesheet" href="assets/css/app.css?v=78">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -24,17 +24,13 @@
 
         .seznam { padding: 12px; gap: 10px; }
         .seznam__vypis { display: flex; flex-direction: column; gap: 2px; max-height: 640px; overflow: auto; }
-        /* Nadpis skupiny je zároveň přepínač – hotové projekty jsou většinou
-           jen na dohledání, tak ať se dají sbalit a nezabírají celý seznam. */
-        .seznam__skupina { display: flex; align-items: center; gap: 7px; width: 100%;
-            font: inherit; font-size: 11px; font-weight: 900; letter-spacing: .06em;
-            text-transform: uppercase; color: var(--muted); background: none; border: 0;
-            padding: 10px 10px 4px; cursor: pointer; text-align: left; }
-        .seznam__skupina:hover { color: var(--accent); }
-        .seznam__skupina i { flex: none; transition: transform .15s; }
-        .seznam__skupina i svg { width: 11px; height: 11px; display: block; }
-        .seznam__skupina[aria-expanded="false"] i { transform: rotate(-90deg); }
-        .seznam__skupina em { font-style: normal; opacity: .7; letter-spacing: 0; }
+        .seznam__skupina { font-size: 11px; font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted); padding: 10px 10px 4px; }
+        /* Co se v seznamu ukazuje: otevřené, hotové, nebo obojí. Hotové
+           jsou zhasnuté – dohledávají se, ale denně se v nich nepracuje. */
+        .seznam__filtr { display: flex; gap: 6px; margin: -2px 0 2px; }
+        .seznam__filtr .chip { flex: 1; justify-content: center; padding: 5px 8px; font-size: 11.5px; }
+        .seznam__filtr .chip em { font-style: normal; opacity: .65; margin-left: 5px; }
         .prjbtn { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
             background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 8px 10px; }
         .prjbtn:hover { background: var(--bg-soft); }
@@ -137,6 +133,10 @@
             <!-- ===================================== SEZNAM PROJEKTŮ -->
             <section class="card col seznam">
                 <input type="search" id="hledat" class="field" placeholder="Hledat projekt…">
+                <!-- Přepínač skupin patří sem nahoru, ne doprostřed seznamu:
+                     nadpis „Hotové" se schovával pod všemi otevřenými projekty
+                     a muselo se k němu rolovat. -->
+                <div class="seznam__filtr" id="seznamFiltr"></div>
                 <div id="seznamVypis" class="seznam__vypis"></div>
                 <span class="tiny muted" id="pocet"></span>
             </section>
@@ -311,10 +311,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=77"></script>
-<script src="assets/js/ui.js?v=77"></script>
-<script src="assets/js/vykazy.js?v=77"></script>
-<script type="module" src="assets/js/store.js?v=77"></script>
+<script src="assets/js/taxonomy.js?v=78"></script>
+<script src="assets/js/ui.js?v=78"></script>
+<script src="assets/js/vykazy.js?v=78"></script>
+<script type="module" src="assets/js/store.js?v=78"></script>
 
 <script>
 (function () {
@@ -338,13 +338,12 @@
 
     /* ------------------------------------------------------------ projekty */
 
-    /* --------------------------------------------- sbalování skupin ---
+    /* ------------------------------------------------ co se vypisuje ---
        Hotové projekty se skoro nikdy neotevírají, ale občas se v nich
-       dohledává – proto se sbalí, nemažou. Volbu drží prohlížeč, ať se
-       seznam po každém návratu netváří jinak. */
-    const SIPKA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 9l6 6 6-6"/></svg>';
-
+       dohledává – proto se dají zhasnout, ne smazat. Přepínač sedí hned
+       pod hledáním: kdyby byl nadpisem uprostřed seznamu, schoval by se
+       pod všemi otevřenými projekty a muselo by se k němu rolovat.
+       Volbu drží prohlížeč, ať se seznam po návratu netváří jinak. */
     const SKUPINY_KLIC = "kb-sprava-skupiny";
 
     function stavSkupin() {
@@ -352,15 +351,18 @@
         catch (err) { return {}; }
     }
 
-    // výchozí stav: otevřené projekty rozbalené, hotové sbalené
-    const rozbaleno = (klic) => {
+    // výchozí stav: otevřené se vypisují, hotové ne
+    const zapnuta = (klic) => {
         const stav = stavSkupin();
         return klic in stav ? !!stav[klic] : klic === "otevrene";
     };
 
     function prepniSkupinu(klic) {
         const stav = stavSkupin();
-        stav[klic] = !rozbaleno(klic);
+        stav[klic] = !zapnuta(klic);
+        /* Obě zhasnutá skupiny = prázdný seznam a nedá se z toho ven jinak
+           než dalším kliknutím. Poslední zapnutá proto zůstane svítit. */
+        if (!stav.otevrene && !stav.hotove) stav[klic === "otevrene" ? "hotove" : "otevrene"] = true;
         try { localStorage.setItem(SKUPINY_KLIC, JSON.stringify(stav)); } catch (err) { /* soukromé okno */ }
         vykresliSeznam();
     }
@@ -392,9 +394,13 @@
            psaní do hledání nesmí vybraný projekt přehodit na jiný. */
         if (!vybranyProjekt() && (window.KB.projektyDocs || []).length) {
             const zAdresy = new URLSearchParams(location.search).get("id") || "";
+            /* Sám si vybere jen z toho, co je v seznamu vidět – jinak by
+               pravá půlka ukazovala hotový projekt, který ve zhasnuté
+               skupině nikde není. */
+            const nabizene = nalezene.filter(p => zapnuta(p.uzavreno === true ? "hotove" : "otevrene"));
             vybrany = (window.KB.projektyDocs || []).some(p => p.id === zAdresy)
                 ? zAdresy
-                : (nalezene[0] || (window.KB.projektyDocs || [])[0]).id;
+                : (nabizene[0] || nalezene[0] || (window.KB.projektyDocs || [])[0]).id;
         }
 
         const skupiny = [
@@ -412,20 +418,22 @@
                 "</button>";
         };
 
-        $("seznamVypis").innerHTML = nalezene.length
-            ? skupiny.filter(s => s.polozky.length).map(s => {
-                /* Ve sbalené skupině zůstane vidět vybraný projekt – pravá
-                   půlka ho ukazuje, tak ať je poznat, odkud je. Zbytek se
-                   schová. */
-                const otevrena = rozbaleno(s.klic);
-                const vypsat = otevrena ? s.polozky : s.polozky.filter(p => p.id === vybrany);
-                return '<button type="button" class="seznam__skupina" data-skupina="' + s.klic + '"' +
-                        ' aria-expanded="' + (otevrena ? "true" : "false") + '">' +
-                        "<i>" + SIPKA + "</i>" + s.nazev +
-                        "<em>" + s.polozky.length + "</em></button>" +
-                    vypsat.map(projektHtml).join("");
-            }).join("")
-            : '<div class="tiny muted" style="padding:8px 10px">Nic nenalezeno.</div>';
+        // přepínače nad seznamem – počet ukazují vždy, i u zhasnuté skupiny
+        $("seznamFiltr").innerHTML = skupiny.map(s =>
+            '<button type="button" class="chip' + (zapnuta(s.klic) ? " chip--active" : "") +
+                '" data-skupina="' + s.klic + '" aria-pressed="' + (zapnuta(s.klic) ? "true" : "false") + '">' +
+                s.nazev + "<em>" + s.polozky.length + "</em></button>").join("");
+
+        const vypsat = skupiny.filter(s => s.polozky.length && zapnuta(s.klic));
+        // nadpis skupiny má smysl, jen když jsou v seznamu obě naráz
+        const sNadpisy = vypsat.length > 1;
+
+        $("seznamVypis").innerHTML = vypsat.length
+            ? vypsat.map(s =>
+                (sNadpisy ? '<div class="seznam__skupina">' + s.nazev + "</div>" : "") +
+                s.polozky.map(projektHtml).join("")).join("")
+            : '<div class="tiny muted" style="padding:8px 10px">' +
+              (nalezene.length ? "Zhasnuté skupiny nic neukazují." : "Nic nenalezeno.") + "</div>";
 
         $("pocet").textContent = nalezene.length
             ? V.pocet(nalezene.length, ["projekt", "projekty", "projektů"])
@@ -731,9 +739,11 @@
             hledani = event.target.value.trim();
             vykresliSeznam();
         });
-        $("seznamVypis").addEventListener("click", (event) => {
+        $("seznamFiltr").addEventListener("click", (event) => {
             const skupina = event.target.closest("[data-skupina]");
-            if (skupina) return void prepniSkupinu(skupina.dataset.skupina);
+            if (skupina) prepniSkupinu(skupina.dataset.skupina);
+        });
+        $("seznamVypis").addEventListener("click", (event) => {
             const tlacitko = event.target.closest("[data-prj]");
             if (tlacitko) vyber(tlacitko.dataset.prj);
         });

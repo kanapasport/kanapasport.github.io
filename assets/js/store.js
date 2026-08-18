@@ -920,16 +920,21 @@ KB.newBoardId = () => "board_" + Date.now() + "_" + Math.floor(Math.random() * 1
 KB.saveBoardMeta = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
+    /* Zapisuje se JEN to, co volající opravdu poslal.
+       `merge: true` totiž slučuje dokumenty po polích, ne po tom, co je
+       v nich zajímavé – a co se do zápisu dostane, to přepíše. Když se
+       tady vyplňovaly náhradní hodnoty („Bez názvu", dnešní datum, moje
+       uid), stačilo uložit viditelnost a tabule se tím přejmenovala,
+       přepsala si datum založení a přepsala zakladatele na toho, kdo
+       zrovna klikl. */
     const zaklad = {
-        title: data.title || "Bez názvu",
         updatedMs: Date.now(),
-        updatedBy: window.KB_USER || "",
-        createdMs: data.createdMs || Date.now(),
-        createdBy: data.createdBy || window.KB_USER || "",
-        createdUid: data.createdUid || KB.currentUid() || ""
+        updatedBy: window.KB_USER || ""
     };
-    /* Viditelnost se zapisuje jen když ji volající řeší – jinak by se
-       při přejmenování shodila zpátky na „všichni". */
+    if (data.title !== undefined)      zaklad.title = data.title || "Bez názvu";
+    if (data.createdMs !== undefined)  zaklad.createdMs = data.createdMs;
+    if (data.createdBy !== undefined)  zaklad.createdBy = data.createdBy;
+    if (data.createdUid !== undefined) zaklad.createdUid = data.createdUid;
     if (data.viditelnost) {
         zaklad.viditelnost = data.viditelnost === "vybrani" ? "vybrani" : "vsichni";
         zaklad.proUids = Array.isArray(data.proUids) ? data.proUids.slice() : [];

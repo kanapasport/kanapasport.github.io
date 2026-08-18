@@ -151,8 +151,10 @@ všech 18 stránek vrací 200.
   Přehled BP), pak se chce heslo znovu. Helpery `KBUI.zamekPamet /
   zamekZapamatuj / zamekObnovujPri` v ui.js.
 - **„Zapsat výkaz" je v hlavičce úkolu**, ne až v rozbaleném těle.
-- **Ve Správě projektů se skupiny Otevřené / Hotové sbalují** (volba
-  v prohlížeči). Ve sbalené skupině zůstane vidět vybraný projekt.
+- **Ve Správě projektů jsou pod hledáním přepínače Otevřené / Hotové**
+  s počty (volba v prohlížeči, hotové zhasnuté). Poslední zapnutá skupina
+  nejde zhasnout – zůstal by prázdný seznam. Nadpisy skupin se v seznamu
+  vypíšou, jen když jsou zapnuté obě.
 - **Hledání v liště je jen na stránkách, kde něco dělá** – seznam
   `STRANKY_S_HLEDANIM` v ui.js. Na návodech našeptává nálezy a klik
   otevře návod; na výkazech filtruje tabulku.
@@ -205,7 +207,16 @@ všech 18 stránek vrací 200.
     zakládání nové tabule, i přesun starých.
 19. **Chybějící pole v pravidlech není prázdná hodnota, ale chyba** –
     a chyba znamená zamítnuto. Každé pole se nejdřív ověří přes `in`.
-20. **Zvuk jde přehrát až po gestu uživatele** – prohlížeč blokuje audio
+20. **`merge: true` slučuje po polích, ne po tom, co je v nich zajímavé.**
+    Kdo do zápisu přidá náhradní hodnotu („Bez názvu"), přepíše tím tu
+    uloženou. `KB.saveBoardMeta` proto zapisuje jen to, co dostal –
+    dřív se uložením viditelnosti tabule přejmenovala a přepsala si
+    i zakladatele.
+21. **`position: relative` nechává platit `top`/`right` z původního
+    pravidla.** Hledání v pásu se tím odsunulo o 20 px doleva a o půl
+    výšky dolů. Přepsání na `static` to řeší, ale pak se pod pole nedá
+    pověsit nabídka – správně je `position: relative; inset: auto`.
+22. **Zvuk jde přehrát až po gestu uživatele** – prohlížeč blokuje audio
     do prvního kliknutí. Pípnutí na nový vzkaz je proto v `try` a po
     přihlášení (což gesto je) už funguje.
 

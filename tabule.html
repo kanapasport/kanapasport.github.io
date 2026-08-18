@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Tabule – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=77">
+    <link rel="stylesheet" href="assets/css/app.css?v=78">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 
@@ -249,11 +249,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=77"></script>
-<script src="assets/js/doc.js?v=77"></script>
-<script src="assets/js/ui.js?v=77"></script>
-<script src="assets/js/board.js?v=77"></script>
-<script type="module" src="assets/js/store.js?v=77"></script>
+<script src="assets/js/taxonomy.js?v=78"></script>
+<script src="assets/js/doc.js?v=78"></script>
+<script src="assets/js/ui.js?v=78"></script>
+<script src="assets/js/board.js?v=78"></script>
+<script type="module" src="assets/js/store.js?v=78"></script>
 
 <script>
 (function () {
@@ -346,10 +346,18 @@
         if (!title) return;
         try {
             const id = window.KB.newBoardId();
-            /* Viditelnost se zapisuje hned při založení: seznam tabulí se
-               skládá mimo jiné z dotazu `viditelnost == "vsichni"`, a co
-               to pole nemá, do něj nespadne a nikomu se neukáže. */
-            await window.KB.saveBoardMeta(id, { title: title, viditelnost: "vsichni" });
+            /* Při zakládání se vyplní všechno najednou. Viditelnost proto,
+               že seznam tabulí se skládá mimo jiné z dotazu
+               `viditelnost == "vsichni"` a co to pole nemá, do něj
+               nespadne. `createdUid` proto, že podle něj pravidla poznají
+               zakladatele – bez něj by tabule nešla ani založit. */
+            await window.KB.saveBoardMeta(id, {
+                title: title,
+                viditelnost: "vsichni",
+                createdMs: Date.now(),
+                createdBy: window.KB_USER || "",
+                createdUid: window.KB.currentUid() || ""
+            });
             await window.KB.saveBoard(id, [], "");
             location.href = "tabule.html#deska=" + encodeURIComponent(id);
         } catch (err) {
