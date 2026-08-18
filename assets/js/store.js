@@ -1539,32 +1539,6 @@ KB.ulozUkolBudget = async (id, data) => {
     KB.zapisAktivitu("ukol", "změnil budget úkolu " + id);
 };
 
-/**
- * Jednorázový přesun: budgety zapsané dřív přímo v dokumentech úkolů se
- * překopírují do tajné kolekce a v úkolu se vynulují – jinak by je dál
- * viděl každý přiřazený. Běží ho hlavní správce na Importu dat.
- */
-KB.presunUkolBudgety = async () => {
-    if (authReady) await authReady;
-    requireDb();
-    const snap = await getDocs(ukolyCol());
-    let presunuto = 0;
-    for (const d of snap.docs) {
-        const stary = Number((d.data() || {}).budgetHodin) || 0;
-        if (!stary) continue;
-        const uz = await getDoc(ukolBudgetDoc(d.id));
-        if (!uz.exists()) {
-            await setDoc(ukolBudgetDoc(d.id), {
-                budgetHodin: stary, rezervaHodin: 0,
-                updatedMs: Date.now(), updatedBy: window.KB_USER || ""
-            });
-        }
-        await setDoc(ukolDoc(d.id), { budgetHodin: 0 }, { merge: true });
-        presunuto++;
-    }
-    return { presunuto: presunuto };
-};
-
 /** Živý přenos všech úkolů – pro manažery. */
 KB.watchUkoly = async () => {
     ukolyChteno = "vse";

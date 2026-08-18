@@ -138,6 +138,68 @@
         return Array.isArray(mapa[zakazka]) ? mapa[zakazka] : [];
     };
 
+    /** Plnění úkolu v procentech – průměr TO-DO položek. */
+    V.pctUkolu = (u) => {
+        const todo = u.todo || [];
+        if (!todo.length) return u.stav === "hotovo" ? 100 : 0;
+        return Math.round(todo.reduce((sum, t) => sum + (Number(t.pct) || 0), 0) / todo.length);
+    };
+
+    /**
+     * Matice plnění: jedna tabulka jako v excelovém budgetu – řádek je
+     * technologie a vedle ní malé buňky po budovách a patrech (hlavička
+     * má dvě patra: budova nahoře, její patra pod ní). Procento buňky je
+     * vážené budgetem úkolů; úkoly bez budgetu se průměrují prostě.
+     * `klikaci: true` udělá z buněk tlačítka s data-mx="budova|tech|patro"
+     * (prázdná buňka zakládá úkol) – bez toho je matice jen na čtení.
+     */
+    V.maticePlneni = (ukoly, budgety, osy, klikaci) => {
+        const esc = window.KBUI.esc;
+        const budovy = osy.budovy || [], patra = osy.patra || [], technologie = osy.technologie || [];
+        if (!budovy.length || !patra.length || !technologie.length) return "";
+
+        const uroven = (pct) => pct >= 100 ? "p100" : pct >= 95 ? "p95"
+            : pct >= 75 ? "p75" : pct >= 50 ? "p50" : "p0";
+
+        const bunka = (budova, tech, patro) => {
+            const moje = ukoly.filter(u =>
+                u.budova === budova && u.patro === patro && u.technologie === tech);
+            const klic = esc(budova) + "|" + esc(tech) + "|" + esc(patro);
+            if (!moje.length) {
+                return klikaci
+                    ? '<td><button type="button" class="mx__bunka mx__bunka--nic" data-mx="' + klic +
+                        '" title="Založit úkol ' + esc(budova + " – " + tech + " – " + patro) + '">+</button></td>'
+                    : '<td><span class="mx__bunka mx__bunka--nic">·</span></td>';
+            }
+            let vaha = 0, soucet = 0;
+            moje.forEach(u => {
+                const w = Number(((budgety || {})[u.id] || {}).budgetHodin) || 0;
+                vaha += w; soucet += V.pctUkolu(u) * w;
+            });
+            const pct = vaha ? Math.round(soucet / vaha)
+                : Math.round(moje.reduce((x, u) => x + V.pctUkolu(u), 0) / moje.length);
+            const nazvy = moje.map(u => esc(u.nazev)).join(", ");
+            return klikaci
+                ? '<td><button type="button" class="mx__bunka mx__bunka--' + uroven(pct) +
+                    '" data-mx="' + klic + '" title="' + nazvy +
+                    ' – dalším kliknutím založíš další úkol">' + pct + "&nbsp;%</button></td>"
+                : '<td><span class="mx__bunka mx__bunka--' + uroven(pct) + '" title="' + nazvy + '">' +
+                    pct + "&nbsp;%</span></td>";
+        };
+
+        return '<div class="mx-wrap"><table class="mx"><thead>' +
+            "<tr><th></th>" + budovy.map(b =>
+                '<th colspan="' + patra.length + '">' + esc(b) + "</th>").join("") + "</tr>" +
+            "<tr><th></th>" + budovy.map(() =>
+                patra.map(pt => "<th>" + esc(pt) + "</th>").join("")).join("") + "</tr>" +
+            "</thead><tbody>" +
+            technologie.map(tech =>
+                '<tr><th style="text-align:left">' + esc(tech) + "</th>" +
+                budovy.map(b => patra.map(pt => bunka(b, tech, pt)).join("")).join("") +
+                "</tr>").join("") +
+            "</tbody></table></div>";
+    };
+
     V.rozpocet = (zakazka) => {
         const r = (window.KB.rozpocty || {})[zakazka] || {};
         return { kc: Number(r.kc) || 0, hodiny: Number(r.hodiny) || 0 };

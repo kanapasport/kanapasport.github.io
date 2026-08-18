@@ -41,14 +41,11 @@ odkazy na webu jsou s koncovkou `.html`, takže se `?parametry` neztrácejí.
    vzkazy (`proUids`), přibyla pravidla pro tabule a **úkoly teď čte každý
    člen** (budget v nich už neleží) – bez nasazení se společné vzkazy ani
    tabule nenačtou a úkoly zůstanou po staru.
-1b. **Přesunout budgety úkolů** (Import dat → tlačítko *Přesunout budgety
-   úkolů*) – překopíruje `budgetHodin` z dokumentů úkolů do tajné kolekce
-   `private/ukoly/budgety` a v úkolech ho vynuluje. Spustit až PO nasazení
-   pravidel. Bez toho starší budgety vidí přiřazení zaměstnanci.
-1c. **BioPharma:** ve Správě projektů vyplnit Rozpočet (hodin) = 28500,
-   budovy G61, G62, patra 3PP…6NP + Zbytek a technologie (STAVBA, HRM, SLN,
-   SLB, MAR, ZAR, VZT, HAS, PLYN, RLM, TER, CHLAD, VODA, KAN) – matice
-   plnění a krajíc se vykreslí z těchhle polí.
+1b. **BioPharma:** ve Správě projektů vyplnit Rozpočet (hodin) = 28500
+   a v bloku Budovy, patra a technologie kliknout **Předvyplnit podle
+   budgetu BioPharm** (doplní G61/G62, 10 pater a 14 technologií) → Uložit.
+   Matice plnění, krajíc i „kdo dělá kterou technologii" se kreslí z
+   těchhle polí – dokud jsou prázdná, sekce ukazují jen nápovědu.
 2. **Přesunout tabule** (Import dat → Přesun tabulí). Pořadí: nejdřív
    nasadit pravidla, pak *Zkopírovat tabule na nové místo*, pak si na
    stránce Tabule ověřit, že jsou i s obsahem, a teprve nakonec
@@ -158,7 +155,19 @@ všech 18 stránek vrací 200.
   tlačítkem dole.
 - **Kdo dělá kterou technologii** (`projekt.lideTech`: uid → zkratky) –
   na průměrné sazby technologií; není tajné, sazby zůstávají v tajném
-  číselníku.
+  číselníku. Sekce se ukáže, až má projekt vyplněné technologie a lidi.
+- **Matice je jedna tabulka jako v excelovém budgetu**: technologie
+  v řádku, budovy × patra v malých buňkách (dvouřádková hlavička).
+  Kreslí ji `V.maticePlneni` ve vykazy.js – sdílí ji Správa (klikací,
+  zakládá úkoly) a stránka **Plnění projektů** (jen na čtení).
+- **Plnění projektů** (`plneni.html`, podlišta PROJEKTY, jen manažeři):
+  karta na každý otevřený projekt – krajíc, odpracováno na úkolech,
+  plnění TO-DO vážené budgetem, hotové úkoly a matice.
+- **Oblíbené projekty**: hvězdička v seznamu Správy je drží nahoře
+  (localStorage `kb-sprava-oblibene`, sdílí ho i Plnění). Poprvé se
+  předvyplní BioPharma, C03 a A08 podle čísla/názvu.
+- **Sazby na projektu jsou sbalené a až dole** – rozbalí se kliknutím
+  na pruh; budgety jsou nadřazené, sazby se řeší jednou za čas.
 - **Výkaz má Budovu a Patro** (roletky z nastavení projektu; projekty bez
   budov je nemají) – ať se dá sečíst, kolik hodin stálo patro.
 - **Výkaz nabízí jen moje úkoly.** Výpomoc na cizím: stránka Úkoly & TO-DO

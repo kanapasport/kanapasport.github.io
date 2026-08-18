@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Plnění projektů – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=81">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Karta projektu: hlavička s názvem, pod ní krajíc a matice.
+           Vzhled drží s bloky Správy projektů (červený pruh, tónované tělo). */
+        .pl { border: 1px solid var(--accent); border-radius: var(--radius-lg);
+            background: var(--accent-tint); overflow: hidden; }
+        .pl__hlava { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            padding: 9px 14px; background: var(--accent); }
+        .pl__nazev { font-size: 13px; font-weight: 900; letter-spacing: .05em;
+            text-transform: uppercase; color: #fff; }
+        .pl__cislo { font-size: 11.5px; color: rgba(255, 255, 255, .75); }
+        .pl__hlava a { margin-left: auto; font-size: 11.5px; font-weight: 700;
+            color: #fff; text-decoration: underline; }
+        .pl__telo { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+        .pl__prazdno { font-size: 12.5px; color: var(--muted); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Plnění projektů vidí jen manažeři.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou tu budgety úkolů. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+        <div>
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Plnění projektů</h2>
+            <p class="small muted" style="margin-top:6px;max-width:860px;line-height:1.6">
+                Přehled přes všechny otevřené projekty: krajíc hodin, kolik je
+                odpracováno na úkolech a matice plnění po budovách a patrech.
+                Jen na čtení – zakládání úkolů a budgety jsou ve Správě projektů.
+            </p>
+        </div>
+        <div id="vypis" class="col" style="gap:16px"></div>
+    </div>
+
+</main>
+
+<script src="assets/js/taxonomy.js?v=81"></script>
+<script src="assets/js/ui.js?v=81"></script>
+<script src="assets/js/vykazy.js?v=81"></script>
+<script type="module" src="assets/js/store.js?v=81"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    let sledovaniZapnuto = false;
+
+    /* Stejný klíč jako Správa projektů – oblíbené projekty drží nahoře
+       v obou pohledech, ať se člověk nemusí učit dvoje pořadí. */
+    function oblibeneIds() {
+        try { return JSON.parse(localStorage.getItem("kb-sprava-oblibene")) || []; }
+        catch (err) { return []; }
+    }
+
+    const ukolyProjektu = (p) => (window.KB.ukoly || [])
+        .filter(u => u.projektId === p.id || u.projekt === (p.nazev || ""));
+
+    const odpracovanoUkolu = (id) => (window.KB.vykazy || [])
+        .filter(z => z.ukolId === id && z.absence !== true)
+        .reduce((sum, z) => sum + (Number(z.hodiny) || 0), 0);
+
+    function kartaProjektu(p) {
+        const nazev = p.nazev || "Bez názvu";
+        const budgety = window.KB.ukolBudgety || {};
+        const ukoly = ukolyProjektu(p);
+
+        const strop = V.rozpocet(nazev).hodiny || 0;
+        const prideleno = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).budgetHodin) || 0), 0);
+        const rezervy = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).rezervaHodin) || 0), 0);
+        const odpracovano = ukoly.reduce((sum, u) => sum + odpracovanoUkolu(u.id), 0);
+        const zbyva = strop - prideleno - rezervy;
+
+        /* Plnění TO-DO vážené budgetem – velký úkol hýbe procentem víc.
+           Bez budgetů se průměruje prostě, ať číslo je i na začátku. */
+        let vaha = 0, soucet = 0;
+        ukoly.forEach(u => {
+            const w = Number((budgety[u.id] || {}).budgetHodin) || 0;
+            vaha += w; soucet += V.pctUkolu(u) * w;
+        });
+        const todoPct = ukoly.length
+            ? (vaha ? Math.round(soucet / vaha)
+                    : Math.round(ukoly.reduce((x, u) => x + V.pctUkolu(u), 0) / ukoly.length))
+            : 0;
+        const hotovych = ukoly.filter(u => u.stav === "hotovo").length;
+
+        const dlazdice = (popis, hodnota, minus) =>
+            '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' + hodnota +
+            "</b><span>" + popis + "</span></div>";
+
+        const b = (window.KB.budgetCiselnik || {})[nazev] || {};
+        const matice = V.maticePlneni(ukoly, budgety, {
+            budovy: b.budovy || [], patra: b.patra || [], technologie: b.technologie || []
+        }, false);
+
+        return '<section class="pl">' +
+            '<div class="pl__hlava">' +
+                '<span class="pl__nazev">' + esc(nazev) + "</span>" +
+                (p.cislo ? '<span class="pl__cislo">' + esc(p.cislo) + "</span>" : "") +
+                '<a href="sprava.html?id=' + encodeURIComponent(p.id) + '">Otevřít ve Správě</a>' +
+            "</div>" +
+            '<div class="pl__telo">' +
+                '<div class="row row--wrap" style="gap:10px">' +
+                    dlazdice("Rozpočet projektu", V.cislo(strop) + " h") +
+                    dlazdice("Přiděleno úkolům", V.cislo(prideleno) + " h") +
+                    dlazdice("Rezervy úkolů", V.cislo(rezervy) + " h") +
+                    dlazdice("Odpracováno na úkolech", V.cislo(odpracovano) + " h") +
+                    dlazdice("Zbývá rozdělit", V.cislo(zbyva) + " h", zbyva < 0) +
+                    dlazdice("Plnění TO-DO", todoPct + " %") +
+                    dlazdice("Hotových úkolů", hotovych + " z " + ukoly.length) +
+                "</div>" +
+                (matice || '<p class="pl__prazdno">Projekt nemá vyplněné budovy, patra ' +
+                    "a technologie – matice se kreslí z nastavení ve Správě projektů.</p>") +
+            "</div>" +
+        "</section>";
+    }
+
+    function render() {
+        if (!window.KBUI.can("vykaz.view")) {
+            $("stop").hidden = false;
+            $("obsah").hidden = true;
+            return;
+        }
+        $("stop").hidden = true;
+        $("obsah").hidden = false;
+
+        const oblibene = oblibeneIds();
+        const projekty = (window.KB.projektyDocs || []).filter(p => p.uzavreno !== true);
+        // oblíbené nahoře, zbytek v pořadí ze store (číslo, pak název)
+        const serazene = projekty.filter(p => oblibene.indexOf(p.id) !== -1)
+            .concat(projekty.filter(p => oblibene.indexOf(p.id) === -1));
+
+        $("vypis").innerHTML = serazene.length
+            ? serazene.map(kartaProjektu).join("")
+            : '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
+              "Žádný otevřený projekt.</div>";
+    }
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        if (!window.KBUI.can("vykaz.view")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchProjekty();
+        window.KB.watchVykazy();        // odpracováno + rozpočty (tajný číselník)
+        window.KB.watchUkoly();
+        window.KB.watchUkolyBudgety();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "sprava.html", subbar: true });
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "plneni.html");
+
+        const obnov = () => { zapniSledovani(); render(); };
+        document.addEventListener("kb-role", obnov);
+        ["users", "projekty-docs", "ukoly", "ukoly-budgety", "vykazy", "vykazy-meta", "zakazky"]
+            .forEach(ev => window.KB.on(ev, render));
+        obnov();
+    });
+})();
+</script>
+</body>
+</html>
