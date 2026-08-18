@@ -38,8 +38,17 @@ odkazy na webu jsou s koncovkou `.html`, takže se `?parametry` neztrácejí.
 ## ČEKÁ NA MICHALA
 
 1. **Znovu nasadit `firestore.rules`.** Quick TO-DO se přepsal na společné
-   vzkazy (`proUids`) a přibyla pravidla pro tabule – bez nasazení se
-   **společné vzkazy ani tabule vůbec nenačtou**.
+   vzkazy (`proUids`), přibyla pravidla pro tabule a **úkoly teď čte každý
+   člen** (budget v nich už neleží) – bez nasazení se společné vzkazy ani
+   tabule nenačtou a úkoly zůstanou po staru.
+1b. **Přesunout budgety úkolů** (Import dat → tlačítko *Přesunout budgety
+   úkolů*) – překopíruje `budgetHodin` z dokumentů úkolů do tajné kolekce
+   `private/ukoly/budgety` a v úkolech ho vynuluje. Spustit až PO nasazení
+   pravidel. Bez toho starší budgety vidí přiřazení zaměstnanci.
+1c. **BioPharma:** ve Správě projektů vyplnit Rozpočet (hodin) = 28500,
+   budovy G61, G62, patra 3PP…6NP + Zbytek a technologie (STAVBA, HRM, SLN,
+   SLB, MAR, ZAR, VZT, HAS, PLYN, RLM, TER, CHLAD, VODA, KAN) – matice
+   plnění a krajíc se vykreslí z těchhle polí.
 2. **Přesunout tabule** (Import dat → Přesun tabulí). Pořadí: nejdřív
    nasadit pravidla, pak *Zkopírovat tabule na nové místo*, pak si na
    stránce Tabule ověřit, že jsou i s obsahem, a teprve nakonec
@@ -131,6 +140,30 @@ všech 18 stránek vrací 200.
   dotaz povolit nebo zakázat, ne ho profiltrovat.
 - Obrázek se před uložením zmenší (1200 px), a kdyby se do dokumentu
   nevešel, zkusí se ještě dvakrát nahrubo (1000/800 px).
+
+### Budget úkolů a plnění (Správa projektů)
+
+- **Budget a rezerva úkolu (hodiny) leží v `private/ukoly/budgety/{id}`** –
+  vedlejší dokument se stejným id jako úkol, čtou ho JEN manažeři (spodní
+  pravidlo pro `private`). V dokumentu úkolu být nesmí: úkol čte každý člen
+  a pravidla neumí schovat pole. Stejný trik jako výkazy (zaznamy × castky).
+- **Krajíc projektu:** Rozpočet (hodin) → Přiděleno úkolům → Rezervy →
+  Zbývá rozdělit. Strop je pole Rozpočet (hodin); u projektu jde nastavit
+  i **Rezerva peněz (Kč)** (`rozpocty[projekt].rezervaKc`).
+- **Matice technologie × patro po budovách:** % vážené budgetem úkolů;
+  prázdná buňka = tlačítko + → dialog nového úkolu s předvyplněným názvem
+  `G62 – TER – 1PP` (dá se upřesnit), budgetem, rezervou a lidmi.
+- **Tabulka úkolů projektu:** hotovo %, odpracováno (z výkazů přes
+  `ukolId`), budget a rezerva – ukládá se tlačítkem u řádku, ne velkým
+  tlačítkem dole.
+- **Kdo dělá kterou technologii** (`projekt.lideTech`: uid → zkratky) –
+  na průměrné sazby technologií; není tajné, sazby zůstávají v tajném
+  číselníku.
+- **Výkaz má Budovu a Patro** (roletky z nastavení projektu; projekty bez
+  budov je nemají) – ať se dá sečíst, kolik hodin stálo patro.
+- **Výkaz nabízí jen moje úkoly.** Výpomoc na cizím: stránka Úkoly & TO-DO
+  (přepínač Všechny je teď pro každého) → tlačítko Zapsat výkaz → cizí
+  úkol se do roletky vloží s poznámkou „(výpomoc)".
 
 ### Provoz
 

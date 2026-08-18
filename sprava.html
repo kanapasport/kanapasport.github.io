@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=79">
+    <link rel="stylesheet" href="assets/css/app.css?v=80">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -95,6 +95,38 @@
         /* Ukončení projektu je rozhodnutí, ne vyplňované pole – proto tlačítko
            a ne zaškrtávátko mezi údaji. Zapnutý stav je tmavší, ať se pozná
            i bez čtení textu. */
+        /* krajíc: dlaždice s čísly rozpočtu hodin */
+        .kraj { flex: 1 1 140px; padding: 9px 12px; border-radius: var(--radius);
+            background: var(--surface); border: 1px solid var(--line-soft); }
+        .kraj b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+        .kraj span { font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); }
+        .kraj--minus b { color: var(--danger); }
+
+        /* tabulka úkolů s budgetem */
+        .bu { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--surface); }
+        .bu th { text-align: left; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+            color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+        .bu td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+        .bu input { width: 84px; text-align: right; font-variant-numeric: tabular-nums; min-height: 32px; }
+        .bu .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+        /* matice technologie × patra */
+        .mx-wrap { overflow-x: auto; }
+        .mx { border-collapse: collapse; font-size: 12px; background: var(--surface); }
+        .mx th { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+            padding: 5px 7px; border: 1px solid var(--line-soft); background: var(--bg-soft); }
+        .mx td { border: 1px solid var(--line-soft); padding: 0; text-align: center; min-width: 58px; }
+        .mx__bunka { display: block; width: 100%; padding: 6px 4px; border: 0; background: none;
+            font: inherit; font-weight: 800; cursor: pointer; font-variant-numeric: tabular-nums; }
+        .mx__bunka:hover { background: var(--accent-tint); }
+        .mx__bunka--nic { color: var(--dim); font-weight: 400; }
+        .mx__bunka--p0 { background: var(--p0-bg); color: var(--p0-fg); }
+        .mx__bunka--p50 { background: var(--p50-bg); color: var(--p50-fg); }
+        .mx__bunka--p75 { background: var(--p75-bg); color: var(--p75-fg); }
+        .mx__bunka--p95 { background: var(--p95-bg); color: var(--p95-fg); }
+        .mx__bunka--p100 { background: var(--p100-bg); color: var(--p100-fg); }
+
         .jehotov { border-color: var(--ok); }
         .jehotov--zap { background: #0f5533; border-color: #0f5533; }
     </style>
@@ -233,6 +265,9 @@
                                 <input type="number" id="fKc" class="field" min="0" placeholder="0"></label>
                             <label class="pole"><span class="popisek">Rozpočet (hodin)</span>
                                 <input type="number" id="fHodiny" class="field" min="0" placeholder="0"></label>
+                            <label class="pole"><span class="popisek">Rezerva peněz (Kč)</span>
+                                <input type="number" id="fRezervaKc" class="field" min="0" placeholder="0"
+                                    title="Celková rezerva projektu v penězích – vedle rozpočtu"></label>
                             <label class="pole"><span class="popisek">Fakturovat firmě</span>
                                 <select id="fFirma" class="field"></select></label>
                             <label class="pole fmr__cely"><span class="popisek">Části projektu (oddělené čárkou)</span>
@@ -299,6 +334,35 @@
                         </div>
                     </section>
 
+                    <!-- ------------------------------- technologie lidí -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Kdo dělá kterou technologii</span></div>
+                        <div class="sblok__telo">
+                        <p class="small muted" style="margin:0;line-height:1.6">
+                            Každý má jinou hodinovku – z tohohle přiřazení se pak počítají
+                            průměrné sazby na technologii. Nabízejí se technologie projektu
+                            (pole výš) a lidé zaškrtnutí v bloku <b>Kdo na projektu dělá</b>.
+                        </p>
+                        <div id="techLide" class="col" style="gap:6px"></div>
+                        </div>
+                    </section>
+
+                    <!-- --------------------------- budget úkolů a plnění -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Budget úkolů a plnění</span></div>
+                        <div class="sblok__telo">
+                        <p class="small muted" style="margin:0;line-height:1.6">
+                            Krajíc projektu: z celkového rozpočtu hodin se ukrajuje úkolům.
+                            Budget a rezerva úkolu jsou <b>vidět jen tady</b> – v úkolech ani
+                            ve výkazech je nikdo jiný neuvidí. Změny se ukládají hned
+                            tlačítkem u řádku, ne velkým tlačítkem dole.
+                        </p>
+                        <div id="krajic" class="row row--wrap" style="gap:10px"></div>
+                        <div id="budgetUkoly"></div>
+                        <div id="matice" class="col" style="gap:14px"></div>
+                        </div>
+                    </section>
+
                     <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
                         <span id="stav" class="small muted" style="margin-right:auto"></span>
                         <button type="button" id="btnUloz" class="btn btn--primary">Uložit nastavení projektu</button>
@@ -312,10 +376,45 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=79"></script>
-<script src="assets/js/ui.js?v=79"></script>
-<script src="assets/js/vykazy.js?v=79"></script>
-<script type="module" src="assets/js/store.js?v=79"></script>
+<!-- =============================================== NOVÝ ÚKOL Z MATICE ==
+     Předvyplněný průsečík budova × technologie × patro; název se dá upřesnit.
+     Budget se rovnou zapíše do tajné kolekce, do dokumentu úkolu nikdy. -->
+<div id="ukolOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:560px;width:100%;gap:0;overflow:hidden;max-height:88vh">
+        <div style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Nový úkol
+        </div>
+        <div style="padding:14px 18px;overflow-y:auto" class="col">
+            <div class="fmr">
+                <label class="pole fmr__cely"><span class="popisek">Název úkolu</span>
+                    <input type="text" id="nuNazev" class="field"></label>
+                <label class="pole"><span class="popisek">Druh (pro výkaz)</span>
+                    <select id="nuDruh" class="field"></select></label>
+                <label class="pole"><span class="popisek">Termín</span>
+                    <input type="date" id="nuTermin" class="field"></label>
+                <label class="pole"><span class="popisek">Budget (hodin)</span>
+                    <input type="number" id="nuBudget" class="field" min="0" placeholder="0"></label>
+                <label class="pole"><span class="popisek">Rezerva (hodin)</span>
+                    <input type="number" id="nuRezerva" class="field" min="0" placeholder="0"></label>
+            </div>
+            <div>
+                <span class="popisek">Kdo na úkolu dělá</span>
+                <div id="nuLide" class="prjlide"></div>
+            </div>
+        </div>
+        <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
+            <span id="nuOsy" class="tiny muted"></span>
+            <div class="grow"></div>
+            <button type="button" id="nuZrus" class="btn btn--sm btn--ghost">Zrušit</button>
+            <button type="button" id="nuUloz" class="btn btn--primary btn--sm">Založit úkol</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=80"></script>
+<script src="assets/js/ui.js?v=80"></script>
+<script src="assets/js/vykazy.js?v=80"></script>
+<script type="module" src="assets/js/store.js?v=80"></script>
 
 <script>
 (function () {
@@ -573,6 +672,7 @@
         const rozpocet = V.rozpocet(nazev);
         $("fKc").value = rozpocet.kc || "";
         $("fHodiny").value = rozpocet.hodiny || "";
+        $("fRezervaKc").value = ((window.KB.rozpocty || {})[nazev] || {}).rezervaKc || "";
 
         const firma = (window.KB.firmaMap || {})[nazev] || p.firma || "";
         $("fFirma").innerHTML = V.options(sHodnotou(V.firmy(), firma), firma, "— nevyplněno —");
@@ -585,6 +685,253 @@
         naplnZdroje(nazev);
 
         naplnSazby(p);
+        naplnTechLide(p);
+        vykresliBudget(p);
+    }
+
+    /* ------------------------------------------- budget úkolů a plnění ---
+       Krajíc (kolik hodin je rozdáno), tabulka úkolů projektu s budgetem
+       a rezervou, a matice technologie × patro po budovách. Budgety leží
+       v tajné kolekci (KB.ukolBudgety) a ukládají se hned po řádcích –
+       velké tlačítko dole se jich netýká, aby rozepsaná čísla nepadala
+       s ukládáním celého projektu. */
+
+    const ukolyProjektu = (p) => (window.KB.ukoly || [])
+        .filter(u => u.projektId === p.id || u.projekt === (p.nazev || ""));
+
+    const pctUkolu = (u) => {
+        const todo = u.todo || [];
+        if (!todo.length) return u.stav === "hotovo" ? 100 : 0;
+        return Math.round(todo.reduce((sum, t) => sum + (Number(t.pct) || 0), 0) / todo.length);
+    };
+
+    const odpracovanoUkolu = (id) => (window.KB.vykazy || [])
+        .filter(z => z.ukolId === id && z.absence !== true)
+        .reduce((sum, z) => sum + (Number(z.hodiny) || 0), 0);
+
+    function vykresliBudget(p) {
+        if (!p) return;
+        /* Rozepsané číslo v tabulce nesmí přepsat příchod dat – překreslí se,
+           až člověk z pole odejde (další datová událost to dorovná). */
+        if (document.activeElement && document.activeElement.closest &&
+            document.activeElement.closest("#budgetUkoly, #matice")) return;
+
+        const budgety = window.KB.ukolBudgety || {};
+        const ukoly = ukolyProjektu(p);
+
+        // ---- krajíc ----
+        const strop = Number($("fHodiny").value) || (V.rozpocet(p.nazev || "").hodiny || 0);
+        const prideleno = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).budgetHodin) || 0), 0);
+        const rezervy = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).rezervaHodin) || 0), 0);
+        const zbyva = strop - prideleno - rezervy;
+        const dlazdice = (popis, hodnota, minus) =>
+            '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' +
+            V.cislo(hodnota) + " h</b><span>" + popis + "</span></div>";
+        $("krajic").innerHTML =
+            dlazdice("Rozpočet projektu", strop) +
+            dlazdice("Přiděleno úkolům", prideleno) +
+            dlazdice("Rezervy úkolů", rezervy) +
+            dlazdice("Zbývá rozdělit", zbyva, zbyva < 0);
+
+        // ---- tabulka úkolů ----
+        $("budgetUkoly").innerHTML = ukoly.length
+            ? '<table class="bu"><thead><tr><th>Úkol</th><th>Kde</th><th>Lidé</th>' +
+              '<th class="num">Hotovo</th><th class="num">Odprac.</th>' +
+              '<th class="num">Budget h</th><th class="num">Rezerva h</th><th></th></tr></thead><tbody>' +
+              ukoly.map(u => {
+                const b = budgety[u.id] || {};
+                const kde = [u.budova, u.patro, u.technologie].filter(Boolean).join(" · ");
+                const lide = (u.prirazeni || []).map(uid => {
+                    const clovek = (window.KB.users || []).find(x => x.id === uid);
+                    return clovek ? (clovek.last || clovek.first || "?") : "?";
+                }).join(", ");
+                return '<tr data-burow="' + esc(u.id) + '">' +
+                    "<td><b>" + esc(u.nazev || "Bez názvu") + "</b></td>" +
+                    "<td>" + esc(kde) + "</td>" +
+                    "<td>" + esc(lide) + "</td>" +
+                    '<td class="num">' + pctUkolu(u) + " %</td>" +
+                    '<td class="num">' + V.cislo(odpracovanoUkolu(u.id)) + " h</td>" +
+                    '<td class="num"><input type="number" class="field" min="0" data-bud="budget" value="' +
+                        (Number(b.budgetHodin) || "") + '"></td>' +
+                    '<td class="num"><input type="number" class="field" min="0" data-bud="rezerva" value="' +
+                        (Number(b.rezervaHodin) || "") + '"></td>' +
+                    '<td><button type="button" class="btn btn--sm btn--ghost" data-buuloz="' +
+                        esc(u.id) + '">Uložit</button></td>' +
+                "</tr>";
+              }).join("") + "</tbody></table>"
+            : '<p class="tiny muted" style="margin:0">Projekt zatím nemá úkoly – založ je z matice níž.</p>';
+
+        vykresliMatici(p, ukoly, budgety);
+    }
+
+    /* Matice: řádky technologie, sloupce patra, jedna tabulka na budovu.
+       Procento buňky je vážené budgetem úkolů (velký úkol hýbe číslem víc);
+       úkoly bez budgetu se průměrují prostě. Prázdná buňka = založit úkol. */
+    function vykresliMatici(p, ukoly, budgety) {
+        const b = (window.KB.budgetCiselnik || {})[p.nazev || ""] || {};
+        const budovy = seznamZTextu($("fBudovy").value).length ? seznamZTextu($("fBudovy").value) : (b.budovy || []);
+        const patra = seznamZTextu($("fPatra").value).length ? seznamZTextu($("fPatra").value) : (b.patra || []);
+        const technologie = seznamZTextu($("fTech").value).length ? seznamZTextu($("fTech").value) : (b.technologie || []);
+
+        if (!budovy.length || !patra.length || !technologie.length) {
+            $("matice").innerHTML = '<p class="tiny muted" style="margin:0">' +
+                "Matice se vykreslí, až budou vyplněné budovy, patra a technologie výš.</p>";
+            return;
+        }
+
+        const uroven = (pct) => pct >= 100 ? "p100" : pct >= 95 ? "p95" : pct >= 75 ? "p75" : pct >= 50 ? "p50" : "p0";
+
+        $("matice").innerHTML = budovy.map(budova =>
+            '<div><div class="popisek" style="margin-bottom:5px">Budova ' + esc(budova) + "</div>" +
+            '<div class="mx-wrap"><table class="mx"><thead><tr><th></th>' +
+                patra.map(patro => "<th>" + esc(patro) + "</th>").join("") +
+            "</tr></thead><tbody>" +
+            technologie.map(tech =>
+                '<tr><th style="text-align:left">' + esc(tech) + "</th>" +
+                patra.map(patro => {
+                    const bunky = ukoly.filter(u =>
+                        u.budova === budova && u.patro === patro && u.technologie === tech);
+                    const klic = esc(budova) + "|" + esc(tech) + "|" + esc(patro);
+                    if (!bunky.length) {
+                        return '<td><button type="button" class="mx__bunka mx__bunka--nic" data-mx="' +
+                            klic + '" title="Založit úkol ' + esc(budova + " – " + tech + " – " + patro) +
+                            '">+</button></td>';
+                    }
+                    let vaha = 0, soucet = 0;
+                    bunky.forEach(u => {
+                        const w = Number((budgety[u.id] || {}).budgetHodin) || 0;
+                        vaha += w; soucet += pctUkolu(u) * w;
+                    });
+                    const pct = vaha
+                        ? Math.round(soucet / vaha)
+                        : Math.round(bunky.reduce((x, u) => x + pctUkolu(u), 0) / bunky.length);
+                    return '<td><button type="button" class="mx__bunka mx__bunka--' + uroven(pct) +
+                        '" data-mx="' + klic + '" title="' +
+                        bunky.map(u => esc(u.nazev)).join(", ") + ' – dalším kliknutím založíš další úkol">' +
+                        pct + "&nbsp;%</button></td>";
+                }).join("") +
+            "</tr>").join("") +
+            "</tbody></table></div></div>").join("");
+    }
+
+    async function ulozBudgetRadek(id) {
+        const radek = document.querySelector('[data-burow="' + id + '"]');
+        if (!radek) return;
+        try {
+            await window.KB.ulozUkolBudget(id, {
+                budgetHodin: Number(radek.querySelector('[data-bud="budget"]').value) || 0,
+                rezervaHodin: Number(radek.querySelector('[data-bud="rezerva"]').value) || 0
+            });
+            window.KBUI.toast("Budget úkolu uložen.");
+            vykresliBudget(vybranyProjekt());
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení budgetu selhalo.", "error");
+        }
+    }
+
+    /* ------------------------------------------------ nový úkol z matice */
+
+    let novyUkolOsy = null;   // { budova, tech, patro }
+
+    function otevriNovyUkol(klic) {
+        const p = vybranyProjekt();
+        if (!p) return;
+        const [budova, tech, patro] = klic.split("|");
+        novyUkolOsy = { budova: budova, tech: tech, patro: patro };
+
+        $("nuNazev").value = budova + " – " + tech + " – " + patro;
+        $("nuDruh").innerHTML = V.options(V.cinnosti(), "ArcGIS", "— vyber —");
+        $("nuTermin").value = "";
+        $("nuBudget").value = "";
+        $("nuRezerva").value = "";
+        $("nuOsy").textContent = "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
+
+        const prirazeni = vybraniLide(p);
+        const lide = V.lide().filter(u => prirazeni.has(u.id))
+            .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+        $("nuLide").innerHTML = lide.map(u =>
+            '<label><input type="checkbox" value="' + esc(u.id) + '"> ' + esc(V.jmeno(u)) + "</label>").join("") ||
+            '<span class="tiny muted">Na projektu nikdo není – zaškrtni lidi v bloku Kdo na projektu dělá.</span>';
+
+        $("ukolOverlay").hidden = false;
+        $("nuNazev").focus();
+    }
+
+    async function zalozNovyUkol() {
+        const p = vybranyProjekt();
+        if (!p || !novyUkolOsy) return;
+        const nazev = $("nuNazev").value.trim();
+        if (!nazev) return void window.KBUI.toast("Úkol potřebuje název.", "warn");
+
+        $("nuUloz").disabled = true;
+        try {
+            const id = window.KB.newUkolId();
+            await window.KB.saveUkol(id, {
+                projektId: p.id,
+                projekt: p.nazev || "",
+                nazev: nazev,
+                druh: $("nuDruh").value,
+                technologie: novyUkolOsy.tech,
+                budova: novyUkolOsy.budova,
+                patro: novyUkolOsy.patro,
+                prirazeni: Array.from($("nuLide").querySelectorAll("input:checked")).map(ch => ch.value),
+                termin: $("nuTermin").value,
+                todo: []
+            });
+            const budget = Number($("nuBudget").value) || 0;
+            const rezerva = Number($("nuRezerva").value) || 0;
+            if (budget || rezerva) {
+                await window.KB.ulozUkolBudget(id, { budgetHodin: budget, rezervaHodin: rezerva });
+            }
+            $("ukolOverlay").hidden = true;
+            window.KBUI.toast("Úkol založen.");
+            vykresliBudget(p);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Založení úkolu selhalo.", "error");
+        } finally {
+            $("nuUloz").disabled = false;
+        }
+    }
+
+    /* ------------------------------------------- kdo dělá kterou technologii
+       Ukládá se s projektem (lideTech: uid → pole zkratek). Není to tajné
+       číslo, jen přiřazení – sazby zůstávají v tajném číselníku. */
+
+    function naplnTechLide(p) {
+        const b = (window.KB.budgetCiselnik || {})[p.nazev || ""] || {};
+        const technologie = seznamZTextu($("fTech").value).length
+            ? seznamZTextu($("fTech").value) : (b.technologie || []);
+        const ulozene = (p.lideTech && typeof p.lideTech === "object") ? p.lideTech : {};
+
+        const prirazeni = vybraniLide(p);
+        const lide = V.lide().filter(u => prirazeni.has(u.id))
+            .sort((a, b2) => (a.last || "").localeCompare(b2.last || "", "cs"));
+
+        $("techLide").innerHTML = (lide.length && technologie.length)
+            ? lide.map(u =>
+                '<div class="sazbap" data-techclovek="' + esc(u.id) + '">' +
+                    '<span class="sazbap__jmeno">' + esc(V.jmeno(u)) + "</span>" +
+                    '<span class="prjlide">' +
+                    technologie.map(t =>
+                        '<label><input type="checkbox" value="' + esc(t) + '"' +
+                        ((ulozene[u.id] || []).indexOf(t) !== -1 ? " checked" : "") + "> " +
+                        esc(t) + "</label>").join("") +
+                    "</span></div>").join("")
+            : '<div class="tiny muted">' + (technologie.length
+                ? "Nikdo není přiřazený – zaškrtni lidi v bloku <b>Kdo na projektu dělá</b>."
+                : "Nejdřív vyplň technologie projektu (pole výš).") + "</div>";
+    }
+
+    /** Přečte přiřazení technologií ze zaškrtávátek – ukládá se s projektem. */
+    function ctiTechLide() {
+        const mapa = {};
+        $("techLide").querySelectorAll("[data-techclovek]").forEach(radek => {
+            const vybrane = Array.from(radek.querySelectorAll("input:checked")).map(ch => ch.value);
+            if (vybrane.length) mapa[radek.dataset.techclovek] = vybrane;
+        });
+        return mapa;
     }
 
     /* ------------------------------------------------------------ ovládání */
@@ -641,6 +988,7 @@
         rozpocty[nazev] = Object.assign({}, rozpocty[nazev], {
             kc: Number($("fKc").value) || 0,
             hodiny: Number($("fHodiny").value) || 0,
+            rezervaKc: Number($("fRezervaKc").value) || 0,
             sazby: sazby
         });
 
@@ -678,6 +1026,7 @@
             priorita: $("pPriorita").value,
             uzavreno: hotovoStav,
             lide: Array.from($("pLide").querySelectorAll("input:checked")).map(ch => ch.value),
+            lideTech: ctiTechLide(),
             poznamka: $("pPoznamka").value.trim(),
             createdMs: p.createdMs,
             createdBy: p.createdBy
@@ -714,6 +1063,9 @@
         /* Rozpočty a sazby chodí spolu s výkazy (tajný číselník) – bez tohohle
            odběru by pole zůstala prázdná a uložení by přepsalo cizí čísla. */
         window.KB.watchVykazy();
+        // úkoly a jejich tajné budgety – krajíc, tabulka a matice plnění
+        window.KB.watchUkoly();
+        window.KB.watchUkolyBudgety();
     }
 
     function render() {
@@ -750,8 +1102,13 @@
             const prepinac = event.target.closest("[data-jina]");
             if (prepinac) return void prepniSazbu(prepinac);
 
-            // přibyl/ubyl člověk na projektu → sazby se hned přeskládají
-            if (event.target.closest("#pLide")) naplnSazby(vybranyProjekt() || {});
+            // přibyl/ubyl člověk na projektu → sazby i technologie se přeskládají
+            if (event.target.closest("#pLide")) {
+                naplnSazby(vybranyProjekt() || {});
+                naplnTechLide(vybranyProjekt() || {});
+            }
+            // změna seznamu technologií → nabídka u lidí se přeskládá
+            if (event.target.id === "fTech") naplnTechLide(vybranyProjekt() || {});
         });
         $("panel").addEventListener("click", (event) => {
             const tlacitko = event.target.closest("[data-prevzit]");
@@ -774,6 +1131,24 @@
             }
         });
         $("btnUloz").addEventListener("click", uloz);
+
+        // budget úkolů se ukládá po řádcích, matice zakládá úkoly
+        document.addEventListener("click", (event) => {
+            const radek = event.target.closest("[data-buuloz]");
+            if (radek) return void ulozBudgetRadek(radek.dataset.buuloz);
+            const bunka = event.target.closest("[data-mx]");
+            if (bunka) return void otevriNovyUkol(bunka.dataset.mx);
+        });
+        $("nuZrus").addEventListener("click", () => { $("ukolOverlay").hidden = true; });
+        $("nuUloz").addEventListener("click", zalozNovyUkol);
+        /* Zápis v tabulce budgetů nemá shazovat ochranu formuláře projektu –
+           ukládá se vlastním tlačítkem, ne velkým dole. */
+        ["budgetUkoly", "matice"].forEach(id =>
+            $(id).addEventListener("input", (ev) => ev.stopPropagation()));
+
+        window.KB.on("ukoly", () => vykresliBudget(vybranyProjekt()));
+        window.KB.on("ukoly-budgety", () => vykresliBudget(vybranyProjekt()));
+        window.KB.on("vykazy", () => vykresliBudget(vybranyProjekt()));
 
 
         document.addEventListener("kb-role", render);

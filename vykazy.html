@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=79">
+    <link rel="stylesheet" href="assets/css/app.css?v=80">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=79"></script>
-<script src="assets/js/ui.js?v=79"></script>
-<script src="assets/js/vykazy.js?v=79"></script>
-<script type="module" src="assets/js/store.js?v=79"></script>
+<script src="assets/js/taxonomy.js?v=80"></script>
+<script src="assets/js/ui.js?v=80"></script>
+<script src="assets/js/vykazy.js?v=80"></script>
+<script type="module" src="assets/js/store.js?v=80"></script>
 
 <script>
 (function () {
@@ -275,6 +275,13 @@
     function nabidkaProjektu() {
         const zEvidence = (window.KB.projektyDocs || [])
             .filter(p => !p.uzavreno).map(p => p.nazev).filter(Boolean);
+        /* Výpomoc na cizím úkolu: jeho projekt v mé evidenci být nemusí
+           (zaměstnanec vidí jen projekty, kde je přiřazený). Projekty
+           z viditelných úkolů se proto přidají – zapsat hodiny na cizí
+           projekt pravidla dovolují, jen by nebyl v roletce. */
+        (window.KB.ukoly || []).forEach(u => {
+            if (u.projekt && zEvidence.indexOf(u.projekt) === -1) zEvidence.push(u.projekt);
+        });
         const jmena = zEvidence.length ? zEvidence : V.zakazky();
 
         /* Administrativa se nabízí vždycky – režie se odpracuje na každé
@@ -289,14 +296,50 @@
     /**
      * Úkoly k projektu – nepovinná vazba zápisu na úkol z plánu. Až se bude
      * počítat efektivita (budget hodin vs. skutečnost), sedí na tomhle poli.
-     * Zaměstnanci jeho odběr stejně nabídne jen úkoly, které mu patří.
      */
     function ukolOptions(zakazka, vybrany) {
+        /* V nabídce jsou jen úkoly přiřazené mně – každý pracuje primárně
+           na svých. Pomoc na cizím úkolu se zapisuje ze stránky Úkoly & TO-DO
+           (tlačítko Zapsat výkaz), která sem pošle ?ukol=ID – takový úkol
+           se do nabídky dovloží, i když v ní běžně není. */
+        const uid = window.KB.currentUid();
         const seznam = (window.KB.ukoly || [])
-            .filter(u => u.projekt === zakazka && u.stav !== "hotovo")
+            .filter(u => u.projekt === zakazka && u.stav !== "hotovo"
+                && (u.prirazeni || []).indexOf(uid) !== -1)
             .map(u => ({ value: u.id, label: u.nazev }));
+        if (vybrany && !seznam.some(x => x.value === vybrany)) {
+            const cizi = (window.KB.ukoly || []).find(u => u.id === vybrany);
+            if (cizi) seznam.push({ value: cizi.id, label: cizi.nazev + " (výpomoc)" });
+        }
         if (!seznam.length) return '<option value="">— žádný úkol —</option>';
         return V.options(seznam, vybrany, "— bez úkolu —");
+    }
+
+    /* Budovy a patra projektu – z nastavení ve Správě projektů (číselník
+       `budget`). Kde projekt nic nemá, roletky se vůbec nekreslí. */
+    function mistoProjektu(zakazka) {
+        const b = (window.KB.budgetCiselnik || {})[zakazka] || {};
+        return { budovy: Array.isArray(b.budovy) ? b.budovy : [],
+                 patra:  Array.isArray(b.patra)  ? b.patra  : [] };
+    }
+
+    /* Roletky Budova + Patro: ať se dá sečíst, kolik hodin stálo jedno patro.
+       Obal [data-misto] s display:contents drží místo v mřížce a překresluje
+       se při změně projektu – jiný projekt má jiné budovy. */
+    function mistoHtml(zakazka, d) {
+        const misto = mistoProjektu(zakazka);
+        return '<span data-misto style="display:contents">' +
+            (misto.budovy.length
+                ? '<div><label class="label">Budova</label>' +
+                    '<select class="field" data-f="budova">' +
+                    V.options(misto.budovy, (d && d.budova) || "", "— nezadáno —") + "</select></div>"
+                : "") +
+            (misto.patra.length
+                ? '<div><label class="label">Patro</label>' +
+                    '<select class="field" data-f="patro">' +
+                    V.options(misto.patra, (d && d.patro) || "", "— nezadáno —") + "</select></div>"
+                : "") +
+        "</span>";
     }
 
     /** Části patří pod projekt – bez něj není z čeho vybírat. */
@@ -407,6 +450,8 @@
                     '<select class="field" data-f="technologie">' +
                         V.options(V.technologie().map(t => ({ value: t.zkratka, label: t.zkratka + " – " + t.nazev })),
                                   d.technologie || "", "— nezadáno —") + "</select></div>" +
+
+                mistoHtml(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d) +
             "</div>" +
 
             // kdy a za kolik
@@ -510,6 +555,8 @@
             datum: val("datum"),
             datumDo: val("datumDo"),
             ukolId: val("ukolId"),
+            budova: val("budova"),
+            patro: val("patro"),
             od: val("od"),
             do: val("do"),
             celyden: zaskrtnuto("celyden"),
@@ -1277,9 +1324,10 @@
             window.KB.watchUkoly();
         } else {
             window.KB.watchMojeVykazy();
-            // kvůli nabídce projektů a úkolů, ke kterým je člověk přiřazený
+            // projekty jen svoje (pravidla víc nedovolí); úkoly ale všechny –
+            // proklik „Zapsat výkaz" z cizího úkolu ho musí umět předvyplnit
             window.KB.watchMojeProjekty();
-            window.KB.watchMojeUkoly();
+            window.KB.watchUkoly();
         }
     }
 
@@ -1317,6 +1365,10 @@
             blok.querySelectorAll('[data-f="ukolId"]').forEach(select => {
                 select.innerHTML = ukolOptions(event.target.value, "");
             });
+            // ...a jiné budovy a patra – vybrané hodnoty stejně jinde neplatí
+            blok.querySelectorAll("[data-misto]").forEach(el => {
+                el.outerHTML = mistoHtml(event.target.value, null);
+            });
             // u absence se do popisu práce doplní „Dovolená – Jméno"
             polozkyBloku(blok).forEach(box =>
                 predvyplnAbsenci(box, event.target.value, $("dOsoba").value));
@@ -1338,6 +1390,8 @@
             predvyplnAbsenci(box, event.target.value, $("eOsoba").value);
             const ukolSelect = box.querySelector('[data-f="ukolId"]');
             if (ukolSelect) ukolSelect.innerHTML = ukolOptions(event.target.value, "");
+            const misto = box.querySelector("[data-misto]");
+            if (misto) misto.outerHTML = mistoHtml(event.target.value, null);
             box.querySelector('[data-f="projekt"]').innerHTML =
                 projektOptions(event.target.value, "");
         }
@@ -1557,10 +1611,17 @@
                     const el = box.querySelector('[data-f="' + klic + '"]');
                     if (el && hodnota) el.value = hodnota;
                 };
+                /* Roletka úkolů se právě přepsala změnou projektu – bez id
+                   vybraného úkolu, takže cizí úkol (výpomoc) v ní není.
+                   Postaví se znovu i s ním, jinak by se hodnota neujala. */
+                const ukolSelect = box.querySelector('[data-f="ukolId"]');
+                if (ukolSelect) ukolSelect.innerHTML = ukolOptions(u.projekt || "", zUkolu);
                 nastav("ukolId", zUkolu);
                 nastav("nazev", u.nazev);
                 nastav("cinnost", u.druh);
                 nastav("technologie", u.technologie);
+                nastav("budova", u.budova);
+                nastav("patro", u.patro);
                 prepocti(box);
             };
             window.KB.on("ukoly", predvypln);

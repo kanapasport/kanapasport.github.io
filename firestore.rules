@@ -107,16 +107,23 @@ service cloud.firestore {
 
     // --- úkoly s TO-DO rozpadem -----------------------------------------
     //
-    //   private/ukoly/seznam/{id}   projekt, druh, technologie, budova,
-    //                               patro, přiřazení lidé, budget hodin,
-    //                               todo: [{ text, pct }]
+    //   private/ukoly/seznam/{id}    projekt, druh, technologie, budova,
+    //                                patro, přiřazení lidé, todo: [{text,pct}]
+    //   private/ukoly/budgety/{id}   budget a rezerva hodin – JEN manažeři
+    //                                (kryje je spodní pravidlo pro private)
     //
-    // Přiřazený člověk čte svoje úkoly a smí si zapisovat postup – ale jen
-    // pole `todo` a `stav`; zadání, budget ani přiřazení mu pravidlo změnit
-    // nedovolí. Zakládání a mazání je manažerská práce (spodní pravidlo).
+    // Úkol čte každý člen: kdo pomáhal kolegovi, zapisuje si výkaz na jeho
+    // úkol a musí ho umět najít. Jde to bezpečně až od chvíle, kdy budget
+    // neleží v dokumentu úkolu – pravidla neumí schovat jednotlivé pole,
+    // proto je ve vedlejším dokumentu `budgety/{id}` (stejný trik jako
+    // výkazy: zaznamy × castky).
+    //
+    // Postup smí zapisovat jen přiřazený – a jen pole `todo` a `stav`;
+    // zadání ani přiřazení mu pravidlo změnit nedovolí. Zakládání a mazání
+    // je manažerská práce (spodní pravidlo).
 
     match /artifacts/firemni-kb-app/private/ukoly/seznam/{id} {
-      allow read: if spravce() || (clen() && request.auth.uid in resource.data.prirazeni);
+      allow read: if clen();
       allow update: if spravce() || (clen()
                        && request.auth.uid in resource.data.prirazeni
                        && request.resource.data.diff(resource.data).affectedKeys()

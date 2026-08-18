@@ -107,6 +107,7 @@ const KB = {
     aktivity: [],           // historie kroků (kdo co uložil) – jen pro manažery
     logy: [],               // historie přihlášení (public/data/logs)
     quicktodo: [],          // rychlé vzkazy: vidí je jen autor a adresát
+    ukolBudgety: {},        // budgety úkolů (jen manažeři): id → { budgetHodin, rezervaHodin }
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
@@ -1238,6 +1239,10 @@ function zaznamPayload(data) {
         technologie: data.technologie || "",
         /* vazba na úkol – z ní se časem spočítá efektivita (budget vs. skutečnost) */
         ukolId:   data.ukolId || "",
+        /* budova a patro – ať se dá sečíst, kolik hodin stálo jedno patro;
+           nabídka se bere z nastavení projektu ve Správě */
+        budova:   data.budova || "",
+        patro:    data.patro || "",
         od:       data.od || "",
         do:       data.do || "",
         pauza:    Math.max(0, Number(data.pauza) || 0),
@@ -1430,6 +1435,9 @@ KB.saveProjekt = async (id, data) => {
         priorita: data.priorita || "stredni",
         uzavreno: data.uzavreno === true,
         lide:     Array.isArray(data.lide) ? data.lide : [],
+        /* kdo z přiřazených dělá kterou technologii: { uid: ["TER", "VZT"] }
+           – z toho se počítají průměrné sazby na technologii */
+        lideTech: (data.lideTech && typeof data.lideTech === "object") ? data.lideTech : {},
         poznamka: data.poznamka || "",
         createdMs: data.createdMs || Date.now(),
         createdBy: data.createdBy || window.KB_USER || "",
@@ -1495,6 +1503,68 @@ function sledujUkoly(jenSve) {
     }, (err) => console.error("Chyba čtení úkolů:", err));
 }
 
+/* ------------------------------------------------------ budgety úkolů ----
+   Budget a rezerva úkolu v hodinách. Vedlejší dokument se stejným {id} jako
+   úkol – v dokumentu úkolu být nesmí, protože ten čte každý člen a pravidla
+   neumí schovat pole. Kolekce leží v `private`, kam vidí jen manažeři
+   (spodní pravidlo pro `private/{document=**}`), takže zaměstnanec budget
+   neuvidí ani dotazem mimo web. */
+
+const ukolBudgetyCol = () => collection(db, "artifacts", APP_ID, "private", "ukoly", "budgety");
+const ukolBudgetDoc = (id) => doc(db, "artifacts", APP_ID, "private", "ukoly", "budgety", id);
+
+let ukolBudgetyOdber = null;
+
+/** Živý přenos budgetů úkolů – volají ho jen manažerské stránky. */
+KB.watchUkolyBudgety = async () => {
+    if (ukolBudgetyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || ukolBudgetyOdber) return;
+    ukolBudgetyOdber = onSnapshot(ukolBudgetyCol(), (snapshot) => {
+        KB.ukolBudgety = {};
+        snapshot.forEach(d => { KB.ukolBudgety[d.id] = d.data(); });
+        emit("ukoly-budgety", KB.ukolBudgety);
+    }, (err) => console.error("Chyba čtení budgetů úkolů:", err));
+};
+
+KB.ulozUkolBudget = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(ukolBudgetDoc(id), {
+        budgetHodin:  Math.max(0, Number(data.budgetHodin) || 0),
+        rezervaHodin: Math.max(0, Number(data.rezervaHodin) || 0),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    KB.zapisAktivitu("ukol", "změnil budget úkolu " + id);
+};
+
+/**
+ * Jednorázový přesun: budgety zapsané dřív přímo v dokumentech úkolů se
+ * překopírují do tajné kolekce a v úkolu se vynulují – jinak by je dál
+ * viděl každý přiřazený. Běží ho hlavní správce na Importu dat.
+ */
+KB.presunUkolBudgety = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(ukolyCol());
+    let presunuto = 0;
+    for (const d of snap.docs) {
+        const stary = Number((d.data() || {}).budgetHodin) || 0;
+        if (!stary) continue;
+        const uz = await getDoc(ukolBudgetDoc(d.id));
+        if (!uz.exists()) {
+            await setDoc(ukolBudgetDoc(d.id), {
+                budgetHodin: stary, rezervaHodin: 0,
+                updatedMs: Date.now(), updatedBy: window.KB_USER || ""
+            });
+        }
+        await setDoc(ukolDoc(d.id), { budgetHodin: 0 }, { merge: true });
+        presunuto++;
+    }
+    return { presunuto: presunuto };
+};
+
 /** Živý přenos všech úkolů – pro manažery. */
 KB.watchUkoly = async () => {
     ukolyChteno = "vse";
@@ -1533,7 +1603,11 @@ KB.saveUkol = async (id, data) => {
         patro:     data.patro || "",
         prirazeni: Array.isArray(data.prirazeni) ? data.prirazeni : [],
         termin:    data.termin || "",
-        budgetHodin: Math.max(0, Number(data.budgetHodin) || 0),
+        /* POZOR: budget úkolu se sem NEZAPISUJE. Dokument úkolu čte každý
+           člen (a přiřazený vždy) a databáze neumí schovat jednotlivé pole –
+           budget a rezerva proto leží ve vedlejším dokumentu
+           `private/ukoly/budgety/{id}`, který čtou jen manažeři.
+           Stejný trik jako výkazy (zaznamy × castky). */
         stav:      data.stav || "otevreny",
         todo:      Array.isArray(data.todo) ? data.todo : [],
         poznamka:  data.poznamka || "",
@@ -1571,6 +1645,7 @@ KB.deleteUkol = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(ukolDoc(id));
+    await deleteDoc(ukolBudgetDoc(id)).catch(() => {});   // vedlejší dokument s budgetem
 };
 
 /* ----------------------------------------------------------- kalendář ----

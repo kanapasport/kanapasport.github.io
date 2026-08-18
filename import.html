@@ -11,7 +11,7 @@
         /* Popis patří POD nadpis – stejně jako v ostatních stránkách nastavení. */
         .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=79">
+    <link rel="stylesheet" href="assets/css/app.css?v=80">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -81,6 +81,15 @@
                 <button type="button" id="btnUklid" class="btn btn--ghost btn--sm">Uklidit staré umístění</button>
                 <span class="small muted" id="presunStav"></span>
             </div>
+            <p class="tiny muted" style="margin:8px 0 0;line-height:1.6">
+                <b>Budgety úkolů:</b> dřív ležely přímo v úkolu, kde je viděl každý
+                přiřazený. Přesun je překopíruje do tajné kolekce (vidí jen manažeři)
+                a v úkolech je vynuluje. Nové úkoly už to mají správně samy.
+            </p>
+            <div class="row row--wrap" style="gap:10px">
+                <button type="button" id="btnBudgety" class="btn btn--ghost btn--sm">Přesunout budgety úkolů</button>
+                <span class="small muted" id="budgetyStav"></span>
+            </div>
         </section>
 
         <!-- ========================================== ZÁLOHA A OBNOVA -->
@@ -111,10 +120,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=79"></script>
-<script src="assets/js/ui.js?v=79"></script>
-<script src="assets/js/vykazy.js?v=79"></script>
-<script type="module" src="assets/js/store.js?v=79"></script>
+<script src="assets/js/taxonomy.js?v=80"></script>
+<script src="assets/js/ui.js?v=80"></script>
+<script src="assets/js/vykazy.js?v=80"></script>
+<script type="module" src="assets/js/store.js?v=80"></script>
 
 <script>
 (function () {
@@ -316,6 +325,25 @@
         }
     }
 
+    /** Budgety úkolů z dokumentů úkolů do tajné kolekce – jednorázově. */
+    async function presunBudgety() {
+        if (!confirm("Překopírovat budgety z dokumentů úkolů do tajné kolekce" + "\n" +
+            "a v úkolech je vynulovat? Jde to spustit opakovaně, nic nezdvojí.")) return;
+        $("btnBudgety").disabled = true;
+        try {
+            const vysledek = await window.KB.presunUkolBudgety();
+            $("budgetyStav").textContent = vysledek.presunuto
+                ? "Přesunuto " + vysledek.presunuto + " budgetů."
+                : "Žádný úkol už budget v sobě nenese.";
+            window.KBUI.toast("Budgety úkolů přesunuté.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Přesun budgetů selhal – " + (err.message || "zkus to znovu."), "error");
+        } finally {
+            $("btnBudgety").disabled = false;
+        }
+    }
+
     /* ------------------------------------------------- záloha a obnova --- */
 
     async function stahniZalohu() {
@@ -372,6 +400,7 @@
         $("btnZaloha").addEventListener("click", stahniZalohu);
         $("btnPresun").addEventListener("click", presunTabule);
         $("btnUklid").addEventListener("click", uklidStare);
+        $("btnBudgety").addEventListener("click", presunBudgety);
         $("btnObnova").addEventListener("click", obnovZalohu);
 
         document.addEventListener("kb-role", () => { render(); paintPodlista("import"); });
