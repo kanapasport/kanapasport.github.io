@@ -181,9 +181,12 @@ všech 18 stránek vrací 200.
   (čte ROZŘAZENÉ sešity, z textů úseků tahá patra/technologie/budovy
   a hodiny dělí rovným dílem). Po spuštění nahrát nový JSON na stránce
   Přehled BP.
-- **Pokrytí je přiznané v hlavičce**: patro je zmíněno u 15 % hodin
-  (skeny 40 %), technologie u 20 % (kreslení 45 %); focení se psalo
-  většinou bez místa. Čísla jsou spodní odhad, ne úplný součet.
+- **Pokrytí je přiznané v hlavičce**: patro je zmíněno u 19 % hodin,
+  technologie u 29 %; focení se psalo většinou bez místa. Každá tabulka
+  má řádek „— bez údaje v textu" a „Celkem druhu", ať je porovnání vidět.
+- **Sloupce ZAKÁZKA n leží v každém sešitě jinde** (David 17/21/25,
+  Kuba 23…51) – extraktor je hledá v hlavičce, pevné indexy by půlku
+  hodin minuly.
 
 ### Provoz
 

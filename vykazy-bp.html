@@ -353,34 +353,52 @@
             if (druhy.indexOf(z.druh) === -1 && z.druh !== "Nerozřazeno") druhy.push(z.druh);
         });
 
+        /* Vedle rozepsaných řádků i dvě porovnávací: kolik hodin druhu
+           místo v textu nemá („bez údaje") a součet druhu – jinak by
+           tabulka vypadala jako úplný obraz, a není. */
         const kontingence = (klicPole) => {
             const radky = new Map();
+            const bez = { celkem: 0 };
+            const souhrn = { celkem: 0 };
             (m.zaznamy || []).forEach(z => {
+                if (z.druh === "Nerozřazeno") return;
                 const klic = z[klicPole];
-                if (!klic || z.druh === "Nerozřazeno") return;
+                souhrn[z.druh] = (souhrn[z.druh] || 0) + z.hodin;
+                souhrn.celkem += z.hodin;
+                if (!klic) {
+                    bez[z.druh] = (bez[z.druh] || 0) + z.hodin;
+                    bez.celkem += z.hodin;
+                    return;
+                }
                 if (!radky.has(klic)) radky.set(klic, { celkem: 0 });
                 const r = radky.get(klic);
                 r[z.druh] = (r[z.druh] || 0) + z.hodin;
                 r.celkem += z.hodin;
             });
-            return Array.from(radky.entries()).sort((a, b) => b[1].celkem - a[1].celkem);
+            return { radky: Array.from(radky.entries()).sort((a, b) => b[1].celkem - a[1].celkem),
+                     bez: bez, souhrn: souhrn };
         };
 
-        const tabulka = (slot, popisek, dvojice) => {
-            const sloupce = druhy.filter(d => dvojice.some(([, r]) => r[d]));
+        const tabulka = (slot, popisek, kont, popisBez) => {
+            const sloupce = druhy.filter(d => kont.radky.some(([, r]) => r[d]) || kont.bez[d]);
+            const bunky = (r, tucne) => sloupce.map(d => '<td class="vyk__num">' +
+                (r[d] ? (tucne ? "<b>" + hod(r[d]) + "</b>" : hod(r[d])) : "–") + "</td>").join("");
             $(slot).innerHTML = "<thead><tr><th>" + esc(popisek) + "</th>" +
                 sloupce.map(d => '<th class="vyk__num">' + esc(d) + "</th>").join("") +
                 '<th class="vyk__num">Celkem</th></tr></thead><tbody>' +
-                dvojice.map(([klic, r]) =>
-                    "<tr><td><b>" + esc(klic) + "</b></td>" +
-                    sloupce.map(d => '<td class="vyk__num">' +
-                        (r[d] ? hod(r[d]) : "–") + "</td>").join("") +
+                kont.radky.map(([klic, r]) =>
+                    "<tr><td><b>" + esc(klic) + "</b></td>" + bunky(r) +
                     '<td class="vyk__num"><b>' + hod(r.celkem) + "</b></td></tr>").join("") +
+                '<tr style="color:var(--muted)"><td>' + esc(popisBez) + "</td>" + bunky(kont.bez) +
+                    '<td class="vyk__num">' + hod(kont.bez.celkem) + "</td></tr>" +
+                '<tr style="border-top:2px solid var(--line)"><td><b>Celkem druhu</b></td>' +
+                    bunky(kont.souhrn, true) +
+                    '<td class="vyk__num"><b>' + hod(kont.souhrn.celkem) + "</b></td></tr>" +
                 "</tbody>";
         };
 
-        tabulka("tabPatra", "Patro", kontingence("patro"));
-        tabulka("tabTech", "Technologie", kontingence("tech"));
+        tabulka("tabPatra", "Patro", kontingence("patro"), "— bez patra v textu");
+        tabulka("tabTech", "Technologie", kontingence("tech"), "— bez technologie v textu");
 
         const pk = m.pokryti || {};
         $("mistaPokryti").textContent = "patro zmíněno u " + (pk.patroPct || 0) +
