@@ -793,7 +793,6 @@
        na dvou místech. Zůstala Správa, kde je všechno pohromadě. */
     UI.PODLISTA_PROJEKTY = [
         { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" },
-        { title: "PLNĚNÍ PROJEKTŮ", href: "plneni.html", need: "vykaz.view" },
         { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view" },
         { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view" }
     ];

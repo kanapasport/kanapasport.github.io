@@ -160,9 +160,16 @@ všech 18 stránek vrací 200.
   v řádku, budovy × patra v malých buňkách (dvouřádková hlavička).
   Kreslí ji `V.maticePlneni` ve vykazy.js – sdílí ji Správa (klikací,
   zakládá úkoly) a stránka **Plnění projektů** (jen na čtení).
-- **Plnění projektů** (`plneni.html`, podlišta PROJEKTY, jen manažeři):
-  karta na každý otevřený projekt – krajíc, odpracováno na úkolech,
-  plnění TO-DO vážené budgetem, hotové úkoly a matice.
+- **Správa projektů má nahoře pruh projektů** (přes celou šířku, malé
+  dlaždice) a pod ním detail na celou stránku se **záložkami Údaje /
+  Spolupracovníci / Plnění projektu** (volba v `kb-sprava-zalozka`).
+- **Plnění projektu = dvě dlaždice**: „Plnění po budovách a patrech"
+  (krajíc + přehled celých pater + matice technologie × patro)
+  a „Úkoly projektu" s filtrem (budova, patro, technologie, stav, text).
+- **Přehled pater**: řádek = patro, sloupce Úkolů · Hotovo · Předepsáno ·
+  Vykázáno · Zbývá · Vyfakturováno. Klik otevře detail patra s rozpadem
+  po technologiích a seznamem úkolů. Peníze jsou z `castka` výkazů.
+- **Samostatná stránka `plneni.html` je smazaná** – přesunula se sem.
 - **Oblíbené projekty**: hvězdička v seznamu Správy je drží nahoře
   (localStorage `kb-sprava-oblibene`, sdílí ho i Plnění). Poprvé se
   předvyplní BioPharma, C03 a A08 podle čísla/názvu.
