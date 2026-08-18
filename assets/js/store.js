@@ -134,12 +134,27 @@ const guideDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "guides"
 const tasksCol = () => collection(db, "artifacts", APP_ID, "public", "data", "tasks");
 const taskDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "tasks", id);
 const metaDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "meta", id);
-const boardsCol = () => collection(db, "artifacts", APP_ID, "public", "data", "boards");
-const boardDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id);
+/* ------------------------------------------------------------- tabule ----
+   Tabule leží v `private`, ne v `public/data`. Je to kvůli volbě „vidí ji
+   jen vybraní lidé": v `public/data` stojí nahoře plošné `allow read`,
+   které se níž ničím nedá odebrat, takže by omezení platilo jen ve webu
+   a kdokoliv s přístupem do databáze by si obsah přečetl. Tady o čtení
+   rozhoduje sama hlavička tabule (viditelnost, zakladatel, proUids).
+
+   `stare*` míří na původní umístění – zůstává jen kvůli přesunu dat
+   na stránce Import dat a po úklidu se dá smazat. */
+const tabuleCol = () => collection(db, "artifacts", APP_ID, "private", "tabule", "seznam");
+const boardDoc = (id) => doc(db, "artifacts", APP_ID, "private", "tabule", "seznam", id);
 /* obsah tabule je zvlášť, aby seznam tabulí zůstal lehký */
-const boardBody = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "content", "data");
-const boardImages = (id) => collection(db, "artifacts", APP_ID, "public", "data", "boards", id, "images");
-const boardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "images", imgId);
+const boardBody = (id) => doc(db, "artifacts", APP_ID, "private", "tabule", "seznam", id, "content", "data");
+const boardImages = (id) => collection(db, "artifacts", APP_ID, "private", "tabule", "seznam", id, "images");
+const boardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "private", "tabule", "seznam", id, "images", imgId);
+
+const stareBoardsCol = () => collection(db, "artifacts", APP_ID, "public", "data", "boards");
+const stareBoardDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id);
+const stareBoardBody = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "content", "data");
+const stareBoardImages = (id) => collection(db, "artifacts", APP_ID, "public", "data", "boards", id, "images");
+const stareBoardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "images", imgId);
 const usersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "users");
 const userDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "users", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
@@ -181,6 +196,38 @@ const pritomnostDoc = (uid) => doc(db, "artifacts", APP_ID, "public", "data", "p
 /* Odběry se navazují až po přihlášení a při odhlášení se zase ruší,
    aby po člověku nezůstal otevřený poslech dat. */
 let odbery = [];
+
+/* ------------------------------------------------------- odběry tabulí ---
+   Seznam tabulí se skládá ze tří (u manažera čtyř) dotazů – viz komentář
+   u cest nahoře. Části se drží zvlášť a po každé změně se slijí podle id,
+   ať se tabule, která vyhoví dvěma dotazům, neobjeví dvakrát. */
+let tabuleOdbery = [];
+let tabuleVse = false;
+const tabuleCasti = { vsem: [], moje: [], sdilene: [], vse: [] };
+
+const zrusTabule = () => {
+    tabuleOdbery.forEach(stop => { try { stop(); } catch (e) {} });
+    tabuleOdbery = [];
+    tabuleVse = false;
+    tabuleCasti.vsem = []; tabuleCasti.moje = []; tabuleCasti.sdilene = []; tabuleCasti.vse = [];
+};
+
+function slejTabule() {
+    const mapa = new Map();
+    ["vsem", "moje", "sdilene", "vse"].forEach(klic =>
+        tabuleCasti[klic].forEach(b => mapa.set(b.id, b)));
+    KB.boards = Array.from(mapa.values())
+        .sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0));
+    emit("boards", KB.boards);
+}
+
+function sledujTabuli(klic, dotaz) {
+    tabuleOdbery.push(onSnapshot(dotaz, (snapshot) => {
+        tabuleCasti[klic] = [];
+        snapshot.forEach(d => tabuleCasti[klic].push({ id: d.id, ...d.data() }));
+        slejTabule();
+    }, (err) => console.error("Chyba čtení tabulí:", err)));
+}
 const zrusOdbery = () => { odbery.forEach(stop => { try { stop(); } catch (e) {} }); odbery = []; };
 
 /* Výkazy se neposlouchají samy od sebe – kdo na ně nemá právo, dostal by od
@@ -230,6 +277,7 @@ try {
     onAuthStateChanged(auth, (user) => {
         if (!user) {
             zrusOdbery();
+            zrusTabule();
             zrusVykazy();
             zrusProjektyUkoly();
             if (pritomnostCasovac) { clearInterval(pritomnostCasovac); pritomnostCasovac = null; }
@@ -268,18 +316,32 @@ try {
             emit("tasks", KB.tasks);
         }, (err) => console.error("Chyba čtení úkolů:", err)));
 
-        odbery.push(onSnapshot(boardsCol(), (snapshot) => {
-            KB.boards = [];
-            snapshot.forEach(d => KB.boards.push({ id: d.id, ...d.data() }));
-            KB.boards.sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0));
-            emit("boards", KB.boards);
-        }, (err) => console.error("Chyba čtení tabulí:", err)));
+        /* Tabule: tři dotazy místo jednoho. Pravidla umí povolit nebo zakázat
+           celý dotaz, ne ho profiltrovat – kdyby se sáhlo na celou kolekci,
+           strhla by jedna zamčená tabule celý seznam. Manažerovi se pak
+           přidá čtvrtý dotaz na všechno (viz odběr uživatelů níž). */
+        zrusTabule();
+        sledujTabuli("vsem", query(tabuleCol(), where("viditelnost", "==", "vsichni")));
+        sledujTabuli("moje", query(tabuleCol(), where("createdUid", "==", user.uid)));
+        sledujTabuli("sdilene", query(tabuleCol(), where("proUids", "array-contains", user.uid)));
 
         odbery.push(onSnapshot(usersCol(), (snapshot) => {
             KB.users = [];
             snapshot.forEach(d => KB.users.push({ id: d.id, ...d.data() }));
             KB.users.sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
             emit("users", KB.users);
+
+            /* Manažer má vidět i tabule, do kterých ho nikdo nepřidal.
+               Jde to až teď: jakou má kdo roli, se pozná ze seznamu lidí,
+               a ten dorazí po přihlášení. Přidá se jednou, ne při každé
+               změně seznamu. */
+            const ja = KB.users.find(u => u.id === user.uid);
+            const manazer = ja && ja.active !== false &&
+                (ja.role === "hlavni-spravce" || ja.role === "spravce");
+            if (manazer && !tabuleVse) {
+                tabuleVse = true;
+                sledujTabuli("vse", tabuleCol());
+            }
         }, (err) => console.error("Chyba čtení uživatelů:", err)));
 
         /* Milníky leží v jednom dokumentu jako pole. Je jich pár desítek
@@ -931,6 +993,75 @@ KB.deleteBoard = async (id) => {
     await Promise.all(imgs.docs.map(d => deleteDoc(boardImage(id, d.id))));
     await deleteDoc(boardBody(id)).catch(() => {});
     await deleteDoc(boardDoc(id));
+};
+
+/* ------------------------------------------------- přesun starých tabulí --
+   Tabule se stěhovaly z `public/data/boards` do `private/tabule/seznam`.
+   Přesun se nedělá sám: běží ho hlavní správce jednou, tlačítkem na stránce
+   Import dat. Nejdřív se všechno **zkopíruje** (`KB.presunTabule`) a teprve
+   po ověření, že tabule v novém umístění fungují, se staré smažou
+   (`KB.smazStareTabule`) – kdyby se kopírování rozbilo v půlce, data
+   pořád leží na původním místě.                                          */
+
+/** Kolik tabulí ještě leží na starém místě (0 = uklizeno). */
+KB.pocetStarychTabuli = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(stareBoardsCol());
+    return snap.size;
+};
+
+/**
+ * Zkopíruje tabule i s obsahem a obrázky na nové místo. Staré nechává být.
+ * @param {Function} hlas – volá se po každé tabuli (hotovo, celkem, název)
+ */
+KB.presunTabule = async (hlas) => {
+    if (authReady) await authReady;
+    requireDb();
+    const stare = await getDocs(stareBoardsCol());
+    let tabuli = 0, obrazku = 0;
+
+    for (const d of stare.docs) {
+        const data = d.data() || {};
+        /* Staré tabule viditelnost neřešily – jsou pro všechny. Musí ji mít
+           zapsanou, jinak by je nenašel dotaz `viditelnost == "vsichni"`
+           a v seznamu by nebyly vidět vůbec. */
+        await setDoc(boardDoc(d.id), Object.assign({}, data, {
+            viditelnost: data.viditelnost === "vybrani" ? "vybrani" : "vsichni",
+            proUids: Array.isArray(data.proUids) ? data.proUids : [],
+            createdUid: data.createdUid || ""
+        }), { merge: true });
+
+        const telo = await getDoc(stareBoardBody(d.id)).catch(() => null);
+        if (telo && telo.exists()) await setDoc(boardBody(d.id), telo.data());
+
+        const obrazky = await getDocs(stareBoardImages(d.id)).catch(() => null);
+        if (obrazky) {
+            for (const o of obrazky.docs) {
+                await setDoc(boardImage(d.id, o.id), o.data());
+                obrazku++;
+            }
+        }
+        tabuli++;
+        if (hlas) hlas(tabuli, stare.docs.length, data.title || d.id);
+    }
+    return { tabuli: tabuli, obrazku: obrazku };
+};
+
+/** Úklid původního umístění – až když nové tabule prokazatelně fungují. */
+KB.smazStareTabule = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const stare = await getDocs(stareBoardsCol());
+    let tabuli = 0;
+    for (const d of stare.docs) {
+        const obrazky = await getDocs(stareBoardImages(d.id)).catch(() => null);
+        if (obrazky) await Promise.all(obrazky.docs.map(o => deleteDoc(stareBoardImage(d.id, o.id))));
+        await deleteDoc(stareBoardBody(d.id)).catch(() => {});
+        await deleteDoc(stareBoardDoc(d.id));
+        tabuli++;
+    }
+    return { tabuli: tabuli };
 };
 
 KB.saveBoardImage = async (boardId, imgId, dataUrl, meta = {}) => {

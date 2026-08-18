@@ -166,7 +166,53 @@ service cloud.firestore {
       allow write: if hlavniSpravce();
     }
 
-    // --- tabule: kdo je přihlášený, může kreslit ---
+    // --- tabule -----------------------------------------------------------
+    //
+    //   private/tabule/seznam/{id}                hlavička: název, kdo ji
+    //                                            založil, viditelnost, proUids
+    //   private/tabule/seznam/{id}/content/data   prvky tabule
+    //   private/tabule/seznam/{id}/images/{img}   vložené obrázky
+    //
+    // Tabule se sem stěhovaly z `public/data`. Důvod je volba „vidí ji jen
+    // vybraní lidé": v `public/data` stojí nahoře plošné `allow read`, které
+    // se níž nedá odebrat, takže by to byla jen schovaná položka v liště.
+    // Tady o čtení rozhoduje sama hlavička.
+    //
+    // Web se proto na tabule ptá třemi dotazy (pro všechny / moje / sdílené
+    // se mnou) – pravidla umí dotaz povolit nebo zakázat, ne ho profiltrovat,
+    // takže jedna zamčená tabule by jinak strhla celý seznam.
+
+    function tabuleData(id) {
+      return get(/databases/$(database)/documents/artifacts/firemni-kb-app/private/tabule/seznam/$(id)).data;
+    }
+
+    // Chybějící pole není v pravidlech prázdná hodnota, ale chyba – a chyba
+    // znamená zamítnuto. Proto se každé pole nejdřív ověří přes `in`.
+    function vidiTabuli(d) {
+      return clen() && (
+           !('viditelnost' in d) || d.viditelnost != 'vybrani'
+        || ('createdUid' in d && d.createdUid == request.auth.uid)
+        || ('proUids' in d && d.proUids is list && request.auth.uid in d.proUids)
+      );
+    }
+
+    match /artifacts/firemni-kb-app/private/tabule/seznam/{id} {
+      allow read:   if vidiTabuli(resource.data);
+      allow create: if clen() && request.resource.data.createdUid == request.auth.uid;
+      allow update: if vidiTabuli(resource.data);
+      // smazat smí zakladatel a manažer – ne kdokoliv, kdo tabuli vidí
+      allow delete: if spravce() || (clen() && resource.data.createdUid == request.auth.uid);
+
+      // obsah a obrázky se řídí viditelností hlavičky – jinak by stačilo
+      // sáhnout rovnou na `content/data` a zámek by nebyl k ničemu
+      match /{sub=**} {
+        allow read, write: if spravce() || vidiTabuli(tabuleData(id));
+      }
+    }
+
+    // --- staré umístění tabulí --------------------------------------------
+    // Zůstává jen kvůli přesunu dat (Import dat → Přesun tabulí). Až bude
+    // staré místo prázdné, tenhle blok se může smazat.
     match /artifacts/firemni-kb-app/public/data/boards/{boardId} {
       allow write: if clen();
       match /{sub=**} {

@@ -38,11 +38,17 @@ odkazy na webu jsou s koncovkou `.html`, takže se `?parametry` neztrácejí.
 ## ČEKÁ NA MICHALA
 
 1. **Znovu nasadit `firestore.rules`.** Quick TO-DO se přepsal na společné
-   vzkazy (`proUids`) – bez nasazení se **společné vzkazy vůbec nenačtou**.
-2. Zbytek z minulého předání, pokud ještě nebyl: nahrát `projekty-import.json`
+   vzkazy (`proUids`) a přibyla pravidla pro tabule – bez nasazení se
+   **společné vzkazy ani tabule vůbec nenačtou**.
+2. **Přesunout tabule** (Import dat → Přesun tabulí). Pořadí: nejdřív
+   nasadit pravidla, pak *Zkopírovat tabule na nové místo*, pak si na
+   stránce Tabule ověřit, že jsou i s obsahem, a teprve nakonec
+   *Uklidit staré umístění*. Do té doby lidé kromě manažerů žádné
+   tabule neuvidí – nová verze se ptá už jen na nové místo.
+3. Zbytek z minulého předání, pokud ještě nebyl: nahrát `projekty-import.json`
    a `ukazkove-vykazy.json` (stránka **Import dat**), nový `prehled-BP.json`,
    zvolit heslo k citlivým sekcím.
-3. Na starém webu smazat zakázky, které tam natekly (Moravský Beroun,
+4. Na starém webu smazat zakázky, které tam natekly (Moravský Beroun,
    Střížovice) – nová verze už do číselníku nepíše.
 
 ---
@@ -118,9 +124,11 @@ všech 18 stránek vrací 200.
   Mazání chce opsat název – jde i s obsahem a obrázky, zpátky to nevrátí.
 - **„Kdo ji vidí"**: buď všichni, nebo vybraní lidé. Zamčená tabule má
   v liště visací zámek; zakladatel a manažeři ji vidí vždycky.
-  **Není to zámek na data** – tabule leží v `public/data`, kde má čtení
-  každý přihlášený. Na opravdu citlivé věci by se musely přestěhovat
-  mimo `public/data` jako výkazy.
+  **Platí to i v databázi**: tabule se přestěhovaly z `public/data` do
+  `private/tabule/seznam`, kde o čtení rozhoduje sama hlavička tabule.
+  Seznam se proto skládá ze **tří dotazů** (pro všechny / moje / sdílené
+  se mnou) a manažerovi se přidá čtvrtý na celou kolekci – pravidla umí
+  dotaz povolit nebo zakázat, ne ho profiltrovat.
 - Obrázek se před uložením zmenší (1200 px), a kdyby se do dokumentu
   nevešel, zkusí se ještě dvakrát nahrubo (1000/800 px).
 
@@ -189,7 +197,15 @@ všech 18 stránek vrací 200.
     „Celý den" se hledal přes `data-zapni` (příplatky), ale je to `data-f`.
 16. **Výkaz si příznak „celý den" nenese** – pozná se z časů 00:00–23:59.
     Okno úpravy si ho musí odvodit, jinak počítá 24 h a hlásí překlep.
-17. **Zvuk jde přehrát až po gestu uživatele** – prohlížeč blokuje audio
+17. **Dotaz projde jen tehdy, když má člověk právo na KAŽDÝ vrácený
+    dokument.** Pravidla nejsou filtr. Proto se tabule i Quick TO-DO
+    čtou několika úzkými dotazy a slévají se v paměti podle id.
+18. **Co nemá pole, to dotaz na rovnost nenajde.** Tabule bez
+    `viditelnost` by v seznamu nebyla vůbec – proto ho zapisuje i
+    zakládání nové tabule, i přesun starých.
+19. **Chybějící pole v pravidlech není prázdná hodnota, ale chyba** –
+    a chyba znamená zamítnuto. Každé pole se nejdřív ověří přes `in`.
+20. **Zvuk jde přehrát až po gestu uživatele** – prohlížeč blokuje audio
     do prvního kliknutí. Pípnutí na nový vzkaz je proto v `try` a po
     přihlášení (což gesto je) už funguje.
 
