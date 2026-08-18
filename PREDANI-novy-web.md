@@ -18,10 +18,14 @@ Když už repozitář na tom počítači je, stačí `git checkout novy-web` a `
 **Na počítači s Node.js:** `npx serve -l 4173 pasportkana_navody` → `http://localhost:4173`
 (nebo `SPUSTIT-web.bat` v `Desktop\claude\`).
 
-**Na počítači bez Node.js** (třeba ten domácí) je připravený
-`PREDANI_WEB\SPUSTIT-novy-web.bat` – jede na Pythonu z ArcGIS Pro a otevře
-`http://localhost:5174`. Nepoužívá `serve.json`, ale nevadí to: všechny
-odkazy na webu jsou s koncovkou `.html`, takže se `?parametry` neztrácejí.
+**Na jakémkoliv počítači** (i bez Pythonu a Node.js) je přímo v repozitáři
+**`SPUSTIT-PREZENTACE.bat`** – najde si sám, čím web pustit (Python z ArcGIS
+Pro → Python z PATH → Node.js → vlastní `server.ps1` v PowerShellu, který
+nepotřebuje nainstalovat nic) a otevře `http://localhost:5174`.
+Postup přenosu na cizí notebook je v **`PREZENTACE-jak-spustit.md`**.
+
+Pozor: `%~dp0` končí zpětným lomítkem a v uvozovkách `"...\"` rozbije
+příkazovou řádku – dávkový soubor ho proto usekává.
 
 **Co v repozitáři NENÍ** (je veřejný) a co si musíš přenést sám:
 
