@@ -153,10 +153,17 @@
      * `klikaci: true` udělá z buněk tlačítka s data-mx="budova|tech|patro"
      * (prázdná buňka zakládá úkol) – bez toho je matice jen na čtení.
      */
-    V.maticePlneni = (ukoly, budgety, osy, klikaci) => {
+    /**
+     * @param {Object} [techBudgety] – { TER: 1935, … }: celkové hodiny na
+     *   technologii. Když jsou předané, přibude vpravo blok Budget /
+     *   Ukrojeno / Zbývá – ukrojeno je součet budgetů úkolů té technologie.
+     *   `klikaci` z Budgetu udělá editovatelné pole (data-techbud="TER").
+     */
+    V.maticePlneni = (ukoly, budgety, osy, klikaci, techBudgety) => {
         const esc = window.KBUI.esc;
         const budovy = osy.budovy || [], patra = osy.patra || [], technologie = osy.technologie || [];
         if (!budovy.length || !patra.length || !technologie.length) return "";
+        const sBudgety = techBudgety !== undefined && techBudgety !== null;
 
         const uroven = (pct) => pct >= 100 ? "p100" : pct >= 95 ? "p95"
             : pct >= 75 ? "p75" : pct >= 50 ? "p50" : "p0";
@@ -187,15 +194,40 @@
                     pct + "&nbsp;%</span></td>";
         };
 
+        /* pravý blok: hodiny technologie, z nich ukrajují budgety úkolů */
+        const ukrojeno = (tech) => ukoly
+            .filter(u => u.technologie === tech)
+            .reduce((sum, u) => sum + (Number(((budgety || {})[u.id] || {}).budgetHodin) || 0), 0);
+
+        const cislo = (n) => (Math.round(n * 10) / 10).toLocaleString("cs-CZ");
+
+        const budgetBunky = (tech) => {
+            if (!sBudgety) return "";
+            const celkem = Number(techBudgety[tech]) || 0;
+            const ukr = ukrojeno(tech);
+            const zbyva = celkem - ukr;
+            return '<td class="mx__budget">' +
+                (klikaci
+                    ? '<input type="number" class="field" min="0" data-techbud="' + esc(tech) +
+                        '" value="' + (celkem || "") + '">'
+                    : (celkem ? cislo(celkem) : "–")) + "</td>" +
+                '<td class="mx__budget">' + (ukr ? cislo(ukr) : "–") + "</td>" +
+                '<td class="mx__budget' + (zbyva < 0 ? " mx__budget--minus" : "") + '">' +
+                    (celkem || ukr ? cislo(zbyva) : "–") + "</td>";
+        };
+
         return '<div class="mx-wrap"><table class="mx"><thead>' +
             "<tr><th></th>" + budovy.map(b =>
-                '<th colspan="' + patra.length + '">' + esc(b) + "</th>").join("") + "</tr>" +
+                '<th colspan="' + patra.length + '">' + esc(b) + "</th>").join("") +
+            (sBudgety ? '<th colspan="3">Hodiny technologie</th>' : "") + "</tr>" +
             "<tr><th></th>" + budovy.map(() =>
-                patra.map(pt => "<th>" + esc(pt) + "</th>").join("")).join("") + "</tr>" +
+                patra.map(pt => "<th>" + esc(pt) + "</th>").join("")).join("") +
+            (sBudgety ? "<th>Budget</th><th>Ukrojeno</th><th>Zbývá</th>" : "") + "</tr>" +
             "</thead><tbody>" +
             technologie.map(tech =>
                 '<tr><th style="text-align:left">' + esc(tech) + "</th>" +
                 budovy.map(b => patra.map(pt => bunka(b, tech, pt)).join("")).join("") +
+                budgetBunky(tech) +
                 "</tr>").join("") +
             "</tbody></table></div>";
     };

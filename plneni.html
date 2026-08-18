@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Plnění projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=81">
+    <link rel="stylesheet" href="assets/css/app.css?v=82">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -54,10 +54,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=81"></script>
-<script src="assets/js/ui.js?v=81"></script>
-<script src="assets/js/vykazy.js?v=81"></script>
-<script type="module" src="assets/js/store.js?v=81"></script>
+<script src="assets/js/taxonomy.js?v=82"></script>
+<script src="assets/js/ui.js?v=82"></script>
+<script src="assets/js/vykazy.js?v=82"></script>
+<script type="module" src="assets/js/store.js?v=82"></script>
 
 <script>
 (function () {
@@ -68,6 +68,7 @@
     const V = window.KBVYK;
 
     let sledovaniZapnuto = false;
+    let ukazVse = false;
 
     /* Stejný klíč jako Správa projektů – oblíbené projekty drží nahoře
        v obou pohledech, ať se člověk nemusí učit dvoje pořadí. */
@@ -114,7 +115,7 @@
         const b = (window.KB.budgetCiselnik || {})[nazev] || {};
         const matice = V.maticePlneni(ukoly, budgety, {
             budovy: b.budovy || [], patra: b.patra || [], technologie: b.technologie || []
-        }, false);
+        }, false, ((window.KB.rozpocty || {})[nazev] || {}).techBudgety || {});
 
         return '<section class="pl">' +
             '<div class="pl__hlava">' +
@@ -149,14 +150,22 @@
 
         const oblibene = oblibeneIds();
         const projekty = (window.KB.projektyDocs || []).filter(p => p.uzavreno !== true);
-        // oblíbené nahoře, zbytek v pořadí ze store (číslo, pak název)
-        const serazene = projekty.filter(p => oblibene.indexOf(p.id) !== -1)
-            .concat(projekty.filter(p => oblibene.indexOf(p.id) === -1));
+        /* Výchozí pohled jsou jen oblíbené (hvězdička ve Správě) – karet
+           s maticí je jinak přes dvě stě. Zbytek se dá přiklopit. */
+        const fav = projekty.filter(p => oblibene.indexOf(p.id) !== -1);
+        const ostatni = projekty.filter(p => oblibene.indexOf(p.id) === -1);
+        const serazene = (ukazVse || !fav.length) ? fav.concat(ostatni) : fav;
 
-        $("vypis").innerHTML = serazene.length
+        $("vypis").innerHTML = (serazene.length
             ? serazene.map(kartaProjektu).join("")
             : '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
-              "Žádný otevřený projekt.</div>";
+              "Žádný otevřený projekt.</div>") +
+            (fav.length && ostatni.length
+                ? '<button type="button" class="btn btn--ghost" data-vse-projekty ' +
+                  'style="align-self:flex-start">' +
+                  (ukazVse ? "Skrýt ostatní projekty"
+                           : "Zobrazit i ostatní projekty (" + ostatni.length + ")") + "</button>"
+                : "");
     }
 
     function zapniSledovani() {
@@ -172,6 +181,13 @@
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "sprava.html", subbar: true });
         window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "plneni.html");
+
+        document.addEventListener("click", (event) => {
+            if (event.target.closest("[data-vse-projekty]")) {
+                ukazVse = !ukazVse;
+                render();
+            }
+        });
 
         const obnov = () => { zapniSledovani(); render(); };
         document.addEventListener("kb-role", obnov);

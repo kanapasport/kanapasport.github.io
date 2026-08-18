@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=81">
+    <link rel="stylesheet" href="assets/css/app.css?v=82">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -309,19 +309,6 @@
                         </div>
                     </section>
 
-                    <!-- ------------------------------- technologie lidí -->
-                    <section class="sblok">
-                        <div class="sblok__hlava"><span class="sblok__stitek">Kdo dělá kterou technologii</span></div>
-                        <div class="sblok__telo">
-                        <p class="small muted" style="margin:0;line-height:1.6">
-                            Každý má jinou hodinovku – z tohohle přiřazení se pak počítají
-                            průměrné sazby na technologii. Nabízejí se technologie projektu
-                            (pole výš) a lidé zaškrtnutí v bloku <b>Kdo na projektu dělá</b>.
-                        </p>
-                        <div id="techLide" class="col" style="gap:6px"></div>
-                        </div>
-                    </section>
-
                     <!-- --------------------------- budget úkolů a plnění -->
                     <section class="sblok">
                         <div class="sblok__hlava"><span class="sblok__stitek">Budget úkolů a plnění</span></div>
@@ -335,6 +322,19 @@
                         <div id="krajic" class="row row--wrap" style="gap:10px"></div>
                         <div id="budgetUkoly"></div>
                         <div id="matice" class="col" style="gap:14px"></div>
+                        </div>
+                    </section>
+
+                    <!-- ------------------------------- technologie lidí -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Kdo dělá kterou technologii</span></div>
+                        <div class="sblok__telo">
+                        <p class="small muted" style="margin:0;line-height:1.6">
+                            Každý má jinou hodinovku – z tohohle přiřazení se pak počítají
+                            průměrné sazby na technologii. Nabízejí se technologie projektu
+                            (pole výš) a lidé zaškrtnutí v bloku <b>Kdo na projektu dělá</b>.
+                        </p>
+                        <div id="techLide" class="col" style="gap:6px"></div>
                         </div>
                     </section>
 
@@ -404,10 +404,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=81"></script>
-<script src="assets/js/ui.js?v=81"></script>
-<script src="assets/js/vykazy.js?v=81"></script>
-<script type="module" src="assets/js/store.js?v=81"></script>
+<script src="assets/js/taxonomy.js?v=82"></script>
+<script src="assets/js/ui.js?v=82"></script>
+<script src="assets/js/vykazy.js?v=82"></script>
+<script type="module" src="assets/js/store.js?v=82"></script>
 
 <script>
 (function () {
@@ -444,6 +444,7 @@
        poprvé se předvyplní BioPharma, C03 a A08 (přání Michala) – pozná se
        to podle čísla nebo názvu, id v databázi dopředu neznáme. */
     const FAV_KLIC = "kb-sprava-oblibene";
+    let ukazVsechny = false;   // seznam ukazuje jen oblíbené, dokud se nepřiklopí
 
     function oblibeneIds() {
         try {
@@ -517,7 +518,10 @@
             /* Sám si vybere jen z toho, co je v seznamu vidět – jinak by
                pravá půlka ukazovala hotový projekt, který ve zhasnuté
                skupině nikde není. */
-            const nabizene = nalezene.filter(p => zapnuta(p.uzavreno === true ? "hotove" : "otevrene"));   // jen z vybrané skupiny
+            let nabizene = nalezene.filter(p => zapnuta(p.uzavreno === true ? "hotove" : "otevrene"));   // jen z vybrané skupiny
+            // a přednostně z oblíbených – seznam jiné na startu neukazuje
+            const favNabizene = nabizene.filter(p => oblibeneIds().indexOf(p.id) !== -1);
+            if (favNabizene.length) nabizene = favNabizene;
             vybrany = (window.KB.projektyDocs || []).some(p => p.id === zAdresy)
                 ? zAdresy
                 : (nabizene[0] || nalezene[0] || (window.KB.projektyDocs || [])[0]).id;
@@ -554,14 +558,23 @@
 
         // vidět je vždycky jen jedna skupina, nadpis nad ni proto nepatří
         const vybrana = skupiny.find(s => zapnuta(s.klic)) || skupiny[0];
-        // oblíbené drží nahoře, uvnitř obou půlek platí původní řazení
-        const serazene = vybrana.polozky.filter(p => oblibene.indexOf(p.id) !== -1)
-            .concat(vybrana.polozky.filter(p => oblibene.indexOf(p.id) === -1));
+        /* Výchozí je jen pár oblíbených – projektů je přes dvě stě a denně
+           se pracuje na třech čtyřech. Zbytek se přiklopí tlačítkem;
+           hledání prohledává vždycky všechno. */
+        const fav = vybrana.polozky.filter(p => oblibene.indexOf(p.id) !== -1);
+        const ostatni = vybrana.polozky.filter(p => oblibene.indexOf(p.id) === -1);
+        const jenFav = !ukazVsechny && !hledani.trim() && fav.length;
+        const serazene = jenFav ? fav : fav.concat(ostatni);
 
-        $("seznamVypis").innerHTML = serazene.length
+        $("seznamVypis").innerHTML = (serazene.length
             ? serazene.map(projektHtml).join("")
             : '<div class="tiny muted" style="padding:8px 10px">' +
-              (vybrana.klic === "hotove" ? "Žádný hotový projekt." : "Nic nenalezeno.") + "</div>";
+              (vybrana.klic === "hotove" ? "Žádný hotový projekt." : "Nic nenalezeno.") + "</div>") +
+            (fav.length && ostatni.length && !hledani.trim()
+                ? '<button type="button" class="linkbtn" data-vsechny style="margin:6px 10px">' +
+                  (ukazVsechny ? "Skrýt ostatní" : "Zobrazit všechny (" + ostatni.length + " dalších)") +
+                  "</button>"
+                : "");
 
         $("pocet").textContent = nalezene.length
             ? V.pocet(nalezene.length, ["projekt", "projekty", "projektů"])
@@ -765,19 +778,18 @@
 
         // ---- tabulka úkolů ----
         $("budgetUkoly").innerHTML = ukoly.length
-            ? '<table class="bu"><thead><tr><th>Úkol</th><th>Kde</th><th>Lidé</th>' +
+            ? '<table class="bu"><thead><tr><th>Úkol</th><th>Lidé</th>' +
               '<th class="num">Hotovo</th><th class="num">Odprac.</th>' +
               '<th class="num">Budget h</th><th class="num">Rezerva h</th><th></th></tr></thead><tbody>' +
               ukoly.map(u => {
                 const b = budgety[u.id] || {};
-                const kde = [u.budova, u.patro, u.technologie].filter(Boolean).join(" · ");
+                // sloupec Kde tu není: budova, patro i technologie jsou v názvu
                 const lide = (u.prirazeni || []).map(uid => {
                     const clovek = (window.KB.users || []).find(x => x.id === uid);
                     return clovek ? (clovek.last || clovek.first || "?") : "?";
                 }).join(", ");
                 return '<tr data-burow="' + esc(u.id) + '">' +
                     "<td><b>" + esc(u.nazev || "Bez názvu") + "</b></td>" +
-                    "<td>" + esc(kde) + "</td>" +
                     "<td>" + esc(lide) + "</td>" +
                     '<td class="num">' + pctUkolu(u) + " %</td>" +
                     '<td class="num">' + V.cislo(odpracovanoUkolu(u.id)) + " h</td>" +
@@ -804,7 +816,15 @@
             patra: seznamZTextu($("fPatra").value).length ? seznamZTextu($("fPatra").value) : (b.patra || []),
             technologie: seznamZTextu($("fTech").value).length ? seznamZTextu($("fTech").value) : (b.technologie || [])
         };
-        $("matice").innerHTML = V.maticePlneni(ukoly, budgety, osy, true) ||
+        /* Budgety technologií: uložené v rozpočtu projektu (tajný číselník),
+           přes ně rozepsané, ale ještě neuložené hodnoty z polí – jinak by
+           je každý příchod dat z databáze smazal zpod rukou. */
+        const techBudgety = Object.assign({},
+            ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgety);
+        document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
+            if (pole.value !== "") techBudgety[pole.dataset.techbud] = Number(pole.value) || 0;
+        });
+        $("matice").innerHTML = V.maticePlneni(ukoly, budgety, osy, true, techBudgety) ||
             '<p class="tiny muted" style="margin:0">' +
             "Matice se vykreslí, až budou vyplněné budovy, patra a technologie výš.</p>";
     }
@@ -904,16 +924,31 @@
         const lide = V.lide().filter(u => prirazeni.has(u.id))
             .sort((a, b2) => (a.last || "").localeCompare(b2.last || "", "cs"));
 
+        /* Po rolích: manažeři, zaměstnanci a dole studenti – ti technologie
+           většinou přiřazené nemají, tak ať se k nim nemusí rolovat skrz. */
+        const SKUPINY_LIDI = [
+            ["Manažeři", ["hlavni-spravce", "spravce"]],
+            ["Zaměstnanci", ["zamestnanec"]],
+            ["Studenti", ["student"]]
+        ];
+        const radekCloveka = (u) =>
+            '<div class="sazbap" data-techclovek="' + esc(u.id) + '">' +
+                '<span class="sazbap__jmeno">' + esc(V.jmeno(u)) + "</span>" +
+                '<span class="prjlide">' +
+                technologie.map(t =>
+                    '<label><input type="checkbox" value="' + esc(t) + '"' +
+                    ((ulozene[u.id] || []).indexOf(t) !== -1 ? " checked" : "") + "> " +
+                    esc(t) + "</label>").join("") +
+                "</span></div>";
+
         $("techLide").innerHTML = (lide.length && technologie.length)
-            ? lide.map(u =>
-                '<div class="sazbap" data-techclovek="' + esc(u.id) + '">' +
-                    '<span class="sazbap__jmeno">' + esc(V.jmeno(u)) + "</span>" +
-                    '<span class="prjlide">' +
-                    technologie.map(t =>
-                        '<label><input type="checkbox" value="' + esc(t) + '"' +
-                        ((ulozene[u.id] || []).indexOf(t) !== -1 ? " checked" : "") + "> " +
-                        esc(t) + "</label>").join("") +
-                    "</span></div>").join("")
+            ? SKUPINY_LIDI.map(([nadpis, role]) => {
+                const skupina = lide.filter(u => role.indexOf(u.role) !== -1);
+                return skupina.length
+                    ? '<div class="popisek" style="margin:4px 0 0">' + nadpis + "</div>" +
+                      skupina.map(radekCloveka).join("")
+                    : "";
+              }).join("")
             : '<div class="tiny muted">' + (technologie.length
                 ? "Nikdo není přiřazený – zaškrtni lidi v bloku <b>Kdo na projektu dělá</b>."
                 : "Nejdřív vyplň technologie projektu (pole výš).") + "</div>";
@@ -980,10 +1015,18 @@
            uložení celý dokument slučuje, takže ostatní projekty musí odejít
            zpátky beze změny. */
         const rozpocty = Object.assign({}, window.KB.rozpocty);
+        // hodiny na technologii (pravý blok matice) – ukrajují z nich úkoly
+        const techBudgety = {};
+        document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
+            const hodnota = Number(pole.value) || 0;
+            if (hodnota > 0) techBudgety[pole.dataset.techbud] = hodnota;
+        });
+
         rozpocty[nazev] = Object.assign({}, rozpocty[nazev], {
             kc: Number($("fKc").value) || 0,
             hodiny: Number($("fHodiny").value) || 0,
             rezervaKc: Number($("fRezervaKc").value) || 0,
+            techBudgety: techBudgety,
             sazby: sazby
         });
 
@@ -1086,6 +1129,10 @@
             if (skupina) prepniSkupinu(skupina.dataset.skupina);
         });
         $("seznamVypis").addEventListener("click", (event) => {
+            if (event.target.closest("[data-vsechny]")) {
+                ukazVsechny = !ukazVsechny;
+                return void vykresliSeznam();
+            }
             const fav = event.target.closest("[data-fav]");
             if (fav) return void prepniOblibeny(fav.dataset.fav);
             const tlacitko = event.target.closest("[data-prj]");
@@ -1127,6 +1174,17 @@
                 $("fTech").value = "STAVBA, HRM, SLN, SLB, MAR, ZAR, VZT, HAS, PLYN, RLM, TER, CHLAD, VODA, KAN";
                 naplnTechLide(vybranyProjekt() || {});
                 vykresliBudget(vybranyProjekt());
+                /* hodiny na technologie z listu Biopharm_hub_zprac__technologie
+                   (celkem 19 950 h kreslení) – zapíšou se do polí matice
+                   a uloží velkým tlačítkem */
+                const BIOPHARM_HODINY = { STAVBA: 2200, HRM: 40, SLN: 1935, SLB: 800,
+                    MAR: 800, ZAR: 30, VZT: 1935, HAS: 600, PLYN: 1935, RLM: 1935,
+                    TER: 1935, CHLAD: 1935, VODA: 1935, KAN: 1935 };
+                document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
+                    if (BIOPHARM_HODINY[pole.dataset.techbud] && pole.value === "") {
+                        pole.value = BIOPHARM_HODINY[pole.dataset.techbud];
+                    }
+                });
                 window.KBUI.toast("Předvyplněno podle budgetu BioPharm – ještě to ulož.");
                 return;
             }
@@ -1163,8 +1221,7 @@
         $("nuUloz").addEventListener("click", zalozNovyUkol);
         /* Zápis v tabulce budgetů nemá shazovat ochranu formuláře projektu –
            ukládá se vlastním tlačítkem, ne velkým dole. */
-        ["budgetUkoly", "matice"].forEach(id =>
-            $(id).addEventListener("input", (ev) => ev.stopPropagation()));
+        $("budgetUkoly").addEventListener("input", (ev) => ev.stopPropagation());
 
         window.KB.on("ukoly", () => vykresliBudget(vybranyProjekt()));
         window.KB.on("ukoly-budgety", () => vykresliBudget(vybranyProjekt()));

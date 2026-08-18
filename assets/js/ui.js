@@ -653,11 +653,20 @@
     }
 
     /** Roletka PROJEKTŮ – otevřené projekty z databáze, nejdřív ty naléhavé. */
+    /** Oblíbené projekty (hvězdička ve Správě) – sdílený klíč s ní. */
+    UI.oblibeneProjekty = () => {
+        try { return JSON.parse(localStorage.getItem("kb-sprava-oblibene")) || []; }
+        catch (err) { return []; }
+    };
+
     function projektyMenu() {
         const dulezitost = { "resit-okamzite": 0, "vysoka": 1, "stredni": 2, "nizka": 3 };
+        const oblibene = UI.oblibeneProjekty();
         const otevrene = ((window.KB && window.KB.projektyDocs) || [])
             .filter(p => !p.uzavreno)
-            .sort((a, b) => (dulezitost[a.priorita] ?? 9) - (dulezitost[b.priorita] ?? 9)
+            // oblíbené vždycky první, zbytek podle priority a názvu
+            .sort((a, b) => (oblibene.indexOf(a.id) === -1) - (oblibene.indexOf(b.id) === -1)
+                || (dulezitost[a.priorita] ?? 9) - (dulezitost[b.priorita] ?? 9)
                 || (a.nazev || "").localeCompare(b.nazev || "", "cs"))
             .slice(0, 12)
             .map(p => ({

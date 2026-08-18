@@ -168,6 +168,17 @@ všech 18 stránek vrací 200.
   předvyplní BioPharma, C03 a A08 podle čísla/názvu.
 - **Sazby na projektu jsou sbalené a až dole** – rozbalí se kliknutím
   na pruh; budgety jsou nadřazené, sazby se řeší jednou za čas.
+- **Seznam projektů ukazuje jen oblíbené** + tlačítko Zobrazit všechny;
+  hledání prohledává vždycky všechno. Oblíbené jsou první i v roletce
+  PROJEKTY v liště, v nabídce projektů výkazu a na Plnění projektů
+  (tam s přepínačem Zobrazit i ostatní).
+- **Matice má vpravo blok Hodiny technologie**: Budget (editovatelný ve
+  Správě, `rozpocty[projekt].techBudgety`, ukládá velké tlačítko) ·
+  Ukrojeno (Σ budgetů úkolů té technologie) · Zbývá. Předvyplnit BioPharm
+  doplní i hodiny z listu zprac__technologie (STAVBA 2200, SLN/VZT/…
+  1935, SLB/MAR 800, HAS 600, HRM 40, ZAR 30).
+- **Tabulka úkolů projektu nemá sloupec Kde** (je v názvu úkolu) a lidé
+  v „Kdo dělá kterou technologii" jsou po rolích (studenti dole).
 - **Výkaz má Budovu a Patro** (roletky z nastavení projektu; projekty bez
   budov je nemají) – ať se dá sečíst, kolik hodin stálo patro.
 - **Výkaz nabízí jen moje úkoly.** Výpomoc na cizím: stránka Úkoly & TO-DO
