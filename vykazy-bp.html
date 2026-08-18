@@ -172,6 +172,28 @@
             </dl>
         </section>
 
+        <!-- ============================================== KDE SE PRACOVALO --
+             Z textů rozřazených úseků: patra a technologie, pokud je lidé
+             do popisu dne napsali. Pokrytí je přiznané u každé tabulky –
+             zbytek hodin místo v textu prostě nemá. -->
+        <section class="card bpkarta" id="mistaKarta" hidden>
+            <div class="bpkarta__hlava">
+                <b>Kde se pracovalo – patra a technologie</b>
+                <span class="small muted" id="mistaPokryti"></span>
+            </div>
+            <div class="bpgrid">
+                <div>
+                    <div class="small" style="font-weight:800;margin-bottom:6px">Hodiny na patrech</div>
+                    <div style="overflow-x:auto"><table id="tabPatra" class="vyk" style="min-width:0"></table></div>
+                </div>
+                <div>
+                    <div class="small" style="font-weight:800;margin-bottom:6px">Hodiny na technologiích</div>
+                    <div style="overflow-x:auto"><table id="tabTech" class="vyk" style="min-width:0"></table></div>
+                </div>
+            </div>
+            <p class="tiny muted" style="margin:10px 0 0;line-height:1.6" id="mistaPoznamka"></p>
+        </section>
+
         <!-- ================================================ ROKY A KONTEXT -->
         <div class="bpgrid">
             <section class="card bpkarta">
@@ -316,6 +338,61 @@
             chip.classList.toggle("chip--active", jednotky[chip.dataset.kolac] === chip.dataset.jednotka));
     }
 
+    /* ------------------------------------------------- kde se pracovalo ---
+       Kontingence z data.podleMista.zaznamy: patra × druh a technologie ×
+       druh. Hodiny bez patra/technologie v textu tu nejsou – kolik jich
+       je, říká pokrytí v hlavičce. */
+
+    function vykresliMista() {
+        const m = data.podleMista;
+        $("mistaKarta").hidden = !m || !(m.zaznamy || []).length;
+        if ($("mistaKarta").hidden) return;
+
+        const druhy = [];
+        (m.zaznamy || []).forEach(z => {
+            if (druhy.indexOf(z.druh) === -1 && z.druh !== "Nerozřazeno") druhy.push(z.druh);
+        });
+
+        const kontingence = (klicPole) => {
+            const radky = new Map();
+            (m.zaznamy || []).forEach(z => {
+                const klic = z[klicPole];
+                if (!klic || z.druh === "Nerozřazeno") return;
+                if (!radky.has(klic)) radky.set(klic, { celkem: 0 });
+                const r = radky.get(klic);
+                r[z.druh] = (r[z.druh] || 0) + z.hodin;
+                r.celkem += z.hodin;
+            });
+            return Array.from(radky.entries()).sort((a, b) => b[1].celkem - a[1].celkem);
+        };
+
+        const tabulka = (slot, popisek, dvojice) => {
+            const sloupce = druhy.filter(d => dvojice.some(([, r]) => r[d]));
+            $(slot).innerHTML = "<thead><tr><th>" + esc(popisek) + "</th>" +
+                sloupce.map(d => '<th class="vyk__num">' + esc(d) + "</th>").join("") +
+                '<th class="vyk__num">Celkem</th></tr></thead><tbody>' +
+                dvojice.map(([klic, r]) =>
+                    "<tr><td><b>" + esc(klic) + "</b></td>" +
+                    sloupce.map(d => '<td class="vyk__num">' +
+                        (r[d] ? hod(r[d]) : "–") + "</td>").join("") +
+                    '<td class="vyk__num"><b>' + hod(r.celkem) + "</b></td></tr>").join("") +
+                "</tbody>";
+        };
+
+        tabulka("tabPatra", "Patro", kontingence("patro"));
+        tabulka("tabTech", "Technologie", kontingence("tech"));
+
+        const pk = m.pokryti || {};
+        $("mistaPokryti").textContent = "patro zmíněno u " + (pk.patroPct || 0) +
+            " % hodin, technologie u " + (pk.techPct || 0) + " %";
+        $("mistaPoznamka").textContent =
+            "Bere se jen to, co lidé napsali do popisu dne („sken 2NP G61“, " +
+            "„kreslení TER 1PP…“). Hodiny bez zmínky patra nebo technologie " +
+            "v tabulkách nejsou – čísla jsou proto spodní odhad, ne úplný " +
+            "součet. Nejlíp jsou popsané skeny (patra) a kreslení " +
+            "(technologie); focení se psalo většinou bez místa.";
+    }
+
     /* ------------------------------------------------------- vykreslení */
 
     function vykresli() {
@@ -344,6 +421,7 @@
             dlazdice("Z toho odhad", cislo(c.odhadPct) + " %", "dopočet podle okolních dnů");
 
         kresliKolace();
+        vykresliMista();
 
         /* měsíce */
         const maxM = Math.max.apply(null, data.podleMesicu.map(m => m.hodin));

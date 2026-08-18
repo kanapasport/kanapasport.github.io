@@ -174,6 +174,17 @@ všech 18 stránek vrací 200.
   (přepínač Všechny je teď pro každého) → tlačítko Zapsat výkaz → cizí
   úkol se do roletky vloží s poznámkou „(výpomoc)".
 
+### Přehled BP – kde se pracovalo
+
+- Nová sekce **patra × druh a technologie × druh** ze sekce `podleMista`
+  v prehled-BP.json. Vyrábí ji `PREDANI_WEB/vykazy_rozrazeno/analyza-mista.py`
+  (čte ROZŘAZENÉ sešity, z textů úseků tahá patra/technologie/budovy
+  a hodiny dělí rovným dílem). Po spuštění nahrát nový JSON na stránce
+  Přehled BP.
+- **Pokrytí je přiznané v hlavičce**: patro je zmíněno u 15 % hodin
+  (skeny 40 %), technologie u 20 % (kreslení 45 %); focení se psalo
+  většinou bez místa. Čísla jsou spodní odhad, ne úplný součet.
+
 ### Provoz
 
 - **Záloha a obnova** na Importu dat: projekty, úkoly, výkazy, kalendář
