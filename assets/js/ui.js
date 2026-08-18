@@ -1458,6 +1458,13 @@
         const box = document.querySelector(".searchbox");
         const doRailu = document.querySelector("[data-rail-search]");
         const doListy = document.querySelector(".appbar__barin");
+
+        /* Bez hledání zbývaly v pásu dvě čáry těsně nad sebou: jedna pod
+           logem, druhá nad „Můj den" – mezi nimi prázdné místo po poli.
+           Pás si to řekne třídou a CSS druhou čáru i mezeru zruší. */
+        const rail = document.querySelector(".siderail");
+        if (rail) rail.classList.toggle("siderail--bezhledani", !box);
+
         if (!box || !doRailu || !doListy) return;
         const cil = isCompact() ? doListy : doRailu;
         if (box.parentElement !== cil) cil.appendChild(box);

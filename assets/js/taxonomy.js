@@ -171,7 +171,7 @@ window.KB_NAV = [
     // roletka se naplní otevřenými projekty z databáze (viz projektyMenu v ui.js)
     { title: 'PROJEKTY', href: 'sprava.html', projekty: true },
     // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
-    { title: 'ÚKOLY', href: 'ukoly.html', tasks: true },
+    { title: 'ÚKOLY & TO-DO', href: 'ukoly.html', tasks: true },
     { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },
     // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
     { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },

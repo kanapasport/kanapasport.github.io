@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=78">
+    <link rel="stylesheet" href="assets/css/app.css?v=79">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -105,12 +105,26 @@
 
         /* Upozornění pro kontrolu: řádek s datem a popisem nálezu. Ladí se
            do červena decentně – je to varování, ne poplach. */
-        .kontrola__radek { display: flex; gap: 10px; align-items: baseline; padding: 7px 10px;
+        .kontrola__radek { display: flex; gap: 8px; align-items: center; padding: 7px 10px;
             border-radius: var(--radius); background: #fdecec; border: 1px solid #f5c2c2;
-            font-size: 13px; text-decoration: none; color: inherit; }
+            font-size: 13px; color: inherit; }
         .kontrola__radek:hover { border-color: var(--accent); }
+        .kontrola__odkaz { display: flex; gap: 10px; align-items: baseline; flex: 1; min-width: 0;
+            text-decoration: none; color: inherit; }
         .kontrola__datum { flex: none; font-weight: 900; color: #b91c1c;
             font-variant-numeric: tabular-nums; }
+        /* Fajfka „je to v pořádku" – zhasnutá je jen obrys, ať nevypadá
+           jako už odbavená věc. */
+        .kontrola__fajfka { flex: none; width: 26px; height: 26px; padding: 0; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid #f5c2c2; border-radius: 7px; background: #fff; color: #c8a0a0; }
+        .kontrola__fajfka svg { width: 14px; height: 14px; }
+        .kontrola__fajfka:hover { border-color: var(--ok, #15803d); color: var(--ok, #15803d); }
+        .kontrola__fajfka[aria-pressed="true"] { background: var(--ok, #15803d);
+            border-color: var(--ok, #15803d); color: #fff; }
+        /* odbavený nález: zůstává vidět, ale už nekřičí */
+        .kontrola__radek--ok { background: var(--bg-soft); border-color: var(--line); opacity: .75; }
+        .kontrola__radek--ok .kontrola__datum { color: var(--muted); }
 
         /* Co je nového: jedno okno doprostřed po přihlášení. Nadpis nese
            stejný červený pruh jako dlaždice, ať je jasné, že patří k webu. */
@@ -323,11 +337,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=78"></script>
-<script src="assets/js/doc.js?v=78"></script>
-<script src="assets/js/ui.js?v=78"></script>
-<script src="assets/js/vykazy.js?v=78"></script>
-<script type="module" src="assets/js/store.js?v=78"></script>
+<script src="assets/js/taxonomy.js?v=79"></script>
+<script src="assets/js/doc.js?v=79"></script>
+<script src="assets/js/ui.js?v=79"></script>
+<script src="assets/js/vykazy.js?v=79"></script>
+<script type="module" src="assets/js/store.js?v=79"></script>
 
 <script>
 (function () {
@@ -662,6 +676,12 @@
     /* Splněno / Vrátit / smazání / rozbalení splněných – panel v pásu má
        vlastní obsluhu v ui.js, tohle patří jen dlaždici. */
     document.addEventListener("click", (event) => {
+        const fajfka = event.target.closest("[data-ok]");
+        if (fajfka) return void prepniKontrolaOk(fajfka.dataset.ok);
+        if (event.target.closest("[data-odbavene]")) {
+            ukazOdbavene = !ukazOdbavene;
+            return void renderKontrola();
+        }
         if (event.target.closest("[data-quick-splnene-tile]")) {
             quickSplneneTile = !quickSplneneTile;
             return void renderQuick();
@@ -733,12 +753,12 @@
             });
             (window.KB.ukoly || []).forEach(u => {
                 if (u.termin === iso && u.stav !== "hotovo") {
-                    radky.push({ barva: "#c26a00", text: "úkol: " + (u.nazev || "") });
+                    radky.push({ barva: "#c26a00", text: "Úkol: " + (u.nazev || "") });
                 }
             });
             (window.KB.milniky || []).forEach(m => {
                 if (m.datum === iso && !m.hotovo) {
-                    radky.push({ barva: "#b3006b", text: "milník: " + (m.cinnost || "") +
+                    radky.push({ barva: "#b3006b", text: "Milník: " + (m.cinnost || "") +
                         (m.zakazka ? " (" + m.zakazka + ")" : "") });
                 }
             });
@@ -757,8 +777,12 @@
                 '<div style="padding:5px 0;border-bottom:1px dashed var(--line-soft)">' +
                     '<span class="muted" style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase">' +
                         esc(den.popis) + "</span>" +
+                    /* Nejvýš tři sloupce (přání Michala): auto-fit by si
+                       na širokém monitoru nadrobil klidně pět a řádky by
+                       se přestaly číst zleva doprava. */
                     '<div style="' + (doSloupcu(den.radky)
-                        ? "display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));column-gap:14px"
+                        ? "display:grid;column-gap:14px;grid-template-columns:repeat(" +
+                          Math.min(3, Math.ceil(den.radky.length / 3)) + ",minmax(0,1fr))"
                         : "") + '">' +
                     den.radky.map(r =>
                         '<span class="row" style="gap:8px;padding:3px 0;font-size:14.5px">' +
@@ -814,6 +838,31 @@
         return m ? Number(m[1]) * 60 + Number(m[2]) : null;
     };
 
+    const FAJFKA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
+
+    /* Co už manažer odbavil. Drží se v databázi, ne v prohlížeči – kontroluje
+       to víc lidí a nikdo nemá procházet znovu to, co druhý odklepl. */
+    let kontrolaOk = new Set();
+    let ukazOdbavene = false;
+
+    async function nactiKontrolaOk() {
+        if (!window.KBUI.can("vykaz.view")) return;
+        try { kontrolaOk = new Set(await window.KB.nactiKontrolaOk()); }
+        catch (err) { console.error(err); }
+        renderKontrola();
+    }
+
+    async function prepniKontrolaOk(klic) {
+        kontrolaOk.has(klic) ? kontrolaOk.delete(klic) : kontrolaOk.add(klic);
+        renderKontrola();
+        try { await window.KB.ulozKontrolaOk(Array.from(kontrolaOk)); }
+        catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení se nepovedlo.", "error");
+        }
+    }
+
     function renderKontrola() {
         const box = document.getElementById("kontrolaSeznam");
         if (!box || !window.KBUI.can("vykaz.view")) return;
@@ -838,10 +887,11 @@
             const [uid, datum] = klic.split("|");
             const kdo = jmenoUid(uid) || "?";
 
-            if (den.hodiny > 14) chyby.push({ datum: datum, text: kdo + " má " +
-                V.hod(den.hodiny) + " za jeden den" });
+            if (den.hodiny > 14) chyby.push({ datum: datum, klic: klic + "|hodiny",
+                text: kdo + " má " + V.hod(den.hodiny) + " za jeden den" });
 
             if (den.absenceCely && den.prace.length) chyby.push({ datum: datum,
+                klic: klic + "|absence",
                 text: kdo + " má výkaz práce v den celodenní absence" });
 
             // překryvy: seřadit podle začátku a porovnat sousedy
@@ -850,7 +900,8 @@
                 .sort((a, b) => naMin(a.od) - naMin(b.od));
             for (let i = 1; i < sCasy.length; i++) {
                 if (naMin(sCasy[i].od) < naMin(sCasy[i - 1].do)) {
-                    chyby.push({ datum: datum, text: kdo + " má zápisy přes sebe (" +
+                    chyby.push({ datum: datum, klic: klic + "|prekryv",
+                        text: kdo + " má zápisy přes sebe (" +
                         sCasy[i - 1].od + "–" + sCasy[i - 1].do + " a " +
                         sCasy[i].od + "–" + sCasy[i].do + ")" });
                     break;   // jeden den = jedno hlášení, ať se neopakuje
@@ -860,12 +911,32 @@
 
         chyby.sort((a, b) => b.datum.localeCompare(a.datum));
 
-        box.innerHTML = chyby.slice(0, 25).map(ch =>
-            '<a class="kontrola__radek" href="vykazy.html">' +
-                '<span class="kontrola__datum">' + esc(czDatum(ch.datum)) + "</span>" +
-                '<span>' + esc(ch.text) + "</span></a>").join("") ||
-            '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-            "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>";
+        const otevrene = chyby.filter(ch => !kontrolaOk.has(ch.klic));
+        const odbavene = chyby.filter(ch => kontrolaOk.has(ch.klic));
+
+        const radek = (ch, hotovo) =>
+            '<div class="kontrola__radek' + (hotovo ? " kontrola__radek--ok" : "") + '">' +
+                '<a class="kontrola__odkaz" href="vykazy.html">' +
+                    '<span class="kontrola__datum">' + esc(czDatum(ch.datum)) + "</span>" +
+                    "<span>" + esc(ch.text) + "</span></a>" +
+                '<button type="button" class="kontrola__fajfka" data-ok="' + esc(ch.klic) + '"' +
+                    ' aria-pressed="' + (hotovo ? "true" : "false") + '"' +
+                    ' title="' + (hotovo ? "Vrátit mezi upozornění" : "Je to v pořádku – schovat") + '">' +
+                    FAJFKA + "</button>" +
+            "</div>";
+
+        box.innerHTML =
+            (otevrene.length
+                ? otevrene.slice(0, 25).map(ch => radek(ch, false)).join("")
+                : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+                  "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>") +
+            /* Odbavené se nemažou, jen schovají – ať se dá odškrtnutí vzít
+               zpět a ať je vidět, že se na to někdo díval. */
+            (odbavene.length
+                ? '<button type="button" class="linkbtn" data-odbavene style="align-self:flex-start;margin-top:6px">' +
+                    (ukazOdbavene ? "Skrýt " : "Zobrazit ") + "označené jako v pořádku (" + odbavene.length + ")</button>" +
+                  (ukazOdbavene ? odbavene.map(ch => radek(ch, true)).join("") : "")
+                : "");
     }
 
     /* ----------------------------------------------------- co je nového ---
@@ -1019,7 +1090,8 @@
 
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
-            renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola(); };
+            renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola();
+            nactiKontrolaOk(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice(); });

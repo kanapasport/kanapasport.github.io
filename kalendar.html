@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=78">
+    <link rel="stylesheet" href="assets/css/app.css?v=79">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -149,6 +149,11 @@
             <button type="button" class="btn btn--ghost btn--sm" id="btnZpet">‹</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btnDnes">Dnes</button>
             <button type="button" class="btn btn--ghost btn--sm" id="btnDal">›</button>
+            <!-- Skok na konkrétní datum. Šipkami se k loňskému říjnu klikat
+                 nedá, a stejné pole (systémový kalendářík) se používá i při
+                 zápisu výkazu – ať to je všude stejné. -->
+            <input type="date" id="skokDatum" class="field" style="width:auto"
+                   aria-label="Přejít na datum" title="Přejít na datum">
             <b id="obdobi" style="font-size:15px;margin-left:6px"></b>
             <label class="filtr__kdo" style="margin-left:6px"><span class="filtr__popisek">Kdo</span>
                 <select id="fKdo" class="field filtr__pole"></select></label>
@@ -224,10 +229,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=78"></script>
-<script src="assets/js/ui.js?v=78"></script>
-<script src="assets/js/vykazy.js?v=78"></script>
-<script type="module" src="assets/js/store.js?v=78"></script>
+<script src="assets/js/taxonomy.js?v=79"></script>
+<script src="assets/js/ui.js?v=79"></script>
+<script src="assets/js/vykazy.js?v=79"></script>
+<script type="module" src="assets/js/store.js?v=79"></script>
 
 <script>
 (function () {
@@ -558,6 +563,11 @@
         document.querySelectorAll("[data-pohled]").forEach(ch =>
             ch.classList.toggle("chip--active", ch.dataset.pohled === pohled));
 
+        // pole s datem drží krok s šipkami i s tlačítkem Dnes
+        $("skokDatum").value = kotva.getFullYear() + "-" +
+            String(kotva.getMonth() + 1).padStart(2, "0") + "-" +
+            String(kotva.getDate()).padStart(2, "0");
+
         const mrizka = $("mrizka");
 
         if (pohled === "mesic") {
@@ -732,6 +742,15 @@
         window.KBUI.mountNav({ active: "kalendar.html" });
 
         $("btnDnes").addEventListener("click", () => { kotva = new Date(); vykresli(); });
+        /* Vybrané datum se stane kotvou – podle zapnutého pohledu se kolem
+           něj vykreslí ten den, jeho týden nebo jeho měsíc. */
+        $("skokDatum").addEventListener("change", () => {
+            const hodnota = $("skokDatum").value;
+            if (!hodnota) return;
+            const [rok, mesic, den] = hodnota.split("-").map(Number);
+            kotva = new Date(rok, mesic - 1, den);
+            vykresli();
+        });
         $("btnZpet").addEventListener("click", () => {
             kotva = pohled === "mesic"
                 ? new Date(kotva.getFullYear(), kotva.getMonth() - 1, 1)

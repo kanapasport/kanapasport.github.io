@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=78">
+    <link rel="stylesheet" href="assets/css/app.css?v=79">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -26,8 +26,9 @@
         .seznam__vypis { display: flex; flex-direction: column; gap: 2px; max-height: 640px; overflow: auto; }
         .seznam__skupina { font-size: 11px; font-weight: 900; letter-spacing: .06em;
             text-transform: uppercase; color: var(--muted); padding: 10px 10px 4px; }
-        /* Co se v seznamu ukazuje: otevřené, hotové, nebo obojí. Hotové
-           jsou zhasnuté – dohledávají se, ale denně se v nich nepracuje. */
+        /* Přepínač nad seznamem: buď otevřené, nebo hotové. Vždycky svítí
+           jeden – seznam je tím kratší a je hned poznat, na co se člověk
+           dívá. */
         .seznam__filtr { display: flex; gap: 6px; margin: -2px 0 2px; }
         .seznam__filtr .chip { flex: 1; justify-content: center; padding: 5px 8px; font-size: 11.5px; }
         .seznam__filtr .chip em { font-style: normal; opacity: .65; margin-left: 5px; }
@@ -311,10 +312,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=78"></script>
-<script src="assets/js/ui.js?v=78"></script>
-<script src="assets/js/vykazy.js?v=78"></script>
-<script type="module" src="assets/js/store.js?v=78"></script>
+<script src="assets/js/taxonomy.js?v=79"></script>
+<script src="assets/js/ui.js?v=79"></script>
+<script src="assets/js/vykazy.js?v=79"></script>
+<script type="module" src="assets/js/store.js?v=79"></script>
 
 <script>
 (function () {
@@ -351,19 +352,16 @@
         catch (err) { return {}; }
     }
 
-    // výchozí stav: otevřené se vypisují, hotové ne
+    /* Přepínač, ne zaškrtávátka: klik na Hotové ukáže hotové, klik na
+       Otevřené zase otevřené. Vždycky svítí právě jedna skupina. */
     const zapnuta = (klic) => {
         const stav = stavSkupin();
-        return klic in stav ? !!stav[klic] : klic === "otevrene";
+        return (stav.vybrana || "otevrene") === klic;
     };
 
     function prepniSkupinu(klic) {
-        const stav = stavSkupin();
-        stav[klic] = !zapnuta(klic);
-        /* Obě zhasnutá skupiny = prázdný seznam a nedá se z toho ven jinak
-           než dalším kliknutím. Poslední zapnutá proto zůstane svítit. */
-        if (!stav.otevrene && !stav.hotove) stav[klic === "otevrene" ? "hotove" : "otevrene"] = true;
-        try { localStorage.setItem(SKUPINY_KLIC, JSON.stringify(stav)); } catch (err) { /* soukromé okno */ }
+        try { localStorage.setItem(SKUPINY_KLIC, JSON.stringify({ vybrana: klic })); }
+        catch (err) { /* soukromé okno */ }
         vykresliSeznam();
     }
 
@@ -397,7 +395,7 @@
             /* Sám si vybere jen z toho, co je v seznamu vidět – jinak by
                pravá půlka ukazovala hotový projekt, který ve zhasnuté
                skupině nikde není. */
-            const nabizene = nalezene.filter(p => zapnuta(p.uzavreno === true ? "hotove" : "otevrene"));
+            const nabizene = nalezene.filter(p => zapnuta(p.uzavreno === true ? "hotove" : "otevrene"));   // jen z vybrané skupiny
             vybrany = (window.KB.projektyDocs || []).some(p => p.id === zAdresy)
                 ? zAdresy
                 : (nabizene[0] || nalezene[0] || (window.KB.projektyDocs || [])[0]).id;
@@ -424,16 +422,13 @@
                 '" data-skupina="' + s.klic + '" aria-pressed="' + (zapnuta(s.klic) ? "true" : "false") + '">' +
                 s.nazev + "<em>" + s.polozky.length + "</em></button>").join("");
 
-        const vypsat = skupiny.filter(s => s.polozky.length && zapnuta(s.klic));
-        // nadpis skupiny má smysl, jen když jsou v seznamu obě naráz
-        const sNadpisy = vypsat.length > 1;
+        // vidět je vždycky jen jedna skupina, nadpis nad ni proto nepatří
+        const vybrana = skupiny.find(s => zapnuta(s.klic)) || skupiny[0];
 
-        $("seznamVypis").innerHTML = vypsat.length
-            ? vypsat.map(s =>
-                (sNadpisy ? '<div class="seznam__skupina">' + s.nazev + "</div>" : "") +
-                s.polozky.map(projektHtml).join("")).join("")
+        $("seznamVypis").innerHTML = vybrana.polozky.length
+            ? vybrana.polozky.map(projektHtml).join("")
             : '<div class="tiny muted" style="padding:8px 10px">' +
-              (nalezene.length ? "Zhasnuté skupiny nic neukazují." : "Nic nenalezeno.") + "</div>";
+              (vybrana.klic === "hotove" ? "Žádný hotový projekt." : "Nic nenalezeno.") + "</div>";
 
         $("pocet").textContent = nalezene.length
             ? V.pocet(nalezene.length, ["projekt", "projekty", "projektů"])

@@ -152,14 +152,23 @@ všech 18 stránek vrací 200.
   zamekZapamatuj / zamekObnovujPri` v ui.js.
 - **„Zapsat výkaz" je v hlavičce úkolu**, ne až v rozbaleném těle.
 - **Ve Správě projektů jsou pod hledáním přepínače Otevřené / Hotové**
-  s počty (volba v prohlížeči, hotové zhasnuté). Poslední zapnutá skupina
-  nejde zhasnout – zůstal by prázdný seznam. Nadpisy skupin se v seznamu
-  vypíšou, jen když jsou zapnuté obě.
+  s počty. Svítí vždycky jeden a seznam ukazuje jen jeho – volba zůstává
+  v prohlížeči.
+- **Kalendář má pole s datem** vedle šipek: skočí na den, jeho týden nebo
+  měsíc podle zapnutého pohledu a drží krok se šipkami i s „Dnes".
+- **Upozornění pro kontrolu se odškrtávají fajfkou** („je to v pořádku").
+  Odbavené se schovají pod odkaz *Zobrazit označené jako v pořádku* a jdou
+  vrátit zpět. Seznam klíčů leží v `private/kontrola/seznam/vyrizeno`,
+  kam vidí jen manažeři – kontroluje to víc lidí a nikdo nemá procházet
+  znovu to, co druhý odklepl.
+- **Ve svislém pásu je bez hledání jen jedna čára.** Prázdné místo po poli
+  i druhou čáru zhasíná třída `siderail--bezhledani` (nasazuje ji
+  `placeSearch`).
 - **Hledání v liště je jen na stránkách, kde něco dělá** – seznam
   `STRANKY_S_HLEDANIM` v ui.js. Na návodech našeptává nálezy a klik
   otevře návod; na výkazech filtruje tabulku.
-- **Dlaždice kalendáře sází do dvou sloupců** od pátého řádku, a jen
-  když jsou názvy krátké.
+- **Dlaždice kalendáře sází do sloupců** od pátého řádku (nejvýš tři),
+  a jen když jsou názvy krátké.
 
 ---
 

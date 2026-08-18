@@ -1000,6 +1000,33 @@ KB.deleteBoard = async (id) => {
     await deleteDoc(boardDoc(id));
 };
 
+/* ------------------------------------------ odbavená upozornění -----------
+   Manažer si u upozornění na nástěnce odškrtne, že je to v pořádku (noční
+   směna, dvě práce v jeden čas omylem zapsané správně…). Seznam odbavených
+   leží v `private`, kam vidí jen manažeři – jsou to poznámky o cizích
+   výkazech, ne firemní číselník. Je to jeden dokument s polem klíčů;
+   je jich pár desítek, takže se to nevyplatí rozpadat na dokumenty.      */
+
+const kontrolaDoc = () => doc(db, "artifacts", APP_ID, "private", "kontrola", "seznam", "vyrizeno");
+
+KB.nactiKontrolaOk = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(kontrolaDoc());
+    const data = snap.exists() ? snap.data() : {};
+    return Array.isArray(data.klice) ? data.klice : [];
+};
+
+KB.ulozKontrolaOk = async (klice) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(kontrolaDoc(), {
+        klice: Array.isArray(klice) ? klice : [],
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
+};
+
 /* ------------------------------------------------- přesun starých tabulí --
    Tabule se stěhovaly z `public/data/boards` do `private/tabule/seznam`.
    Přesun se nedělá sám: běží ho hlavní správce jednou, tlačítkem na stránce
