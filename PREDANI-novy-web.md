@@ -41,7 +41,8 @@ příkazovou řádku – dávkový soubor ho proto usekává.
 
 ## ČEKÁ NA MICHALA
 
-1. **Znovu nasadit `firestore.rules`.** Quick TO-DO se přepsal na společné
+1. **Znovu nasadit `firestore.rules`.** (Nově i kvůli **Správě aut** –
+   bez nasazení si zápis o autech nikdo neuloží.) Quick TO-DO se přepsal na společné
    vzkazy (`proUids`), přibyla pravidla pro tabule a **úkoly teď čte každý
    člen** (budget v nich už neleží) – bez nasazení se společné vzkazy ani
    tabule nenačtou a úkoly zůstanou po staru.
@@ -223,6 +224,21 @@ všech 18 stránek vrací 200.
 - **Sloupce ZAKÁZKA n leží v každém sešitě jinde** (David 17/21/25,
   Kuba 23…51) – extraktor je hledá v hlavičce, pevné indexy by půlku
   hodin minuly.
+
+### Správa aut
+
+- Tlačítko **Správa aut** ve svislém pásu, panel vyjíždí jako Quick TO-DO
+  (sdílí třídy `.quickpanel*`; `prepniPanel(id, otevrit)` je obecná
+  a otevřený panel ten druhý zavře).
+- **Auto Brno**: nejbližších 10 pracovních dnů, pod každým se člověk
+  přidá tlačítkem **+** a zase odhlásí. Víkendy se přeskakují.
+- **Rezervace**: TOYOTA, ROOMSTER, YETI. Klik na vůz rozevře formulář
+  od–do a *kam jedeš*; pod ním visí nadcházející rezervace ve tvaru
+  „datum · jméno – kam". Zrušit smí autor a manažer.
+- Data: `public/data/auta/{id}`, jedna kolekce, dva druhy podle pole
+  `druh` (`brno` / `rezervace`). Schválně veřejné pro celou firmu –
+  jinak by se dva domlouvali na tomtéž autě přes hlavu toho druhého.
+  Seznam vozů je konstanta `AUTA` v ui.js.
 
 ### Provoz
 

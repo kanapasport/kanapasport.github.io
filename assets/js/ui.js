@@ -913,6 +913,7 @@
             window.KB.on("vykazy", renderMujDen);
             window.KB.on("quicktodo", renderMujDen);
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
+            window.KB.on("auta", renderAuta);
         }
         document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); renderQuick(); });
     };
@@ -948,6 +949,11 @@
                 '<button type="button" class="siderail__btn" data-quick-otevri>' +
                     icon("tasks") + '<span>Quick TO-DO</span>' +
                     '<span class="siderail__odznak" data-quick-pocet hidden></span></button>' +
+                /* Auta jsou provozní věc jako Quick TO-DO: potřebuje je každý
+                   a řeší se uprostřed jiné práce, ne že by se kvůli nim
+                   chodilo na vlastní stránku. */
+                '<button type="button" class="siderail__btn" data-auta-otevri>' +
+                    icon("car") + "<span>Správa aut</span></button>" +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
                     icon("plus") + "<span>Nový výkaz</span></a>" +
@@ -1054,9 +1060,15 @@
      * nepropsala a panel zůstal ležet přes pás. Levý okraj se měří z pásu –
      * media query se nemusí trefit do všech kombinací šířky a zvětšení.
      */
-    function prepniQuick(otevrit) {
-        const panel = document.getElementById("kbQuickPanel");
+    function prepniQuick(otevrit) { prepniPanel("kbQuickPanel", otevrit); }
+
+    function prepniPanel(id, otevrit) {
+        const panel = document.getElementById(id);
         if (!panel) return;
+        // otevřený panel vytlačí ten druhý – oba vyjíždějí ze stejného místa
+        if (otevrit) document.querySelectorAll(".quickpanel").forEach(p2 => {
+            if (p2.id !== id) prepniPanel(p2.id, false);
+        });
         const deska = panel.querySelector(".quickpanel__deska");
         const stin = panel.querySelector(".quickpanel__stin");
 
@@ -1281,6 +1293,198 @@
             el.hidden = !kolik;
         });
     }
+
+    /* ------------------------------------------------------ správa aut ---
+       Panel jako Quick TO-DO, jen s jiným obsahem: nahoře „AUTO BRNO" –
+       nejbližší pracovní dny, pod každým se člověk přidá tlačítkem +.
+       Dole rezervace tří vozů (od–do a kam se jede). Vidí to celá firma,
+       jinak by se dva domlouvali na tomtéž autě přes hlavu toho druhého. */
+
+    const AUTA = ["TOYOTA", "ROOMSTER", "YETI"];
+    const DNY_CZ = ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"];
+    const PRACOVNICH_DNU = 10;      // dva týdny dopředu; dál se stejně neplánuje
+
+    let autoVybrane = "";           // u kterého vozu je rozevřený formulář
+
+    function mountAutaPanel() {
+        if (document.getElementById("kbAutaPanel")) return;
+        const panel = document.createElement("div");
+        panel.id = "kbAutaPanel";
+        panel.className = "quickpanel no-print";
+        panel.style.pointerEvents = "none";
+        panel.innerHTML =
+            '<div class="quickpanel__stin" data-auta-zavri></div>' +
+            '<div class="quickpanel__deska">' +
+                '<div class="quickpanel__hlava">' +
+                    '<span class="quickpanel__stitek">Správa aut</span>' +
+                    '<button type="button" class="linkbtn" data-auta-zavri>Zavřít</button>' +
+                "</div>" +
+                '<div class="quickpanel__telo" data-auta-telo></div>' +
+            "</div>";
+        document.body.appendChild(panel);
+        const deska = panel.querySelector(".quickpanel__deska");
+        deska.style.transform = "translateX(-102%)";
+        deska.style.visibility = "hidden";
+        panel.querySelector(".quickpanel__stin").style.opacity = "0";
+    }
+
+    /** Nejbližší pracovní dny od dneška – víkendy se do Brna nejezdí. */
+    function pracovniDny(kolik) {
+        const dny = [];
+        const d = new Date();
+        while (dny.length < kolik) {
+            const den = d.getDay();
+            if (den !== 0 && den !== 6) {
+                dny.push({
+                    iso: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+                         "-" + String(d.getDate()).padStart(2, "0"),
+                    nazev: DNY_CZ[den],
+                    popis: d.getDate() + ". " + (d.getMonth() + 1) + "."
+                });
+            }
+            d.setDate(d.getDate() + 1);
+        }
+        return dny;
+    }
+
+    function renderAuta() {
+        const telo = document.querySelector("#kbAutaPanel [data-auta-telo]");
+        if (!telo) return;
+        const uid = window.KB.currentUid ? window.KB.currentUid() : "";
+        const zaznamy = window.KB.auta || [];
+        const dnes = dnesISO();
+
+        /* ---- AUTO BRNO: kdo který den jede ---- */
+        const brnoHtml = pracovniDny(PRACOVNICH_DNU).map(den => {
+            const lide = zaznamy.filter(z => z.druh === "brno" && z.datum === den.iso);
+            const jsemTam = lide.some(z => z.uid === uid);
+            return '<div class="auta__den">' +
+                '<div class="auta__denhlava">' +
+                    "<b>" + esc(den.nazev) + "</b> " + esc(den.popis) +
+                    (jsemTam
+                        ? '<button type="button" class="linkbtn" data-auto-odhlas="' +
+                            esc((lide.find(z => z.uid === uid) || {}).id || "") + '">odhlásit se</button>'
+                        : '<button type="button" class="auta__plus" data-auto-brno="' + den.iso +
+                            '" title="Přidat se na tenhle den">+</button>') +
+                "</div>" +
+                (lide.length
+                    ? '<div class="auta__lide">' + lide.map(z =>
+                        '<span class="auta__clovek' + (z.uid === uid ? " je-ja" : "") + '">' +
+                        esc(z.jmeno || "?") + "</span>").join("") + "</div>"
+                    : '<span class="auta__prazdno">zatím nikdo</span>') +
+            "</div>";
+        }).join("");
+
+        /* ---- rezervace vozů ---- */
+        const rezervaceHtml = AUTA.map(auto => {
+            const moje = zaznamy.filter(z => z.druh === "rezervace" && z.auto === auto &&
+                (z.do || z.od || "") >= dnes);
+            return '<div class="auta__vuz">' +
+                '<button type="button" class="auta__vuzhlava' + (autoVybrane === auto ? " je-otevreny" : "") +
+                    '" data-auto-vyber="' + esc(auto) + '">' +
+                    "<b>" + esc(auto) + "</b>" +
+                    '<span class="auta__pocet">' + (moje.length ? moje.length + "×" : "volné") + "</span>" +
+                "</button>" +
+                (autoVybrane === auto
+                    ? '<div class="auta__form">' +
+                        '<div class="auta__radek">' +
+                            '<label>Od<input type="date" class="field" data-auto-od value="' + dnes + '"></label>' +
+                            '<label>Do<input type="date" class="field" data-auto-do value="' + dnes + '"></label>' +
+                        "</div>" +
+                        '<input type="text" class="field" data-auto-kam maxlength="200" placeholder="Kam jedeš (např. BioPharma G61)">' +
+                        '<button type="button" class="btn btn--primary btn--sm" data-auto-uloz="' +
+                            esc(auto) + '">Rezervovat</button>' +
+                      "</div>"
+                    : "") +
+                (moje.length
+                    ? '<div class="auta__seznam">' + moje.map(z =>
+                        '<div class="auta__rez">' +
+                            '<span class="auta__rezkdy">' + esc(czDatumKratke(z.od)) +
+                                (z.do && z.do !== z.od ? " – " + esc(czDatumKratke(z.do)) : "") + "</span>" +
+                            '<span class="auta__rezkdo"><b>' + esc(z.jmeno || "?") + "</b>" +
+                                (z.kam ? " – " + esc(z.kam) : "") + "</span>" +
+                            (z.uid === uid || UI.isAdmin()
+                                ? '<button type="button" class="linkbtn" data-auto-smaz="' + esc(z.id) + '">zrušit</button>'
+                                : "") +
+                        "</div>").join("") + "</div>"
+                    : "") +
+            "</div>";
+        }).join("");
+
+        telo.innerHTML =
+            '<div class="auta__nadpis">Auto Brno</div>' +
+            '<p class="tiny muted" style="margin:0 0 8px;line-height:1.5">' +
+                "Přidej se na den, kdy jedeš – ostatní uvidí, s kým se svezou.</p>" +
+            brnoHtml +
+            '<div class="auta__nadpis" style="margin-top:16px">Rezervace</div>' +
+            rezervaceHtml;
+    }
+
+    async function ulozRezervaci(auto) {
+        const telo = document.querySelector("#kbAutaPanel [data-auta-telo]");
+        const od = telo.querySelector("[data-auto-od]").value;
+        const doKdy = telo.querySelector("[data-auto-do]").value || od;
+        const kam = telo.querySelector("[data-auto-kam]").value.trim();
+        if (!od) return void UI.toast("Vyber, od kdy auto potřebuješ.", "warn");
+        if (doKdy < od) return void UI.toast("Datum do nesmí být dřív než datum od.", "warn");
+        try {
+            await window.KB.saveAuto(window.KB.newAutoId(), {
+                druh: "rezervace", auto: auto, od: od, do: doKdy, kam: kam
+            });
+            /* Formulář se zavírá tady, ne až s příchodem dat: překreslení
+               přijde ze snapshotu a to by ještě četlo starou hodnotu. */
+            autoVybrane = "";
+            renderAuta();
+            UI.toast("Auto " + auto + " rezervované.");
+        } catch (err) {
+            console.error(err);
+            UI.toast("Rezervace se neuložila.", "error");
+        }
+    }
+
+    document.addEventListener("click", async (event) => {
+        if (event.target.closest("[data-auta-otevri]")) {
+            mountAutaPanel();
+            renderAuta();
+            prepniPanel("kbAutaPanel", true);
+            return;
+        }
+        if (event.target.closest("[data-auta-zavri]")) {
+            prepniPanel("kbAutaPanel", false);
+            return;
+        }
+
+        const brno = event.target.closest("[data-auto-brno]");
+        if (brno) {
+            try {
+                await window.KB.saveAuto(window.KB.newAutoId(),
+                    { druh: "brno", datum: brno.dataset.autoBrno });
+            } catch (err) { UI.toast("Přidání se nepovedlo.", "error"); }
+            return;
+        }
+        const odhlas = event.target.closest("[data-auto-odhlas]");
+        if (odhlas) {
+            window.KB.deleteAuto(odhlas.dataset.autoOdhlas)
+                .catch(() => UI.toast("Odhlášení se nepovedlo.", "error"));
+            return;
+        }
+        const vyber = event.target.closest("[data-auto-vyber]");
+        if (vyber) {
+            // druhé kliknutí na tentýž vůz formulář zase zavře
+            autoVybrane = autoVybrane === vyber.dataset.autoVyber ? "" : vyber.dataset.autoVyber;
+            renderAuta();
+            return;
+        }
+        const uloz = event.target.closest("[data-auto-uloz]");
+        if (uloz) return void ulozRezervaci(uloz.dataset.autoUloz);
+
+        const smaz = event.target.closest("[data-auto-smaz]");
+        if (smaz) {
+            window.KB.deleteAuto(smaz.dataset.autoSmaz)
+                .catch(() => UI.toast("Zrušení se nepovedlo.", "error"));
+            return;
+        }
+    });
 
     document.addEventListener("click", async (event) => {
         if (event.target.closest("[data-quick-otevri]")) {

@@ -238,6 +238,18 @@ service cloud.firestore {
       allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
     }
 
+    // --- auta: rozvrh cest do Brna a rezervace vozů --------------------
+    // Vidí to celá firma (blanket `read` výš) – o to jde, aby se dva
+    // nedomlouvali na tomtéž autě přes hlavu toho druhého. Zapisuje každý
+    // sám za sebe; cizí zápis smaže jen manažer (když někdo zapomene).
+    match /artifacts/firemni-kb-app/public/data/auta/{id} {
+      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+    }
+
     // --- kdo je právě na webu: každý píše jen svůj otisk ---
     match /artifacts/firemni-kb-app/public/data/pritomnost/{uid} {
       allow write: if clen() && request.auth.uid == uid;

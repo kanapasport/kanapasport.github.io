@@ -108,6 +108,7 @@ const KB = {
     logy: [],               // historie přihlášení (public/data/logs)
     quicktodo: [],          // rychlé vzkazy: vidí je jen autor a adresát
     ukolBudgety: {},        // budgety úkolů (jen manažeři): id → { budgetHodin, rezervaHodin }
+    auta: [],               // správa aut: zápisy na dny v Brně a rezervace vozů
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 350 }
@@ -156,6 +157,12 @@ const stareBoardDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "bo
 const stareBoardBody = (id) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "content", "data");
 const stareBoardImages = (id) => collection(db, "artifacts", APP_ID, "public", "data", "boards", id, "images");
 const stareBoardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "public", "data", "boards", id, "images", imgId);
+/* Auta: kdo který den jede do Brna a kdo si kdy bere který vůz.
+   Schválně v `public/data` – rozvrh aut má vidět celá firma, jinak by se
+   dva lidé domlouvali na tomtéž autě přes hlavu toho druhého. */
+const autaCol = () => collection(db, "artifacts", APP_ID, "public", "data", "auta");
+const autoDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "auta", id);
+
 const usersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "users");
 const userDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "users", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
@@ -287,7 +294,7 @@ try {
             quickOdbery.forEach(stop => { try { stop(); } catch (e) {} });
             quickOdbery = []; quickPrijate = []; quickPrijateSkupina = [];
             quickOdeslane = []; KB.quicktodo = [];
-            KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = [];
+            KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
             KB.ready = true;
@@ -325,6 +332,14 @@ try {
         sledujTabuli("vsem", query(tabuleCol(), where("viditelnost", "==", "vsichni")));
         sledujTabuli("moje", query(tabuleCol(), where("createdUid", "==", user.uid)));
         sledujTabuli("sdilene", query(tabuleCol(), where("proUids", "array-contains", user.uid)));
+
+        odbery.push(onSnapshot(autaCol(), (snapshot) => {
+            KB.auta = [];
+            snapshot.forEach(d => KB.auta.push({ id: d.id, ...d.data() }));
+            // od nejbližšího termínu – panel čte odshora dolů
+            KB.auta.sort((a, b) => (a.od || "").localeCompare(b.od || ""));
+            emit("auta", KB.auta);
+        }, (err) => console.error("Chyba čtení aut:", err)));
 
         odbery.push(onSnapshot(usersCol(), (snapshot) => {
             KB.users = [];
@@ -999,6 +1014,40 @@ KB.deleteBoard = async (id) => {
     await Promise.all(imgs.docs.map(d => deleteDoc(boardImage(id, d.id))));
     await deleteDoc(boardBody(id)).catch(() => {});
     await deleteDoc(boardDoc(id));
+};
+
+/* ---------------------------------------------------------------- auta ----
+   Dva druhy záznamu v jedné kolekci, liší se polem `druh`:
+
+     druh: "brno"       { datum, uid, jmeno }            – kdo který den jede
+     druh: "rezervace"  { auto, od, do, uid, jmeno, kam } – kdo si bere vůz
+
+   Jedna kolekce proto, že obojí je „kdo, kdy, s čím" a v panelu se to čte
+   pohromadě; dělit to na dvě by znamenalo dva odběry pro totéž.            */
+
+KB.newAutoId = () => "auto_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.saveAuto = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(autoDoc(id), {
+        druh:   data.druh === "rezervace" ? "rezervace" : "brno",
+        datum:  data.datum || "",              // u zápisu na den
+        auto:   data.auto || "",               // u rezervace
+        od:     data.od || data.datum || "",   // společné řazení
+        do:     data.do || data.datum || "",
+        kam:    String(data.kam || "").slice(0, 200),
+        uid:    data.uid || KB.currentUid(),
+        jmeno:  data.jmeno || window.KB_USER || "",
+        ms:     data.ms || Date.now()
+    }, { merge: true });
+    return id;
+};
+
+KB.deleteAuto = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(autoDoc(id));
 };
 
 /* ------------------------------------------ odbavená upozornění -----------
