@@ -115,6 +115,10 @@ všech 18 stránek vrací 200.
   sebe si zadavatel nezaškrtává.
 - **Oblíbené party** lidí (localStorage) – odkaz *uložit jako oblíbené*
   vpravo u nadpisu KOMU.
+- **„Jen pro mě"** je první volba v seznamu lidí – poznámka pro sebe je
+  jiný záměr než vzkaz kolegovi a dřív se nedala uložit vůbec (bez
+  vybraného člověka to hlásilo chybu). Ukládá se jako běžný vzkaz
+  s `proUids = [moje uid]`.
 - **„Udělej co nejdříve"** bez termínu, řadí se první.
 - Historie splněných s datem odškrtnutí.
 
@@ -290,6 +294,11 @@ všech 18 stránek vrací 200.
 ---
 
 ## Pasti, na které jsme narazili
+
+0. **Česká uvozovka `"` uvnitř dvojitě uvozeného JS řetězce utrhne kód.**
+   Stalo se dvakrát (`vykazy-bp.html`, `ui.js`) a pokaždé to shodilo celý
+   soubor – v `ui.js` tím zmizelo `window.KBUI` a s ním celé rozhraní.
+   Uvnitř `"…"` psát `“` nebo uvozovky vynechat.
 
 1. **Místní server zahazoval `?parametry`.** `npx serve` v režimu hezkých
    adres přesměroval `tabule.html?id=X` na `/tabule`. Řeší to `serve.json`

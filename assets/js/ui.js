@@ -927,7 +927,10 @@
             window.KB.on("projekty-docs", refreshNav);
             window.KB.on("milniky", refreshNav);
             window.KB.on("vykazy", renderMujDen);
-            window.KB.on("quicktodo", renderMujDen);
+            /* Panel se překresluje taky – byl navázaný jen pás, takže nový
+               vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
+               po jeho zavření a otevření. */
+            window.KB.on("quicktodo", () => { renderMujDen(); renderQuick(); });
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
             window.KB.on("auta", renderAuta);
         }
@@ -1200,9 +1203,11 @@
 
         // nabídky (jen jednou, ať se nepřepisuje rozepsaný výběr)
         const komu = panel.querySelector("[data-quick-komu]");
-        /* Sebe si zadavatel nezaškrtává – vzkaz vidí v seznamu tak jako tak,
-           protože ho poslal. Řadí se manažeři, pak zaměstnanci, pak studenti;
-           nadpisy k tomu netřeba, stačí, že to drží pohromadě. */
+        /* Sebe si zadavatel zaškrtne první volbou „Jen pro mě" – poznámka
+           pro sebe je jiný záměr než vzkaz kolegovi a dřív se nedala uložit
+           vůbec (bez vybraného člověka to hlásilo chybu).
+           Řadí se manažeři, pak zaměstnanci, pak studenti; nadpisy k tomu
+           netřeba, stačí, že to drží pohromadě. */
         const PORADI = { "hlavni-spravce": 0, "spravce": 1, "zamestnanec": 2, "student": 3 };
         const lide = (window.KB.users || [])
             .filter(u => u.active !== false && u.id !== uid)
@@ -1210,10 +1215,13 @@
                             (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
                             (a.last || "").localeCompare(b.last || "", "cs"));
 
-        if (lide.length && !komu.querySelector("input")) {
-            komu.innerHTML = lide.map(u =>
-                '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
-                esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
+        if (!komu.querySelector("input")) {
+            komu.innerHTML =
+                '<label class="quickpanel__ja"><input type="checkbox" value="' + esc(uid) +
+                    '" data-quick-jaja> Jen pro mě</label>' +
+                lide.map(u =>
+                    '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
+                    esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
         }
         vykresliOblibene();
         const projektSel = panel.querySelector("[data-quick-projekt]");
@@ -1595,7 +1603,7 @@
         const text = panel.querySelector("[data-quick-text]").value.trim();
         const komu = vybraniKomu();
         if (!text) return UI.toast("Napiš, co se nemá zapomenout.", "warn");
-        if (!komu.length) return UI.toast("Vyber, komu vzkaz patří.", "warn");
+        if (!komu.length) return UI.toast("Vyber, komu vzkaz patří – nebo zaškrtni Jen pro mě.", "warn");
 
         const asap = panel.querySelector("[data-quick-asap]").checked;
         const doKdy = panel.querySelector("[data-quick-kdy]").value;
@@ -1618,7 +1626,9 @@
             panel.querySelectorAll("[data-quick-komu] input:checked")
                 .forEach(ch => { ch.checked = false; });
 
-            UI.toast(komu.length === 1 ? "Quick to-do zadáno."
+            const jenJa = komu.length === 1 && komu[0] === window.KB.currentUid();
+            UI.toast(jenJa ? "Poznámka uložena jen pro tebe."
+                : komu.length === 1 ? "Quick to-do zadáno."
                 : "Společný quick to-do zadán " + komu.length + " lidem.");
         } catch (err) {
             console.error(err);
