@@ -1037,8 +1037,12 @@ KB.saveAuto = async (id, data) => {
         od:     data.od || data.datum || "",   // společné řazení
         do:     data.do || data.datum || "",
         kam:    String(data.kam || "").slice(0, 200),
+        /* `uid` je ten, kdo jede – nemusí to být ten, kdo zápis pořídil.
+           Kdo veze partu, přihlásí kolegy za ně; `zapsalUid` proto drží
+           autora zápisu a pravidla ho pouštějí i k cizímu jménu. */
         uid:    data.uid || KB.currentUid(),
         jmeno:  data.jmeno || window.KB_USER || "",
+        zapsalUid: data.zapsalUid || KB.currentUid(),
         ms:     data.ms || Date.now()
     }, { merge: true });
     return id;

@@ -231,7 +231,11 @@ všech 18 stránek vrací 200.
   (sdílí třídy `.quickpanel*`; `prepniPanel(id, otevrit)` je obecná
   a otevřený panel ten druhý zavře).
 - **Auto Brno**: nejbližších 10 pracovních dnů, pod každým se člověk
-  přidá tlačítkem **+** a zase odhlásí. Víkendy se přeskakují.
+  přidá tlačítkem **+** a zase odhlásí. Víkendy se přeskakují. U data
+  svítí **počet lidí** („6 lidí"), tlačítkem **+ člověk** se přihlásí
+  i kolega (kdo veze partu) a každé jméno má **×** na odebrání.
+  Záznam proto nese `uid` (kdo jede) i `zapsalUid` (kdo ho zapsal) –
+  pravidla hlídají `zapsalUid`, jinak by cizí jméno neprošlo.
 - **Rezervace**: TOYOTA, ROOMSTER, YETI. Klik na vůz rozevře formulář
   od–do a *kam jedeš*; pod ním visí nadcházející rezervace ve tvaru
   „datum · jméno – kam". Zrušit smí autor a manažer.
@@ -251,6 +255,11 @@ všech 18 stránek vrací 200.
 - **„Zapsat výkaz z úkolu"** u rozdělaného úkolu – předvyplní projekt,
   úkol, druh i název (`vykazy.html?ukol=ID`).
 - **Enter přepíná zaškrtávátka** (dřív jen mezerník).
+- **Nepřihlášený nevidí osobní věci**: pás (Quick TO-DO, Správa aut, Nový
+  výkaz, Moje úkoly) i ikony nástrojů jsou schované, stejně jako všechno
+  s `data-need`. Role se totiž do příchodu seznamu lidí bere z prohlížeče,
+  takže po odhlášení zůstávala poslední zapamatovaná a s ní i tlačítka.
+  Nabídka stránek zůstává vidět – za ní je stejně přihlášení.
 - **Výchozí barva je petrolejová `#1d556d`** (app.css); červená `#c8102e`
   je předvolba „Pasport červená" na Barvách webu. „Používat tuhle barvu"
   volbu drží v prohlížeči (localStorage `kb-akcent`, aplikuje ui.js hned

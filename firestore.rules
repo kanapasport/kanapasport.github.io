@@ -242,12 +242,16 @@ service cloud.firestore {
     // Vidí to celá firma (blanket `read` výš) – o to jde, aby se dva
     // nedomlouvali na tomtéž autě přes hlavu toho druhého. Zapisuje každý
     // sám za sebe; cizí zápis smaže jen manažer (když někdo zapomene).
+    // Kdo veze partu, přihlásí kolegy za ně – proto se nehlídá `uid` (ten,
+    // kdo jede), ale `zapsalUid` (kdo zápis pořídil). Smazat smí ten, koho
+    // se to týká, ten kdo ho zapsal, a manažer.
     match /artifacts/firemni-kb-app/public/data/auta/{id} {
-      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      allow create: if clen() && request.resource.data.zapsalUid == request.auth.uid;
       allow update: if spravce() || (clen()
-                       && resource.data.uid == request.auth.uid
-                       && request.resource.data.uid == request.auth.uid);
-      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+                       && resource.data.zapsalUid == request.auth.uid
+                       && request.resource.data.zapsalUid == request.auth.uid);
+      allow delete: if spravce() || (clen() && (resource.data.uid == request.auth.uid
+                                                || resource.data.zapsalUid == request.auth.uid));
     }
 
     // --- kdo je právě na webu: každý píše jen svůj otisk ---

@@ -343,10 +343,24 @@
             el.className = "rolepill" + (UI.isAdmin() ? " rolepill--admin" : "") +
                            (window.KB_USER ? "" : " rolepill--off");
         });
-        // prvky, které smí vidět jen někdo – data-need="ukol.create"
+        /* Prvky, které smí vidět jen někdo – data-need="ukol.create".
+           Nepřihlášenému se skryjí všechny: role se do doby, než dorazí
+           seznam lidí, bere z prohlížeče, takže po odhlášení zůstávala
+           poslední zapamatovaná a s ní i tlačítka jako Nový výkaz. */
         document.querySelectorAll("[data-need]").forEach(el => {
-            el.hidden = !UI.can(el.dataset.need);
+            el.hidden = !window.KB_USER || !UI.can(el.dataset.need);
         });
+
+        /* Osobní věci nemá nepřihlášený proč vidět: Quick TO-DO, Správa aut,
+           Nový výkaz, Moje úkoly ani ikony nástrojů nic nenačtou (data drží
+           pravidla databáze), ale klikaly se a vypadalo to jako rozbitý web.
+           Nabídka stránek zůstává – ta slouží k rozhlédnutí a stejně za ní
+           je přihlášení. */
+        const prihlasen = !!window.KB_USER;
+        document.querySelectorAll("[data-jen-prihlaseny]").forEach(el => {
+            el.hidden = !prihlasen;
+        });
+
         paintNahled();
     };
 
@@ -802,7 +816,9 @@
         const tools = (window.KB_TOOLS || []).map(tool => {
             const inner = icon(tool.icon) + "<span>" + tool.title + "</span>";
             // nástroj s `need` se ukáže jen tomu, kdo na něj má právo
-            const gate = tool.need ? ' data-need="' + tool.need + '" hidden' : "";
+            // bez práva se ikona neukáže vůbec; bez přihlášení žádná z nich
+            const gate = tool.need ? ' data-need="' + tool.need + '" hidden'
+                                   : ' data-jen-prihlaseny hidden';
             return tool.action
                 ? '<button type="button" class="toolbtn" data-action="' + tool.action + '"' + gate +
                   ' title="' + tool.title + '">' + inner + "</button>"
@@ -946,18 +962,18 @@
             '<div class="siderail__spodek">' +
                 /* Quick TO-DO smí každý – je to vzkaz kolegovi, ne firemní
                    údaj. Proto bez data-need, stejně jako Moje úkoly. */
-                '<button type="button" class="siderail__btn" data-quick-otevri>' +
+                '<button type="button" class="siderail__btn" data-jen-prihlaseny hidden data-quick-otevri>' +
                     icon("tasks") + '<span>Quick TO-DO</span>' +
                     '<span class="siderail__odznak" data-quick-pocet hidden></span></button>' +
                 /* Auta jsou provozní věc jako Quick TO-DO: potřebuje je každý
                    a řeší se uprostřed jiné práce, ne že by se kvůli nim
                    chodilo na vlastní stránku. */
-                '<button type="button" class="siderail__btn" data-auta-otevri>' +
+                '<button type="button" class="siderail__btn" data-jen-prihlaseny hidden data-auta-otevri>' +
                     icon("car") + "<span>Správa aut</span></button>" +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
                     icon("plus") + "<span>Nový výkaz</span></a>" +
-                '<a class="siderail__btn" href="ukoly.html?moje=1">' +
+                '<a class="siderail__btn" href="ukoly.html?moje=1" data-jen-prihlaseny hidden>' +
                     icon("tasks") + "<span>Moje úkoly</span></a>" +
                 // zakládání projektů je manažerská práce, proto až za úkoly
                 '<a class="siderail__btn" href="sprava.html#novy" data-need="zakazky.manage" hidden>' +
@@ -1305,6 +1321,7 @@
     const PRACOVNICH_DNU = 10;      // dva týdny dopředu; dál se stejně neplánuje
 
     let autoVybrane = "";           // u kterého vozu je rozevřený formulář
+    let autoPridavam = "";          // u kterého dne je rozevřený výběr člověka
 
     function mountAutaPanel() {
         if (document.getElementById("kbAutaPanel")) return;
@@ -1327,6 +1344,10 @@
         deska.style.visibility = "hidden";
         panel.querySelector(".quickpanel__stin").style.opacity = "0";
     }
+
+    /** „1 člověk / 3 lidé / 6 lidí" – jinak by v pruhu svítilo „1 lidí". */
+    const V_pocetLidi = (n) =>
+        n + " " + (n === 1 ? "člověk" : (n >= 2 && n <= 4 ? "lidé" : "lidí"));
 
     /** Nejbližší pracovní dny od dneška – víkendy se do Brna nejezdí. */
     function pracovniDny(kolik) {
@@ -1358,19 +1379,40 @@
         const brnoHtml = pracovniDny(PRACOVNICH_DNU).map(den => {
             const lide = zaznamy.filter(z => z.druh === "brno" && z.datum === den.iso);
             const jsemTam = lide.some(z => z.uid === uid);
+            /* Kdo veze partu, přihlásí i kolegy – proto je „přidat člověka"
+               vedle odhlášení. Nabízejí se jen ti, kdo na dni ještě nejsou. */
+            const zbyva = (window.KB.users || [])
+                .filter(u => u.active !== false && !lide.some(z => z.uid === u.id))
+                .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+
             return '<div class="auta__den">' +
                 '<div class="auta__denhlava">' +
                     "<b>" + esc(den.nazev) + "</b> " + esc(den.popis) +
+                    '<span class="auta__pocetlidi">' +
+                        (lide.length ? V_pocetLidi(lide.length) : "nikdo") + "</span>" +
                     (jsemTam
                         ? '<button type="button" class="linkbtn" data-auto-odhlas="' +
                             esc((lide.find(z => z.uid === uid) || {}).id || "") + '">odhlásit se</button>'
                         : '<button type="button" class="auta__plus" data-auto-brno="' + den.iso +
                             '" title="Přidat se na tenhle den">+</button>') +
+                    (zbyva.length
+                        ? '<button type="button" class="linkbtn" data-auto-pridej="' + den.iso + '">' +
+                            (autoPridavam === den.iso ? "zavřít" : "+ člověk") + "</button>"
+                        : "") +
                 "</div>" +
+                (autoPridavam === den.iso
+                    ? '<div class="auta__vyber">' + zbyva.map(u =>
+                        '<button type="button" class="auta__clovek auta__clovek--pridat" ' +
+                            'data-auto-kolega="' + den.iso + "|" + esc(u.id) + '">+ ' +
+                            esc(((u.first || "") + " " + (u.last || "")).trim()) + "</button>").join("") +
+                      "</div>"
+                    : "") +
                 (lide.length
                     ? '<div class="auta__lide">' + lide.map(z =>
                         '<span class="auta__clovek' + (z.uid === uid ? " je-ja" : "") + '">' +
-                        esc(z.jmeno || "?") + "</span>").join("") + "</div>"
+                        esc(z.jmeno || "?") +
+                        '<button type="button" class="auta__x" data-auto-odhlas="' + esc(z.id) +
+                            '" title="Odebrat z tohohle dne">×</button></span>').join("") + "</div>"
                     : '<span class="auta__prazdno">zatím nikdo</span>') +
             "</div>";
         }).join("");
@@ -1459,6 +1501,26 @@
             try {
                 await window.KB.saveAuto(window.KB.newAutoId(),
                     { druh: "brno", datum: brno.dataset.autoBrno });
+            } catch (err) { UI.toast("Přidání se nepovedlo.", "error"); }
+            return;
+        }
+        const pridej = event.target.closest("[data-auto-pridej]");
+        if (pridej) {
+            autoPridavam = autoPridavam === pridej.dataset.autoPridej ? "" : pridej.dataset.autoPridej;
+            renderAuta();
+            return;
+        }
+        const kolega = event.target.closest("[data-auto-kolega]");
+        if (kolega) {
+            const [datum, kdo] = kolega.dataset.autoKolega.split("|");
+            const clovek = (window.KB.users || []).find(u => u.id === kdo);
+            try {
+                await window.KB.saveAuto(window.KB.newAutoId(), {
+                    druh: "brno", datum: datum, uid: kdo,
+                    jmeno: clovek ? ((clovek.first || "") + " " + (clovek.last || "")).trim() : ""
+                });
+                autoPridavam = "";
+                renderAuta();
             } catch (err) { UI.toast("Přidání se nepovedlo.", "error"); }
             return;
         }
