@@ -280,13 +280,13 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
 Stav se odškrtává průběžně – podle tohohle seznamu se pokračuje i po
 předání kontextu.
 
-- [ ] 1. Auta: změna „Od" posune „Do", když by bylo dřív
-- [ ] 2. Zrušit „části projektu" (Správa) i „Část" ve výkazu
+- [x] 1. Auta: změna „Od" posune „Do", když by bylo dřív
+- [x] 2. Zrušit „části projektu" (Správa) i „Část" ve výkazu
 - [ ] 3. Budget technologií v PENĚZÍCH; vedle Kč vypsat hodiny podle
       průměrné hodinovky lidí přiřazených k technologii (lideTech + sazby)
 - [ ] 4. Dialog nového úkolu z matice: předzaškrtnout lidi té technologie,
       pole na TO-DO (řádek = položka), popisek „Primární druh práce"
-- [ ] 5. Firma ve výkazu jen ke čtení, když ji projekt má nastavenou
+- [x] 5. Firma ve výkazu jen ke čtení, když ji projekt má nastavenou
 - [ ] 6. Výkaz – nové pořadí: budova → patro → technologie; výběr úkolu
       podle nich (nebo rovnou úkol → zamkne budovu/patro/technologii
       a předvyplní druh); popis práce NEPOVINNÝ vedle povinného druhu;
@@ -302,7 +302,7 @@ předání kontextu.
 - [ ] 11. Úkoly: tlačítko Historie u rozbaleného úkolu (kdo kdy kolik %)
 - [ ] 12. Quick TODO jako samostatná stránka (lišta + proklik z dlaždice);
       panel v pásu zůstává jen na tvorbu
-- [ ] 13. Zrušit „Přizpůsobit" na nástěnce
+- [x] 13. Zrušit „Přizpůsobit" na nástěnce
 
 ---
 
