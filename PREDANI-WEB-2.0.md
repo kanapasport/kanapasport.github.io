@@ -275,6 +275,37 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
 
 ---
 
+## Rozpracovaná dávka (zadáno 19. 8.)
+
+Stav se odškrtává průběžně – podle tohohle seznamu se pokračuje i po
+předání kontextu.
+
+- [ ] 1. Auta: změna „Od" posune „Do", když by bylo dřív
+- [ ] 2. Zrušit „části projektu" (Správa) i „Část" ve výkazu
+- [ ] 3. Budget technologií v PENĚZÍCH; vedle Kč vypsat hodiny podle
+      průměrné hodinovky lidí přiřazených k technologii (lideTech + sazby)
+- [ ] 4. Dialog nového úkolu z matice: předzaškrtnout lidi té technologie,
+      pole na TO-DO (řádek = položka), popisek „Primární druh práce"
+- [ ] 5. Firma ve výkazu jen ke čtení, když ji projekt má nastavenou
+- [ ] 6. Výkaz – nové pořadí: budova → patro → technologie; výběr úkolu
+      podle nich (nebo rovnou úkol → zamkne budovu/patro/technologii
+      a předvyplní druh); popis práce NEPOVINNÝ vedle povinného druhu;
+      sazba za „⋯ zobrazit"
+- [ ] 7. Upozornění pro kontrolu: zápis hodin na cizí úkol (výpomoc) –
+      manažer potvrzuje fajfkou; označení i ve výkazech
+- [ ] 8. Úkol „hotovo" od zaměstnance čeká na POTVRZENÍ manažera
+      (přes upozornění pro kontrolu)
+- [ ] 9. Dovolené: potvrzování manažerem, v kalendáři „Nepotvrzená
+      dovolená", nová dlaždice „Potvrzení dovolených"
+- [ ] 10. Reporty: záložky QUICK TODO / TODO / Výkazy; u TODO z kolika
+      na kolik procent (logovat do aktivit i do úkolu)
+- [ ] 11. Úkoly: tlačítko Historie u rozbaleného úkolu (kdo kdy kolik %)
+- [ ] 12. Quick TODO jako samostatná stránka (lišta + proklik z dlaždice);
+      panel v pásu zůstává jen na tvorbu
+- [ ] 13. Zrušit „Přizpůsobit" na nástěnce
+
+---
+
 ## 10. Co se odložilo
 
 - **Efektivita** (budget ÷ skutečnost) — probrané tři scénáře, čeká se na
