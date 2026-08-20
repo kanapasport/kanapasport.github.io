@@ -763,6 +763,20 @@ KB.saveMilniky = async (items) => {
     });
 };
 
+/** Manažer potvrzuje milník, který si přiřazený člověk odškrtl sám. */
+KB.potvrdMilnik = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const items = (KB.milniky || []).map(m => m.id !== id ? m : Object.assign({}, m, {
+        potvrzeno: true,
+        potvrdil: window.KB_USER || "",
+        potvrzenoMs: Date.now()
+    }));
+    await KB.saveMilniky(items);
+    const m = (KB.milniky || []).find(x => x.id === id);
+    KB.zapisAktivitu("milnik", "potvrdil splněný milník" + (m && m.cinnost ? " " + m.cinnost : ""));
+};
+
 /* ------------------------------------------------------------- uživatelé --
    Seznam lidí, kteří mají na web přístup, a jejich role. Spravuje ho hlavní
    správce. Heslo se ukládá jen jako otisk (SHA-256 se solí), nikdy v čitelné

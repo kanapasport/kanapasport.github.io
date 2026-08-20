@@ -371,6 +371,11 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
 - [x] 17. Správa → Spolupracovníci: nad zaškrtávátky tabulka
       „Technologie → Dělají ji" – neobsazená technologie svítí červeně
       „nikdo – zaškrtni níž"; překresluje se hned při zaškrtnutí
+- [x] 18. Splněný milník od přiřazeného člověka čeká na potvrzení manažera
+      (štítek „splněno – čeká na potvrzení"; řádek MILNÍK? v Upozornění
+      pro kontrolu s tlačítkem Potvrdit; jde potvrdit i na stránce
+      Milníky). Manažerovo vlastní odškrtnutí platí rovnou. Vrácení
+      milníku potvrzení maže.
 
 ---
 

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=95">
+    <link rel="stylesheet" href="assets/css/app.css?v=96">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -328,11 +328,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=95"></script>
-<script src="assets/js/doc.js?v=95"></script>
-<script src="assets/js/ui.js?v=95"></script>
-<script src="assets/js/vykazy.js?v=95"></script>
-<script type="module" src="assets/js/store.js?v=95"></script>
+<script src="assets/js/taxonomy.js?v=96"></script>
+<script src="assets/js/doc.js?v=96"></script>
+<script src="assets/js/ui.js?v=96"></script>
+<script src="assets/js/vykazy.js?v=96"></script>
+<script type="module" src="assets/js/store.js?v=96"></script>
 
 <script>
 (function () {
@@ -658,6 +658,15 @@
                     window.KBUI.toast("Potvrzení selhalo.", "error"); });
             return;
         }
+        const milPotvrd = event.target.closest("[data-potvrd-milnik]");
+        if (milPotvrd) {
+            milPotvrd.disabled = true;
+            window.KB.potvrdMilnik(milPotvrd.dataset.potvrdMilnik)
+                .then(() => window.KBUI.toast("Milník potvrzen."))
+                .catch(() => { milPotvrd.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
         const potvrd = event.target.closest("[data-potvrd-ukol]");
         if (potvrd) {
             potvrd.disabled = true;
@@ -949,6 +958,10 @@
         const kPotvrzeni = (window.KB.ukoly || [])
             .filter(u => u.stav === "hotovo" && u.potvrzeno !== true);
 
+        /* Milníky odškrtnuté přiřazeným člověkem – platí až po potvrzení. */
+        const milKPotvrzeni = (window.KB.milniky || [])
+            .filter(m => m.hotovo && m.potvrzeno !== true);
+
         chyby.sort((a, b) => b.datum.localeCompare(a.datum));
 
         const otevrene = chyby.filter(ch => !kontrolaOk.has(ch.klic));
@@ -974,10 +987,20 @@
                     esc(u.id) + '">Potvrdit</button>' +
             "</div>").join("");
 
-        box.innerHTML = potvrzeniHtml +
+        const milPotvrzeniHtml = milKPotvrzeni.map(m =>
+            '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
+                '<a class="kontrola__odkaz" href="milniky.html">' +
+                    '<span class="kontrola__datum" style="color:var(--accent)">MILNÍK?</span>' +
+                    "<span><b>" + esc(m.cinnost || "?") + "</b> – splněno (" +
+                        esc(m.hotovoKdo || "?") + "), čeká na tvé potvrzení</span></a>" +
+                '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' +
+                    esc(m.id) + '">Potvrdit</button>' +
+            "</div>").join("");
+
+        box.innerHTML = potvrzeniHtml + milPotvrzeniHtml +
             (otevrene.length
                 ? otevrene.slice(0, 25).map(ch => radek(ch, false)).join("")
-                : (kPotvrzeni.length ? "" :
+                : ((kPotvrzeni.length || milKPotvrzeni.length) ? "" :
                   '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
                   "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>")) +
             /* Odbavené se nemažou, jen schovají – ať se dá odškrtnutí vzít
@@ -1152,7 +1175,8 @@
         window.KB.on("aktivity", renderAktivita);
         window.KB.on("quicktodo", renderQuick);
         window.KB.on("kalendar", () => { renderKalendarDlazdice(); renderDovolene(); });
-        window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky(); });
+        window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky();
+            renderKontrola(); });   // potvrzování splněných milníků
         window.KB.on("vykazy", renderKontrola);
 
         // okno „Co je nového" – až když dorazí úkoly i vzkazy, ne dřív

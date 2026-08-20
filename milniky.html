@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=95">
+    <link rel="stylesheet" href="assets/css/app.css?v=96">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -18,6 +18,8 @@
         .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
         /* milník přiřazený mně – podbarvený, ať člověk vidí „ty svoje" */
         .milnik--muj td { background: var(--accent-tint); }
+        /* splněno od zaměstnance, které ještě neposvětil manažer */
+        .milpil--ceka { background: #fff3d6; color: #9a6b00; border: 1px solid #e8c877; }
         .milpil {
             display: inline-block;
             margin-top: 4px;
@@ -115,10 +117,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=95"></script>
-<script src="assets/js/doc.js?v=95"></script>
-<script src="assets/js/ui.js?v=95"></script>
-<script type="module" src="assets/js/store.js?v=95"></script>
+<script src="assets/js/taxonomy.js?v=96"></script>
+<script src="assets/js/doc.js?v=96"></script>
+<script src="assets/js/ui.js?v=96"></script>
+<script type="module" src="assets/js/store.js?v=96"></script>
 
 <script>
 (function () {
@@ -326,7 +328,11 @@
                 return '<tr class="' + t.trida + (muj && !item.hotovo ? " milnik--muj" : "") + '">' +
                     '<td class="milniky__cinnost">' +
                         '<span class="milcin">' + esc(item.cinnost || "") + "</span>" +
-                        (item.hotovo ? '<span class="milpil">splněno</span>' : "") + "</td>" +
+                        (item.hotovo
+                            ? (item.potvrzeno === true
+                                ? '<span class="milpil">splněno</span>'
+                                : '<span class="milpil milpil--ceka">splněno – čeká na potvrzení</span>')
+                            : "") + "</td>" +
                     "<td>" + esc(ownersText(item)) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum"><b>' + t.text + "</b>" +
@@ -337,6 +343,9 @@
                                 ? '<button type="button" class="btn btn--sm ' +
                                     (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
                                     (item.hotovo ? "Vrátit" : "Splněno") + "</button>"
+                                : "") +
+                            (muzeMenit && item.hotovo && item.potvrzeno !== true
+                                ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(item.id) + '">Potvrdit</button>'
                                 : "") +
                             (muzeMenit
                                 ? '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(item.id) + '">Upravit</button>'
@@ -414,7 +423,10 @@
             // úprava milníku nesmí shodit značku „splněno"
             hotovo: !!puvodni.hotovo,
             hotovoKdo: puvodni.hotovoKdo || "",
-            hotovoMs: puvodni.hotovoMs || 0
+            hotovoMs: puvodni.hotovoMs || 0,
+            potvrzeno: puvodni.potvrzeno === true,
+            potvrdil: puvodni.potvrdil || "",
+            potvrzenoMs: puvodni.potvrzenoMs || 0
         };
 
         const items = (window.KB.milniky || []).slice();
@@ -437,12 +449,19 @@
     async function prepniHotovo(id) {
         const items = (window.KB.milniky || []).map(m => {
             if (m.id !== id) return m;
+            /* Manažerovo odškrtnutí platí rovnou; od přiřazeného člověka
+               milník čeká na potvrzení (dlaždice Upozornění pro kontrolu). */
+            const rovnou = window.KBUI.can("milnik.manage");
             return m.hotovo
-                ? Object.assign({}, m, { hotovo: false, hotovoKdo: "", hotovoMs: 0 })
+                ? Object.assign({}, m, { hotovo: false, hotovoKdo: "", hotovoMs: 0,
+                    potvrzeno: false, potvrdil: "", potvrzenoMs: 0 })
                 : Object.assign({}, m, {
                     hotovo: true,
                     hotovoKdo: window.KB_USER || "",
-                    hotovoMs: Date.now()
+                    hotovoMs: Date.now(),
+                    potvrzeno: rovnou,
+                    potvrdil: rovnou ? (window.KB_USER || "") : "",
+                    potvrzenoMs: rovnou ? Date.now() : 0
                   });
         });
         const byl = (window.KB.milniky || []).find(m => m.id === id);
@@ -456,6 +475,15 @@
     }
 
     document.addEventListener("click", (event) => {
+        const potvrd = event.target.closest("[data-potvrd-milnik]");
+        if (potvrd && window.KBUI.can("milnik.manage")) {
+            potvrd.disabled = true;
+            window.KB.potvrdMilnik(potvrd.dataset.potvrdMilnik)
+                .then(() => window.KBUI.toast("Milník potvrzen."))
+                .catch(() => { potvrd.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
         const hotovo = event.target.closest("[data-done]");
         if (hotovo) {
             const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
