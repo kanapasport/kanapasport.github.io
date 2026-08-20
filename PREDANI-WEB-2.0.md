@@ -295,11 +295,11 @@ předání kontextu.
       manažer potvrzuje fajfkou; označení i ve výkazech
 - [x] 8. Úkol „hotovo" od zaměstnance čeká na POTVRZENÍ manažera
       (přes upozornění pro kontrolu)
-- [ ] 9. Dovolené: potvrzování manažerem, v kalendáři „Nepotvrzená
+- [x] 9. Dovolené: potvrzování manažerem, v kalendáři „Nepotvrzená
       dovolená", nová dlaždice „Potvrzení dovolených"
-- [ ] 10. Reporty: záložky QUICK TODO / TODO / Výkazy; u TODO z kolika
+- [x] 10. Reporty: záložky QUICK TODO / TODO / Výkazy; u TODO z kolika
       na kolik procent (logovat do aktivit i do úkolu)
-- [ ] 11. Úkoly: tlačítko Historie u rozbaleného úkolu (kdo kdy kolik %)
+- [x] 11. Úkoly: tlačítko Historie u rozbaleného úkolu (kdo kdy kolik %)
 - [ ] 12. Quick TODO jako samostatná stránka (lišta + proklik z dlaždice);
       panel v pásu zůstává jen na tvorbu
 - [x] 13. Zrušit „Přizpůsobit" na nástěnce

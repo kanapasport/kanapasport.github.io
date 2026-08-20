@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Report – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=91">
+    <link rel="stylesheet" href="assets/css/app.css?v=92">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -90,6 +90,15 @@
         <!-- ============================================ HISTORIE AKTIVIT -->
         <section class="rblok">
             <div class="rblok__hlava"><span class="rblok__stitek">Historie aktivit</span></div>
+            <!-- rozdělení podle druhu (přání Michala 19. 8.) – u TO-DO je
+                 v textu i z kolika na kolik procent se zapsalo -->
+            <div class="row row--wrap" style="gap:6px;padding:10px 14px 0" id="aktivityFiltr">
+                <button type="button" class="chip chip--active" data-adruh="">Vše</button>
+                <button type="button" class="chip" data-adruh="quicktodo">Quick TO-DO</button>
+                <button type="button" class="chip" data-adruh="postup">TO-DO</button>
+                <button type="button" class="chip" data-adruh="vykaz">Výkazy</button>
+                <button type="button" class="chip" data-adruh="ostatni">Ostatní</button>
+            </div>
             <div class="rblok__telo">
                 <p class="tiny muted" style="margin:0;line-height:1.6">
                     Kdo co uložil – projekty, úkoly, postup i výkazy. Plní se samo od chvíle,
@@ -113,10 +122,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=91"></script>
-<script src="assets/js/ui.js?v=91"></script>
-<script src="assets/js/vykazy.js?v=91"></script>
-<script type="module" src="assets/js/store.js?v=91"></script>
+<script src="assets/js/taxonomy.js?v=92"></script>
+<script src="assets/js/ui.js?v=92"></script>
+<script src="assets/js/vykazy.js?v=92"></script>
+<script type="module" src="assets/js/store.js?v=92"></script>
 
 <script>
 (function () {
@@ -125,7 +134,10 @@
     const V = window.KBVYK;
     let sledovaniZapnuto = false;
 
-    const DRUHY = { projekt: "projekt", ukol: "úkol", postup: "postup", vykaz: "výkaz", kalendar: "kalendář" };
+    const DRUHY = { projekt: "projekt", ukol: "úkol", postup: "TO-DO", vykaz: "výkaz",
+                    kalendar: "kalendář", quicktodo: "quick to-do" };
+    const HLAVNI_DRUHY = ["quicktodo", "postup", "vykaz"];
+    let aktivniDruh = "";   // filtr záložek nad historií
 
     /* Delší seznam přihlášení nikdo nečte a jen by odsunul zbytek stránky. */
     const POSLEDNICH_PRIHLASENI = 30;
@@ -184,8 +196,15 @@
         "</div>";
 
     function renderAktivity() {
+        document.querySelectorAll("[data-adruh]").forEach(ch =>
+            ch.classList.toggle("chip--active", ch.dataset.adruh === aktivniDruh));
+        const vyber = (window.KB.aktivity || []).filter(a =>
+            !aktivniDruh ||
+            (aktivniDruh === "ostatni"
+                ? HLAVNI_DRUHY.indexOf(a.druh) === -1
+                : a.druh === aktivniDruh));
         document.getElementById("aktivity").innerHTML =
-            (window.KB.aktivity || []).map(a => histRadek(
+            vyber.map(a => histRadek(
                 cas(a.ms),
                 '<span class="tag">' + esc(DRUHY[a.druh] || a.druh || "") + "</span>",
                 "<b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "")
@@ -222,6 +241,12 @@
         document.addEventListener("kb-role", render);
         window.KB.on("users", render);
         window.KB.on("aktivity", renderAktivity);
+        document.getElementById("aktivityFiltr").addEventListener("click", (event) => {
+            const chip = event.target.closest("[data-adruh]");
+            if (!chip) return;
+            aktivniDruh = chip.dataset.adruh;
+            renderAktivity();
+        });
         window.KB.on("logy", renderPrihlaseni);
         render();
     });

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=91">
+    <link rel="stylesheet" href="assets/css/app.css?v=92">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -281,6 +281,13 @@
                                     </div>
                 <div id="aktivitaSeznam" class="nastenka__telo col" style="gap:8px"></div>
             </div>
+            <!-- dovolené čekající na manažerovo razítko -->
+            <div class="card nastenka__karta" id="wDovolene" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="kalendar.html" title="Otevřít kalendář">
+                    <b>Potvrzení dovolených</b>
+                </div>
+                <div id="dovoleneSeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
             <!-- kontrola výkazů: většinou prázdná, ale když někde něco nesedí,
                  manažer to vidí hned a nemusí to dohledávat na konci měsíce -->
             <div class="card nastenka__karta" id="wKontrola" data-need="vykaz.view" hidden>
@@ -313,11 +320,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=91"></script>
-<script src="assets/js/doc.js?v=91"></script>
-<script src="assets/js/ui.js?v=91"></script>
-<script src="assets/js/vykazy.js?v=91"></script>
-<script type="module" src="assets/js/store.js?v=91"></script>
+<script src="assets/js/taxonomy.js?v=92"></script>
+<script src="assets/js/doc.js?v=92"></script>
+<script src="assets/js/ui.js?v=92"></script>
+<script src="assets/js/vykazy.js?v=92"></script>
+<script type="module" src="assets/js/store.js?v=92"></script>
 
 <script>
 (function () {
@@ -633,6 +640,15 @@
     document.addEventListener("click", (event) => {
         const fajfka = event.target.closest("[data-ok]");
         if (fajfka) return void prepniKontrolaOk(fajfka.dataset.ok);
+        const dovol = event.target.closest("[data-potvrd-dovolenou]");
+        if (dovol) {
+            dovol.disabled = true;
+            window.KB.potvrdDovolenou(dovol.dataset.potvrdDovolenou)
+                .then(() => window.KBUI.toast("Dovolená potvrzena."))
+                .catch(() => { dovol.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
         const potvrd = event.target.closest("[data-potvrd-ukol]");
         if (potvrd) {
             potvrd.disabled = true;
@@ -708,7 +724,8 @@
             const radky = [];
             (window.KB.kalendar || []).forEach(k => {
                 if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
-                    const druh = TYP_NAZEV[k.typ] || "událost";
+                    let druh = TYP_NAZEV[k.typ] || "událost";
+                    if (k.typ === "dovolena" && k.potvrzeno !== true) druh = "Nepotvrzená dovolená";
                     radky.push({ barva: TYP_BARVA[k.typ] || TYP_BARVA.udalost,
                         text: k.typ === "udalost"
                             ? (k.text || "událost") + (k.osoba ? " – " + k.osoba : "")
@@ -790,6 +807,37 @@
             "</a>";
         }).join("") || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
             "Žádný nadcházející milník. Termíny odevzdání zadávají manažeři na stránce Milníky.</div>";
+    }
+
+    /* ---------------------------------------- potvrzování dovolených ---
+       Dovolená platí, až ji manažer odklepne. Dlaždice ukazuje nepotvrzené
+       – budoucí a čerstvé (do 30 dnů zpátky), starší už nikoho nezajímají. */
+
+    function renderDovolene() {
+        const box = document.getElementById("dovoleneSeznam");
+        if (!box || !window.KBUI.can("vykaz.view")) return;
+        const hranice = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+        const hraniceISO = hranice.getFullYear() + "-" +
+            String(hranice.getMonth() + 1).padStart(2, "0") + "-" +
+            String(hranice.getDate()).padStart(2, "0");
+
+        const ceka = (window.KB.kalendar || [])
+            .filter(k => k.typ === "dovolena" && k.potvrzeno !== true &&
+                (k.do || k.od || "") >= hraniceISO)
+            .sort((a, b) => (a.od || "").localeCompare(b.od || ""));
+
+        box.innerHTML = ceka.length
+            ? ceka.map(k =>
+                '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
+                    '<span class="kontrola__odkaz">' +
+                        '<span class="kontrola__datum" style="color:var(--accent)">' +
+                            esc(czDatum(k.od)) + (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>" +
+                        "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b></span></span>" +
+                    '<button type="button" class="btn btn--sm btn--primary" data-potvrd-dovolenou="' +
+                        esc(k.id) + '">Potvrdit</button>' +
+                "</div>").join("")
+            : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+              "Žádná dovolená nečeká na potvrzení.</div>";
     }
 
     /* ------------------------------------------ upozornění pro kontrolu ---
@@ -975,11 +1023,13 @@
     async function zapisPct(todoId, pct) {
         const u = seznamUkolu().find(x => x.id === vybranyUkol);
         if (!u) return;
+        const puvodni = (u.todo || []).find(t => t.id === todoId);
         const todo = (u.todo || []).map(t => t.id === todoId
             ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
         const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
         try {
-            await window.KB.ulozUkolPostup(u.id, todo, hotovo ? "hotovo" : "otevreny");
+            await window.KB.ulozUkolPostup(u.id, todo, hotovo ? "hotovo" : "otevreny",
+                puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
             if (hotovo) window.KBUI.toast("Úkol je hotový. 🎉");
         } catch (err) {
             console.error(err);
@@ -1082,7 +1132,7 @@
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
             renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola();
-            nactiKontrolaOk(); };
+            renderDovolene(); nactiKontrolaOk(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice();
@@ -1090,7 +1140,7 @@
         window.KB.on("pritomnost", renderOnline);
         window.KB.on("aktivity", renderAktivita);
         window.KB.on("quicktodo", renderQuick);
-        window.KB.on("kalendar", renderKalendarDlazdice);
+        window.KB.on("kalendar", () => { renderKalendarDlazdice(); renderDovolene(); });
         window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky(); });
         window.KB.on("vykazy", renderKontrola);
 

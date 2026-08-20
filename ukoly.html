@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=91">
+    <link rel="stylesheet" href="assets/css/app.css?v=92">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -170,10 +170,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=91"></script>
-<script src="assets/js/ui.js?v=91"></script>
-<script src="assets/js/vykazy.js?v=91"></script>
-<script type="module" src="assets/js/store.js?v=91"></script>
+<script src="assets/js/taxonomy.js?v=92"></script>
+<script src="assets/js/ui.js?v=92"></script>
+<script src="assets/js/vykazy.js?v=92"></script>
+<script type="module" src="assets/js/store.js?v=92"></script>
 
 <script>
 (function () {
@@ -215,6 +215,7 @@
     let pohled = params.get("moje") ? "moje" : (params.get("zak") ? "zak" : "moje");
     const zakSlug = params.get("zak") || "";
     let editovanyId = "";
+    const historieOtevrena = new Set();   // u kterých úkolů je rozbalená historie
     let sledovaniZapnuto = false;
     const otevrene = new Set();
 
@@ -386,11 +387,22 @@
             (otevreny
                 ? '<div class="ukol__telo">' +
                     '<div class="ukol__todo">' + todoHtml(u, smiPsat) + "</div>" +
+                    (historieOtevrena.has(u.id)
+                        ? '<div style="padding:8px 14px;border-top:1px dashed var(--line);font-size:12px;color:var(--text-soft)">' +
+                            (u.historie || []).slice().reverse().map(h =>
+                                '<div style="padding:2px 0">' + esc(casRazitko(h.ms)) + " · <b>" +
+                                esc(h.kdo || "?") + "</b> · " + esc(h.text || "") + ": " +
+                                (Number(h.z) || 0) + " % → <b>" + (Number(h.na) || 0) + " %</b></div>").join("") +
+                          "</div>"
+                        : "") +
                     '<div class="ukol__pata">' +
                         '<span class="tiny muted">' + (u.poznamka ? esc(u.poznamka) : "") + "</span>" +
                         '<span class="row" style="gap:8px">' +
                         // „Zapsat výkaz" je nahoře v hlavičce, ať se kvůli
                         // němu nemusí úkol rozbalovat – tady už podruhé není
+                        ((u.historie || []).length
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-historie="' + esc(u.id) + '">' +
+                                (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>" : "") +
                         (smiPsat && u.stav !== "hotovo"
                             ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
                         (window.KBUI.can("ukol.delete")
@@ -460,11 +472,13 @@
     async function zapisPct(ukolId, todoId, pct) {
         const u = najdiUkol(ukolId);
         if (!u) return;
+        const puvodni = (u.todo || []).find(t => t.id === todoId);
         const todo = (u.todo || []).map(t => t.id === todoId
             ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
         const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
         try {
-            await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny");
+            await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
+                puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Zápis se nepovedl – postup zapisuje jen přiřazený člověk.", "error");
@@ -608,6 +622,12 @@
             const pohledBtn = event.target.closest("[data-pohled]");
             if (pohledBtn) { pohled = pohledBtn.dataset.pohled; return void vykresli(); }
 
+            const hist = event.target.closest("[data-historie]");
+            if (hist) {
+                const id = hist.dataset.historie;
+                historieOtevrena.has(id) ? historieOtevrena.delete(id) : historieOtevrena.add(id);
+                return void vykresli();
+            }
             const rozbal = event.target.closest("[data-rozbal]");
             // odkaz „Zapsat výkaz" sedí uvnitř hlavičky – klik na něj vede
             // do výkazů, ne na rozbalení úkolu

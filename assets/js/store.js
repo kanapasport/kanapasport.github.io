@@ -544,6 +544,11 @@ KB.saveQuickTodo = async (id, data) => {
         hotovoMs:  data.hotovoMs || 0,
         ms:      data.ms || Date.now()
     }, { merge: true });
+    /* Aktivita kvůli reportům – bez textu vzkazu: aktivity čtou všichni
+       manažeři, ale vzkaz je jen mezi autorem a adresátem. */
+    KB.zapisAktivitu("quicktodo", data.hotovo === true
+        ? "splnil quick to-do"
+        : "zadal quick to-do (" + komu.length + " lidem)");
     return id;
 };
 
@@ -1670,19 +1675,35 @@ KB.potvrdUkol = async (id) => {
     KB.zapisAktivitu("ukol", "potvrdil hotový úkol" + (ukol ? " " + ukol.nazev : ""));
 };
 
-KB.ulozUkolPostup = async (id, todo, stav) => {
+KB.ulozUkolPostup = async (id, todo, stav, zmena) => {
     if (authReady) await authReady;
     requireDb();
+    const ukol = KB.ukoly.find(u => u.id === id);
     const payload = {
         todo: Array.isArray(todo) ? todo : [],
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     };
     if (stav !== undefined) payload.stav = stav;
+    /* Historie zapsání přímo v úkolu: kdo, kdy, z kolika na kolik procent.
+       Drží se posledních 80 kroků – starší nikdo nedohledává a dokument
+       nesmí bobtnat donekonečna. Aktivity ji nenahradí: ty čte jen manažer,
+       kdežto historii úkolu si rozklikne i přiřazený zaměstnanec. */
+    if (zmena && zmena.text) {
+        const stara = (ukol && Array.isArray(ukol.historie)) ? ukol.historie : [];
+        payload.historie = stara.concat([{
+            ms: Date.now(), kdo: window.KB_USER || "",
+            text: String(zmena.text).slice(0, 120),
+            z: Number(zmena.z) || 0, na: Number(zmena.na) || 0
+        }]).slice(-80);
+    }
     await setDoc(ukolDoc(id), payload, { merge: true });
-    const ukol = KB.ukoly.find(u => u.id === id);
     KB.zapisAktivitu("postup", "zapsal postup" +
-        (ukol ? " u úkolu " + ukol.nazev : "") + (stav === "hotovo" ? " – hotovo" : ""));
+        (ukol ? " u úkolu " + ukol.nazev : "") +
+        (zmena && zmena.text
+            ? " – " + zmena.text + " " + (Number(zmena.z) || 0) + " % → " + (Number(zmena.na) || 0) + " %"
+            : "") +
+        (stav === "hotovo" ? " – hotovo" : ""));
 };
 
 KB.deleteUkol = async (id) => {
@@ -1700,6 +1721,18 @@ KB.deleteUkol = async (id) => {
    na jednom místě. `zdroj` říká, odkud záznam přišel. */
 
 KB.newUdalostId = () => "kal_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+/** Potvrzení dovolené manažerem – jen příznak, událost se nemění. */
+KB.potvrdDovolenou = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(kalendarDoc(id), {
+        potvrzeno: true,
+        potvrdil: window.KB_USER || "",
+        potvrzenoMs: Date.now()
+    }, { merge: true });
+    KB.zapisAktivitu("kalendar", "potvrdil dovolenou");
+};
 
 KB.saveUdalost = async (id, data) => {
     if (authReady) await authReady;
@@ -1720,6 +1753,10 @@ KB.saveUdalost = async (id, data) => {
            se pak dá skočit rovnou na jeho opravu. Mazat se smí jen tam, aby
            nezůstal výkaz bez události nebo naopak. */
         vykazId: data.vykazId || "",
+        /* Dovolenou musí potvrdit manažer. Nová (i přeuložená – změněné
+           datum znamená schvalovat znovu) začíná nepotvrzená; potvrzuje
+           KB.potvrdDovolenou z dlaždice na nástěnce. */
+        potvrzeno: data.potvrzeno === true,
         createdMs: data.createdMs || Date.now(),
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
