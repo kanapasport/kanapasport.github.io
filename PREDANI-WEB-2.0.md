@@ -375,7 +375,16 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
       (štítek „splněno – čeká na potvrzení"; řádek MILNÍK? v Upozornění
       pro kontrolu s tlačítkem Potvrdit; jde potvrdit i na stránce
       Milníky). Manažerovo vlastní odškrtnutí platí rovnou. Vrácení
-      milníku potvrzení maže.
+      milníku potvrzení maže. Nepotvrzený milník v nadcházejících
+      ZŮSTÁVÁ – zmizí až manažerovým potvrzením. „Čeká" je jen výslovné
+      `potvrzeno: false` od nového kódu – 5 starých splněných milníků
+      pole nemá a bere se jako dávno odsouhlasené (jinak by po nasazení
+      zaplavily kontrolu i seznam).
+- [x] 19. Oprava: smazání Quick TODO z dlaždice na nástěnce hlásilo
+      „smazání selhalo", ačkoli se smazalo – klik chytala dlaždice
+      i obecná obsluha v ui.js, druhé smazání spadlo na právech.
+      Obsluha v ui.js teď platí jen pro panel a stránku vzkazů
+      (stejná zábrana i u Splněno – dělalo dvojité zápisy do aktivit).
 
 ---
 

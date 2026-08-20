@@ -1651,6 +1651,10 @@
         }
         const smaz = event.target.closest("[data-quick-smaz]");
         if (smaz) {
+            /* Dlaždice na nástěnce má vlastní obsluhu – bez téhle zábrany
+               se mazalo dvakrát: první pokus vzkaz smazal, druhý spadl na
+               právech a vyhodil „Smazání selhalo", ačkoli vzkaz zmizel. */
+            if (!smaz.closest("#kbQuickPanel, [data-quick-seznam]")) return;
             window.KB.deleteQuickTodo(smaz.dataset.quickSmaz)
                 .catch(() => UI.toast("Smazání selhalo.", "error"));
             return;
@@ -1663,6 +1667,8 @@
         // Splněno / Vrátit – tlačítkem, ne zaškrtávátkem
         const hotovoBtn = event.target.closest("[data-quick-hotovo]");
         if (hotovoBtn && hotovoBtn.tagName === "BUTTON") {
+            // dlaždice na nástěnce si Splněno obsluhuje sama – viz mazání výš
+            if (!hotovoBtn.closest("#kbQuickPanel, [data-quick-seznam]")) return;
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
             if (q) {
                 // u společného vzkazu se zapíše, kdo ho odškrtl za všechny

@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#c8102e">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=96">
+    <link rel="stylesheet" href="assets/css/app.css?v=97">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -117,10 +117,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=96"></script>
-<script src="assets/js/doc.js?v=96"></script>
-<script src="assets/js/ui.js?v=96"></script>
-<script type="module" src="assets/js/store.js?v=96"></script>
+<script src="assets/js/taxonomy.js?v=97"></script>
+<script src="assets/js/doc.js?v=97"></script>
+<script src="assets/js/ui.js?v=97"></script>
+<script type="module" src="assets/js/store.js?v=97"></script>
 
 <script>
 (function () {
@@ -204,7 +204,11 @@
             const okno = minulyMesic();
             return vsechny.filter(m => m.datum && m.datum >= okno.od && m.datum <= okno.do);
         }
-        return vsechny.filter(m => !m.hotovo && !jeStary(m));
+        /* Splněný, ale manažerem nepotvrzený milník v nadcházejících
+           ZŮSTÁVÁ (se štítkem „čeká na potvrzení") – zmizí až potvrzením.
+           „Čeká" je jen výslovné `potvrzeno: false` od nového kódu; staré
+           splněné milníky pole nemají a berou se jako dávno odsouhlasené. */
+        return vsechny.filter(m => (!m.hotovo || m.potvrzeno === false) && !jeStary(m));
     }
 
     /** Barva termínu podle toho, jak je blízko – splněný je vždycky zelený. */
@@ -329,9 +333,9 @@
                     '<td class="milniky__cinnost">' +
                         '<span class="milcin">' + esc(item.cinnost || "") + "</span>" +
                         (item.hotovo
-                            ? (item.potvrzeno === true
-                                ? '<span class="milpil">splněno</span>'
-                                : '<span class="milpil milpil--ceka">splněno – čeká na potvrzení</span>')
+                            ? (item.potvrzeno === false
+                                ? '<span class="milpil milpil--ceka">splněno – čeká na potvrzení</span>'
+                                : '<span class="milpil">splněno</span>')
                             : "") + "</td>" +
                     "<td>" + esc(ownersText(item)) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
@@ -344,7 +348,7 @@
                                     (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
                                     (item.hotovo ? "Vrátit" : "Splněno") + "</button>"
                                 : "") +
-                            (muzeMenit && item.hotovo && item.potvrzeno !== true
+                            (muzeMenit && item.hotovo && item.potvrzeno === false
                                 ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(item.id) + '">Potvrdit</button>'
                                 : "") +
                             (muzeMenit
@@ -424,7 +428,8 @@
             hotovo: !!puvodni.hotovo,
             hotovoKdo: puvodni.hotovoKdo || "",
             hotovoMs: puvodni.hotovoMs || 0,
-            potvrzeno: puvodni.potvrzeno === true,
+            // staré splněné bez pole zůstávají potvrzené i po úpravě formulářem
+            potvrzeno: puvodni.potvrzeno !== false,
             potvrdil: puvodni.potvrdil || "",
             potvrzenoMs: puvodni.potvrzenoMs || 0
         };
@@ -469,8 +474,10 @@
            ať to nevypadá, že se místo uložení něco smazalo. */
         const hlaska = byl && byl.hotovo
             ? "Milník vrácen mezi rozdělané."
-            : "Milník označen jako splněný." +
-              (pohled === "splnene" ? "" : " Najdeš ho v pohledu Všechny splněné.");
+            : (window.KBUI.can("milnik.manage")
+                ? "Milník označen jako splněný." +
+                  (pohled === "splnene" ? "" : " Najdeš ho v pohledu Všechny splněné.")
+                : "Milník označen jako splněný – v seznamu zůstává, dokud ho manažer nepotvrdí.");
         await ulozSeznam(items, hlaska);
     }
 

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=96">
+    <link rel="stylesheet" href="assets/css/app.css?v=97">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -328,11 +328,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=96"></script>
-<script src="assets/js/doc.js?v=96"></script>
-<script src="assets/js/ui.js?v=96"></script>
-<script src="assets/js/vykazy.js?v=96"></script>
-<script type="module" src="assets/js/store.js?v=96"></script>
+<script src="assets/js/taxonomy.js?v=97"></script>
+<script src="assets/js/doc.js?v=97"></script>
+<script src="assets/js/ui.js?v=97"></script>
+<script src="assets/js/vykazy.js?v=97"></script>
+<script type="module" src="assets/js/store.js?v=97"></script>
 
 <script>
 (function () {
@@ -801,15 +801,17 @@
         const dnes = V.dnesISO();
         const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
         const seznam = (window.KB.milniky || [])
-            .filter(m => m.datum && !m.hotovo)
+            .filter(m => m.datum && (!m.hotovo || m.potvrzeno === false))
             .sort((a, b) => a.datum.localeCompare(b.datum))
             .slice(0, 8);
 
         document.getElementById("milnikySeznam").innerHTML = seznam.map(m => {
-            const pozde = m.datum < dnes;
+            const ceka = m.hotovo && m.potvrzeno === false;
+            const pozde = !ceka && m.datum < dnes;
             const zbyva = Math.round((new Date(m.datum + "T00:00:00") -
                 new Date(dnes + "T00:00:00")) / 86400000);
-            const kdy = pozde ? "po termínu"
+            const kdy = ceka ? "čeká na potvrzení"
+                : pozde ? "po termínu"
                 : zbyva === 0 ? "dnes" : zbyva === 1 ? "zítra" : "za " + zbyva + " dní";
 
             const kdo = (m.owners || []).map(jmenoUid).filter(Boolean).join(", ");
@@ -958,9 +960,10 @@
         const kPotvrzeni = (window.KB.ukoly || [])
             .filter(u => u.stav === "hotovo" && u.potvrzeno !== true);
 
-        /* Milníky odškrtnuté přiřazeným člověkem – platí až po potvrzení. */
+        /* Milníky odškrtnuté přiřazeným člověkem – platí až po potvrzení.
+           Jen výslovné `potvrzeno: false`; staré splněné pole nemají. */
         const milKPotvrzeni = (window.KB.milniky || [])
-            .filter(m => m.hotovo && m.potvrzeno !== true);
+            .filter(m => m.hotovo && m.potvrzeno === false);
 
         chyby.sort((a, b) => b.datum.localeCompare(a.datum));
 
