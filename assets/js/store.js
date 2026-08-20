@@ -1653,6 +1653,23 @@ KB.saveUkol = async (id, data) => {
  * tolik, kolik pravidla databáze zaměstnanci dovolí; kdyby se přibalilo
  * cokoliv dalšího, databáze celý zápis odmítne.
  */
+/** Manažerské potvrzení hotového úkolu – zaměstnanec označí hotovo,
+    manažer po kontrole potvrdí. Zaměstnanci pole `potvrzeno` pravidla
+    zapsat nedovolí (smí jen todo a stav). */
+KB.potvrdUkol = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(ukolDoc(id), {
+        potvrzeno: true,
+        potvrdil: window.KB_USER || "",
+        potvrzenoMs: Date.now(),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    const ukol = KB.ukoly.find(u => u.id === id);
+    KB.zapisAktivitu("ukol", "potvrdil hotový úkol" + (ukol ? " " + ukol.nazev : ""));
+};
+
 KB.ulozUkolPostup = async (id, todo, stav) => {
     if (authReady) await authReady;
     requireDb();

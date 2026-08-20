@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=90">
+    <link rel="stylesheet" href="assets/css/app.css?v=91">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -313,11 +313,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=90"></script>
-<script src="assets/js/doc.js?v=90"></script>
-<script src="assets/js/ui.js?v=90"></script>
-<script src="assets/js/vykazy.js?v=90"></script>
-<script type="module" src="assets/js/store.js?v=90"></script>
+<script src="assets/js/taxonomy.js?v=91"></script>
+<script src="assets/js/doc.js?v=91"></script>
+<script src="assets/js/ui.js?v=91"></script>
+<script src="assets/js/vykazy.js?v=91"></script>
+<script type="module" src="assets/js/store.js?v=91"></script>
 
 <script>
 (function () {
@@ -633,6 +633,15 @@
     document.addEventListener("click", (event) => {
         const fajfka = event.target.closest("[data-ok]");
         if (fajfka) return void prepniKontrolaOk(fajfka.dataset.ok);
+        const potvrd = event.target.closest("[data-potvrd-ukol]");
+        if (potvrd) {
+            potvrd.disabled = true;
+            window.KB.potvrdUkol(potvrd.dataset.potvrdUkol)
+                .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
+                .catch(() => { potvrd.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
         if (event.target.closest("[data-odbavene]")) {
             ukazOdbavene = !ukazOdbavene;
             return void renderKontrola();
@@ -864,6 +873,23 @@
             }
         });
 
+        /* Výpomoc: hodiny zapsané na úkol, který člověku nepatří. Stává se
+           (lidi si pomáhají), ale manažer o tom má vědět a odklepnout to. */
+        (window.KB.vykazy || []).forEach(z => {
+            if (!z.ukolId || z.absence === true || !z.datum) return;
+            const u = (window.KB.ukoly || []).find(x => x.id === z.ukolId);
+            if (!u || (u.prirazeni || []).indexOf(z.uid) !== -1) return;
+            chyby.push({ datum: z.datum, klic: "vypomoc|" + z.id,
+                text: (jmenoUid(z.uid) || "?") + " zapsal hodiny na cizí úkol „" +
+                    (u.nazev || "?") + "“" });
+        });
+
+        /* Hotové úkoly čekající na potvrzení – zaměstnanec označil hotovo,
+           manažer po kontrole potvrdí tlačítkem (ne fajfkou „v pořádku",
+           tohle opravdu mění úkol). */
+        const kPotvrzeni = (window.KB.ukoly || [])
+            .filter(u => u.stav === "hotovo" && u.potvrzeno !== true);
+
         chyby.sort((a, b) => b.datum.localeCompare(a.datum));
 
         const otevrene = chyby.filter(ch => !kontrolaOk.has(ch.klic));
@@ -880,11 +906,21 @@
                     FAJFKA + "</button>" +
             "</div>";
 
-        box.innerHTML =
+        const potvrzeniHtml = kPotvrzeni.map(u =>
+            '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
+                '<a class="kontrola__odkaz" href="ukoly.html?vse=1">' +
+                    '<span class="kontrola__datum" style="color:var(--accent)">HOTOVO?</span>' +
+                    "<span><b>" + esc(u.nazev || "?") + "</b> – označeno jako hotové, čeká na tvé potvrzení</span></a>" +
+                '<button type="button" class="btn btn--sm btn--primary" data-potvrd-ukol="' +
+                    esc(u.id) + '">Potvrdit</button>' +
+            "</div>").join("");
+
+        box.innerHTML = potvrzeniHtml +
             (otevrene.length
                 ? otevrene.slice(0, 25).map(ch => radek(ch, false)).join("")
-                : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-                  "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>") +
+                : (kPotvrzeni.length ? "" :
+                  '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+                  "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>")) +
             /* Odbavené se nemažou, jen schovají – ať se dá odškrtnutí vzít
                zpět a ať je vidět, že se na to někdo díval. */
             (odbavene.length
@@ -1049,7 +1085,8 @@
             nactiKontrolaOk(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
-        window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice(); });
+        window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice();
+            renderKontrola(); });   // výpomoc a potvrzování hotových čtou úkoly
         window.KB.on("pritomnost", renderOnline);
         window.KB.on("aktivity", renderAktivita);
         window.KB.on("quicktodo", renderQuick);

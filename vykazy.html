@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=90">
+    <link rel="stylesheet" href="assets/css/app.css?v=91">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=90"></script>
-<script src="assets/js/ui.js?v=90"></script>
-<script src="assets/js/vykazy.js?v=90"></script>
-<script type="module" src="assets/js/store.js?v=90"></script>
+<script src="assets/js/taxonomy.js?v=91"></script>
+<script src="assets/js/ui.js?v=91"></script>
+<script src="assets/js/vykazy.js?v=91"></script>
+<script type="module" src="assets/js/store.js?v=91"></script>
 
 <script>
 (function () {
@@ -330,6 +330,13 @@
         }
         if (!seznam.length) return '<option value="">— žádný úkol —</option>';
         return V.options(seznam, vybrany, "— vyber úkol —");
+    }
+
+    /** Zápis na úkol, který má přiřazený někdo jiný – výpomoc. */
+    function jeVypomoc(z) {
+        if (!z.ukolId || z.absence === true) return false;
+        const u = (window.KB.ukoly || []).find(x => x.id === z.ukolId);
+        return !!u && (u.prirazeni || []).indexOf(z.uid) === -1;
     }
 
     /** Projekt záznamu: z hlavičky bloku, nebo z pole v okně úpravy. */
@@ -1278,6 +1285,8 @@
             return "<tr>" +
                 (spravce ? "<td>" + esc(V.osobaText(z)) + "</td>" : "") +
                 '<td class="vyk__nazev">' + esc(z.nazev || "") +
+                    (jeVypomoc(z) ? ' <span class="tag" title="Hodiny na úkolu, který má přiřazený někdo jiný" ' +
+                        'style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">výpomoc</span>' : "") +
                     (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
                 "<td>" + esc(z.zakazka || "") +
                     (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +

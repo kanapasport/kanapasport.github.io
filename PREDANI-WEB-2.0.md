@@ -291,9 +291,9 @@ předání kontextu.
       podle nich (nebo rovnou úkol → zamkne budovu/patro/technologii
       a předvyplní druh); popis práce NEPOVINNÝ vedle povinného druhu;
       sazba za „⋯ zobrazit"
-- [ ] 7. Upozornění pro kontrolu: zápis hodin na cizí úkol (výpomoc) –
+- [x] 7. Upozornění pro kontrolu: zápis hodin na cizí úkol (výpomoc) –
       manažer potvrzuje fajfkou; označení i ve výkazech
-- [ ] 8. Úkol „hotovo" od zaměstnance čeká na POTVRZENÍ manažera
+- [x] 8. Úkol „hotovo" od zaměstnance čeká na POTVRZENÍ manažera
       (přes upozornění pro kontrolu)
 - [ ] 9. Dovolené: potvrzování manažerem, v kalendáři „Nepotvrzená
       dovolená", nová dlaždice „Potvrzení dovolených"
