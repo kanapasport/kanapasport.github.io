@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=87">
+    <link rel="stylesheet" href="assets/css/app.css?v=88">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=87"></script>
-<script src="assets/js/ui.js?v=87"></script>
-<script src="assets/js/vykazy.js?v=87"></script>
-<script type="module" src="assets/js/store.js?v=87"></script>
+<script src="assets/js/taxonomy.js?v=88"></script>
+<script src="assets/js/ui.js?v=88"></script>
+<script src="assets/js/vykazy.js?v=88"></script>
+<script type="module" src="assets/js/store.js?v=88"></script>
 
 <script>
 (function () {
@@ -348,13 +348,6 @@
         "</span>";
     }
 
-    /** Části patří pod projekt – bez něj není z čeho vybírat. */
-    function projektOptions(zakazka, vybrany) {
-        const seznam = V.projekty(zakazka);
-        if (!zakazka) return '<option value="">— nejdřív projekt —</option>';
-        if (!seznam.length) return '<option value="">— projekt nemá části —</option>';
-        return V.options(seznam, vybrany, "— celý projekt —");
-    }
 
     /** Pole pro čas: psaní i rozbalovací nabídka po čtvrthodinách. */
     function casPole(klic, hodnota) {
@@ -409,9 +402,7 @@
             ? '<div><label class="label">Projekt</label>' +
                   '<select class="field" data-f="zakazka">' +
                       V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
-              '<div><label class="label">Část</label>' +
-                  '<select class="field" data-f="projekt">' +
-                      projektOptions(d.zakazka || "", d.projekt || "") + "</select></div>" +
+
               '<div><label class="label">Fakturovat firmě</label>' +
                   '<select class="field" data-f="firma">' +
                       V.options(V.firmy(), d.firma || "", "— vyber —") + "</select></div>"
@@ -471,11 +462,19 @@
                 /* Sazba se jen ukazuje. Platí ta z projektu (nebo obecná)
                    a přepisovat ji u jednoho záznamu by tiše rozešlo výkaz
                    s tím, co je nastavené ve Správě projektů. */
+                /* Sazba je i manažerovi schovaná za „⋯ zobrazit" – na obrazovce
+                   při zapisování často někdo stojí za zády. Hodnota jede ve
+                   skrytém poli, ať ji ctiPolozku přečte jako dřív. */
                 (window.KBUI.can("vykaz.view")
                     ? '<div><label class="label">Sazba (Kč/h)</label>' +
-                          '<input type="number" class="field" data-f="sazba" ' +
-                              'readonly tabindex="-1" title="Nastavuje se u projektu ve Správě projektů" ' +
-                              'value="' + (d.sazba ? Number(d.sazba) : "") + '"></div>'
+                          '<input type="hidden" data-f="sazba" value="' +
+                              (d.sazba ? Number(d.sazba) : "") + '">' +
+                          '<span class="field tajne" style="display:flex;align-items:center;gap:8px">' +
+                              '<b data-sazba-cislo hidden>' + (d.sazba ? Number(d.sazba) : "–") + "</b>" +
+                              '<span data-sazba-tecky>⋯</span>' +
+                              '<button type="button" class="linkbtn" data-sazba-ukaz ' +
+                                  'style="margin-left:auto">zobrazit</button>' +
+                          "</span></div>"
                     : "") +
             "</div>" +
 
@@ -515,9 +514,7 @@
                     '<select class="field" data-z="zakazka">' +
                         V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
 
-                '<div><label class="label">Část</label>' +
-                    '<select class="field" data-z="projekt">' +
-                        projektOptions(d.zakazka || "", d.projekt || "") + "</select></div>" +
+
 
                 '<div><label class="label">Fakturovat firmě</label>' +
                     '<select class="field" data-z="firma">' +
@@ -845,6 +842,9 @@
 
         radkyBox().querySelectorAll('[data-f="sazba"]').forEach(input => {
             if (!input.value || Number(input.value) === stara) input.value = vychoziSazba || "";
+            // sazba je schovaná za „⋯ zobrazit" – číslo vedle se musí dorovnat
+            const cislo = input.parentElement.querySelector("[data-sazba-cislo]");
+            if (cislo) cislo.textContent = input.value || "–";
         });
         radkyBox().querySelectorAll("[data-polozka]").forEach(prepocti);
         soucetDne();
@@ -1343,7 +1343,14 @@
     function doplnFirmu(kontejner, atribut, projekt) {
         const firma = (window.KB.firmaMap || {})[projekt] || "";
         const select = kontejner.querySelector('[' + atribut + '="firma"]');
-        if (firma && select) select.value = firma;
+        if (!select) return;
+        if (firma) select.value = firma;
+        /* Když má projekt firmu nastavenou ve Správě, roletka se zamkne –
+           fakturuje se vždycky té, přepsáním vznikaly jen omyly. */
+        select.disabled = !!firma;
+        select.title = firma
+            ? "Firmu určuje nastavení projektu ve Správě projektů"
+            : "";
     }
 
     /** Celý den u absence: časy se předvyplní na 8 hodin a zamknou. */
@@ -1359,12 +1366,23 @@
         if (radkyBox().contains(box)) soucetDne();
     }
 
+    /* Odkrytí sazby v jedné položce – a zase schování. */
+    document.addEventListener("click", (event) => {
+        const prepinac = event.target.closest("[data-sazba-ukaz]");
+        if (!prepinac) return;
+        const obal = prepinac.closest("span");
+        const cislo = obal.querySelector("[data-sazba-cislo]");
+        const tecky = obal.querySelector("[data-sazba-tecky]");
+        const odkryt = cislo.hidden;
+        cislo.hidden = !odkryt;
+        tecky.hidden = odkryt;
+        prepinac.textContent = odkryt ? "skrýt" : "zobrazit";
+    });
+
     document.addEventListener("input", (event) => {
-        // hlavička bloku: jiný projekt = jiná nabídka částí (a jiná firma)
+        // hlavička bloku: jiný projekt = jiná nabídka firmy
         const blok = event.target.closest("[data-zblok]");
         if (blok && event.target.dataset.z === "zakazka") {
-            blok.querySelector('[data-z="projekt"]').innerHTML =
-                projektOptions(event.target.value, "");
             doplnFirmu(blok, "data-z", event.target.value);
             blok.classList.toggle("zblok--absence", jeAbsence(event.target.value));
             // jiný projekt = jiná nabídka úkolů ve všech záznamech výkazu
@@ -1398,8 +1416,6 @@
             if (ukolSelect) ukolSelect.innerHTML = ukolOptions(event.target.value, "");
             const misto = box.querySelector("[data-misto]");
             if (misto) misto.outerHTML = mistoHtml(event.target.value, null);
-            box.querySelector('[data-f="projekt"]').innerHTML =
-                projektOptions(event.target.value, "");
         }
         prepocti(box);
         if (radkyBox().contains(box)) soucetDne();

@@ -1470,6 +1470,16 @@
             rezervaceHtml;
     }
 
+    /* Změna „Od" táhne „Do" s sebou: skoro každá rezervace je na jeden
+       den a nechávat v „Do" dnešek nutilo opravovat dvě pole místo jednoho.
+       Kdo si „Do" nastavil dál do budoucna, tomu se nesahá. */
+    document.addEventListener("change", (event) => {
+        const od = event.target.closest("#kbAutaPanel [data-auto-od]");
+        if (!od) return;
+        const doPole = document.querySelector("#kbAutaPanel [data-auto-do]");
+        if (doPole && (!doPole.value || doPole.value < od.value)) doPole.value = od.value;
+    });
+
     async function ulozRezervaci(auto) {
         const telo = document.querySelector("#kbAutaPanel [data-auta-telo]");
         const od = telo.querySelector("[data-auto-od]").value;

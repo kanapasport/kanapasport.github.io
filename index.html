@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=87">
+    <link rel="stylesheet" href="assets/css/app.css?v=88">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -226,30 +226,6 @@
 
     <!-- ================================================ nástěnka člověka -->
     <section id="nastenka" class="wrap" style="padding-top:22px">
-        <div class="row" style="justify-content:flex-end;margin-bottom:10px">
-            <button type="button" id="btnPrizpusob" class="btn btn--ghost btn--sm">Přizpůsobit</button>
-        </div>
-        <!-- co kdo na nástěnce chce – pamatuje si to prohlížeč každého zvlášť -->
-        <div id="nastenkaVolby" class="row row--wrap card" hidden
-             style="gap:14px;padding:10px 14px;margin-bottom:12px;font-size:13px">
-            <label class="row" style="gap:6px;cursor:pointer">
-                <input type="checkbox" data-widget="ukoly" checked> Zadané úkoly</label>
-            <label class="row" style="gap:6px;cursor:pointer">
-                <input type="checkbox" data-widget="todo" checked> TO-DO</label>
-            <label class="row" style="gap:6px;cursor:pointer">
-                <input type="checkbox" data-widget="quick" checked> Quick TO-DO</label>
-            <label class="row" style="gap:6px;cursor:pointer">
-                <input type="checkbox" data-widget="milniky" checked> Milníky</label>
-            <label class="row" style="gap:6px;cursor:pointer">
-                <input type="checkbox" data-widget="kalendar" checked> Kalendář</label>
-            <label class="row" style="gap:6px;cursor:pointer">
-                <input type="checkbox" data-widget="online" checked> Kdo tu byl</label>
-            <label class="row" style="gap:6px;cursor:pointer" data-need="vykaz.view" hidden>
-                <input type="checkbox" data-widget="aktivita" checked> Poslední aktivita</label>
-            <label class="row" style="gap:6px;cursor:pointer" data-need="vykaz.view" hidden>
-                <input type="checkbox" data-widget="kontrola" checked> Upozornění pro kontrolu</label>
-        </div>
-
         <!-- všechny dlaždice stejně velké; delší obsah roluje uvnitř -->
         <div class="nastenka">
             <div class="card nastenka__karta" id="wUkoly">
@@ -337,11 +313,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=87"></script>
-<script src="assets/js/doc.js?v=87"></script>
-<script src="assets/js/ui.js?v=87"></script>
-<script src="assets/js/vykazy.js?v=87"></script>
-<script type="module" src="assets/js/store.js?v=87"></script>
+<script src="assets/js/taxonomy.js?v=88"></script>
+<script src="assets/js/doc.js?v=88"></script>
+<script src="assets/js/ui.js?v=88"></script>
+<script src="assets/js/vykazy.js?v=88"></script>
+<script type="module" src="assets/js/store.js?v=88"></script>
 
 <script>
 (function () {
@@ -387,30 +363,9 @@
        Každý si zvolí, co na nástěnce chce; volba se drží v prohlížeči
        (na jiném počítači si ji člověk klikne znovu – to je v pořádku). */
 
-    const VOLBY_KLIC = "kb-nastenka";
 
-    const VYCHOZI_VOLBY = { ukoly: true, todo: true, quick: true, milniky: true,
-        kalendar: true, online: true, aktivita: true, kontrola: true };
 
-    function nactiVolby() {
-        try { return Object.assign({}, VYCHOZI_VOLBY,
-            JSON.parse(localStorage.getItem(VOLBY_KLIC) || "{}")); }
-        catch (err) { return Object.assign({}, VYCHOZI_VOLBY); }
-    }
 
-    function pouzijVolby() {
-        const volby = nactiVolby();
-        document.querySelectorAll("[data-widget]").forEach(ch => { ch.checked = volby[ch.dataset.widget] !== false; });
-        // karta s data-need se skrývá i podle práv (paintUser), tady jen podle volby
-        [["ukoly", "wUkoly"], ["todo", "wTodo"], ["quick", "wQuick"], ["milniky", "wMilniky"],
-         ["kalendar", "wKalendar"], ["online", "wOnline"], ["aktivita", "wAktivita"],
-         ["kontrola", "wKontrola"]]
-            .forEach(([klic, id]) => {
-                const karta = document.getElementById(id);
-                if (volby[klic] === false) karta.style.display = "none";
-                else karta.style.removeProperty("display");
-            });
-    }
 
     /**
      * Kdo tu byl. Otisk se obnovuje po pěti minutách, takže „před 3 minutami"
@@ -1109,18 +1064,8 @@
             document.getElementById("novinkyOverlay").hidden = true;
         });
 
-        // přizpůsobení nástěnky
-        document.getElementById("btnPrizpusob").addEventListener("click", () => {
-            const volby = document.getElementById("nastenkaVolby");
-            volby.hidden = !volby.hidden;
-        });
-        document.getElementById("nastenkaVolby").addEventListener("change", () => {
-            const volby = {};
-            document.querySelectorAll("[data-widget]").forEach(ch => { volby[ch.dataset.widget] = ch.checked; });
-            try { localStorage.setItem(VOLBY_KLIC, JSON.stringify(volby)); } catch (err) {}
-            pouzijVolby();
-        });
-        pouzijVolby();
+        /* „Přizpůsobit" (schovávání dlaždic) je pryč – nikdo to nepoužíval
+           a nástěnka má ukazovat všem totéž. */
         renderOnline();
     });
 })();
