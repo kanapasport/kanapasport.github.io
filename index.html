@@ -149,6 +149,9 @@
         .milrad__meta { display: block; font-size: 11.5px; color: var(--muted);
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* prošlý termín červeně – stejně jako přečerpaný rozpočet ve výkazech */
+        /* můj milník – podbarvený stejně jako na stránce Milníky;
+           „po termínu" červená má přednost (stojí níž) */
+        .milrad--muj { background: var(--accent-tint); border-color: var(--accent-lt); }
         .milrad--pozde { background: #fdecec; border-color: #f5c2c2; }
         .milrad--pozde .milrad__datum { color: #b91c1c; }
         .milrad--pozde .milrad__datum span { color: #b91c1c; }
@@ -170,6 +173,10 @@
         .qtrad--hotovo { background: var(--p100-bg); border-bottom-color: transparent;
             border-radius: var(--radius); padding: 6px 10px; margin-bottom: 3px; }
         .qtrad--hotovo .muted { color: var(--p100-fg); opacity: .8; }
+        /* „co nejdříve" červené celé – stejný vzor jako na stránce Quick TODO */
+        .qtrad--asap { background: #fde3e3; border-bottom-color: transparent;
+            border-radius: var(--radius); padding: 6px 8px; color: var(--danger); }
+        .qtrad--asap .muted { color: var(--danger); opacity: .8; }
         .qt__meta { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
         /* prošlý termín červeně – stejný odstín jako přečerpaný rozpočet ve výkazech */
         .qt__meta--pozde { color: #b91c1c; font-weight: 700; }
@@ -579,7 +586,8 @@
             .map(jmenoUid).filter(Boolean);
 
         const radek = (q, mujVzkaz) =>
-            '<div class="row qtrad' + (q.hotovo ? " qtrad--hotovo" : "") + '">' +
+            '<div class="row qtrad' +
+                (q.hotovo ? " qtrad--hotovo" : (q.asap ? " qtrad--asap" : "")) + '">' +
                 '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
                     '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:12.5px">' +
@@ -782,6 +790,7 @@
      */
     function renderMilniky() {
         const dnes = V.dnesISO();
+        const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
         const seznam = (window.KB.milniky || [])
             .filter(m => m.datum && !m.hotovo)
             .sort((a, b) => a.datum.localeCompare(b.datum))
@@ -797,7 +806,8 @@
             const kdo = (m.owners || []).map(jmenoUid).filter(Boolean).join(", ");
             const meta = [m.zakazka, kdo].filter(Boolean).join(" · ");
 
-            return '<a class="milrad' + (pozde ? " milrad--pozde" : "") +
+            const muj = uid && (m.owners || []).indexOf(uid) !== -1;
+            return '<a class="milrad' + (pozde ? " milrad--pozde" : (muj ? " milrad--muj" : "")) +
                 '" href="milniky.html" title="Otevřít milníky">' +
                 '<span class="milrad__datum">' + esc(czDatum(m.datum)) +
                     '<span>' + esc(kdy) + "</span></span>" +

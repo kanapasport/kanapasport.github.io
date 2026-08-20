@@ -47,7 +47,7 @@ přihlášení **Firebase Auth**.
 
 | # | Co | Kde | Stav |
 |---|---|---|---|
-| 1 | **Nasadit `firestore.rules`** | Firebase Console → Firestore → Rules | ✅ hotovo 18. 8. |
+| 1 | **ZNOVU nasadit `firestore.rules`** – 19. 8. přibylo pole `historie` u úkolů, 20. 8. zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků). Bez nasazení obě věci padají na „nemáš právo". | Firebase Console → Firestore → Rules | ⬜ ČEKÁ (naposledy nasazeno 18. 8.) |
 | 2 | **Přesunout tabule** | Import dat → *Zkopírovat tabule na nové místo* | ⬜ čeká |
 | 3 | **Nahrát nový `prehled-BP.json`** (17 lidí, 11 073 h) | Přehled BP → import | ⬜ čeká |
 | 4 | **Vyplnit BioPharmu** — rozpočet 28 500 h, budovy, patra, technologie | Správa projektů → Údaje | ⬜ čeká |
@@ -356,6 +356,21 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
 - „I manažerům" je vyloženo tak, že hlídka platí i pro manažery (i oni
   dostanou vzkaz, když nemají zapsáno). Kdyby to mělo znamenat „vzkaz
   o zaměstnanci vidí i manažeři", ozvi se – je to změna na pár řádků.
+
+**Dodatek (20. 8. odpoledne):**
+
+- [x] 14. Oprava nástěnky – přesun dlaždic utrhl zavírací divy, manažerské
+      karty vypadly z mřížky; blok přepsán načisto
+- [x] 15. Vzkaz „co nejdříve" má červený CELÝ řádek – na stránce Quick TODO,
+      v panelu i na dlaždici nástěnky (vzor zeleného „splněno")
+- [x] 16. Milník si odškrtne i přiřazený člověk (zelené Splněno u „svých");
+      jeho milníky jsou podbarvené na stránce Milníky i na nástěnce.
+      **Chce znovu nasadit pravidla** – zápis `meta/milniky` je nově pro
+      každého člena. Pravidla neumí ohlídat jedinou položku pole, takže
+      technicky může člen přepsat i cizí milník – UI to nenabízí.
+- [x] 17. Správa → Spolupracovníci: nad zaškrtávátky tabulka
+      „Technologie → Dělají ji" – neobsazená technologie svítí červeně
+      „nikdo – zaškrtni níž"; překresluje se hned při zaškrtnutí
 
 ---
 

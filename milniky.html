@@ -16,6 +16,8 @@
            vodítko – barvu sama o sobě nerozezná každý, slovo a přeškrtnutí ano. */
         .milcin { display: block; }
         .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
+        /* milník přiřazený mně – podbarvený, ať člověk vidí „ty svoje" */
+        .milnik--muj td { background: var(--accent-tint); }
         .milpil {
             display: inline-block;
             margin-top: 4px;
@@ -250,6 +252,10 @@
 
     function render() {
         const muzeMenit = window.KBUI.can("milnik.manage");
+        /* Svůj milník si odškrtne i řadový člověk – vidí u něj zelené
+           Splněno a řádek má podbarvený, ať své najde na první pohled. */
+        const ja = (window.KB.currentUid && window.KB.currentUid()) || "";
+        const jeMuj = (m) => !!ja && (m.owners || []).indexOf(ja) !== -1;
         $("hint").hidden = muzeMenit;
         paintZakRow();
 
@@ -293,12 +299,13 @@
             if (m.hotovo) s.hotovych += 1;
         });
 
-        const sloupcu = muzeMenit ? 5 : 4;
+        const sloupecAkci = muzeMenit || (window.KB.milniky || []).some(jeMuj);
+        const sloupcu = sloupecAkci ? 5 : 4;
 
         $("table").innerHTML =
             "<thead><tr>" +
                 "<th>Činnost</th><th>Zpracovatel</th><th>Náplň milníku</th><th>Datum dodání</th>" +
-                (muzeMenit ? "<th></th>" : "") +
+                (sloupecAkci ? "<th></th>" : "") +
             "</tr></thead><tbody>" +
             Array.from(skupiny.entries()).map(([nazev, radky]) => {
                 const s = souhrn.get(nazev) || { celkem: radky.length, hotovych: 0 };
@@ -315,7 +322,8 @@
 
         function radek(item) {
                 const t = stavTerminu(item);
-                return '<tr class="' + t.trida + '">' +
+                const muj = jeMuj(item);
+                return '<tr class="' + t.trida + (muj && !item.hotovo ? " milnik--muj" : "") + '">' +
                     '<td class="milniky__cinnost">' +
                         '<span class="milcin">' + esc(item.cinnost || "") + "</span>" +
                         (item.hotovo ? '<span class="milpil">splněno</span>' : "") + "</td>" +
@@ -323,12 +331,16 @@
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum"><b>' + t.text + "</b>" +
                         (t.pozn ? '<span class="milniky__pozn">' + esc(t.pozn) + "</span>" : "") + "</td>" +
-                    (muzeMenit
+                    (sloupecAkci
                         ? '<td class="milniky__akce">' +
-                            '<button type="button" class="btn btn--sm ' +
-                                (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
-                                (item.hotovo ? "Vrátit" : "Splněno") + "</button>" +
-                            '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(item.id) + '">Upravit</button>' +
+                            (muzeMenit || muj
+                                ? '<button type="button" class="btn btn--sm ' +
+                                    (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
+                                    (item.hotovo ? "Vrátit" : "Splněno") + "</button>"
+                                : "") +
+                            (muzeMenit
+                                ? '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(item.id) + '">Upravit</button>'
+                                : "") +
                           "</td>"
                         : "") +
                 "</tr>";
@@ -381,7 +393,8 @@
             window.KBUI.toast(hlaska);
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Uložení selhalo – zapisovat milníky můžou jen správci.", "error");
+            window.KBUI.toast("Uložení selhalo – nejspíš na to tvoje role nemá právo" +
+                " (odškrtávání vlastních milníků chce nasazená nová pravidla).", "error");
         }
     }
 
@@ -443,10 +456,17 @@
     }
 
     document.addEventListener("click", (event) => {
-        if (!window.KBUI.can("milnik.manage")) return;
-
         const hotovo = event.target.closest("[data-done]");
-        if (hotovo) return prepniHotovo(hotovo.dataset.done);
+        if (hotovo) {
+            const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
+            const m = (window.KB.milniky || []).find(x => x.id === hotovo.dataset.done);
+            /* svůj milník si odškrtne (i vrátí) každý, cizí jen správce */
+            const smim = window.KBUI.can("milnik.manage") ||
+                (m && uid && (m.owners || []).indexOf(uid) !== -1);
+            if (smim) prepniHotovo(hotovo.dataset.done);
+            return;
+        }
+        if (!window.KBUI.can("milnik.manage")) return;
 
         const uprav = event.target.closest("[data-edit]");
         if (uprav) openForm(uprav.dataset.edit);

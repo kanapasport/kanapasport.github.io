@@ -140,6 +140,9 @@
         .pt .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .pt tbody tr { cursor: pointer; }
         .pt tbody tr:hover { background: var(--accent-tint); }
+        /* souhrn technologií je jen ke čtení – bez klikacího kurzoru a hoveru */
+        .pt--cist tbody tr { cursor: default; }
+        .pt--cist tbody tr:hover { background: transparent; }
         .pt__budova { font-weight: 900; color: var(--accent); background: var(--bg-soft); }
         .pt__pres { color: var(--danger); font-weight: 900; }
 
@@ -364,6 +367,7 @@
                             průměrné sazby na technologii. Nabízejí se technologie projektu
                             (pole výš) a lidé zaškrtnutí v bloku <b>Kdo na projektu dělá</b>.
                         </p>
+                        <div id="techPrehled"></div>
                         <div id="techLide" class="col" style="gap:6px"></div>
                         </div>
                     </section>
@@ -1400,6 +1404,41 @@
             : '<div class="tiny muted">' + (technologie.length
                 ? "Nikdo není přiřazený – zaškrtni lidi v bloku <b>Kdo na projektu dělá</b>."
                 : "Nejdřív vyplň technologie projektu (pole výš).") + "</div>";
+
+        naplnTechPrehled(technologie, ulozene);
+    }
+
+    // živý souhrn: každé zaškrtnutí se hned propíše do tabulky nahoře
+    document.addEventListener("change", (event) => {
+        if (event.target.closest("#techLide")) {
+            naplnTechPrehled(posledniTechSeznam, ctiTechLide());
+        }
+    });
+
+    /* Souhrn nad zaškrtávátky: technologie → jména. Na jeden pohled je
+       vidět, že žádná technologie nezůstala bez člověka – neobsazená svítí
+       červeně. Překresluje se hned při každém zaškrtnutí. */
+    let posledniTechSeznam = [];
+
+    function naplnTechPrehled(technologie, mapa) {
+        posledniTechSeznam = technologie;
+        const box = $("techPrehled");
+        if (!technologie.length) { box.innerHTML = ""; return; }
+        const jmena = (t) => V.lide()
+            .filter(u => (mapa[u.id] || []).indexOf(t) !== -1)
+            .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"))
+            .map(V.jmeno);
+        box.innerHTML =
+            '<div style="overflow-x:auto"><table class="pt pt--cist"><thead><tr>' +
+            "<th>Technologie</th><th>Dělají ji</th></tr></thead><tbody>" +
+            technologie.map(t => {
+                const lide = jmena(t);
+                return '<tr><td style="white-space:nowrap"><b>' + esc(t) + "</b></td>" +
+                    (lide.length
+                        ? "<td>" + esc(lide.join(", ")) + "</td>"
+                        : '<td style="color:var(--danger);font-weight:700">nikdo – zaškrtni níž</td>') +
+                "</tr>";
+            }).join("") + "</tbody></table></div>";
     }
 
     /** Přečte přiřazení technologií ze zaškrtávátek – ukládá se s projektem. */
