@@ -1588,9 +1588,12 @@ KB.watchUkolyBudgety = async () => {
 KB.ulozUkolBudget = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
+    /* Budget úkolu je v PENĚZÍCH (změna 19. 8. večer) – hodiny se u úkolů
+       nezapisují, každý má jinou hodinovku a pletlo by se to. Starší pole
+       budgetHodin/rezervaHodin se ignorují. */
     await setDoc(ukolBudgetDoc(id), {
-        budgetHodin:  Math.max(0, Number(data.budgetHodin) || 0),
-        rezervaHodin: Math.max(0, Number(data.rezervaHodin) || 0),
+        budgetKc:  Math.max(0, Number(data.budgetKc) || 0),
+        rezervaKc: Math.max(0, Number(data.rezervaKc) || 0),
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });

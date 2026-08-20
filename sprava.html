@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=93">
+    <link rel="stylesheet" href="assets/css/app.css?v=94">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -239,11 +239,20 @@
                     <section class="sblok">
                         <div class="sblok__hlava"><span class="sblok__stitek">Údaje projektu</span></div>
                         <div class="sblok__telo">
-                        <div class="fmr">
-                            <label class="pole"><span class="popisek">Číslo</span>
+                        <!-- První řádek: číslo a název (to hlavní), vpravo
+                             „Projekt je hotov". Priorita a termíny až pod tím. -->
+                        <div class="row row--wrap" style="gap:12px;align-items:flex-end">
+                            <label class="pole" style="flex:0 0 130px"><span class="popisek">Číslo</span>
                                 <input type="text" id="pCislo" class="field" placeholder="2026-021"></label>
-                            <label class="pole"><span class="popisek">Název</span>
+                            <label class="pole" style="flex:1 1 280px;min-width:0"><span class="popisek">Název</span>
                                 <input type="text" id="pNazevPole" class="field" placeholder="Pasport budovy…"></label>
+                            <div style="margin-left:auto">
+                                <button type="button" id="btnHotov" class="btn btn--ok jehotov"
+                                        aria-pressed="false"
+                                        title="Hotový projekt se schová z výběru ve výkazech">Projekt je hotov</button>
+                            </div>
+                        </div>
+                        <div class="fmr">
                             <label class="pole"><span class="popisek">Priorita</span>
                                 <select id="pPriorita" class="field">
                                     <option value="nizka">Nízká</option>
@@ -257,11 +266,6 @@
                                 <input type="date" id="pKonec" class="field"></label>
                             <label class="pole fmr__cely"><span class="popisek">Poznámka</span>
                                 <input type="text" id="pPoznamka" class="field"></label>
-                        </div>
-                        <div class="row row--wrap" style="gap:10px;align-items:center">
-                            <button type="button" id="btnHotov" class="btn btn--ok jehotov"
-                                    aria-pressed="false">Projekt je hotov</button>
-                            <span class="tiny muted">Hotový projekt se schová z výběru ve výkazech.</span>
                         </div>
                         </div>
                     </section>
@@ -393,6 +397,14 @@
                         <div id="krajic" class="row row--wrap" style="gap:10px"></div>
                         <div id="patraPrehled"></div>
                         <div id="matice" class="col" style="gap:8px"></div>
+                        <!-- rozepsané budgety technologií ukládá velké tlačítko;
+                             tahle výstraha na to upozorní přímo pod maticí -->
+                        <div id="maticeUloz" hidden class="row row--wrap"
+                             style="gap:10px;align-items:center;padding:10px 12px;border-radius:var(--radius);background:#fff3d6;border:1px solid #e8c877">
+                            <b style="color:#9a6b00">Změny budgetů nejsou uložené.</b>
+                            <div class="grow"></div>
+                            <button type="button" id="btnUlozMatice" class="btn btn--primary btn--sm">Uložit nastavení projektu</button>
+                        </div>
                         </div>
                     </section>
 
@@ -424,7 +436,7 @@
      Předvyplněný průsečík budova × technologie × patro; název se dá upřesnit.
      Budget se rovnou zapíše do tajné kolekce, do dokumentu úkolu nikdy. -->
 <div id="ukolOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
-    <div class="card col" style="padding:0;max-width:560px;width:100%;gap:0;overflow:hidden;max-height:88vh">
+    <div class="card col" style="padding:0;max-width:700px;width:100%;gap:0;overflow:hidden;max-height:88vh">
         <div id="nuNadpis" style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
             Nový úkol
         </div>
@@ -436,10 +448,10 @@
                     <select id="nuDruh" class="field"></select></label>
                 <label class="pole"><span class="popisek">Termín</span>
                     <input type="date" id="nuTermin" class="field"></label>
-                <label class="pole"><span class="popisek">Budget (hodin)</span>
-                    <input type="number" id="nuBudget" class="field" min="0" placeholder="0"></label>
-                <label class="pole"><span class="popisek">Rezerva (hodin)</span>
-                    <input type="number" id="nuRezerva" class="field" min="0" placeholder="0"></label>
+                <label class="pole"><span class="popisek">Budget (Kč)</span>
+                    <input type="number" id="nuBudget" class="field" min="0" step="1000" placeholder="0"></label>
+                <label class="pole"><span class="popisek">Rezerva (Kč)</span>
+                    <input type="number" id="nuRezerva" class="field" min="0" step="1000" placeholder="0"></label>
             </div>
             <div>
                 <span class="popisek">Kdo na úkolu dělá</span>
@@ -487,10 +499,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=93"></script>
-<script src="assets/js/ui.js?v=93"></script>
-<script src="assets/js/vykazy.js?v=93"></script>
-<script type="module" src="assets/js/store.js?v=93"></script>
+<script src="assets/js/taxonomy.js?v=94"></script>
+<script src="assets/js/ui.js?v=94"></script>
+<script src="assets/js/vykazy.js?v=94"></script>
+<script type="module" src="assets/js/store.js?v=94"></script>
 
 <script>
 (function () {
@@ -891,16 +903,16 @@
         const ukoly = ukolyProjektu(p);
         const osy = osyProjektu(p);
 
-        // ---- krajíc ----
-        const strop = Number($("fHodiny").value) || (V.rozpocet(p.nazev || "").hodiny || 0);
-        const prideleno = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).budgetHodin) || 0), 0);
-        const rezervy = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).rezervaHodin) || 0), 0);
+        // ---- krajíc – všechno v penězích (hodiny se u úkolů nevedou) ----
+        const strop = Number($("fKc").value) || (V.rozpocet(p.nazev || "").kc || 0);
+        const prideleno = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).budgetKc) || 0), 0);
+        const rezervy = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).rezervaKc) || 0), 0);
         const zbyva = strop - prideleno - rezervy;
         const dlazdice = (popis, hodnota, minus) =>
             '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' +
-            V.cislo(hodnota) + " h</b><span>" + popis + "</span></div>";
+            V.kc(hodnota) + "</b><span>" + popis + "</span></div>";
         $("krajic").innerHTML =
-            dlazdice("Rozpočet projektu", strop) +
+            dlazdice("Rozpočet projektu (Kč)", strop) +
             dlazdice("Přiděleno úkolům", prideleno) +
             dlazdice("Rezervy úkolů", rezervy) +
             dlazdice("Zbývá rozdělit", zbyva, zbyva < 0);
@@ -938,8 +950,8 @@
         // ---- tabulka úkolů ----
         $("budgetUkoly").innerHTML = vypsat.length
             ? '<table class="bu"><thead><tr><th>Úkol</th><th>Lidé</th>' +
-              '<th class="num">Hotovo (TO-DO)</th><th class="num">Odprac.</th>' +
-              '<th class="num">Budget h</th><th class="num">Rezerva h</th><th></th></tr></thead><tbody>' +
+              '<th class="num">Hotovo (TO-DO)</th><th class="num">Vyfakturováno</th>' +
+              '<th class="num">Budget Kč</th><th class="num">Rezerva Kč</th><th></th></tr></thead><tbody>' +
               vypsat.map(u => {
                 const b = budgety[u.id] || {};
                 // sloupec Kde tu není: budova, patro i technologie jsou v názvu
@@ -951,11 +963,11 @@
                     "<td><b>" + esc(u.nazev || "Bez názvu") + "</b></td>" +
                     "<td>" + esc(lide) + "</td>" +
                     '<td class="num">' + pctUkolu(u) + " %</td>" +
-                    '<td class="num">' + V.cislo(odpracovanoUkolu(u.id)) + " h</td>" +
-                    '<td class="num"><input type="number" class="field" min="0" data-bud="budget" value="' +
-                        (Number(b.budgetHodin) || "") + '"></td>' +
-                    '<td class="num"><input type="number" class="field" min="0" data-bud="rezerva" value="' +
-                        (Number(b.rezervaHodin) || "") + '"></td>' +
+                    '<td class="num">' + V.kc(penizeUkolu(u.id)) + "</td>" +
+                    '<td class="num"><input type="number" class="field" min="0" step="1000" data-bud="budget" value="' +
+                        (Number(b.budgetKc) || "") + '"></td>' +
+                    '<td class="num"><input type="number" class="field" min="0" step="1000" data-bud="rezerva" value="' +
+                        (Number(b.rezervaKc) || "") + '"></td>' +
                     '<td><span class="row" style="gap:4px;justify-content:flex-end">' +
                         '<button type="button" class="btn btn--sm btn--ghost" data-buuloz="' +
                             esc(u.id) + '">Uložit</button>' +
@@ -1006,10 +1018,10 @@
             '<button type="button" class="chip' + (mxRezim === "pct" ? " chip--active" : "") +
                 '" data-mxrezim="pct">% TO-DO</button>' +
             '<button type="button" class="chip' + (mxRezim === "zbyva" ? " chip--active" : "") +
-                '" data-mxrezim="zbyva">Zbývá hodin</button></div>';
+                '" data-mxrezim="zbyva">Zbývá peněz</button></div>';
 
         const telo = V.maticePlneni(ukoly, budgety, osy, true, techBudgety,
-            { rezim: mxRezim, odpracovano: odpracovanoUkolu,
+            { rezim: mxRezim, cerpani: penizeUkolu,
               sazbaTech: (tech) => prumernaSazbaTech(p, tech) });
         $("matice").innerHTML = telo
             ? prepinac + telo
@@ -1028,12 +1040,15 @@
 
     /** Součty za skupinu úkolů – používá přehled pater i detail patra. */
     function souctyUkolu(seznam, budgety) {
+        /* Všechno v penězích – budgety úkolů jsou v Kč a hodiny se u nich
+           nevedou (každý má jinou hodinovku). `vykazano` zůstává v hodinách
+           jen pro doplněk v detailu patra. */
         let predepsano = 0, rezerva = 0, vykazano = 0, penize = 0, vaha = 0, pctVaha = 0;
         seznam.forEach(u => {
             const b = (budgety || {})[u.id] || {};
-            const bud = Number(b.budgetHodin) || 0;
+            const bud = Number(b.budgetKc) || 0;
             predepsano += bud;
-            rezerva += Number(b.rezervaHodin) || 0;
+            rezerva += Number(b.rezervaKc) || 0;
             vykazano += odpracovanoUkolu(u.id);
             penize += penizeUkolu(u.id);
             vaha += bud; pctVaha += pctUkolu(u) * bud;
@@ -1054,16 +1069,15 @@
         const radek = (budova, patro) => {
             const moje = ukoly.filter(u => u.budova === budova && u.patro === patro);
             const c = souctyUkolu(moje, budgety);
-            const zbyva = c.predepsano - c.vykazano;
+            const zbyva = c.predepsano - c.penize;   // Kč − Kč
             return '<tr data-patro="' + esc(budova) + "|" + esc(patro) + '">' +
                 "<td><b>" + esc(patro) + "</b></td>" +
                 '<td class="num">' + (c.pocet ? c.pocet + (c.hotovych ? " (" + c.hotovych + " hot.)" : "") : "–") + "</td>" +
                 '<td class="num">' + (c.pocet ? c.pct + " %" : "–") + "</td>" +
-                '<td class="num">' + (c.predepsano ? V.cislo(c.predepsano) + " h" : "–") + "</td>" +
-                '<td class="num">' + (c.vykazano ? V.cislo(c.vykazano) + " h" : "–") + "</td>" +
-                '<td class="num' + (zbyva < 0 ? " pt__pres" : "") + '">' +
-                    (c.predepsano || c.vykazano ? V.cislo(zbyva) + " h" : "–") + "</td>" +
+                '<td class="num">' + (c.predepsano ? V.kc(c.predepsano) : "–") + "</td>" +
                 '<td class="num">' + (c.penize ? V.kc(c.penize) : "–") + "</td>" +
+                '<td class="num' + (zbyva < 0 ? " pt__pres" : "") + '">' +
+                    (c.predepsano || c.penize ? V.kc(zbyva) : "–") + "</td>" +
             "</tr>";
         };
 
@@ -1073,11 +1087,11 @@
                 "– klikni na řádek pro rozpad po technologiích</span></div>" +
             '<div style="overflow-x:auto"><table class="pt"><thead><tr><th>Patro</th>' +
                 '<th class="num">Úkolů</th><th class="num">Hotovo</th>' +
-                '<th class="num">Předepsáno</th><th class="num">Vykázáno</th>' +
-                '<th class="num">Zbývá</th><th class="num">Vyfakturováno</th>' +
+                '<th class="num">Předepsáno Kč</th><th class="num">Vyfakturováno Kč</th>' +
+                '<th class="num">Zbývá Kč</th>' +
             "</tr></thead><tbody>" +
             osy.budovy.map(b =>
-                '<tr class="pt__budova"><td colspan="7">Budova ' + esc(b) + "</td></tr>" +
+                '<tr class="pt__budova"><td colspan="6">Budova ' + esc(b) + "</td></tr>" +
                 osy.patra.map(pt => radek(b, pt)).join("")).join("") +
             "</tbody></table></div>";
     }
@@ -1104,25 +1118,25 @@
             '<div class="row row--wrap" style="gap:10px">' +
                 dlazdice("Úkolů", c.pocet + (c.hotovych ? " (" + c.hotovych + " hotových)" : "")) +
                 dlazdice("Plnění TO-DO", c.pct + " %") +
-                dlazdice("Předepsáno", V.cislo(c.predepsano) + " h") +
-                dlazdice("Vykázáno", V.cislo(c.vykazano) + " h") +
-                dlazdice("Zbývá", V.cislo(c.predepsano - c.vykazano) + " h",
-                         c.predepsano - c.vykazano < 0) +
+                dlazdice("Předepsáno", V.kc(c.predepsano)) +
                 dlazdice("Vyfakturováno", V.kc(c.penize)) +
+                dlazdice("Zbývá", V.kc(c.predepsano - c.penize),
+                         c.predepsano - c.penize < 0) +
+                dlazdice("Vykázané hodiny", V.cislo(c.vykazano) + " h") +
             "</div>" +
             (technologie.length
                 ? '<div class="popisek" style="margin:10px 0 0">Po technologiích</div>' +
                   '<div style="overflow-x:auto"><table class="pt"><thead><tr><th>Technologie</th>' +
-                  '<th class="num">Úkolů</th><th class="num">Hotovo</th><th class="num">Předepsáno</th>' +
-                  '<th class="num">Vykázáno</th><th class="num">Vyfakturováno</th></tr></thead><tbody>' +
+                  '<th class="num">Úkolů</th><th class="num">Hotovo</th><th class="num">Předepsáno Kč</th>' +
+                  '<th class="num">Vyfakturováno Kč</th><th class="num">Hodin</th></tr></thead><tbody>' +
                   technologie.map(t => {
                       const ct = souctyUkolu(moje.filter(u => u.technologie === t), budgety);
                       return "<tr><td><b>" + esc(t) + "</b></td>" +
                           '<td class="num">' + ct.pocet + "</td>" +
                           '<td class="num">' + ct.pct + " %</td>" +
-                          '<td class="num">' + V.cislo(ct.predepsano) + " h</td>" +
-                          '<td class="num">' + V.cislo(ct.vykazano) + " h</td>" +
-                          '<td class="num">' + V.kc(ct.penize) + "</td></tr>";
+                          '<td class="num">' + V.kc(ct.predepsano) + "</td>" +
+                          '<td class="num">' + V.kc(ct.penize) + "</td>" +
+                          '<td class="num">' + V.cislo(ct.vykazano) + " h</td></tr>";
                   }).join("") + "</tbody></table></div>"
                 : "") +
             '<div class="popisek" style="margin:10px 0 0">Úkoly patra</div>' +
@@ -1130,8 +1144,8 @@
                 ? moje.map(u => {
                     const b = budgety[u.id] || {};
                     const popis = [pctUkolu(u) + " % TO-DO",
-                        (Number(b.budgetHodin) ? "předepsáno " + V.cislo(b.budgetHodin) + " h" : ""),
-                        "vykázáno " + V.cislo(odpracovanoUkolu(u.id)) + " h"].filter(Boolean).join(" · ");
+                        (Number(b.budgetKc) ? "budget " + V.kc(b.budgetKc) : ""),
+                        "vyfakturováno " + V.kc(penizeUkolu(u.id))].filter(Boolean).join(" · ");
                     return '<div class="sazbap" style="margin-top:6px">' +
                         '<span class="sazbap__jmeno">' + esc(u.nazev || "Bez názvu") +
                             "<span>" + esc(popis) + "</span></span>" +
@@ -1148,8 +1162,8 @@
         if (!radek) return;
         try {
             await window.KB.ulozUkolBudget(id, {
-                budgetHodin: Number(radek.querySelector('[data-bud="budget"]').value) || 0,
-                rezervaHodin: Number(radek.querySelector('[data-bud="rezerva"]').value) || 0
+                budgetKc: Number(radek.querySelector('[data-bud="budget"]').value) || 0,
+                rezervaKc: Number(radek.querySelector('[data-bud="rezerva"]').value) || 0
             });
             window.KBUI.toast("Budget úkolu uložen.");
             vykresliBudget(vybranyProjekt(), true);
@@ -1216,8 +1230,8 @@
         $("nuNazev").value = u.nazev || "";
         $("nuDruh").innerHTML = V.options(V.cinnosti(), u.druh || "", "— vyber —");
         $("nuTermin").value = u.termin || "";
-        $("nuBudget").value = Number(b.budgetHodin) || "";
-        $("nuRezerva").value = Number(b.rezervaHodin) || "";
+        $("nuBudget").value = Number(b.budgetKc) || "";
+        $("nuRezerva").value = Number(b.rezervaKc) || "";
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") +
             [u.budova, u.technologie, u.patro].filter(Boolean).map(x => " · " + x).join("");
         $("nuTodo").value = (u.todo || []).map(t => t.text || "").join("\n");
@@ -1253,7 +1267,7 @@
                 return clovek ? (clovek.last || clovek.first || "?") : "?";
             }).join(", ");
             const popis = [pctUkolu(u) + " % TO-DO",
-                (Number(b.budgetHodin) ? "budget " + V.cislo(b.budgetHodin) + " h" : ""),
+                (Number(b.budgetKc) ? "budget " + V.kc(b.budgetKc) : ""),
                 lide].filter(Boolean).join(" · ");
             return '<div class="sazbap">' +
                 '<span class="sazbap__jmeno">' + esc(u.nazev || "Bez názvu") +
@@ -1329,8 +1343,8 @@
                 createdBy: stavajici ? stavajici.createdBy : undefined
             });
             await window.KB.ulozUkolBudget(id, {
-                budgetHodin: Number($("nuBudget").value) || 0,
-                rezervaHodin: Number($("nuRezerva").value) || 0
+                budgetKc: Number($("nuBudget").value) || 0,
+                rezervaKc: Number($("nuRezerva").value) || 0
             });
             $("ukolOverlay").hidden = true;
             window.KBUI.toast(upravovanyUkolId ? "Úkol upraven." : "Úkol založen.");
@@ -1589,6 +1603,7 @@
                 projekty: casti, firmaMap: firmaMap, budget: budget
             });
             dotknuto = false;
+            $("maticeUloz").hidden = true;   // výstraha pod maticí zhasne
             $("stav").textContent = "Uloženo.";
             vykresliNastaveni();
             window.KBUI.toast("Nastavení projektu uloženo.");
@@ -1662,6 +1677,8 @@
             }
             // změna seznamu technologií → nabídka u lidí se přeskládá
             if (event.target.id === "fTech") naplnTechLide(vybranyProjekt() || {});
+            // rozepsaný budget technologie: výstraha přímo pod maticí
+            if (event.target.closest("#matice")) $("maticeUloz").hidden = false;
         });
         $("panel").addEventListener("click", (event) => {
             const zalozka = event.target.closest("[data-zalozka]");
@@ -1693,6 +1710,7 @@
             }
         });
         $("btnUloz").addEventListener("click", uloz);
+        $("btnUlozMatice").addEventListener("click", uloz);
 
         // budget úkolů se ukládá po řádcích; buňka matice otevírá výběr
         document.addEventListener("click", (event) => {

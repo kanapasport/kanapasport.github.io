@@ -314,6 +314,51 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
 
 ---
 
+## Dávka zadaná 20. 8.
+
+**CELÁ DÁVKA HOTOVÁ (20. 8., `?v=94`).**
+
+- [x] 1. Údaje projektu: číslo + název na prvním řádku, „projekt je hotov"
+      vpravo, priorita pod tím
+- [x] 2. Budgety úkolů v PENĚZÍCH, ne hodinách („každý má jinou hodinovku,
+      pletlo by se to") – `budgetKc`/`rezervaKc`, staré hodinové se ignorují
+- [x] 3. Nástěnka: „Poslední aktivita" a „Kdo tu byl" úplně na konec
+- [x] 4. Upozornění „HOTOVO?" po kliknutí najede na daný úkol a rozbalí ho
+      (`ukoly.html?vse=1&otevri=ID`)
+- [x] 5. Pohled Všechny úkoly seskupený podle DRUHU práce (Moje zůstávají
+      po projektech)
+- [x] 6. Potvrzování hotových úkolů i přímo v Úkolech; „zobrazit hotové"
+      schovává jen hotové POTVRZENÉ manažerem
+- [x] 7. Historie úkolu: tlačítko je vidět vždycky; prázdná historie
+      vysvětlí, že se zapisuje až od 20. 8. (starší data pole nemají – není
+      to chyba)
+- [x] 8. Uzávěrka výkazů: týden se zapisuje do PONDĚLÍ PŮLNOCI týdne
+      následujícího; vlastní záznam jde opravit jen do půlnoci dne zápisu
+      (pak tlačítko Upravit zmizí); manažera se uzávěrka netýká
+- [x] 9. Páteční hlídka: kdo od pátku nemá v běžícím týdnu jediný zápis,
+      dostane Quick TODO „Nemáš zapsaný výkaz v tomhle týdnu, naprav to"
+      s „co nejdříve" – platí pro všechny včetně manažerů
+- [x] 10. „Co nejdříve" je vždy červeně (bylo hotové už z dřívějška,
+      `.quickrad__asap`)
+- [x] 11. Dialog úkolu širší (700 px)
+- [x] 12. Přehled celých pater v penězích (vykázané hodiny jen jako doplněk)
+- [x] 13. Pod maticí tlačítko Uložit + výstraha „neuložené změny"
+
+**K bodům 8 a 9 – vědět:**
+
+- Uzávěrka se hlídá jen na stránce (UI). Pravidla ve Firestore ji
+  nevynucují – zaměstnanec znalý konzole by ji obešel. Vědomé rozhodnutí:
+  jde o pořádek, ne o zabezpečení.
+- Hlídka zapisuje vzkaz s pevným id `qt_hlidka_{uid}_{pondělí}` – týž
+  týden se nezaloží dvakrát, ani odškrtnutý, ani z jiného počítače.
+  Jen SMAZANÝ (ne odškrtnutý) vzkaz se z jiného zařízení může založit
+  znovu – v tomhle prohlížeči to jistí ještě značka `kb-hlidka`.
+- „I manažerům" je vyloženo tak, že hlídka platí i pro manažery (i oni
+  dostanou vzkaz, když nemají zapsáno). Kdyby to mělo znamenat „vzkaz
+  o zaměstnanci vidí i manažeři", ozvi se – je to změna na pár řádků.
+
+---
+
 ## 10. Co se odložilo
 
 - **Efektivita** (budget ÷ skutečnost) — probrané tři scénáře, čeká se na

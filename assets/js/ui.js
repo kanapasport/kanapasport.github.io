@@ -926,11 +926,13 @@
             window.KB.on("ukoly", () => { refreshNav(); renderMujDen(); });
             window.KB.on("projekty-docs", refreshNav);
             window.KB.on("milniky", refreshNav);
-            window.KB.on("vykazy", renderMujDen);
+            window.KB.on("vykazy", () => { renderMujDen();
+                hlidkaPrislo.vykazy = true; hlidkaVykazu(); });
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
-            window.KB.on("quicktodo", () => { renderMujDen(); renderQuick(); });
+            window.KB.on("quicktodo", () => { renderMujDen(); renderQuick();
+                hlidkaPrislo.quick = true; hlidkaVykazu(); });
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
             window.KB.on("auta", renderAuta);
         }
@@ -1010,6 +1012,56 @@
         if (!UI.can("vykaz.otevrit")) return;      // student výkazy nemá
         window.KB.watchMojeVykazy();
         window.KB.watchMojeUkoly();
+    }
+
+    /* --------------------------------------------- páteční hlídka výkazů ---
+       Kdo v pátek (a o víkendu) nemá v běžícím týdnu jediný zápis, dostane
+       do Quick TO-DO vzkaz „co nejdříve". Platí pro každého včetně manažerů.
+       Vzkaz má pevné id (uid + pondělí týdne), takže se týž týden nezaloží
+       podruhé – ani odškrtnutý, ani z jiného počítače. Kontrola se pouští
+       až po příchodu výkazů I vzkazů, jinak by rozhodovala nad prázdnem. */
+
+    const hlidkaPrislo = { vykazy: false, quick: false };
+    let hlidkaBezela = false;
+
+    function hlidkaVykazu() {
+        if (hlidkaBezela || !hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
+        const uid = window.KB.currentUid && window.KB.currentUid();
+        if (!uid || !UI.can("vykaz.otevrit")) return;
+
+        const dnes = new Date();
+        if ([5, 6, 0].indexOf(dnes.getDay()) === -1) return;   // hlídá se od pátku
+
+        const den = (d) => d.getFullYear() + "-" +
+            String(d.getMonth() + 1).padStart(2, "0") + "-" +
+            String(d.getDate()).padStart(2, "0");
+        const po = new Date(dnes);
+        po.setDate(po.getDate() - (po.getDay() + 6) % 7);      // pondělí týdne
+        const ne = new Date(po);
+        ne.setDate(ne.getDate() + 6);
+        const pondeli = den(po), nedele = den(ne);
+
+        hlidkaBezela = true;    // rozhodnuto – druhé kolo by zapsalo duplicitu
+
+        const maZapis = (window.KB.vykazy || []).some(z =>
+            z.uid === uid && (z.datum || "") >= pondeli && (z.datum || "") <= nedele);
+        if (maZapis) return;
+
+        const id = "qt_hlidka_" + uid + "_" + pondeli;
+        if ((window.KB.quicktodo || []).some(q => q.id === id)) return;
+        /* pojistka pro tenhle prohlížeč: smazaný (ne odškrtnutý) vzkaz by se
+           jinak založil znovu, protože v databázi po něm nic nezbylo */
+        try { if (localStorage.getItem("kb-hlidka") === id) return; } catch (err) { }
+
+        window.KB.saveQuickTodo(id, {
+            text: "Nemáš zapsaný výkaz v tomhle týdnu, naprav to",
+            proUids: [uid],
+            odKoho: uid,
+            odKohoJmeno: "Hlídka výkazů",
+            asap: true
+        }).then(() => {
+            try { localStorage.setItem("kb-hlidka", id); } catch (err) { }
+        }).catch(err => console.warn("Hlídka výkazů nezapsala vzkaz:", err));
     }
 
     /* ------------------------------------------------------ Quick TO-DO ---

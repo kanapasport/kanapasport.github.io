@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=93">
+    <link rel="stylesheet" href="assets/css/app.css?v=94">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -114,7 +114,7 @@
         <button type="button" class="btn btn--sm btn--ghost prepnac" data-pohled="vse">Všechny</button>
         <select id="fProjekt" class="field" style="width:auto;min-width:180px"></select>
         <label class="row" style="gap:6px;font-size:13px;cursor:pointer">
-            <input type="checkbox" id="fHotove"> i hotové
+            <input type="checkbox" id="fHotove"> zobrazit hotové
         </label>
         <div class="grow"></div>
         <button type="button" id="prepPodrobne" class="btn btn--sm btn--ghost prepnac"
@@ -170,10 +170,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=93"></script>
-<script src="assets/js/ui.js?v=93"></script>
-<script src="assets/js/vykazy.js?v=93"></script>
-<script type="module" src="assets/js/store.js?v=93"></script>
+<script src="assets/js/taxonomy.js?v=94"></script>
+<script src="assets/js/ui.js?v=94"></script>
+<script src="assets/js/vykazy.js?v=94"></script>
+<script type="module" src="assets/js/store.js?v=94"></script>
 
 <script>
 (function () {
@@ -290,7 +290,10 @@
     function vybrane() {
         const uid = window.KB.currentUid();
         return (window.KB.ukoly || []).filter(u => {
-            if (!$("fHotove").checked && u.stav === "hotovo" && pohled !== "zak") return false;
+            /* Bez zaškrtnutí se schovávají jen hotové POTVRZENÉ manažerem –
+               hotové čekající na potvrzení musí zůstat na očích. */
+            if (!$("fHotove").checked && u.stav === "hotovo" && u.potvrzeno === true
+                && pohled !== "zak") return false;
             if (pohled === "moje" && (u.prirazeni || []).indexOf(uid) === -1) return false;
             if (pohled === "zak" && window.KBUI.slug(u.projekt || "") !== zakSlug) return false;
             if ($("fProjekt").value && (u.projekt || "") !== $("fProjekt").value) return false;
@@ -389,6 +392,8 @@
                     '<div class="ukol__todo">' + todoHtml(u, smiPsat) + "</div>" +
                     (historieOtevrena.has(u.id)
                         ? '<div style="padding:8px 14px;border-top:1px dashed var(--line);font-size:12px;color:var(--text-soft)">' +
+                            ((u.historie || []).length ? "" :
+                                "Zatím žádný záznam – historie se zapisuje od 20. 8. 2026, starší posuny procent v ní nejsou.") +
                             (u.historie || []).slice().reverse().map(h =>
                                 '<div style="padding:2px 0">' + esc(casRazitko(h.ms)) + " · <b>" +
                                 esc(h.kdo || "?") + "</b> · " + esc(h.text || "") + ": " +
@@ -400,9 +405,11 @@
                         '<span class="row" style="gap:8px">' +
                         // „Zapsat výkaz" je nahoře v hlavičce, ať se kvůli
                         // němu nemusí úkol rozbalovat – tady už podruhé není
-                        ((u.historie || []).length
-                            ? '<button type="button" class="btn btn--sm btn--ghost" data-historie="' + esc(u.id) + '">' +
-                                (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>" : "") +
+                        (window.KBUI.isAdmin() && u.stav === "hotovo" && u.potvrzeno !== true
+                            ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
+                                esc(u.id) + '">Potvrdit hotové</button>' : "") +
+                        '<button type="button" class="btn btn--sm btn--ghost" data-historie="' + esc(u.id) + '">' +
+                            (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>" +
                         (smiPsat && u.stav !== "hotovo"
                             ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
                         (window.KBUI.can("ukol.delete")
@@ -434,17 +441,23 @@
         $("prepPodrobne").classList.toggle("je-zapnuty", podrobne());
         $("btnRozbal").disabled = !seznam.length;
 
-        // seskupení podle projektu
+        /* Moje úkoly drží skupiny po projektech; pohled Všechny se dělí
+           podle DRUHU práce (přání Michala) – manažer v něm hledá třeba
+           „všechno skenování", ne konkrétní projekt. */
         const skupiny = new Map();
         seznam.forEach(u => {
-            const klic = u.projekt || "Bez projektu";
+            const klic = pohled === "vse"
+                ? (u.druh || "Bez druhu")
+                : (u.projekt || "Bez projektu");
             if (!skupiny.has(klic)) skupiny.set(klic, []);
             skupiny.get(klic).push(u);
         });
 
-        $("vypis").innerHTML = Array.from(skupiny.entries()).map(([projekt, ukoly]) => {
+        $("vypis").innerHTML = Array.from(skupiny.entries())
+            .sort((a, b) => pohled === "vse" ? a[0].localeCompare(b[0], "cs") : 0)
+            .map(([nadpis, ukoly]) => {
             const prumer = Math.round(ukoly.reduce((s, u) => s + pctUkolu(u), 0) / ukoly.length);
-            return '<div class="skupina-nadpis">' + esc(projekt) +
+            return '<div class="skupina-nadpis">' + esc(nadpis) +
                 '<span class="tag">' + prumer + " % · " +
                 V.pocet(ukoly.length, ["úkol", "úkoly", "úkolů"]) + "</span></div>" +
                 ukoly.map(ukolHtml).join("");
@@ -622,6 +635,15 @@
             const pohledBtn = event.target.closest("[data-pohled]");
             if (pohledBtn) { pohled = pohledBtn.dataset.pohled; return void vykresli(); }
 
+            const potvrd = event.target.closest("[data-potvrd]");
+            if (potvrd) {
+                potvrd.disabled = true;
+                window.KB.potvrdUkol(potvrd.dataset.potvrd)
+                    .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
+                    .catch(() => { potvrd.disabled = false;
+                        window.KBUI.toast("Potvrzení selhalo.", "error"); });
+                return;
+            }
             const hist = event.target.closest("[data-historie]");
             if (hist) {
                 const id = hist.dataset.historie;
@@ -701,7 +723,28 @@
         window.KB.on("zakazky", () => {
             if (!$("tvorba").hidden) prepniProjekt(najdiUkol(editovanyId));
         });
+
+        /* Proklik z „HOTOVO?" na nástěnce: ?otevri=ID úkol rovnou rozbalí
+           a sroluje na něj – manažer ho nemá hledat očima. Čeká se, až
+           úkol dorazí z databáze a vykreslí se (posluchač je zapsaný AŽ ZA
+           vykresli, takže běží nad hotovým výpisem). */
+        const otevriId = params.get("otevri");
+        let najeto = false;
+        const najedNaOtevreny = () => {
+            if (najeto) return;
+            const prvek = document.getElementById("ukol-" + otevriId);
+            if (!prvek) return;                    // data nebo výpis ještě nedoběhly
+            najeto = true;
+            prvek.scrollIntoView({ behavior: "smooth", block: "center" });
+        };
+        if (otevriId) {
+            otevrene.add(otevriId);
+            window.KB.on("ukoly", najedNaOtevreny);
+            document.addEventListener("kb-role", najedNaOtevreny);
+        }
+
         start();
+        if (otevriId) najedNaOtevreny();
     });
 })();
 </script>

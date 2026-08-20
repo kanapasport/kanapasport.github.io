@@ -191,7 +191,7 @@
             }
             let vaha = 0, soucet = 0;
             moje.forEach(u => {
-                const w = Number(((budgety || {})[u.id] || {}).budgetHodin) || 0;
+                const w = Number(((budgety || {})[u.id] || {}).budgetKc) || 0;
                 vaha += w; soucet += V.pctUkolu(u) * w;
             });
             const pct = vaha ? Math.round(soucet / vaha)
@@ -200,13 +200,14 @@
 
             let obsah, trida;
             if ((volby || {}).rezim === "zbyva") {
-                // zbývající hodiny buňky: budget úkolů − odpracováno z výkazů
+                /* zbývající PENÍZE buňky: budget úkolů − vyfakturováno
+                   z výkazů (částky přes vazbu na úkol) */
                 const budget = moje.reduce((x, u) =>
-                    x + (Number(((budgety || {})[u.id] || {}).budgetHodin) || 0), 0);
-                const odprac = volby.odpracovano
-                    ? moje.reduce((x, u) => x + volby.odpracovano(u.id), 0) : 0;
-                const zbyva = budget - odprac;
-                obsah = (Math.round(zbyva * 10) / 10).toLocaleString("cs-CZ") + "&nbsp;h";
+                    x + (Number(((budgety || {})[u.id] || {}).budgetKc) || 0), 0);
+                const cerpano = volby.cerpani
+                    ? moje.reduce((x, u) => x + volby.cerpani(u.id), 0) : 0;
+                const zbyva = budget - cerpano;
+                obsah = Math.round(zbyva).toLocaleString("cs-CZ") + "&nbsp;Kč";
                 trida = zbyva < 0 ? "mx__bunka--pres" : "mx__bunka--" + uroven(pct);
             } else {
                 obsah = pct + "&nbsp;%";
@@ -222,7 +223,7 @@
         /* pravý blok: hodiny technologie, z nich ukrajují budgety úkolů */
         const ukrojeno = (tech) => ukoly
             .filter(u => u.technologie === tech)
-            .reduce((sum, u) => sum + (Number(((budgety || {})[u.id] || {}).budgetHodin) || 0), 0);
+            .reduce((sum, u) => sum + (Number(((budgety || {})[u.id] || {}).budgetKc) || 0), 0);
 
         const cislo = (n) => (Math.round(n * 10) / 10).toLocaleString("cs-CZ");
 
@@ -231,10 +232,11 @@
             const kc = Number(techBudgety[tech]) || 0;
             const sazba = (volby && volby.sazbaTech) ? volby.sazbaTech(tech) : 0;
             /* peníze → hodiny přes průměrnou hodinovku lidí té technologie;
-               bez přiřazených lidí není čím dělit a hodiny se nedopočítají */
+               bez přiřazených lidí není čím dělit a hodiny se nedopočítají.
+               Ukrojeno i Zbývá jsou v Kč – budgety úkolů jsou v penězích. */
             const hodinCelkem = (kc && sazba) ? kc / sazba : 0;
             const ukr = ukrojeno(tech);
-            const zbyva = hodinCelkem - ukr;
+            const zbyva = kc - ukr;
             return '<td class="mx__budget">' +
                 (klikaci
                     ? '<input type="number" class="field" min="0" step="1000" data-techbud="' + esc(tech) +
@@ -245,8 +247,8 @@
                     : (kc ? ' title="přiřaď lidi k technologii (Spolupracovníci), jinak není čím dělit"' : "")) + ">" +
                     (hodinCelkem ? cislo(Math.round(hodinCelkem)) : (kc ? "?" : "–")) + "</td>" +
                 '<td class="mx__budget">' + (ukr ? cislo(ukr) : "–") + "</td>" +
-                '<td class="mx__budget' + (zbyva < 0 && hodinCelkem ? " mx__budget--minus" : "") + '">' +
-                    (hodinCelkem ? cislo(Math.round(zbyva * 10) / 10) : "–") + "</td>";
+                '<td class="mx__budget' + (zbyva < 0 && kc ? " mx__budget--minus" : "") + '">' +
+                    (kc ? cislo(Math.round(zbyva)) : "–") + "</td>";
         };
 
         return '<div class="mx-wrap"><table class="mx"><thead>' +
@@ -255,7 +257,7 @@
             (sBudgety ? '<th colspan="4">Budget technologie</th>' : "") + "</tr>" +
             "<tr><th></th>" + budovy.map(() =>
                 patra.map(pt => "<th>" + esc(pt) + "</th>").join("")).join("") +
-            (sBudgety ? "<th>Kč</th><th>Hodin</th><th>Ukrojeno</th><th>Zbývá</th>" : "") + "</tr>" +
+            (sBudgety ? "<th>Kč</th><th>Hodin</th><th>Ukrojeno Kč</th><th>Zbývá Kč</th>" : "") + "</tr>" +
             "</thead><tbody>" +
             technologie.map(tech =>
                 '<tr><th style="text-align:left">' + esc(tech) + "</th>" +

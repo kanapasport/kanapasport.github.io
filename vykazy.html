@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=93">
+    <link rel="stylesheet" href="assets/css/app.css?v=94">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=93"></script>
-<script src="assets/js/ui.js?v=93"></script>
-<script src="assets/js/vykazy.js?v=93"></script>
-<script type="module" src="assets/js/store.js?v=93"></script>
+<script src="assets/js/taxonomy.js?v=94"></script>
+<script src="assets/js/ui.js?v=94"></script>
+<script src="assets/js/vykazy.js?v=94"></script>
+<script type="module" src="assets/js/store.js?v=94"></script>
 
 <script>
 (function () {
@@ -1020,6 +1020,33 @@
         return dny.length ? dny : [odIso];
     }
 
+    /* ------------------------------------------------------ uzávěrka ----
+       Týden se zapisuje nejpozději do pondělí půlnoci týdne následujícího
+       a vlastní záznam jde opravit jen do půlnoci dne, kdy vznikl. Potom
+       už jen manažer – zpětné zásahy do uzavřených týdnů mají jít přes
+       něj, ne potichu. */
+
+    /** Konec lhůty pro zápis dne `datum`: úterý 00:00 následujícího týdne. */
+    function konecLhuty(datum) {
+        const d = new Date(datum + "T00:00:00");
+        if (isNaN(d)) return 0;
+        // pondělí týdne + 8 dní = půlnoc na konci pondělí týdne dalšího
+        d.setDate(d.getDate() - (d.getDay() + 6) % 7 + 8);
+        return d.getTime();
+    }
+
+    const poLhute = (datum) => Date.now() >= konecLhuty(datum);
+
+    /** Smí přihlášený tenhle záznam ještě upravit? */
+    function smimUpravit(z) {
+        if (window.KBUI.can("vykaz.view")) return true;       // manažer kdykoli
+        const vznik = new Date(Number(z.createdMs) || 0);
+        const ted = new Date();
+        return vznik.getFullYear() === ted.getFullYear() &&
+            vznik.getMonth() === ted.getMonth() &&
+            vznik.getDate() === ted.getDate();
+    }
+
     /**
      * Absence se propíše i do kalendáře, ať ji vidí celá firma.
      * Celý den se ukládá jako 00:00–23:59: v kalendáři pak stojí v pruhu
@@ -1060,6 +1087,12 @@
         if (chybny) {
             return window.KBUI.toast(chybny._popis +
                 ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
+        }
+        const pozdni = !window.KBUI.can("vykaz.view") && polozky.find(p => poLhute(p.datum));
+        if (pozdni) {
+            return window.KBUI.toast(pozdni._popis +
+                ": týden je uzavřený (zapisuje se do pondělí půlnoci týdne" +
+                " následujícího) – zpětný zápis domluv s manažerem.", "warn");
         }
         const bezDruhu = polozky.find(p => !p.absence && !p.cinnost);
         if (bezDruhu) {
@@ -1301,7 +1334,11 @@
                       '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
                     : "") +
                 '<td class="vyk__akce">' +
-                    '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>' +
+                    /* vlastní záznam jde opravit jen v den zápisu – potom
+                       tlačítko zmizí a opravy dělá manažer */
+                    (smimUpravit(z)
+                        ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>'
+                        : "") +
                 "</td>" +
             "</tr>";
         }
@@ -1312,6 +1349,10 @@
     function otevriUpravu(id) {
         const z = (window.KB.vykazy || []).find(v => v.id === id);
         if (!z) return;
+        if (!smimUpravit(z)) {
+            return window.KBUI.toast("Vlastní záznam jde opravit jen do půlnoci" +
+                " dne zápisu – změnu domluv s manažerem.", "warn");
+        }
 
         editId = id;
         $("eDatum").value = z.datum || "";
@@ -1352,6 +1393,17 @@
         const u = V.clovek(uid);
         const jmeno = u ? V.jmeno(u) : (puvodni.osoba || "");
         const datum = $("eDatum").value;
+
+        if (!window.KBUI.can("vykaz.view")) {
+            if (!smimUpravit(puvodni)) {
+                return window.KBUI.toast("Záznam už je po uzávěrce – změnu" +
+                    " domluv s manažerem.", "warn");
+            }
+            if (poLhute(datum)) {
+                return window.KBUI.toast("Ten den patří do uzavřeného týdne –" +
+                    " přesun domluv s manažerem.", "warn");
+            }
+        }
 
         try {
             await window.KB.saveVykaz(editId, Object.assign({}, p, {
