@@ -1315,7 +1315,8 @@
                sebe v tom seznamu vidět nepotřebuje. */
             const ostatni = adresati(q).filter(x => x !== uid).map(jmeno).filter(Boolean);
 
-            return '<div class="quickrad' + (q.hotovo ? " quickrad--hotovo" : "") + '">' +
+            return '<div class="quickrad' +
+                (q.hotovo ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) + '">' +
                 '<span class="quickrad__text">' + esc(q.text) +
                     '<span class="quickrad__kdo">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
