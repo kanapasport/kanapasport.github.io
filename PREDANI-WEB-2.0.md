@@ -116,6 +116,7 @@ a odhlášení. **Nepřihlášený nevidí nic z toho** — jen přihlašovací 
 | `gantt.html` | plán projektů v čase |
 | `firmy.html` | správa firem (IČO, adresa, kontakt) |
 | `ukoly.html` | úkoly s TO-DO rozpadem |
+| `quicktodo.html` | přehled rychlých vzkazů (tvorba zůstává v panelu na pásu) |
 | `kalendar.html` | kalendář firmy, skok na datum |
 | `milniky.html` | termíny odevzdání |
 | `tabule.html` | kreslicí plátna |
@@ -277,8 +278,15 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
 
 ## Rozpracovaná dávka (zadáno 19. 8.)
 
-Stav se odškrtává průběžně – podle tohohle seznamu se pokračuje i po
-předání kontextu.
+**CELÁ DÁVKA HOTOVÁ (19. 8. večer, `?v=93`).** Po ní je potřeba:
+
+1. **Znovu nasadit `firestore.rules`** – úkoly nově pouštějí pole
+   `historie` (zapisuje ho i zaměstnanec u svého postupu).
+2. Vědět o dvou omezeních: zaměstnanec by si z konzole uměl potvrdit
+   vlastní dovolenou (pravidla mu update vlastní události nebrání)
+   a znovuotevřený potvrzený úkol zůstává potvrzený.
+3. Budget technologií se PŘEZADÁVÁ v Kč – starší uložené hodiny
+   (`techBudgety`) se ignorují.
 
 - [x] 1. Auta: změna „Od" posune „Do", když by bylo dřív
 - [x] 2. Zrušit „části projektu" (Správa) i „Část" ve výkazu
@@ -300,7 +308,7 @@ předání kontextu.
 - [x] 10. Reporty: záložky QUICK TODO / TODO / Výkazy; u TODO z kolika
       na kolik procent (logovat do aktivit i do úkolu)
 - [x] 11. Úkoly: tlačítko Historie u rozbaleného úkolu (kdo kdy kolik %)
-- [ ] 12. Quick TODO jako samostatná stránka (lišta + proklik z dlaždice);
+- [x] 12. Quick TODO jako samostatná stránka (lišta + proklik z dlaždice);
       panel v pásu zůstává jen na tvorbu
 - [x] 13. Zrušit „Přizpůsobit" na nástěnce
 

@@ -1063,7 +1063,9 @@
                         '<select class="field" data-quick-projekt aria-label="Projekt"></select>' +
                         '<button type="button" class="btn btn--primary" data-quick-uloz>Zadat quick to-do</button>' +
                     "</div>" +
-                    '<div class="quickpanel__seznam" data-quick-seznam></div>' +
+                    /* přehled vzkazů má vlastní stránku – panel je na tvorbu */
+                    '<a class="linkbtn" href="quicktodo.html" style="margin-top:14px;align-self:flex-start">' +
+                        "Celkový přehled vzkazů →</a>" +
                 "</div>" +
             "</div>";
         document.body.appendChild(panel);
@@ -1199,8 +1201,15 @@
     function renderQuick() {
         const panel = document.getElementById("kbQuickPanel");
         const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
-        if (!panel || !uid) return;
+        /* Seznam se kreslí do KAŽDÉHO [data-quick-seznam] – v panelu už není
+           (panel je jen na tvorbu), zato ho má stránka quicktodo.html.
+           Formulářová část se řeší jen, když panel opravdu existuje. */
+        if (!uid) return;
+        if (panel) naplnQuickForm(panel, uid);
+        vykresliQuickSeznamy(uid);
+    }
 
+    function naplnQuickForm(panel, uid) {
         // nabídky (jen jednou, ať se nepřepisuje rozepsaný výběr)
         const komu = panel.querySelector("[data-quick-komu]");
         /* Sebe si zadavatel zaškrtne první volbou „Jen pro mě" – poznámka
@@ -1231,6 +1240,9 @@
                 '<option value="' + esc(n) + '">' + esc(n) + "</option>").join("");
         }
 
+    }
+
+    function vykresliQuickSeznamy(uid) {
         const jmeno = (id) => {
             const u = (window.KB.users || []).find(x => x.id === id);
             return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
@@ -1296,7 +1308,7 @@
         const aktivniOdeMe = odeMe.filter(q => !q.hotovo).sort(naporadi);
         const splnene = proMe.concat(odeMe).filter(q => q.hotovo);
 
-        panel.querySelector("[data-quick-seznam]").innerHTML =
+        const seznamHtml =
             (aktivniProMe.length
                 ? '<div class="quickpanel__nadpis">Pro mě</div>' + aktivniProMe.map(q => radek(q, false)).join("")
                 : '<div class="quickpanel__prazdno">Žiješ šťastný život, nikdo po tobě nic nechce.</div>') +
@@ -1309,6 +1321,9 @@
                   "</button>" +
                   (quickSplneneVidet ? splnene.map(q => radek(q, q.odKoho === uid && q.proUid !== uid)).join("") : "")
                 : "");
+        document.querySelectorAll("[data-quick-seznam]").forEach(el => {
+            el.innerHTML = seznamHtml;
+        });
 
         // odznak s počtem nesplněných na tlačítku v pásu
         const kolik = proMe.filter(q => !q.hotovo).length;
