@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=88">
+    <link rel="stylesheet" href="assets/css/app.css?v=89">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -445,6 +445,9 @@
                 <span class="popisek">Kdo na úkolu dělá</span>
                 <div id="nuLide" class="prjlide"></div>
             </div>
+            <label class="pole" style="margin-top:10px"><span class="popisek">TO-DO rozpad (řádek = jedna položka)</span>
+                <textarea id="nuTodo" class="field" rows="5"
+                    placeholder="Zákres stěn&#10;Kontrola s podklady&#10;Finální úklid vrstvy"></textarea></label>
         </div>
         <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
             <span id="nuOsy" class="tiny muted"></span>
@@ -484,10 +487,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=88"></script>
-<script src="assets/js/ui.js?v=88"></script>
-<script src="assets/js/vykazy.js?v=88"></script>
-<script type="module" src="assets/js/store.js?v=88"></script>
+<script src="assets/js/taxonomy.js?v=89"></script>
+<script src="assets/js/ui.js?v=89"></script>
+<script src="assets/js/vykazy.js?v=89"></script>
+<script type="module" src="assets/js/store.js?v=89"></script>
 
 <script>
 (function () {
@@ -972,18 +975,30 @@
     /* Matice jako v excelovém budgetu: technologie v řádku, budovy × patra
        v malých buňkách (V.maticePlneni – sdílí ji stránka Plnění projektů).
        Tady je klikací: prázdná buňka zakládá úkol. */
+    /* Průměrná hodinovka lidí přiřazených k technologii (lideTech).
+       Bere se sazba z projektu, jinak obecná z Nastavení. */
+    function prumernaSazbaTech(p, tech) {
+        const mapa = (p.lideTech && typeof p.lideTech === "object") ? p.lideTech : {};
+        const vlastni = sazbyProjektu(p.nazev || "");
+        const obecne = window.KB.sazby || {};
+        const sazby = Object.keys(mapa)
+            .filter(uid => (mapa[uid] || []).indexOf(tech) !== -1)
+            .map(uid => Number(vlastni[uid]) || Number(obecne[uid]) || 0)
+            .filter(x => x > 0);
+        if (!sazby.length) return 0;
+        return sazby.reduce((a, b) => a + b, 0) / sazby.length;
+    }
+
     function vykresliMatici(p, ukoly, budgety) {
         const osy = osyProjektu(p);
         /* Budgety technologií: uložené v rozpočtu projektu (tajný číselník),
            přes ně rozepsané, ale ještě neuložené hodnoty z polí – jinak by
            je každý příchod dat z databáze smazal zpod rukou. */
-        const ulozene = ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgety || {};
-        /* BioPharma má výchozí hodiny z excelového budgetu (list
-           zprac__technologie) – platí, dokud si projekt neuloží vlastní.
-           Prvním uložením projektu se zapíšou do databáze. */
+        /* Budget technologie se zadává v PENĚZÍCH (změna 19. 8.) – klíč
+           `techBudgetyKc`. Starší uložené hodiny (`techBudgety`) se ignorují,
+           jednotka se změnila a přepočítat je bez sazby z té doby nejde. */
         const techBudgety = Object.assign({},
-            (!Object.keys(ulozene).length && /biopharm/i.test(p.nazev || ""))
-                ? V.BIOPHARM_TECH_HODINY : ulozene);
+            ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgetyKc);
         document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
             if (pole.value !== "") techBudgety[pole.dataset.techbud] = Number(pole.value) || 0;
         });
@@ -994,7 +1009,8 @@
                 '" data-mxrezim="zbyva">Zbývá hodin</button></div>';
 
         const telo = V.maticePlneni(ukoly, budgety, osy, true, techBudgety,
-            { rezim: mxRezim, odpracovano: odpracovanoUkolu });
+            { rezim: mxRezim, odpracovano: odpracovanoUkolu,
+              sazbaTech: (tech) => prumernaSazbaTech(p, tech) });
         $("matice").innerHTML = telo
             ? prepinac + telo
             : '<p class="tiny muted" style="margin:0">' +
@@ -1173,7 +1189,13 @@
         $("nuBudget").value = "";
         $("nuRezerva").value = "";
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
-        naplnDialogLidi(p, []);
+        $("nuTodo").value = "";
+        /* Lidé té technologie (Spolupracovníci → Kdo dělá kterou technologii)
+           jsou zaškrtnutí rovnou – to jsou ti, kdo úkol nejspíš dostanou.
+           Další se přidají normálně. */
+        const mapa = (p.lideTech && typeof p.lideTech === "object") ? p.lideTech : {};
+        const predem = Object.keys(mapa).filter(uid => (mapa[uid] || []).indexOf(tech) !== -1);
+        naplnDialogLidi(p, predem);
 
         $("bunkaOverlay").hidden = true;
         $("ukolOverlay").hidden = false;
@@ -1198,6 +1220,7 @@
         $("nuRezerva").value = Number(b.rezervaHodin) || "";
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") +
             [u.budova, u.technologie, u.patro].filter(Boolean).map(x => " · " + x).join("");
+        $("nuTodo").value = (u.todo || []).map(t => t.text || "").join("\n");
         naplnDialogLidi(p, u.prirazeni || []);
 
         $("bunkaOverlay").hidden = true;
@@ -1288,7 +1311,19 @@
                 prirazeni: Array.from($("nuLide").querySelectorAll("input:checked")).map(ch => ch.value),
                 termin: $("nuTermin").value,
                 stav: stavajici ? stavajici.stav : "otevreny",
-                todo: stavajici ? (stavajici.todo || []) : [],
+                /* Řádek textarey = položka TO-DO. Při úpravě se položky
+                   párují podle textu, ať zapsaná procenta nepadají – nový
+                   řádek začíná na nule, smazaný řádek položku odebere. */
+                todo: (function () {
+                    const radky = $("nuTodo").value.split("\n")
+                        .map(t => t.trim()).filter(Boolean);
+                    const stareTodo = stavajici ? (stavajici.todo || []) : [];
+                    if (!radky.length) return stareTodo;   // prázdné pole TO-DO nemaže
+                    return radky.map(text =>
+                        stareTodo.find(t => t.text === text) ||
+                        { id: "td_" + Math.random().toString(36).slice(2),
+                          text: text, pct: 0, by: "", ms: 0 });
+                })(),
                 poznamka: stavajici ? stavajici.poznamka : "",
                 createdMs: stavajici ? stavajici.createdMs : undefined,
                 createdBy: stavajici ? stavajici.createdBy : undefined
@@ -1489,18 +1524,18 @@
            uložení celý dokument slučuje, takže ostatní projekty musí odejít
            zpátky beze změny. */
         const rozpocty = Object.assign({}, window.KB.rozpocty);
-        // hodiny na technologii (pravý blok matice) – ukrajují z nich úkoly
-        const techBudgety = {};
+        // budget technologií v Kč (pravý blok matice)
+        const techBudgetyKc = {};
         document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
             const hodnota = Number(pole.value) || 0;
-            if (hodnota > 0) techBudgety[pole.dataset.techbud] = hodnota;
+            if (hodnota > 0) techBudgetyKc[pole.dataset.techbud] = hodnota;
         });
 
         rozpocty[nazev] = Object.assign({}, rozpocty[nazev], {
             kc: Number($("fKc").value) || 0,
             hodiny: Number($("fHodiny").value) || 0,
             rezervaKc: Number($("fRezervaKc").value) || 0,
-            techBudgety: techBudgety,
+            techBudgetyKc: techBudgetyKc,
             sazby: sazby
         });
 

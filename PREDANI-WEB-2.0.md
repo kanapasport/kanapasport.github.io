@@ -282,9 +282,9 @@ předání kontextu.
 
 - [x] 1. Auta: změna „Od" posune „Do", když by bylo dřív
 - [x] 2. Zrušit „části projektu" (Správa) i „Část" ve výkazu
-- [ ] 3. Budget technologií v PENĚZÍCH; vedle Kč vypsat hodiny podle
+- [x] 3. Budget technologií v PENĚZÍCH; vedle Kč vypsat hodiny podle
       průměrné hodinovky lidí přiřazených k technologii (lideTech + sazby)
-- [ ] 4. Dialog nového úkolu z matice: předzaškrtnout lidi té technologie,
+- [x] 4. Dialog nového úkolu z matice: předzaškrtnout lidi té technologie,
       pole na TO-DO (řádek = položka), popisek „Primární druh práce"
 - [x] 5. Firma ve výkazu jen ke čtení, když ji projekt má nastavenou
 - [ ] 6. Výkaz – nové pořadí: budova → patro → technologie; výběr úkolu

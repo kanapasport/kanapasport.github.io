@@ -161,9 +161,10 @@
         TER: 1935, CHLAD: 1935, VODA: 1935, KAN: 1935 };
 
     /**
-     * @param {Object} [techBudgety] – { TER: 1935, … }: celkové hodiny na
-     *   technologii. Když jsou předané, přibude vpravo blok Budget /
-     *   Ukrojeno / Zbývá – ukrojeno je součet budgetů úkolů té technologie.
+     * @param {Object} [techBudgety] – { TER: 250000, … }: budget technologie
+     *   v PENĚZÍCH (Kč). Vpravo přibude blok Budget Kč / Hodin / Ukrojeno /
+     *   Zbývá – hodiny se dopočítají průměrnou hodinovkou lidí přiřazených
+     *   k technologii (volby.sazbaTech), ukrojeno je součet budgetů úkolů.
      *   `klikaci` z Budgetu udělá editovatelné pole (data-techbud="TER").
      * @param {Object} [volby] – { rezim: "pct"|"zbyva", odpracovano: fn(id)→h }.
      *   „zbyva" místo % TO-DO ukáže v buňce zbývající hodiny (budget úkolů
@@ -227,26 +228,34 @@
 
         const budgetBunky = (tech) => {
             if (!sBudgety) return "";
-            const celkem = Number(techBudgety[tech]) || 0;
+            const kc = Number(techBudgety[tech]) || 0;
+            const sazba = (volby && volby.sazbaTech) ? volby.sazbaTech(tech) : 0;
+            /* peníze → hodiny přes průměrnou hodinovku lidí té technologie;
+               bez přiřazených lidí není čím dělit a hodiny se nedopočítají */
+            const hodinCelkem = (kc && sazba) ? kc / sazba : 0;
             const ukr = ukrojeno(tech);
-            const zbyva = celkem - ukr;
+            const zbyva = hodinCelkem - ukr;
             return '<td class="mx__budget">' +
                 (klikaci
-                    ? '<input type="number" class="field" min="0" data-techbud="' + esc(tech) +
-                        '" value="' + (celkem || "") + '">'
-                    : (celkem ? cislo(celkem) : "–")) + "</td>" +
+                    ? '<input type="number" class="field" min="0" step="1000" data-techbud="' + esc(tech) +
+                        '" value="' + (kc || "") + '">'
+                    : (kc ? cislo(kc) : "–")) + "</td>" +
+                '<td class="mx__budget"' + (sazba
+                    ? ' title="při průměrné sazbě ' + cislo(sazba) + ' Kč/h"'
+                    : (kc ? ' title="přiřaď lidi k technologii (Spolupracovníci), jinak není čím dělit"' : "")) + ">" +
+                    (hodinCelkem ? cislo(Math.round(hodinCelkem)) : (kc ? "?" : "–")) + "</td>" +
                 '<td class="mx__budget">' + (ukr ? cislo(ukr) : "–") + "</td>" +
-                '<td class="mx__budget' + (zbyva < 0 ? " mx__budget--minus" : "") + '">' +
-                    (celkem || ukr ? cislo(zbyva) : "–") + "</td>";
+                '<td class="mx__budget' + (zbyva < 0 && hodinCelkem ? " mx__budget--minus" : "") + '">' +
+                    (hodinCelkem ? cislo(Math.round(zbyva * 10) / 10) : "–") + "</td>";
         };
 
         return '<div class="mx-wrap"><table class="mx"><thead>' +
             "<tr><th></th>" + budovy.map(b =>
                 '<th colspan="' + patra.length + '">' + esc(b) + "</th>").join("") +
-            (sBudgety ? '<th colspan="3">Hodiny technologie</th>' : "") + "</tr>" +
+            (sBudgety ? '<th colspan="4">Budget technologie</th>' : "") + "</tr>" +
             "<tr><th></th>" + budovy.map(() =>
                 patra.map(pt => "<th>" + esc(pt) + "</th>").join("")).join("") +
-            (sBudgety ? "<th>Budget</th><th>Ukrojeno</th><th>Zbývá</th>" : "") + "</tr>" +
+            (sBudgety ? "<th>Kč</th><th>Hodin</th><th>Ukrojeno</th><th>Zbývá</th>" : "") + "</tr>" +
             "</thead><tbody>" +
             technologie.map(tech =>
                 '<tr><th style="text-align:left">' + esc(tech) + "</th>" +
