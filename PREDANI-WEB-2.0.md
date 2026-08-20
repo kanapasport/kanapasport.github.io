@@ -287,7 +287,7 @@ předání kontextu.
 - [x] 4. Dialog nového úkolu z matice: předzaškrtnout lidi té technologie,
       pole na TO-DO (řádek = položka), popisek „Primární druh práce"
 - [x] 5. Firma ve výkazu jen ke čtení, když ji projekt má nastavenou
-- [ ] 6. Výkaz – nové pořadí: budova → patro → technologie; výběr úkolu
+- [x] 6. Výkaz – nové pořadí: budova → patro → technologie; výběr úkolu
       podle nich (nebo rovnou úkol → zamkne budovu/patro/technologii
       a předvyplní druh); popis práce NEPOVINNÝ vedle povinného druhu;
       sazba za „⋯ zobrazit"

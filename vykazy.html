@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=89">
+    <link rel="stylesheet" href="assets/css/app.css?v=90">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -209,10 +209,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=89"></script>
-<script src="assets/js/ui.js?v=89"></script>
-<script src="assets/js/vykazy.js?v=89"></script>
-<script type="module" src="assets/js/store.js?v=89"></script>
+<script src="assets/js/taxonomy.js?v=90"></script>
+<script src="assets/js/ui.js?v=90"></script>
+<script src="assets/js/vykazy.js?v=90"></script>
+<script type="module" src="assets/js/store.js?v=90"></script>
 
 <script>
 (function () {
@@ -303,22 +303,91 @@
      * Úkoly k projektu – nepovinná vazba zápisu na úkol z plánu. Až se bude
      * počítat efektivita (budget hodin vs. skutečnost), sedí na tomhle poli.
      */
-    function ukolOptions(zakazka, vybrany) {
+    /** Moje otevřené úkoly projektu – z nich se skládá nabídka. */
+    function mojeUkolyProjektu(zakazka) {
+        const uid = window.KB.currentUid();
+        return (window.KB.ukoly || []).filter(u =>
+            u.projekt === zakazka && u.stav !== "hotovo" &&
+            (u.prirazeni || []).indexOf(uid) !== -1);
+    }
+
+    function ukolOptions(zakazka, vybrany, misto) {
         /* V nabídce jsou jen úkoly přiřazené mně – každý pracuje primárně
-           na svých. Pomoc na cizím úkolu se zapisuje ze stránky Úkoly & TO-DO
+           na svých. Vybraná budova / patro / technologie nabídku zužuje;
+           u projektu se stovkou úkolů se jinak nedá trefit ten pravý.
+           Pomoc na cizím úkolu se zapisuje ze stránky Úkoly & TO-DO
            (tlačítko Zapsat výkaz), která sem pošle ?ukol=ID – takový úkol
            se do nabídky dovloží, i když v ní běžně není. */
-        const uid = window.KB.currentUid();
-        const seznam = (window.KB.ukoly || [])
-            .filter(u => u.projekt === zakazka && u.stav !== "hotovo"
-                && (u.prirazeni || []).indexOf(uid) !== -1)
+        const m = misto || {};
+        const seznam = mojeUkolyProjektu(zakazka)
+            .filter(u => (!m.budova || u.budova === m.budova) &&
+                         (!m.patro || u.patro === m.patro) &&
+                         (!m.technologie || u.technologie === m.technologie))
             .map(u => ({ value: u.id, label: u.nazev }));
         if (vybrany && !seznam.some(x => x.value === vybrany)) {
             const cizi = (window.KB.ukoly || []).find(u => u.id === vybrany);
             if (cizi) seznam.push({ value: cizi.id, label: cizi.nazev + " (výpomoc)" });
         }
         if (!seznam.length) return '<option value="">— žádný úkol —</option>';
-        return V.options(seznam, vybrany, "— bez úkolu —");
+        return V.options(seznam, vybrany, "— vyber úkol —");
+    }
+
+    /** Projekt záznamu: z hlavičky bloku, nebo z pole v okně úpravy. */
+    function zakazkaZaznamu(box) {
+        const vlastni = box.querySelector('[data-f="zakazka"]');
+        if (vlastni) return vlastni.value;
+        const blok = box.closest("[data-zblok]");
+        const sel = blok && blok.querySelector('[data-z="zakazka"]');
+        return sel ? sel.value : "";
+    }
+
+    /**
+     * Výběr úkolu zamkne budovu, patro a technologii – určuje je úkol
+     * a zápis se váže k němu. Druh se předvyplní primárním druhem úkolu,
+     * ale zůstává na člověku (fotit se jezdí i na kreslicí úkol).
+     */
+    function zamkniPodleUkolu(box) {
+        const select = box.querySelector('[data-f="ukolId"]');
+        if (!select) return;
+        const u = (window.KB.ukoly || []).find(x => x.id === select.value);
+
+        [["budova", u && u.budova], ["patro", u && u.patro],
+         ["technologie", u && u.technologie]].forEach(([klic, hodnota]) => {
+            const pole = box.querySelector('[data-f="' + klic + '"]');
+            if (!pole) return;
+            if (u) {
+                if (hodnota && !Array.from(pole.options).some(o2 => o2.value === hodnota)) {
+                    pole.insertAdjacentHTML("beforeend",
+                        '<option value="' + esc(hodnota) + '">' + esc(hodnota) + "</option>");
+                }
+                pole.value = hodnota || "";
+                pole.disabled = true;
+                pole.title = "Určuje vybraný úkol";
+            } else {
+                pole.disabled = false;
+                pole.title = "";
+            }
+        });
+
+        if (u && u.druh) {
+            const cinnost = box.querySelector('[data-f="cinnost"]');
+            if (cinnost && !cinnost.value) cinnost.value = u.druh;
+        }
+    }
+
+    /** Změna budovy/patra/technologie přeskládá nabídku úkolů. */
+    function prefiltrujUkoly(box) {
+        const select = box.querySelector('[data-f="ukolId"]');
+        if (!select || select.disabled) return;
+        const misto = {
+            budova: (box.querySelector('[data-f="budova"]') || {}).value || "",
+            patro: (box.querySelector('[data-f="patro"]') || {}).value || "",
+            technologie: (box.querySelector('[data-f="technologie"]') || {}).value || ""
+        };
+        const drzena = select.value;
+        select.innerHTML = ukolOptions(zakazkaZaznamu(box), drzena, misto);
+        select.value = drzena;
+        if (select.value !== drzena) select.value = "";
     }
 
     /* Budovy a patra projektu – z nastavení ve Správě projektů (číselník
@@ -425,30 +494,34 @@
                 (o.odebrat ? '<button type="button" class="linkbtn" data-odeber>Odebrat</button>' : "") +
             "</div>" +
 
-            // co se dělalo
+            /* Pořadí (přání Michala 19. 8.): primární je výběr úkolu; pod ním
+               budova – patro – technologie, kterými se úkoly filtrují (a po
+               výběru úkolu se zamknou, protože je určuje úkol). Až pod tím
+               povinný druh vypracování a NEPOVINNÝ popis práce. */
             '<div class="polozka__grid">' +
                 zakazkaCast +
-                '<div class="polozka__nazev">' +
-                    '<label class="label">Popis práce</label>' +
-                    '<input type="text" class="field" data-f="nazev" placeholder="co se konkrétně dělalo" ' +
-                        'value="' + esc(d.nazev || "") + '">' +
-                "</div>" +
-
-                '<div class="polozka__ukolvyber"><label class="label">Úkol z plánu (nepovinné)</label>' +
+                '<div class="polozka__ukolvyber" style="grid-column:1/-1">' +
+                    '<label class="label">Úkol</label>' +
                     '<select class="field" data-f="ukolId">' +
-                        ukolOptions(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d.ukolId || "") +
+                        ukolOptions(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d.ukolId || "", d) +
                     "</select></div>" +
 
-                '<div><label class="label">Druh vypracování</label>' +
-                    '<select class="field" data-f="cinnost">' +
-                        V.options(V.cinnosti(), d.cinnost || "", "— vyber —") + "</select></div>" +
+                mistoHtml(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d) +
 
                 '<div><label class="label">Technologie</label>' +
                     '<select class="field" data-f="technologie">' +
                         V.options(V.technologie().map(t => ({ value: t.zkratka, label: t.zkratka + " – " + t.nazev })),
                                   d.technologie || "", "— nezadáno —") + "</select></div>" +
 
-                mistoHtml(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d) +
+                '<div><label class="label">Druh vypracování</label>' +
+                    '<select class="field" data-f="cinnost">' +
+                        V.options(V.cinnosti(), d.cinnost || "", "— vyber —") + "</select></div>" +
+
+                '<div class="polozka__nazev" style="grid-column:span 2">' +
+                    '<label class="label">Popis práce (nepovinné)</label>' +
+                    '<input type="text" class="field" data-f="nazev" placeholder="doplnění k úkolu" ' +
+                        'value="' + esc(d.nazev || "") + '">' +
+                "</div>" +
             "</div>" +
 
             // kdy a za kolik
@@ -972,14 +1045,33 @@
         if (!uid) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
 
         const polozky = prectiRadky().map(srovnejAbsenci);
+        /* Popis práce je NEPOVINNÝ (19. 8.) – povinný je druh vypracování
+           a tam, kde projekt úkoly má, i úkol: zápis se váže k úkolu. */
         const chybny = polozky.find(p =>
-            !p.nazev || !p.datum || !p.od || !p.do || !p.zakazka ||
+            !p.datum || !p.od || !p.do || !p.zakazka ||
             window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0);
-
         if (chybny) {
             return window.KBUI.toast(chybny._popis +
-                ": doplň projekt, popis práce, datum a časy tak, ať vyjde kladný čas.", "warn");
+                ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
         }
+        const bezDruhu = polozky.find(p => !p.absence && !p.cinnost);
+        if (bezDruhu) {
+            return window.KBUI.toast(bezDruhu._popis +
+                ": vyber druh vypracování.", "warn");
+        }
+        const bezUkolu = polozky.find(p => !p.absence && !p.ukolId &&
+            mojeUkolyProjektu(p.zakazka).length);
+        if (bezUkolu) {
+            return window.KBUI.toast(bezUkolu._popis +
+                ": vyber úkol – zápis se váže k úkolu.", "warn");
+        }
+        /* Prázdný popis dostane název úkolu, ať přehledy nečtou prázdno. */
+        polozky.forEach(p => {
+            if (!p.nazev && p.ukolId) {
+                const u = (window.KB.ukoly || []).find(x => x.id === p.ukolId);
+                if (u) p.nazev = u.nazev || "";
+            }
+        });
 
         const u = V.clovek(uid);
         const jmeno = u ? V.jmeno(u) : "";
@@ -1233,8 +1325,15 @@
         const p = srovnejAbsenci(ctiPolozku($("editRadek").querySelector("[data-polozka]")));
         const puvodni = (window.KB.vykazy || []).find(v => v.id === editId) || {};
 
-        if (!p.nazev || !p.od || !p.do || !p.zakazka) {
-            return window.KBUI.toast("Doplň projekt, popis práce a časy.", "warn");
+        if (!p.od || !p.do || !p.zakazka) {
+            return window.KBUI.toast("Doplň projekt a časy.", "warn");
+        }
+        if (!p.absence && !p.cinnost) {
+            return window.KBUI.toast("Vyber druh vypracování.", "warn");
+        }
+        if (!p.nazev && p.ukolId) {
+            const u = (window.KB.ukoly || []).find(x => x.id === p.ukolId);
+            if (u) p.nazev = u.nazev || "";
         }
         if (window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0) {
             return window.KBUI.toast("Z časů a pauzy nevyjde žádný odpracovaný čas.", "warn");
@@ -1403,6 +1502,13 @@
         if (!box) return;
 
         if (event.target.dataset.f === "celyden") return void prepniCelyDen(box);
+
+        // výběr úkolu zamkne budovu/patro/technologii a předvyplní druh
+        if (event.target.dataset.f === "ukolId") zamkniPodleUkolu(box);
+        // budova/patro/technologie zužují nabídku úkolů
+        if (["budova", "patro", "technologie"].indexOf(event.target.dataset.f) !== -1) {
+            prefiltrujUkoly(box);
+        }
 
         // popis si člověk přepsal sám – od téhle chvíle mu ho předvyplňování nesahá
         if (event.target.dataset.f === "nazev") delete event.target.dataset.auto;
@@ -1639,11 +1745,9 @@
                 const ukolSelect = box.querySelector('[data-f="ukolId"]');
                 if (ukolSelect) ukolSelect.innerHTML = ukolOptions(u.projekt || "", zUkolu);
                 nastav("ukolId", zUkolu);
-                nastav("nazev", u.nazev);
                 nastav("cinnost", u.druh);
-                nastav("technologie", u.technologie);
-                nastav("budova", u.budova);
-                nastav("patro", u.patro);
+                // budovu, patro a technologii nastaví a zamkne zámek úkolu
+                zamkniPodleUkolu(box);
                 prepocti(box);
             };
             window.KB.on("ukoly", predvypln);
