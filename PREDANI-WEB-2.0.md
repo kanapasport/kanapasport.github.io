@@ -47,7 +47,7 @@ přihlášení **Firebase Auth**.
 
 | # | Co | Kde | Stav |
 |---|---|---|---|
-| 1 | **ZNOVU nasadit `firestore.rules`** – Michal nasadil 20. 8. 13:04, ale JEŠTĚ TÝŽ DEN ve 13:07 přibyl zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků) a 21. 8. oprava čtení Quick TO-DO (pojistka `is list` shazovala dotaz přes `proUids`). Soubor: `PREDANI_WEB\pasportkana_navody\firestore.rules` → celý obsah vložit do Firebase Console → Firestore Database → Rules → Publish. | Firebase Console | ⬜ ČEKÁ (nasazeno 20. 8. 13:04) |
+| 1 | **ZNOVU nasadit `firestore.rules`** – Michal nasadil 20. 8. 13:04, ale JEŠTĚ TÝŽ DEN ve 13:07 přibyl zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků) a 21. 8. oprava čtení Quick TO-DO (pojistka `is list` shazovala dotaz přes `proUids`) + nové role `majitel` a `asistentka` ve `spravce()`. **Teprve PO nasazení** přepnout v Uživatelé a hesla Ondřeje Kaňu na Majitele a Věru Tóthovou na Asistentku – do té doby by jim stará pravidla sebrala manažerský přístup. Soubor: `PREDANI_WEB\pasportkana_navody\firestore.rules` → celý obsah vložit do Firebase Console → Firestore Database → Rules → Publish. | Firebase Console | ⬜ ČEKÁ (nasazeno 20. 8. 13:04) |
 | 2 | **Přesunout tabule** | Import dat → *Zkopírovat tabule na nové místo* | ⬜ čeká |
 | 3 | **Nahrát nový `prehled-BP.json`** (17 lidí, 11 073 h) | Přehled BP → import | ⬜ čeká |
 | 4 | **Vyplnit BioPharmu** — rozpočet 28 500 h, budovy, patra, technologie | Správa projektů → Údaje | ⬜ čeká |
@@ -432,6 +432,15 @@ pravidel. Vzkazy se i s chybou načítaly (našly je zbylé dva dotazy).
       víceúčelová sportovní hala. Projekt znovu založen v evidenci,
       8 výkazů přejmenováno ze „Sportovka" na přesný název, přejmenován
       i číselník starého webu.
+- [x] 30. Role MAJITEL (Ondřej Kaňa) a ASISTENTKA (Věra Tóthová) – zatím
+      s právy manažera; id rolí sedí v ui.js (ROLES, PERMISSIONS,
+      MANAZERSKE_ROLE), store.js (tabule) i firestore.rules. Přepnutí
+      lidí na nové role až PO nasazení pravidel (viz Čeká na Michala).
+- [x] 31. TYP SPOLUPRÁCE u člověka: Zaměstnanec / OSVČ / Student – nastavuje
+      se v Uživatelé a hesla (formulář), podle něj se dělí hodinové sazby
+      v Nastavení i seznam lidí. Kdo typ nemá, bere se podle role
+      (student → Student, ostatní → Zaměstnanec). Dál se podle typu bude
+      dělit víc – zatím jen volba.
 
 ---
 

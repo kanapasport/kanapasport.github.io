@@ -33,7 +33,7 @@
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=100">
+    <link rel="stylesheet" href="assets/css/app.css?v=101">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -152,10 +152,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=100"></script>
-<script src="assets/js/ui.js?v=100"></script>
-<script src="assets/js/vykazy.js?v=100"></script>
-<script type="module" src="assets/js/store.js?v=100"></script>
+<script src="assets/js/taxonomy.js?v=101"></script>
+<script src="assets/js/ui.js?v=101"></script>
+<script src="assets/js/vykazy.js?v=101"></script>
+<script type="module" src="assets/js/store.js?v=101"></script>
 
 <script>
 (function () {
@@ -373,13 +373,23 @@
         const sazby = window.KB.sazby || {};
         const lide = V.lide();
         $("pocetSazeb").textContent = lide.length + " lidí";
-        $("sazby").innerHTML = lide.map(u =>
+        const radek = (u) =>
             '<label class="sazba">' +
                 '<span class="sazba__jmeno">' + esc(V.jmeno(u)) + "</span>" +
                 '<input type="number" class="field" min="0" step="10" ' +
                     'data-sazba="' + esc(u.id) + '" value="' + (Number(sazby[u.id]) || "") + '">' +
                 '<span class="sazba__jednotka">Kč/h</span>' +
-            "</label>").join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+            "</label>";
+        /* Dělení podle typu spolupráce (zaměstnanci / OSVČ / studenti) –
+           typ se nastavuje v Uživatelé a hesla; nadpis přes celou mřížku. */
+        $("sazby").innerHTML = window.KBUI.TYPY.map(t => {
+            const skupina = lide.filter(u => window.KBUI.typUvazku(u) === t.id);
+            return skupina.length
+                ? '<div class="popisek" style="grid-column:1/-1;margin:8px 0 0">' + esc(t.mnozne) +
+                    ' <span class="muted">(' + skupina.length + ")</span></div>" +
+                  skupina.map(radek).join("")
+                : "";
+        }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
     }
 
     /* ----------------------------------------------------------- uložení */

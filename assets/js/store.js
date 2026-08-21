@@ -353,7 +353,7 @@ try {
                změně seznamu. */
             const ja = KB.users.find(u => u.id === user.uid);
             const manazer = ja && ja.active !== false &&
-                (ja.role === "hlavni-spravce" || ja.role === "spravce");
+                ["hlavni-spravce", "majitel", "spravce", "asistentka"].indexOf(ja.role) !== -1;
             if (manazer && !tabuleVse) {
                 tabuleVse = true;
                 sledujTabuli("vse", tabuleCol());
@@ -848,6 +848,8 @@ KB.saveUser = async (data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     };
+    // typ spolupráce (zaměstnanec | osvc | student) – jen když ho volající předá
+    if (data.typ !== undefined) payload.typ = data.typ || "";
     // otisk hesla se přepisuje jen tehdy, když se heslo opravdu mění
     if (data.salt) payload.salt = data.salt;
     if (data.hash) payload.hash = data.hash;

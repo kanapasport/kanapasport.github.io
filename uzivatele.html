@@ -31,7 +31,7 @@
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=100">
+    <link rel="stylesheet" href="assets/css/app.css?v=101">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
 </head>
@@ -241,6 +241,11 @@
             <select id="fRole" class="field"></select>
         </div>
         <div>
+            <label class="label" for="fTyp">Typ spolupráce</label>
+            <select id="fTyp" class="field"></select>
+            <div class="tiny muted" style="margin-top:4px">Podle typu se dělí hodinové sazby i seznam lidí.</div>
+        </div>
+        <div>
             <label class="label" for="fPass">Heslo</label>
             <div class="row" style="gap:8px">
                 <input type="text" id="fPass" class="field grow" placeholder="nechat prázdné = ponechat stávající">
@@ -263,10 +268,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=100"></script>
-<script src="assets/js/doc.js?v=100"></script>
-<script src="assets/js/ui.js?v=100"></script>
-<script type="module" src="assets/js/store.js?v=100"></script>
+<script src="assets/js/taxonomy.js?v=101"></script>
+<script src="assets/js/doc.js?v=101"></script>
+<script src="assets/js/ui.js?v=101"></script>
+<script type="module" src="assets/js/store.js?v=101"></script>
 
 <script>
 (function () {
@@ -485,7 +490,9 @@
     /* ------------------------------------------------------------ seznam */
 
     function rowHtml(user) {
-        const role = window.KBUI.ROLES.find(r => r.id === user.role) || window.KBUI.ROLES[3];
+        const role = window.KBUI.ROLES.find(r => r.id === user.role) ||
+            window.KBUI.ROLES.find(r => r.id === "student");
+        const typ = window.KBUI.TYPY.find(t => t.id === window.KBUI.typUvazku(user));
         const me = (window.KB_EMAIL || "").toLowerCase() === (user.email || "").toLowerCase();
 
         // heslo se ukáže jen po odemčení trezoru a jen když je uložené šifrovaně
@@ -501,6 +508,7 @@
             "<div><b>" + esc(((user.first || "") + " " + (user.last || "")).trim() || user.email) + "</b>" +
                 (me ? ' <span class="tiny" style="color:var(--accent);font-weight:800">(to jsi ty)</span>' : "") +
                 '<div class="tiny muted">' + esc(user.email) + " · " + esc(role.title) +
+                (typ ? " · " + esc(typ.title) : "") +
                 (user.active === false ? " · pozastavený" : "") +
                 (user.hash ? "" : ' · <span style="color:var(--warn)">bez hesla</span>') + "</div>" +
                 (pwdCell ? '<div class="pwdrow">' + pwdCell + "</div>" : "") +
@@ -538,8 +546,17 @@
         }
 
         const users = window.KB.users || [];
+        /* Seznam se dělí podle typu spolupráce – stejně jako hodinové sazby,
+           ať se to navzájem rovná (přání Michala 21. 8.). */
         $("list").innerHTML = users.length
-            ? users.map(rowHtml).join("")
+            ? window.KBUI.TYPY.map(t => {
+                const skupina = users.filter(u => window.KBUI.typUvazku(u) === t.id);
+                return skupina.length
+                    ? '<div class="popisek" style="margin:14px 0 6px">' + esc(t.mnozne) +
+                        ' <span class="muted">(' + skupina.length + ")</span></div>" +
+                      skupina.map(rowHtml).join("")
+                    : "";
+              }).join("")
             : '<div class="card center small muted" style="padding:30px">Zatím tu nikdo není.</div>';
 
         paintMatrix();
@@ -878,6 +895,10 @@
         $("fRole").innerHTML = window.KBUI.ROLES.map(r =>
             '<option value="' + r.id + '"' +
             ((user ? user.role : "zamestnanec") === r.id ? " selected" : "") + ">" + esc(r.title) + "</option>").join("");
+        const typ = user ? window.KBUI.typUvazku(user) : "zamestnanec";
+        $("fTyp").innerHTML = window.KBUI.TYPY.map(t =>
+            '<option value="' + t.id + '"' + (typ === t.id ? " selected" : "") + ">" +
+            esc(t.title) + "</option>").join("");
 
         $("userOverlay").hidden = false;
         $(user ? "fRole" : "fFirst").focus();
@@ -893,6 +914,7 @@
             first: $("fFirst").value.trim(),
             last:  $("fLast").value.trim(),
             role:  $("fRole").value,
+            typ:   $("fTyp").value,
             active: $("fActive").checked
         };
 

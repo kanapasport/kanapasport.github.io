@@ -190,21 +190,40 @@
        Vnitřní id `spravce` se NEMĚNÍ: sedí na něm pravidla databáze
        (firestore.rules) i role uložené u lidí. Přejmenovává se jen to,
        co je vidět. */
+    /* Majitel (Ondřej Kaňa) a asistentka (Věra Tothová) přibyli 21. 8. –
+       zatím mají práva manažera, dělení práv přijde později. Id rolí jsou
+       i v firestore.rules (spravce()) a ve store.js (tabule). */
     UI.ROLES = [
         { id: "hlavni-spravce", title: "Hlavní správce", short: "HL. SPRÁVCE" },
+        { id: "majitel",        title: "Majitel",        short: "MAJITEL" },
         { id: "spravce",        title: "Manažer",        short: "MANAŽER" },
+        { id: "asistentka",     title: "Asistentka",     short: "ASISTENTKA" },
         { id: "zamestnanec",    title: "Zaměstnanec",    short: "ZAMĚSTNANEC" },
         { id: "student",        title: "Student",        short: "STUDENT" }
+    ];
+    UI.MANAZERSKE_ROLE = ["hlavni-spravce", "majitel", "spravce", "asistentka"];
+
+    /* Typ spolupráce – zatím jen dělí sazby a seznam lidí, dál se podle něj
+       bude dělit. Kdo ho nemá nastavený, bere se podle role. */
+    UI.TYPY = [
+        { id: "zamestnanec", title: "Zaměstnanec", mnozne: "Zaměstnanci" },
+        { id: "osvc",        title: "OSVČ",        mnozne: "OSVČ" },
+        { id: "student",     title: "Student",     mnozne: "Studenti" }
+    ];
+    UI.typUvazku = (u) => (u && u.typ) || ((u && u.role === "student") ? "student" : "zamestnanec");
+
+    const MANAZER_PRAVA = [
+        "ukol.create", "ukol.edit", "ukol.delete",
+        "zakazky.manage", "historie.view", "milnik.manage",
+        "navod.create", "navod.delete", "navod.pdf",
+        "vykaz.otevrit", "vykaz.view", "vykaz.edit"
     ];
 
     const PERMISSIONS = {
         "hlavni-spravce": ["*"],
-        "spravce": [
-            "ukol.create", "ukol.edit", "ukol.delete",
-            "zakazky.manage", "historie.view", "milnik.manage",
-            "navod.create", "navod.delete", "navod.pdf",
-            "vykaz.otevrit", "vykaz.view", "vykaz.edit"
-        ],
+        "majitel":    MANAZER_PRAVA,
+        "spravce":    MANAZER_PRAVA,
+        "asistentka": MANAZER_PRAVA,
         /* Zaměstnanec si výkazy otevře, ale vidí a zapisuje jen svoje – bez
            cizích zápisů, bez sazeb a bez exportu. Hlídá to i databáze
            (firestore.rules), ne jen schované tlačítko. */
@@ -296,7 +315,7 @@
 
     UI.isOwner = () => UI.role() === "hlavni-spravce";
     /** „Správce" v původním smyslu – hlavní správce i běžný správce. */
-    UI.isAdmin = () => UI.isOwner() || UI.role() === "spravce";
+    UI.isAdmin = () => UI.MANAZERSKE_ROLE.indexOf(UI.role()) !== -1;
 
     UI.setUser = (name) => {
         window.KB_USER = name;
@@ -327,7 +346,7 @@
            Nahoře vpravo zůstane přihlašovací tlačítko jen pro nepřihlášené
            a pro úzké okno, kde žádný pás není. */
         document.querySelectorAll("[data-rail-ja]").forEach(box => {
-            const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES[3];
+            const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES.find(r => r.id === "student");
             box.innerHTML = window.KB_USER
                 ? "<b>" + esc(window.KB_USER) + "</b>" +
                   '<span class="siderail__role">' + esc(role.title) + "</span>" +
@@ -338,7 +357,7 @@
             el.textContent = window.KB_USER || "nepřihlášen";
         });
         document.querySelectorAll("[data-role-pill]").forEach(el => {
-            const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES[3];
+            const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES.find(r => r.id === "student");
             el.textContent = window.KB_USER ? role.short : "NEPŘIHLÁŠEN";
             el.className = "rolepill" + (UI.isAdmin() ? " rolepill--admin" : "") +
                            (window.KB_USER ? "" : " rolepill--off");
@@ -1269,7 +1288,8 @@
            vůbec (bez vybraného člověka to hlásilo chybu).
            Řadí se manažeři, pak zaměstnanci, pak studenti; nadpisy k tomu
            netřeba, stačí, že to drží pohromadě. */
-        const PORADI = { "hlavni-spravce": 0, "spravce": 1, "zamestnanec": 2, "student": 3 };
+        const PORADI = { "hlavni-spravce": 0, "majitel": 1, "spravce": 2, "asistentka": 3,
+                         "zamestnanec": 4, "student": 5 };
         const lide = (window.KB.users || [])
             .filter(u => u.active !== false && u.id !== uid)
             .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
