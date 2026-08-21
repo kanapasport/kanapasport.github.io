@@ -47,7 +47,7 @@ přihlášení **Firebase Auth**.
 
 | # | Co | Kde | Stav |
 |---|---|---|---|
-| 1 | **ZNOVU nasadit `firestore.rules`** – Michal nasadil 20. 8. 13:04, ale JEŠTĚ TÝŽ DEN ve 13:07 přibyl zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků) a 21. 8. oprava čtení Quick TO-DO (pojistka `is list` shazovala dotaz přes `proUids`). Soubor: `PREDANI_WEB\pasportkana_navodyirestore.rules` → celý obsah vložit do Firebase Console → Firestore Database → Rules → Publish. | Firebase Console | ⬜ ČEKÁ (nasazeno 20. 8. 13:04) |
+| 1 | **ZNOVU nasadit `firestore.rules`** – Michal nasadil 20. 8. 13:04, ale JEŠTĚ TÝŽ DEN ve 13:07 přibyl zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků) a 21. 8. oprava čtení Quick TO-DO (pojistka `is list` shazovala dotaz přes `proUids`). Soubor: `PREDANI_WEB\pasportkana_navody\firestore.rules` → celý obsah vložit do Firebase Console → Firestore Database → Rules → Publish. | Firebase Console | ⬜ ČEKÁ (nasazeno 20. 8. 13:04) |
 | 2 | **Přesunout tabule** | Import dat → *Zkopírovat tabule na nové místo* | ⬜ čeká |
 | 3 | **Nahrát nový `prehled-BP.json`** (17 lidí, 11 073 h) | Přehled BP → import | ⬜ čeká |
 | 4 | **Vyplnit BioPharmu** — rozpočet 28 500 h, budovy, patra, technologie | Správa projektů → Údaje | ⬜ čeká |
