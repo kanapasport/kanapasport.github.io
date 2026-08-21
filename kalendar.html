@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=97">
+    <link rel="stylesheet" href="assets/css/app.css?v=98">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -59,6 +59,7 @@
         .ud--nemoc { background: #c8102e; }
         .ud--skoleni { background: #8a2be2; }
         .ud--homeoffice { background: #0e7490; }
+        .ud--volno { background: #6b8e23; }
         .ud--ukol { background: #c26a00; }
         .ud--milnik { background: #b3006b; }
 
@@ -171,6 +172,7 @@
             <label class="filtr__druh"><input type="checkbox" data-druh="nemoc"><i class="ud--nemoc"></i>Nemoci</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="skoleni"><i class="ud--skoleni"></i>Školení</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="homeoffice"><i class="ud--homeoffice"></i>Home office</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="volno"><i class="ud--volno"></i>Volno</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="ukol"><i class="ud--ukol"></i>Termíny úkolů</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="milnik"><i class="ud--milnik"></i>Milníky</label>
             <button type="button" id="btnVse" class="btn btn--ghost btn--sm filtr__reset"
@@ -199,6 +201,7 @@
                         <option value="nemoc">Nemoc</option>
                         <option value="skoleni">Školení</option>
                         <option value="homeoffice">Home office</option>
+                        <option value="volno">Volno</option>
                         <option value="udalost">Událost</option>
                     </select></label>
                 <label class="pole"><span class="popisek">Od dne</span>
@@ -229,10 +232,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=97"></script>
-<script src="assets/js/ui.js?v=97"></script>
-<script src="assets/js/vykazy.js?v=97"></script>
-<script type="module" src="assets/js/store.js?v=97"></script>
+<script src="assets/js/taxonomy.js?v=98"></script>
+<script src="assets/js/ui.js?v=98"></script>
+<script src="assets/js/vykazy.js?v=98"></script>
+<script type="module" src="assets/js/store.js?v=98"></script>
 
 <script>
 (function () {
@@ -245,7 +248,7 @@
     /* Popisky druhů s velkým písmenem – v kalendáři stojí druh na začátku
        řádku („Dovolená – Jan Novák"), takže se píše jako začátek věty. */
     const DRUHY = { udalost: "Událost", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", homeoffice: "Home office" };
+        skoleni: "Školení", homeoffice: "Home office", volno: "Volno" };
     const DNY_KRATCE = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
         "srpen", "září", "říjen", "listopad", "prosinec"];
@@ -283,7 +286,7 @@
 
     const FILTR_KLIC = "kb-kalendar-filtr";
     const VYCHOZI_DRUHY = { udalost: true, dovolena: true, nemoc: true, skoleni: true,
-        homeoffice: true, ukol: true, milnik: true };
+        homeoffice: true, volno: true, ukol: true, milnik: true };
 
     function vychoziFiltr() {
         return { druhy: Object.assign({}, VYCHOZI_DRUHY), kdo: "" };
@@ -355,8 +358,9 @@
         let druh = (u.typ || "udalost") === "udalost"
             ? (vlastni || DRUHY.udalost)
             : nazevDruhu;
-        // dovolená bez manažerova razítka to musí říct rovnou v mřížce
+        // dovolená a volno bez manažerova razítka to musí říct rovnou v mřížce
         if (u.typ === "dovolena" && u.potvrzeno !== true) druh = "Nepotvrzená dovolená";
+        if (u.typ === "volno" && u.potvrzeno !== true) druh = "Nepotvrzené volno";
 
         return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : ""),
                  vlastni: vlastni && vlastni.toLowerCase() !== nazevDruhu.toLowerCase()

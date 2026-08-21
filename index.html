@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=97">
+    <link rel="stylesheet" href="assets/css/app.css?v=98">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -207,6 +207,7 @@
         .ktyp--nemoc { background: #c8102e; }
         .ktyp--skoleni { background: #8a2be2; }
         .ktyp--homeoffice { background: #0e7490; }
+        .ktyp--volno { background: #6b8e23; }
         .ktyp--ukol { background: #c26a00; }
 
         /* Poslední aktivita: čas drobně nad textem, jméno tučně – jedno malé
@@ -328,11 +329,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=97"></script>
-<script src="assets/js/doc.js?v=97"></script>
-<script src="assets/js/ui.js?v=97"></script>
-<script src="assets/js/vykazy.js?v=97"></script>
-<script type="module" src="assets/js/store.js?v=97"></script>
+<script src="assets/js/taxonomy.js?v=98"></script>
+<script src="assets/js/doc.js?v=98"></script>
+<script src="assets/js/ui.js?v=98"></script>
+<script src="assets/js/vykazy.js?v=98"></script>
+<script type="module" src="assets/js/store.js?v=98"></script>
 
 <script>
 (function () {
@@ -727,9 +728,11 @@
        úkolů. Dny bez obsahu se vynechávají – prázdné řádky nic neřeknou. */
 
     const TYP_BARVA = { udalost: "#0f62c4", dovolena: "#0d7d3f", nemoc: "#c8102e",
-        skoleni: "#8a2be2", homeoffice: "#0e7490" };
+        skoleni: "#8a2be2", homeoffice: "#0e7490", volno: "#6b8e23" };
     const TYP_NAZEV = { udalost: "událost", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", homeoffice: "Home office" };
+        skoleni: "Školení", homeoffice: "Home office", volno: "Volno" };
+    // absence, které platí až po manažerově razítku
+    const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená", volno: "Nepotvrzené volno" };
 
     function renderKalendarDlazdice() {
         const dny = [];
@@ -743,7 +746,7 @@
             (window.KB.kalendar || []).forEach(k => {
                 if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
                     let druh = TYP_NAZEV[k.typ] || "událost";
-                    if (k.typ === "dovolena" && k.potvrzeno !== true) druh = "Nepotvrzená dovolená";
+                    if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true) druh = NEPOTVRZENE[k.typ];
                     radky.push({ barva: TYP_BARVA[k.typ] || TYP_BARVA.udalost,
                         text: k.typ === "udalost"
                             ? (k.text || "událost") + (k.osoba ? " – " + k.osoba : "")
@@ -844,7 +847,7 @@
             String(hranice.getDate()).padStart(2, "0");
 
         const ceka = (window.KB.kalendar || [])
-            .filter(k => k.typ === "dovolena" && k.potvrzeno !== true &&
+            .filter(k => (k.typ === "dovolena" || k.typ === "volno") && k.potvrzeno !== true &&
                 (k.do || k.od || "") >= hraniceISO)
             .sort((a, b) => (a.od || "").localeCompare(b.od || ""));
 
@@ -854,7 +857,8 @@
                     '<span class="kontrola__odkaz">' +
                         '<span class="kontrola__datum" style="color:var(--accent)">' +
                             esc(czDatum(k.od)) + (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>" +
-                        "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b></span></span>" +
+                        "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b>" +
+                            (k.typ === "volno" ? " · volno" : "") + "</span></span>" +
                     '<button type="button" class="btn btn--sm btn--primary" data-potvrd-dovolenou="' +
                         esc(k.id) + '">Potvrdit</button>' +
                 "</div>").join("")

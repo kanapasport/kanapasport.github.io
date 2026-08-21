@@ -385,6 +385,13 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
       i obecná obsluha v ui.js, druhé smazání spadlo na právech.
       Obsluha v ui.js teď platí jen pro panel a stránku vzkazů
       (stejná zábrana i u Splněno – dělalo dvojité zápisy do aktivit).
+- [x] 20. Nový druh absence VOLNO (neplacené/náhradní volno) – chová se
+      přesně jako dovolená: rozsah dní, celý den, bez peněz, propis do
+      kalendáře (olivová barva, filtr, roletka) a POTVRZOVÁNÍ manažerem
+      (dlaždice Potvrzení dovolených, štítek Nepotvrzené volno)
+- [x] 21. Správa → Údaje: tlačítko Smazat projekt (jen zakazky.manage,
+      s potvrzením). Maže JEN projekt z evidence + jeho finance; výkazy
+      a úkoly zůstávají – nesou název projektu s sebou jako historie.
 
 ---
 

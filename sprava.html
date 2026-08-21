@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=97">
+    <link rel="stylesheet" href="assets/css/app.css?v=98">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -424,6 +424,8 @@
                     </div>
 
                     <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+                        <button type="button" id="btnSmazProjekt" class="btn btn--ghost btn--sm"
+                            style="color:var(--danger)" data-need="zakazky.manage" hidden>Smazat projekt</button>
                         <span id="stav" class="small muted" style="margin-right:auto"></span>
                         <button type="button" id="btnUloz" class="btn btn--primary">Uložit nastavení projektu</button>
                     </div>
@@ -503,10 +505,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=97"></script>
-<script src="assets/js/ui.js?v=97"></script>
-<script src="assets/js/vykazy.js?v=97"></script>
-<script type="module" src="assets/js/store.js?v=97"></script>
+<script src="assets/js/taxonomy.js?v=98"></script>
+<script src="assets/js/ui.js?v=98"></script>
+<script src="assets/js/vykazy.js?v=98"></script>
+<script type="module" src="assets/js/store.js?v=98"></script>
 
 <script>
 (function () {
@@ -1749,6 +1751,29 @@
             }
         });
         $("btnUloz").addEventListener("click", uloz);
+        $("btnSmazProjekt").addEventListener("click", async () => {
+            const p = vybranyProjekt();
+            if (!p) return;
+            /* Smaže se jen projekt z evidence (a jeho finance). Výkazy
+               a úkoly se NEmažou – nesou název projektu s sebou a zůstávají
+               jako historie; jen už se projekt nenabízí v roletkách. */
+            const nazev = p.nazev || "";
+            const ukolu = (window.KB.ukoly || []).filter(u => u.projekt === nazev).length;
+            const vykazu = (window.KB.vykazy || [])
+                .filter(z => z.zakazka === nazev || z.projekt === nazev).length;
+            const varovani = "Opravdu smazat projekt " + nazev + " z evidence?\n\n" +
+                "Na projektu visí: " + ukolu + " úkolů a " + vykazu + " výkazů " +
+                "(ty zůstanou, jen projekt zmizí z nabídek a přehledů).\n" +
+                "Smazání nejde vzít zpět.";
+            if (!confirm(varovani)) return;
+            try {
+                await window.KB.deleteProjekt(p.id);
+                window.KBUI.toast("Projekt smazán: " + nazev);
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Smazání selhalo.", "error");
+            }
+        });
         $("btnUlozMatice").addEventListener("click", uloz);
 
         // budget úkolů se ukládá po řádcích; buňka matice otevírá výběr
