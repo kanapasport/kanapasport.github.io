@@ -442,6 +442,26 @@ pravidel. Vzkazy se i s chybou načítaly (našly je zbylé dva dotazy).
       (student → Student, ostatní → Zaměstnanec). Dál se podle typu bude
       dělit víc – zatím jen volba.
 
+**Dávka 21. 8. – zápis do Google Sheets:**
+
+- [x] 32. Osobní výkazy v Tabulkách Google se plní z webu. Skript je
+      v `PREDANI_WEB\gas\Kod.gs`, návod vedle v `NAVOD-GAS.md`.
+      Zapisuje se **hned po uložení výkazu** (web ťukne na Apps Script
+      přes `KB.posliDoSheets`, adresa leží v `meta/gsync`, ne ve zdroji –
+      repozitář je veřejný) a **hodinový spouštěč** dožene, co webhook
+      minul. Skript přijímá jen ID zápisu a obsah si čte sám z databáze,
+      takže se přes tu adresu nedá nic podstrčit.
+- [x] 33. Report → **Zápis do osobních výkazů**: u každého zápisu je
+      vidět sešit, list a řádek, kam se propsal, nebo červená CHYBA
+      s důvodem. Tamtéž se ukládá adresa skriptu.
+- [x] 34. Nové: stavy zápisu v `private/vykazy/gsync/{id}` (píše je
+      Apps Script pod účtem `zapisdatgs@pasport.eu`, roli má manažer –
+      jinak by nedosáhl na sazby).
+
+**Pozor:** skript NESMÍ být v sešitě zaměstnance – kdo smí sešit
+upravovat, přečte si v Apps Scriptu heslo. Patří do samostatného
+projektu, který vlastní manažer.
+
 ---
 
 ## 10. Co se odložilo

@@ -106,6 +106,7 @@ const KB = {
     pritomnost: [],         // kdo je právě na webu: { id: uid, ms, jmeno }
     aktivity: [],           // historie kroků (kdo co uložil) – jen pro manažery
     logy: [],               // historie přihlášení (public/data/logs)
+    gsync: [],              // stavy zápisu výkazů do Tabulek Google
     quicktodo: [],          // rychlé vzkazy: vidí je jen autor a adresát
     ukolBudgety: {},        // budgety úkolů (jen manažeři): id → { budgetHodin, rezervaHodin }
     auta: [],               // správa aut: zápisy na dny v Brně a rezervace vozů
@@ -363,6 +364,11 @@ try {
         /* Milníky leží v jednom dokumentu jako pole. Je jich pár desítek
            a hlavně: `meta/…` smí zapisovat jen správce, takže se tím rovnou
            řeší i to, kdo je může měnit – bez dalších pravidel v databázi. */
+        odbery.push(onSnapshot(metaDoc("gsync"), (snap) => {
+            KB.gsyncUrl = (snap.exists() ? (snap.data() || {}).url : "") || "";
+            emit("gsync-url", KB.gsyncUrl);
+        }, () => { /* adresa nemusí být nastavená – zápis se pak jen nespustí */ }));
+
         odbery.push(onSnapshot(metaDoc("milniky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
             KB.milniky = Array.isArray(data.items) ? data.items : [];
@@ -1387,6 +1393,60 @@ function zaznamPayload(data) {
     };
 }
 
+/* ------------------------------------------- zápis do Google Sheets ---
+   Osobní výkazy v Tabulkách Google plní samostatný Apps Script. Web mu po
+   uložení pošle JEN ID zápisu; skript si ho sám přečte z databáze, takže
+   se přes tuhle cestu nedá do výkazu nic podstrčit.
+
+   Adresa skriptu leží v `meta/gsync` (čtou ji jen členové), ne ve zdroji –
+   repozitář je veřejný. Chyba se nikdy nepropíše do ukládání výkazu:
+   když zápis do tabulky nevyjde, dožene ho hodinový spouštěč a v reportu
+   je vidět, u kterého zápisu se to nepovedlo. */
+
+const gsyncDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "gsync", id);
+const gsyncCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", "gsync");
+
+KB.gsync = [];              // stavy zápisů do tabulek (jen manažeři)
+KB.gsyncUrl = "";           // adresa Apps Scriptu z meta/gsync
+
+KB.posliDoSheets = (id) => {
+    if (!KB.gsyncUrl || !id) return;
+    /* text/plain schválně: prohlížeč tak požadavek pošle rovnou, bez
+       předletu, který Apps Script neumí odbavit. Odpověď nečteme –
+       výsledek si skript zapíše zpátky do databáze. */
+    fetch(KB.gsyncUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ id: id })
+    }).catch(err => console.warn("Zápis do Tabulek se neozval:", err));
+};
+
+KB.ulozGsyncUrl = async (url) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(metaDoc("gsync"), {
+        url: String(url || "").trim(),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+};
+
+let gsyncOdber = null;
+
+/** Stavy zápisů do tabulek – čte je jen report, tedy manažeři. */
+KB.watchGsync = async () => {
+    if (gsyncOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || gsyncOdber) return;
+    gsyncOdber = onSnapshot(query(gsyncCol(), orderBy("ms", "desc"), limit(60)),
+        (snapshot) => {
+            KB.gsync = [];
+            snapshot.forEach(d => KB.gsync.push({ id: d.id, ...d.data() }));
+            emit("gsync", KB.gsync);
+        }, (err) => console.error("Chyba čtení stavů zápisu do Tabulek:", err));
+};
+
 /** Uloží zápis i s penězi – volá stránka správce. */
 KB.saveVykaz = async (id, data) => {
     if (authReady) await authReady;
@@ -1406,6 +1466,7 @@ KB.saveVykaz = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, castky), { merge: true });
+    KB.posliDoSheets(id);
     return id;
 };
 
@@ -1440,6 +1501,7 @@ KB.saveMujVykaz = async (id, data) => {
     KB.zapisAktivitu("vykaz", "uložil výkaz " + (zaznam.datum || "") +
         " – " + (zaznam.zakazka || ""));
     await setDoc(vykazDoc(id), zaznam, { merge: true });
+    KB.posliDoSheets(id);
     return id;
 };
 
