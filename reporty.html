@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Report – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=98">
+    <link rel="stylesheet" href="assets/css/app.css?v=99">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -108,6 +108,18 @@
             </div>
         </section>
 
+        <!-- ================================================ TÝDENNÍ LOGY -->
+        <section class="rblok">
+            <div class="rblok__hlava"><span class="rblok__stitek">Týdenní logy</span></div>
+            <div class="rblok__telo">
+                <p class="tiny muted" style="margin:0;line-height:1.6">
+                    Historie aktivit výš drží jen poslední týden. Vždy v pondělí se
+                    z uplynulého týdne udělá zápis – tady se dá rozkliknout.
+                </p>
+                <div id="tydenniLogy" style="font-size:13.5px"></div>
+            </div>
+        </section>
+
         <!-- ======================================= POSLEDNÍ PŘIHLÁŠENÍ -->
         <section class="rblok">
             <div class="rblok__hlava"><span class="rblok__stitek">Poslední přihlášení</span></div>
@@ -122,10 +134,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=98"></script>
-<script src="assets/js/ui.js?v=98"></script>
-<script src="assets/js/vykazy.js?v=98"></script>
-<script type="module" src="assets/js/store.js?v=98"></script>
+<script src="assets/js/taxonomy.js?v=99"></script>
+<script src="assets/js/ui.js?v=99"></script>
+<script src="assets/js/vykazy.js?v=99"></script>
+<script type="module" src="assets/js/store.js?v=99"></script>
 
 <script>
 (function () {
@@ -135,7 +147,7 @@
     let sledovaniZapnuto = false;
 
     const DRUHY = { projekt: "projekt", ukol: "úkol", postup: "TO-DO", vykaz: "výkaz",
-                    kalendar: "kalendář", quicktodo: "quick to-do" };
+                    kalendar: "kalendář", quicktodo: "quick to-do", milnik: "milník" };
     const HLAVNI_DRUHY = ["quicktodo", "postup", "vykaz"];
     let aktivniDruh = "";   // filtr záložek nad historií
 
@@ -198,11 +210,14 @@
     function renderAktivity() {
         document.querySelectorAll("[data-adruh]").forEach(ch =>
             ch.classList.toggle("chip--active", ch.dataset.adruh === aktivniDruh));
+        /* jen poslední týden – starší kroky žijí v týdenních lozích níž */
+        const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
         const vyber = (window.KB.aktivity || []).filter(a =>
-            !aktivniDruh ||
+            (a.ms || 0) >= tydenZpet &&
+            (!aktivniDruh ||
             (aktivniDruh === "ostatni"
                 ? HLAVNI_DRUHY.indexOf(a.druh) === -1
-                : a.druh === aktivniDruh));
+                : a.druh === aktivniDruh)));
         document.getElementById("aktivity").innerHTML =
             vyber.map(a => histRadek(
                 cas(a.ms),
@@ -224,6 +239,66 @@
                "seznam se plní sám, jak se lidé přihlašují.</span>";
     }
 
+    /* ------------------------------------------------- týdenní logy ----
+       Zápis dělá první manažer, který v novém týdnu otevře Reporty – id
+       dokumentu je pondělí LOGOVANÉHO (minulého) týdne, takže se týden
+       nezapíše dvakrát ani ze dvou počítačů. */
+
+    const isoDen = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+        "-" + String(d.getDate()).padStart(2, "0");
+    const czIso = (iso) => iso ? iso.split("-").reverse().map(Number).join(". ") : "";
+    let tydenniLogy = [];
+    const logyRozbalene = new Set();
+    let logyBezely = false;
+
+    async function zajistiTydenniLog() {
+        const ted = new Date();
+        const po = new Date(ted.getFullYear(), ted.getMonth(), ted.getDate());
+        po.setDate(po.getDate() - (po.getDay() + 6) % 7);   // pondělí tohoto týdne
+        const doMs = po.getTime();
+        const odMs = doMs - 7 * 86400000;
+        const id = isoDen(new Date(odMs));
+        if (await window.KB.nactiTydenniLog(id)) return;
+        const polozky = await window.KB.nactiAktivityRozsah(odMs, doMs);
+        await window.KB.ulozTydenniLog(id, {
+            od: isoDen(new Date(odMs)),
+            do: isoDen(new Date(doMs - 86400000)),
+            ms: Date.now(),
+            zapsal: window.KB_USER || "",
+            pocet: polozky.length,
+            // dokument unese 1 MB – pár tisíc krátkých řádků je bezpečný strop
+            items: polozky.slice(0, 4000).map(a => ({
+                ms: a.ms || 0, druh: a.druh || "", jmeno: a.jmeno || "", text: a.text || "" }))
+        });
+    }
+
+    function renderTydenniLogy() {
+        document.getElementById("tydenniLogy").innerHTML = tydenniLogy.map(l =>
+            '<div style="padding:6px 0;border-bottom:1px dashed var(--line-soft)">' +
+                '<button type="button" class="linkbtn" data-log="' + esc(l.id) + '">' +
+                    (logyRozbalene.has(l.id) ? "Skrýt" : "Rozbalit") + "</button> " +
+                "<b>Týden " + esc(czIso(l.od)) + " – " + esc(czIso(l.do)) + "</b>" +
+                ' <span class="tiny muted">· ' + (l.pocet || 0) + " záznamů</span>" +
+                (logyRozbalene.has(l.id)
+                    ? '<div style="margin-top:6px">' + (l.items || []).map(a => histRadek(
+                        cas(a.ms),
+                        '<span class="tag">' + esc(DRUHY[a.druh] || a.druh || "") + "</span>",
+                        "<b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "")
+                      )).join("") + "</div>"
+                    : "") +
+            "</div>").join("")
+            || '<span class="tiny muted">Zatím žádný log – první se zapíše v pondělí.</span>';
+    }
+
+    async function nactiTydenniLogy() {
+        try {
+            await zajistiTydenniLog();
+            tydenniLogy = (await window.KB.nactiTydenniLogy(12))
+                .map(l => Object.assign({ id: l.od || l.id }, l));
+        } catch (err) { console.warn("Týdenní logy se nenačetly:", err); }
+        renderTydenniLogy();
+    }
+
     function render() {
         const smi = window.KBUI.can("vykaz.view");
         document.getElementById("stop").hidden = smi;
@@ -235,6 +310,10 @@
         }
         renderAktivity();
         renderPrihlaseni();
+        if (smi && !logyBezely && window.KB.currentUid()) {
+            logyBezely = true;
+            nactiTydenniLogy();
+        }
     }
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "reporty.html" });
@@ -248,6 +327,14 @@
             renderAktivity();
         });
         window.KB.on("logy", renderPrihlaseni);
+        document.getElementById("tydenniLogy").addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-log]");
+            if (!btn) return;
+            logyRozbalene.has(btn.dataset.log)
+                ? logyRozbalene.delete(btn.dataset.log)
+                : logyRozbalene.add(btn.dataset.log);
+            renderTydenniLogy();
+        });
         render();
     });
 })();

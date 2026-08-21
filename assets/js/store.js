@@ -544,11 +544,12 @@ KB.saveQuickTodo = async (id, data) => {
         hotovoMs:  data.hotovoMs || 0,
         ms:      data.ms || Date.now()
     }, { merge: true });
-    /* Aktivita kvůli reportům – bez textu vzkazu: aktivity čtou všichni
-       manažeři, ale vzkaz je jen mezi autorem a adresátem. */
-    KB.zapisAktivitu("quicktodo", data.hotovo === true
-        ? "splnil quick to-do"
-        : "zadal quick to-do (" + komu.length + " lidem)");
+    /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
+       vidět, o jaký vzkaz šlo. Vzkaz tím pádem čtou i manažeři. */
+    KB.zapisAktivitu("quicktodo", (data.hotovo === true
+        ? "splnil quick to-do: "
+        : "zadal quick to-do (" + komu.length + " lidem): ") +
+        String(data.text || "").slice(0, 80));
     return id;
 };
 
@@ -581,6 +582,48 @@ KB.saveZamek = async (salt, hash) => {
     });
 };
 
+/* ------------------------------------------------- týdenní logy reportů --
+   Reporty ukazují jen poslední týden; každé pondělí (přesněji: při první
+   manažerově návštěvě Reportů v novém týdnu) se z aktivit uplynulého týdne
+   udělá zápis s pevným id = pondělí logovaného týdne. Leží v `private`
+   (nesou i texty quick vzkazů), takže je čtou jen manažeři – kryje je
+   spodní pravidlo pro private, žádná změna pravidel není potřeba. */
+
+const tydenniLogyCol = () => collection(db, "artifacts", APP_ID, "private", "reporty", "logy");
+const tydenniLogDoc = (id) => doc(db, "artifacts", APP_ID, "private", "reporty", "logy", id);
+
+KB.nactiAktivityRozsah = async (odMs, doMs) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(query(aktivityCol(),
+        where("ms", ">=", odMs), where("ms", "<", doMs), orderBy("ms", "asc")));
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+    return out;
+};
+
+KB.nactiTydenniLog = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(tydenniLogDoc(id));
+    return snap.exists() ? snap.data() : null;
+};
+
+KB.ulozTydenniLog = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(tydenniLogDoc(id), data);
+};
+
+KB.nactiTydenniLogy = async (kolik) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(query(tydenniLogyCol(), orderBy("ms", "desc"), limit(kolik || 12)));
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+    return out;
+};
+
 let aktivityOdber = null;
 
 /** Posledních pár desítek kroků – jen pro manažery (pravidla). */
@@ -588,7 +631,9 @@ KB.watchAktivity = async () => {
     if (aktivityOdber) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || aktivityOdber) return;
-    aktivityOdber = onSnapshot(query(aktivityCol(), orderBy("ms", "desc"), limit(40)),
+    /* 300 místo 40: reporty ukazují celý poslední týden a ten může mít
+       stovky kroků; starší týdny žijí v týdenních lozích */
+    aktivityOdber = onSnapshot(query(aktivityCol(), orderBy("ms", "desc"), limit(300)),
         (snapshot) => {
             KB.aktivity = [];
             snapshot.forEach(d => KB.aktivity.push({ id: d.id, ...d.data() }));
@@ -1611,7 +1656,9 @@ KB.ulozUkolBudget = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
-    KB.zapisAktivitu("ukol", "změnil budget úkolu " + id);
+    const ukolBudgetu = (KB.ukoly || []).find(x => x.id === id);
+    KB.zapisAktivitu("ukol", "změnil budget úkolu " +
+        (ukolBudgetu ? ukolBudgetu.nazev : id));
 };
 
 /** Živý přenos všech úkolů – pro manažery. */
@@ -1718,7 +1765,7 @@ KB.ulozUkolPostup = async (id, todo, stav, zmena) => {
     KB.zapisAktivitu("postup", "zapsal postup" +
         (ukol ? " u úkolu " + ukol.nazev : "") +
         (zmena && zmena.text
-            ? " – " + zmena.text + " " + (Number(zmena.z) || 0) + " % → " + (Number(zmena.na) || 0) + " %"
+            ? " – " + (Number(zmena.z) || 0) + "->" + (Number(zmena.na) || 0) + "% " + zmena.text
             : "") +
         (stav === "hotovo" ? " – hotovo" : ""));
 };
@@ -1748,7 +1795,11 @@ KB.potvrdDovolenou = async (id) => {
         potvrdil: window.KB_USER || "",
         potvrzenoMs: Date.now()
     }, { merge: true });
-    KB.zapisAktivitu("kalendar", "potvrdil dovolenou");
+    const u = (KB.kalendar || []).find(x => x.id === id);
+    const DRUH = { dovolena: "dovolenou", volno: "volno", nemoc: "nemoc", skoleni: "školení" };
+    KB.zapisAktivitu("kalendar", "potvrdil " + (DRUH[(u || {}).typ] || "dovolenou") +
+        (u ? " – " + (u.osoba || "?") + " (" + (u.od || "") +
+            (u.do && u.do !== u.od ? " až " + u.do : "") + ")" : ""));
 };
 
 KB.saveUdalost = async (id, data) => {

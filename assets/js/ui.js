@@ -1294,6 +1294,10 @@
 
     }
 
+    /* MOJE = co mi kdo poslal, ZADANÉ = co jsem poslal já – stejné
+       přepínání jako Moje/Všechny u zadaných úkolů (přání Michala 21. 8.). */
+    let quickRezim = "moje";
+
     function vykresliQuickSeznamy(uid) {
         const jmeno = (id) => {
             const u = (window.KB.users || []).find(x => x.id === id);
@@ -1359,20 +1363,31 @@
 
         const aktivniProMe = proMe.filter(q => !q.hotovo).sort(naporadi);
         const aktivniOdeMe = odeMe.filter(q => !q.hotovo).sort(naporadi);
-        const splnene = proMe.concat(odeMe).filter(q => q.hotovo);
+        /* Historie splněných drží jen poslední týden – starší zůstávají
+           v databázi a v týdenních lozích reportů, tady by jen překážely. */
+        const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
+        const mojeRezim = quickRezim !== "zadane";
+        const splnene = (mojeRezim ? proMe : odeMe)
+            .filter(q => q.hotovo && (q.hotovoMs || q.ms || 0) >= tydenZpet);
+        const aktivni = mojeRezim ? aktivniProMe : aktivniOdeMe;
 
         const seznamHtml =
-            (aktivniProMe.length
-                ? '<div class="quickpanel__nadpis">Pro mě</div>' + aktivniProMe.map(q => radek(q, false)).join("")
-                : '<div class="quickpanel__prazdno">Žiješ šťastný život, nikdo po tobě nic nechce.</div>') +
-            (aktivniOdeMe.length
-                ? '<div class="quickpanel__nadpis">Poslal jsem</div>' + aktivniOdeMe.map(q => radek(q, true)).join("")
-                : "") +
+            '<div class="row" style="gap:6px;margin-bottom:10px">' +
+                '<button type="button" class="chip' + (mojeRezim ? " chip--active" : "") +
+                    '" data-quick-rezim="moje">Moje</button>' +
+                '<button type="button" class="chip' + (mojeRezim ? "" : " chip--active") +
+                    '" data-quick-rezim="zadane">Zadané</button>' +
+            "</div>" +
+            (aktivni.length
+                ? aktivni.map(q => radek(q, !mojeRezim)).join("")
+                : '<div class="quickpanel__prazdno">' + (mojeRezim
+                    ? "Žiješ šťastný život, nikdo po tobě nic nechce."
+                    : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
             (splnene.length
                 ? '<button type="button" class="linkbtn" data-quick-splnene style="margin-top:14px">' +
-                    (quickSplneneVidet ? "Skrýt historii" : "Historie – splněné (" + splnene.length + ")") +
+                    (quickSplneneVidet ? "Skrýt historii" : "Splněné za poslední týden (" + splnene.length + ")") +
                   "</button>" +
-                  (quickSplneneVidet ? splnene.map(q => radek(q, q.odKoho === uid && q.proUid !== uid)).join("") : "")
+                  (quickSplneneVidet ? splnene.map(q => radek(q, !mojeRezim)).join("") : "")
                 : "");
         document.querySelectorAll("[data-quick-seznam]").forEach(el => {
             el.innerHTML = seznamHtml;
@@ -1657,6 +1672,12 @@
             if (!smaz.closest("#kbQuickPanel, [data-quick-seznam]")) return;
             window.KB.deleteQuickTodo(smaz.dataset.quickSmaz)
                 .catch(() => UI.toast("Smazání selhalo.", "error"));
+            return;
+        }
+        const quickPrep = event.target.closest("[data-quick-rezim]");
+        if (quickPrep) {
+            quickRezim = quickPrep.dataset.quickRezim;
+            renderQuick();
             return;
         }
         if (event.target.closest("[data-quick-splnene]")) {

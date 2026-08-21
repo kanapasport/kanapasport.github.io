@@ -393,6 +393,33 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
       s potvrzením). Maže JEN projekt z evidence + jeho finance; výkazy
       a úkoly zůstávají – nesou název projektu s sebou jako historie.
 
+**Dávka 21. 8. odpoledne:**
+
+- [x] 22. Quick TODO s přepínačem MOJE / ZADANÉ (dlaždice na nástěnce
+      i stránka vzkazů) – jako Moje/Všechny u zadaných úkolů
+- [x] 23. Historie splněných vzkazů ukazuje jen poslední týden (starší
+      zůstávají v databázi a v týdenních lozích, jen se nevypisují)
+- [x] 24. Reporty: Historie aktivit drží jen poslední týden; první manažer,
+      který v novém týdnu otevře Reporty, zapíše TÝDENNÍ LOG uplynulého
+      týdne (sekce Týdenní logy, rozklikávací, pevné id = pondělí týdne,
+      leží v private/reporty/logy – kryje spodní pravidlo pro private)
+- [x] 25. Aktivity nesou víc detailu: quick to-do VČETNĚ TEXTU vzkazu
+      (vědomá změna – texty vzkazů tím čtou manažeři), potvrzení
+      dovolené/volna s typem, jménem a datem, postup ve tvaru
+      „0->50% 1PP dveře", budget úkolu s názvem místo id
+- [x] 26. DATA (provedeno 21. 8. v databázi): 19 úkolů sloučeno ze starých
+      názvů (BioPharma → Biopharm Hub - pasport dle metodik MU, C03 →
+      C03 Úpravy pavilonu); starý číselník zakázek, 21 postupů starého
+      webu a 11 milníků přejmenováno na přesné názvy (A08 → Vestavba
+      pavilonu A08); Sportovka ponechána (8 výkazů, v evidenci není);
+      smazáno 269 projektů evidence bez výkazů a úkolů – zůstalo 6
+      oblíbených. Evidence jde případně doimportovat znovu z JSON.
+
+**Známé:** konzole hlásí „Chyba čtení Quick TO-DO: permission-denied" –
+jeden ze tří dotazů (starší `proUid`) nekryjí NASAZENÁ pravidla z 18. 8.;
+v repozitáři už kryty jsou, zmizí nasazením. Vzkazy se i tak načítají
+(najdou je zbylé dva dotazy).
+
 ---
 
 ## 10. Co se odložilo

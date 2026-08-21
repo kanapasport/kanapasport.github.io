@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=98">
+    <link rel="stylesheet" href="assets/css/app.css?v=99">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -261,6 +261,10 @@
             <div class="card nastenka__karta" id="wQuick">
                 <div class="nastenka__hlava" data-otevri="quicktodo.html" title="Otevřít přehled Quick TO-DO">
                     <b>Quick TO-DO</b>
+                    <span class="nastenka__prep">
+                        <button type="button" class="chip" data-qrozsah="moje">Moje</button>
+                        <button type="button" class="chip" data-qrozsah="zadane">Zadané</button>
+                    </span>
                 </div>
                 <div id="quickSeznam" class="nastenka__telo"></div>
             </div>
@@ -329,11 +333,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=98"></script>
-<script src="assets/js/doc.js?v=98"></script>
-<script src="assets/js/ui.js?v=98"></script>
-<script src="assets/js/vykazy.js?v=98"></script>
-<script type="module" src="assets/js/store.js?v=98"></script>
+<script src="assets/js/taxonomy.js?v=99"></script>
+<script src="assets/js/doc.js?v=99"></script>
+<script src="assets/js/ui.js?v=99"></script>
+<script src="assets/js/vykazy.js?v=99"></script>
+<script type="module" src="assets/js/store.js?v=99"></script>
 
 <script>
 (function () {
@@ -622,28 +626,36 @@
             "</div>";
 
         /* Splněné se schovávají a seznam zůstává čistý; rozkliknou se dole. */
-        const aktivniProMe = proMe.filter(q => !q.hotovo).sort(naporadi);
-        const aktivniOdeMe = odeMe.filter(q => !q.hotovo).sort(naporadi);
-        const splnene = proMe.concat(odeMe).filter(q => q.hotovo);
+        /* MOJE = co mi kdo poslal, ZADANÉ = co jsem poslal – stejný přepínač
+           jako u zadaných úkolů. Splněné drží jen poslední týden; starší
+           žijí v týdenních lozích reportů. */
+        const mojeRezim = quickRozsah !== "zadane";
+        const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
+        const aktivni = (mojeRezim ? proMe : odeMe).filter(q => !q.hotovo).sort(naporadi);
+        const splnene = (mojeRezim ? proMe : odeMe)
+            .filter(q => q.hotovo && (q.hotovoMs || q.ms || 0) >= tydenZpet);
+
+        document.querySelectorAll("[data-qrozsah]").forEach(ch => {
+            const zapnuto = ch.dataset.qrozsah === quickRozsah;
+            ch.classList.toggle("chip--active", zapnuto);
+            ch.setAttribute("aria-pressed", zapnuto ? "true" : "false");
+        });
 
         document.getElementById("quickSeznam").innerHTML =
-            (aktivniProMe.map(q => radek(q, false)).join("")
+            (aktivni.map(q => radek(q, !mojeRezim)).join("")
                 || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-                   "Žiješ šťastný život, nikdo po tobě nic nechce.</div>") +
-            (aktivniOdeMe.length
-                ? '<div class="tiny muted" style="padding:10px 2px 2px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">Poslal jsem</div>' +
-                  aktivniOdeMe.map(q => radek(q, true)).join("")
-                : "") +
+                   (mojeRezim ? "Žiješ šťastný život, nikdo po tobě nic nechce."
+                              : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
             (splnene.length
                 ? '<button type="button" class="linkbtn" data-quick-splnene-tile style="margin-top:12px">' +
-                    (quickSplneneTile ? "Skrýt historii" : "Historie – splněné (" + splnene.length + ")") +
+                    (quickSplneneTile ? "Skrýt historii" : "Splněné za poslední týden (" + splnene.length + ")") +
                   "</button>" +
-                  (quickSplneneTile
-                      ? splnene.map(q => radek(q, q.odKoho === uid && q.proUid !== uid)).join("") : "")
+                  (quickSplneneTile ? splnene.map(q => radek(q, !mojeRezim)).join("") : "")
                 : "");
     }
 
     let quickSplneneTile = false;
+    let quickRozsah = "moje";
 
     /* Splněno / Vrátit / smazání / rozbalení splněných – panel v pásu má
        vlastní obsluhu v ui.js, tohle patří jen dlaždici. */
@@ -681,6 +693,8 @@
             ukazOdbavene = !ukazOdbavene;
             return void renderKontrola();
         }
+        const qrozsah = event.target.closest("[data-qrozsah]");
+        if (qrozsah) { quickRozsah = qrozsah.dataset.qrozsah; return void renderQuick(); }
         if (event.target.closest("[data-quick-splnene-tile]")) {
             quickSplneneTile = !quickSplneneTile;
             return void renderQuick();
