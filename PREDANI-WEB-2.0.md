@@ -47,7 +47,7 @@ přihlášení **Firebase Auth**.
 
 | # | Co | Kde | Stav |
 |---|---|---|---|
-| 1 | **ZNOVU nasadit `firestore.rules`** – 19. 8. přibylo pole `historie` u úkolů, 20. 8. zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků). Bez nasazení obě věci padají na „nemáš právo". | Firebase Console → Firestore → Rules | ⬜ ČEKÁ (naposledy nasazeno 18. 8.) |
+| 1 | **ZNOVU nasadit `firestore.rules`** – Michal nasadil 20. 8. 13:04, ale JEŠTĚ TÝŽ DEN ve 13:07 přibyl zápis `meta/milniky` pro každého člena (odškrtávání vlastních milníků) a 21. 8. oprava čtení Quick TO-DO (pojistka `is list` shazovala dotaz přes `proUids`). Soubor: `PREDANI_WEB\pasportkana_navodyirestore.rules` → celý obsah vložit do Firebase Console → Firestore Database → Rules → Publish. | Firebase Console | ⬜ ČEKÁ (nasazeno 20. 8. 13:04) |
 | 2 | **Přesunout tabule** | Import dat → *Zkopírovat tabule na nové místo* | ⬜ čeká |
 | 3 | **Nahrát nový `prehled-BP.json`** (17 lidí, 11 073 h) | Přehled BP → import | ⬜ čeká |
 | 4 | **Vyplnit BioPharmu** — rozpočet 28 500 h, budovy, patra, technologie | Správa projektů → Údaje | ⬜ čeká |
@@ -415,10 +415,23 @@ Každá vznikla po konkrétní chybě. Nerušit bez rozmyslu.
       smazáno 269 projektů evidence bez výkazů a úkolů – zůstalo 6
       oblíbených. Evidence jde případně doimportovat znovu z JSON.
 
-**Známé:** konzole hlásí „Chyba čtení Quick TO-DO: permission-denied" –
-jeden ze tří dotazů (starší `proUid`) nekryjí NASAZENÁ pravidla z 18. 8.;
-v repozitáři už kryty jsou, zmizí nasazením. Vzkazy se i tak načítají
-(najdou je zbylé dva dotazy).
+**Známé (opraveno 21. 8.):** konzole hlásila „Chyba čtení Quick TO-DO:
+permission-denied" – dotaz array-contains přes `proUids` neuměl Firestore
+ověřit kvůli pojistce `is list` v pravidle čtení. Pojistka odstraněna
+(u dokumentu `in` na ne-seznamu stejně vyjde false); zmizí nasazením
+pravidel. Vzkazy se i s chybou načítaly (našly je zbylé dva dotazy).
+
+**Dávka 21. 8. večer:**
+
+- [x] 27. Úkoly: dvě úrovně skupin – nejdřív PROJEKT, uvnitř podskupiny
+      podle druhu práce (ArcGIS, Focení, Skeny, Tabulky) s počtem
+- [x] 28. Úkoly: pod přepínačem Moje/Všechny řádek chipů s oblíbenými
+      projekty (hvězdičky ze Správy, drží je prohlížeč; kdo nemá označené,
+      vidí všechny své načtené) – klik filtruje, druhý klik ruší
+- [x] 29. DATA: Sportovka = 2025-059 FSPS – fakulta tělovýchovy
+      víceúčelová sportovní hala. Projekt znovu založen v evidenci,
+      8 výkazů přejmenováno ze „Sportovka" na přesný název, přejmenován
+      i číselník starého webu.
 
 ---
 

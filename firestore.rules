@@ -277,10 +277,12 @@ service cloud.firestore {
          `proUid`, proto se hlídají obě podoby. Splní-li společný vzkaz
          kdokoliv z adresátů, zhasne všem, takže update musí smět každý
          z nich – ne jen ten, komu „patří". */
+      /* U čtení NESMÍ být pojistka `is list`: dotaz array-contains přes
+         `proUids` pak Firestore neumí ověřit a celý spadne na právech
+         (u jednotlivého dokumentu `in` na ne-seznamu prostě vyjde false). */
       allow read: if clen() && (resource.data.odKoho == request.auth.uid
                                 || resource.data.proUid == request.auth.uid
-                                || (resource.data.proUids is list
-                                    && request.auth.uid in resource.data.proUids));
+                                || request.auth.uid in resource.data.proUids);
       allow create: if clen() && request.resource.data.odKoho == request.auth.uid;
       // přeposlat vzkaz jinému nejde – adresáti ani autor se měnit nesmí
       allow update: if clen()

@@ -7,10 +7,14 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=99">
+    <link rel="stylesheet" href="assets/css/app.css?v=100">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
+        /* podnadpis druhu uvnitř projektu – menší než hlavička projektu */
+        .skupina-druh { font-size: 11px; font-weight: 800; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin: 10px 2px 4px; }
+
         /* Hlavička stránky je sdílený .spread z app.css: nadpis vlevo,
            tlačítka vpravo – stejně jako na ostatních stránkách. */
 
@@ -123,6 +127,9 @@
             title="Otevře nebo zavře TO-DO u všech vypsaných úkolů naráz">Rozbalit vše</button>
     </div>
 
+    <!-- oblíbené projekty ze Správy – jeden klik místo roletky (přání 21. 8.) -->
+    <div id="oblibeneChipy" class="row row--wrap" style="gap:6px" hidden></div>
+
     <!-- ============================================== TVORBA ÚKOLU -->
     <!-- stejný kabát jako blok nového výkazu: červený pruh, tónované tělo -->
     <section id="tvorba" class="ublok" hidden>
@@ -170,10 +177,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=99"></script>
-<script src="assets/js/ui.js?v=99"></script>
-<script src="assets/js/vykazy.js?v=99"></script>
-<script type="module" src="assets/js/store.js?v=99"></script>
+<script src="assets/js/taxonomy.js?v=100"></script>
+<script src="assets/js/ui.js?v=100"></script>
+<script src="assets/js/vykazy.js?v=100"></script>
+<script type="module" src="assets/js/store.js?v=100"></script>
 
 <script>
 (function () {
@@ -287,6 +294,28 @@
 
     /* ------------------------------------------------------------- výpis */
 
+    /* Oblíbené projekty (značí se hvězdičkou ve Správě, drží je prohlížeč).
+       Kdo žádné označené nemá, vidí chipy všech načtených projektů –
+       zaměstnanci se stejně načítají jen ty jeho. */
+    let oblFiltr = "";
+
+    function oblibeneProjekty() {
+        let ids = [];
+        try { ids = JSON.parse(localStorage.getItem("kb-sprava-oblibene") || "[]"); } catch (err) { }
+        const vse = window.KB.projektyDocs || [];
+        const vybrane = ids.length ? vse.filter(p => ids.indexOf(p.id) !== -1) : vse;
+        return vybrane.slice(0, 8).map(p => p.nazev).filter(Boolean);
+    }
+
+    function vykresliOblibene() {
+        const box = $("oblibeneChipy");
+        const nazvy = oblibeneProjekty();
+        box.hidden = !nazvy.length;
+        box.innerHTML = nazvy.map(n =>
+            '<button type="button" class="chip' + (oblFiltr === n ? " chip--active" : "") +
+                '" data-obl-projekt="' + esc(n) + '">' + esc(n) + "</button>").join("");
+    }
+
     function vybrane() {
         const uid = window.KB.currentUid();
         return (window.KB.ukoly || []).filter(u => {
@@ -297,6 +326,7 @@
             if (pohled === "moje" && (u.prirazeni || []).indexOf(uid) === -1) return false;
             if (pohled === "zak" && window.KBUI.slug(u.projekt || "") !== zakSlug) return false;
             if ($("fProjekt").value && (u.projekt || "") !== $("fProjekt").value) return false;
+            if (oblFiltr && (u.projekt || "") !== oblFiltr) return false;
             return true;
         });
     }
@@ -441,26 +471,36 @@
         $("prepPodrobne").classList.toggle("je-zapnuty", podrobne());
         $("btnRozbal").disabled = !seznam.length;
 
-        /* Moje úkoly drží skupiny po projektech; pohled Všechny se dělí
-           podle DRUHU práce (přání Michala) – manažer v něm hledá třeba
-           „všechno skenování", ne konkrétní projekt. */
-        const skupiny = new Map();
+        vykresliOblibene();
+
+        /* Dvě úrovně (přání Michala 21. 8.): nejdřív PROJEKT, uvnitř
+           projektu podskupiny podle DRUHU práce (ArcGIS, Focení, Skeny…). */
+        const projekty = new Map();
         seznam.forEach(u => {
-            const klic = pohled === "vse"
-                ? (u.druh || "Bez druhu")
-                : (u.projekt || "Bez projektu");
-            if (!skupiny.has(klic)) skupiny.set(klic, []);
-            skupiny.get(klic).push(u);
+            const klic = u.projekt || "Bez projektu";
+            if (!projekty.has(klic)) projekty.set(klic, []);
+            projekty.get(klic).push(u);
         });
 
-        $("vypis").innerHTML = Array.from(skupiny.entries())
-            .sort((a, b) => pohled === "vse" ? a[0].localeCompare(b[0], "cs") : 0)
-            .map(([nadpis, ukoly]) => {
+        $("vypis").innerHTML = Array.from(projekty.entries())
+            .sort((a, b) => a[0].localeCompare(b[0], "cs"))
+            .map(([projekt, ukoly]) => {
             const prumer = Math.round(ukoly.reduce((s, u) => s + pctUkolu(u), 0) / ukoly.length);
-            return '<div class="skupina-nadpis">' + esc(nadpis) +
+            const druhy = new Map();
+            ukoly.forEach(u => {
+                const d = u.druh || "Bez druhu";
+                if (!druhy.has(d)) druhy.set(d, []);
+                druhy.get(d).push(u);
+            });
+            return '<div class="skupina-nadpis">' + esc(projekt) +
                 '<span class="tag">' + prumer + " % · " +
                 V.pocet(ukoly.length, ["úkol", "úkoly", "úkolů"]) + "</span></div>" +
-                ukoly.map(ukolHtml).join("");
+                Array.from(druhy.entries())
+                    .sort((a, b) => a[0].localeCompare(b[0], "cs"))
+                    .map(([druh, du]) =>
+                        '<div class="skupina-druh">' + esc(druh) +
+                            ' <span class="muted">(' + du.length + ")</span></div>" +
+                        du.map(ukolHtml).join("")).join("");
         }).join("") ||
             '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
             (pohled === "moje" ? "Žádný úkol pro tebe. Až ti manažer nějaký přiřadí, objeví se tady."
@@ -635,6 +675,13 @@
             const pohledBtn = event.target.closest("[data-pohled]");
             if (pohledBtn) { pohled = pohledBtn.dataset.pohled; return void vykresli(); }
 
+            const oblChip = event.target.closest("[data-obl-projekt]");
+            if (oblChip) {
+                // druhý klik na tentýž chip filtr zase zruší
+                oblFiltr = oblFiltr === oblChip.dataset.oblProjekt ? "" : oblChip.dataset.oblProjekt;
+                return void vykresli();
+            }
+
             const potvrd = event.target.closest("[data-potvrd]");
             if (potvrd) {
                 potvrd.disabled = true;
@@ -716,6 +763,7 @@
         document.addEventListener("kb-role", start);
         window.KB.on("ukoly", vykresli);
         window.KB.on("users", vykresli);
+        window.KB.on("projekty-docs", vykresliOblibene);
         /* Číselník budov, pater a technologií chodí spolu se zakázkami – po
            jeho příchodu se přesypou roletky i v otevřeném formuláři, aby
            nabízely to, co má vybraný projekt. U rozepsané úpravy se předá
