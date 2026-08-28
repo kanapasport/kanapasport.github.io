@@ -804,13 +804,18 @@
     function navHtml(active) {
         const items = (window.KB_NAV || []).map((item, index) => {
             const isActive = active && item.href && item.href.split(/[?#]/)[0] === active;
-            const cls = "navbtn" + (isActive ? " navbtn--active" : "");
+            /* Podbarvení skupin: barva jde z KB_NAV (`barva`), text zůstává
+               tmavý – jen aktivní položka se barvou zalije celá. */
+            const cls = "navbtn" + (isActive ? " navbtn--active" : "") +
+                (item.barva ? " navbtn--skup" : "");
+            const tint = item.barva ? ' style="--skup:' + item.barva + '"' : "";
             const menu = menuOf(item);
             // položka s `need` se ukáže jen tomu, kdo na ni má právo
             const gate = item.need ? ' data-need="' + item.need + '" hidden' : "";
 
             if (!menu) {
-                return '<div class="navitem"' + gate + '><a class="' + cls + '" href="' + item.href + '">' +
+                return '<div class="navitem"' + gate + '><a class="' + cls + '"' + tint +
+                    ' href="' + item.href + '">' +
                     (item.icon ? icon(item.icon) : "") + item.title + "</a></div>";
             }
 
@@ -837,9 +842,9 @@
             // Položka s roletkou i vlastní stránkou je odkaz: najetím se roletka
             // rozbalí, kliknutím na název se přejde rovnou na tu stránku.
             const head = item.href
-                ? '<a class="' + cls + '" href="' + item.href + '" data-menu-toggle="' + index + '">' +
+                ? '<a class="' + cls + '"' + tint + ' href="' + item.href + '" data-menu-toggle="' + index + '">' +
                       item.title + CARET + "</a>"
-                : '<button type="button" class="' + cls + '" data-menu-toggle="' + index + '">' +
+                : '<button type="button" class="' + cls + '"' + tint + ' data-menu-toggle="' + index + '">' +
                       item.title + CARET + "</button>";
 
             /* `gate` patří i sem: položka s roletkou ho dřív zahazovala,

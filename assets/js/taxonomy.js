@@ -187,19 +187,16 @@ window.KB_katBarva = (katId) => {
     return (c && c.barva) || "#6b7480";
 };
 
+/* Barevné skupiny lišty (podbarvení, přání Michala 28. 8. 2026):
+   hořčicová = každodenní práce (výkazy, úkoly, quick), cihlová = podklady
+   a zápisky (poznámky, plány, tabule), zelená `--ok` = manažerské
+   (projekty, report – stejná zelená jako manažerská nástěnka). */
 window.KB_NAV = [
     /* Výkazy se vykreslí jen tomu, kdo na ně má právo; studentům zmizí. */
-    { title: 'VÝKAZY', href: 'vykazy.html', need: 'vykaz.otevrit' },
-    /* Roletka se naplní otevřenými projekty z databáze (viz projektyMenu
-       v ui.js). Jen manažeři: zaměstnanec ani student nemá ve správě
-       projektů co dělat – rozpočty, sazby a fáze zakázky nejsou pro ně
-       (přání Michala 24. 8. 2026). Jejich práce je v ÚKOLECH a VÝKAZECH. */
-    { title: 'PROJEKTY', href: 'sprava.html', projekty: true, need: 'vykaz.view' },
+    { title: 'VÝKAZY', href: 'vykazy.html', need: 'vykaz.otevrit', barva: '#8f6b00' },
     // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
-    { title: 'ÚKOLY & TO-DO', href: 'ukoly.html', tasks: true },
-    { title: 'QUICK TO-DO', href: 'quicktodo.html' },
-    /* osobní poznámky se screenshoty – každý má svoje, sdílí, komu chce */
-    { title: 'POZNÁMKY', href: 'poznamky.html' },
+    { title: 'ÚKOLY & TO-DO', href: 'ukoly.html', tasks: true, barva: '#8f6b00' },
+    { title: 'QUICK TO-DO', href: 'quicktodo.html', barva: '#8f6b00' },
     { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },
     // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
     { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },
@@ -216,11 +213,18 @@ window.KB_NAV = [
                     })))
             })))
     },
-    { title: 'TABULE', href: 'tabule.html', icon: 'board' },
-    // podklady pater se společnými značkami – vedle Tabule (přání Michala)
-    { title: 'PLÁNY', href: 'plany.html', icon: 'map' },
+    /* osobní poznámky se screenshoty – každý má svoje, sdílí, komu chce */
+    { title: 'POZNÁMKY', href: 'poznamky.html', barva: '#a8432a' },
+    // podklady pater se společnými značkami – parta si značí naráz
+    { title: 'PLÁNY', href: 'plany.html', icon: 'map', barva: '#a8432a' },
+    { title: 'TABULE', href: 'tabule.html', icon: 'board', barva: '#a8432a' },
+    /* Roletka se naplní otevřenými projekty z databáze (viz projektyMenu
+       v ui.js). Jen manažeři: zaměstnanec ani student nemá ve správě
+       projektů co dělat – rozpočty, sazby a fáze zakázky nejsou pro ně
+       (přání Michala 24. 8. 2026). Jejich práce je v ÚKOLECH a VÝKAZECH. */
+    { title: 'PROJEKTY', href: 'sprava.html', projekty: true, need: 'vykaz.view', barva: 'var(--ok)' },
     // přehledy hodin a peněz – jen manažeři
-    { title: 'REPORT', href: 'reporty.html', need: 'vykaz.view' }
+    { title: 'REPORT', href: 'reporty.html', need: 'vykaz.view', barva: 'var(--ok)' }
 ];
 
 /* ------------------------------------------------- nástroje (ikony) -----
