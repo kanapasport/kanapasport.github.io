@@ -33,7 +33,7 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, increment,
+    collection, doc, getDoc, getDocs, setDoc, deleteDoc, increment, arrayUnion,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -333,6 +333,11 @@ try {
             quickOdbery.forEach(stop => { try { stop(); } catch (e) {} });
             quickOdbery = []; quickPrijate = []; quickPrijateSkupina = [];
             quickOdeslane = []; KB.quicktodo = [];
+            poznOdbery.forEach(stop => { try { stop(); } catch (e) {} });
+            poznOdbery = [];
+            poznKusy.listyMoje = []; poznKusy.listySdilene = [];
+            poznKusy.zaznamyMoje = []; poznKusy.zaznamySdilene = [];
+            KB.poznListy = []; KB.poznamky = [];
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
@@ -658,6 +663,8 @@ KB.saveQuickTodo = async (id, data) => {
         // u společného vzkazu je potřeba vědět, kdo ho odškrtl za všechny
         hotovoKdo: data.hotovoKdo || "",
         hotovoMs:  data.hotovoMs || 0,
+        // nepovinná vazba na poznámku – vzkaz pak nese odkaz „Otevřít"
+        poznamka: data.poznamka || "",
         ms:      data.ms || Date.now()
     }, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
@@ -673,6 +680,148 @@ KB.deleteQuickTodo = async (id) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(quickDoc(id));
+};
+
+/* ------------------------------------------------------------ poznámky ---
+   Osobní zápisník problémů: screenshot + pár vět, řazené do pojmenovaných
+   listů. Jako Quick TO-DO leží mimo `private` – nevidí je ani manažer,
+   jen autor a lidé, kterým autor list nebo poznámku nasdílel.
+
+     osobni/poznamky/listy/{id}                { nazev, uid, sdileni }
+     osobni/poznamky/zaznamy/{id}              poznámka + komentáře
+     osobni/poznamky/zaznamy/{id}/obrazky/{n}  screenshoty (JPEG base64) */
+
+const poznListyCol = () => collection(db, "artifacts", APP_ID, "osobni", "poznamky", "listy");
+const poznListDoc = (id) => doc(db, "artifacts", APP_ID, "osobni", "poznamky", "listy", id);
+const poznCol = () => collection(db, "artifacts", APP_ID, "osobni", "poznamky", "zaznamy");
+const poznDoc = (id) => doc(db, "artifacts", APP_ID, "osobni", "poznamky", "zaznamy", id);
+const poznObrazky = (id) => collection(db, "artifacts", APP_ID, "osobni", "poznamky", "zaznamy", id, "obrazky");
+const poznObrazek = (id, n) => doc(db, "artifacts", APP_ID, "osobni", "poznamky", "zaznamy", id, "obrazky", String(n));
+
+KB.poznListy = [];
+KB.poznamky = [];
+let poznOdbery = [];
+const poznKusy = { listyMoje: [], listySdilene: [], zaznamyMoje: [], zaznamySdilene: [] };
+
+function slejPoznamky() {
+    const listy = new Map(), zaznamy = new Map();
+    poznKusy.listyMoje.concat(poznKusy.listySdilene).forEach(l => listy.set(l.id, l));
+    poznKusy.zaznamyMoje.concat(poznKusy.zaznamySdilene).forEach(z => zaznamy.set(z.id, z));
+    KB.poznListy = Array.from(listy.values()).sort((a, b) => (a.ms || 0) - (b.ms || 0));
+    KB.poznamky = Array.from(zaznamy.values()).sort((a, b) => (b.ms || 0) - (a.ms || 0));
+    emit("poznamky", null);
+}
+
+KB.watchPoznamky = async () => {
+    if (poznOdbery.length) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || poznOdbery.length) return;
+    const uid = auth.currentUser.uid;
+    /* Dva dotazy na listy a dva na poznámky (moje / sdílené se mnou) –
+       pravidla umí dotaz povolit nebo zakázat, ne ho profiltrovat. */
+    const sleduj = (klic, dotaz) => poznOdbery.push(onSnapshot(dotaz, (s) => {
+        poznKusy[klic] = []; s.forEach(d => poznKusy[klic].push({ id: d.id, ...d.data() }));
+        slejPoznamky();
+    }, (err) => console.error("Chyba čtení poznámek:", err)));
+    sleduj("listyMoje", query(poznListyCol(), where("uid", "==", uid)));
+    sleduj("listySdilene", query(poznListyCol(), where("sdileni", "array-contains", uid)));
+    sleduj("zaznamyMoje", query(poznCol(), where("uid", "==", uid)));
+    sleduj("zaznamySdilene", query(poznCol(), where("sdileni", "array-contains", uid)));
+};
+
+KB.ulozPoznList = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const lid = id || "pzl_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(poznListDoc(lid), {
+        nazev: String(data.nazev || "List").slice(0, 80),
+        sdileni: Array.isArray(data.sdileni) ? data.sdileni : [],
+        uid: data.uid || KB.currentUid(),
+        jmeno: data.jmeno || window.KB_USER || "",
+        ms: data.ms || Date.now()
+    }, { merge: true });
+    return lid;
+};
+
+/** Smaže list i s jeho poznámkami a jejich obrázky (jen vlastní). */
+KB.smazPoznList = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const moje = (KB.poznamky || []).filter(z => z.listId === id && z.uid === KB.currentUid());
+    for (const z of moje) await KB.smazPoznamku(z.id);
+    await deleteDoc(poznListDoc(id));
+};
+
+/* Ukládá se jen to, co v patchi opravdu je – sdílený člověk smí podle
+   pravidel měnit jen komentáře a přisdílení, plný zápis by mu spadl. */
+KB.ulozPoznamku = async (id, patch) => {
+    if (authReady) await authReady;
+    requireDb();
+    const pid = id || "pz_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const p = {};
+    if ("listId" in patch) p.listId = String(patch.listId || "");
+    if ("listNazev" in patch) p.listNazev = String(patch.listNazev || "").slice(0, 80);
+    if ("text" in patch) p.text = String(patch.text || "").slice(0, 2000);
+    if ("stav" in patch) p.stav = Number(patch.stav) || 0;   // 0 = řeší se, 1 = splněno
+    if ("sdileni" in patch) p.sdileni = Array.isArray(patch.sdileni) ? patch.sdileni : [];
+    if (!id) {
+        p.uid = KB.currentUid();
+        p.jmeno = window.KB_USER || "";
+        p.komentare = [];
+        p.obrazku = 0;
+        if (!("stav" in p)) p.stav = 0;
+    }
+    p.ms = Date.now();
+    await setDoc(poznDoc(pid), p, { merge: true });
+    return pid;
+};
+
+KB.pridejPoznKomentar = async (id, text) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(poznDoc(id), {
+        komentare: arrayUnion({
+            uid: KB.currentUid(),
+            jmeno: window.KB_USER || "",
+            text: String(text || "").slice(0, 500),
+            ms: Date.now()
+        }),
+        ms: Date.now()
+    }, { merge: true });
+};
+
+/** Přisdílí poznámku dalšímu člověku (třeba při upozornění do Quick TO-DO). */
+KB.pridejPoznSdileni = async (id, uid) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(poznDoc(id), { sdileni: arrayUnion(uid), ms: Date.now() }, { merge: true });
+};
+
+KB.pridejPoznObrazek = async (id, dataUrl) => {
+    if (authReady) await authReady;
+    requireDb();
+    const n = "img_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(poznObrazek(id, n), { data: dataUrl, ms: Date.now() });
+    await setDoc(poznDoc(id), { obrazku: increment(1), ms: Date.now() }, { merge: true });
+    return n;
+};
+
+KB.nactiPoznObrazky = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(poznObrazky(id));
+    const ven = [];
+    snap.forEach(d => ven.push({ id: d.id, ...d.data() }));
+    ven.sort((a, b) => (a.ms || 0) - (b.ms || 0));
+    return ven;
+};
+
+KB.smazPoznamku = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const obrazky = await getDocs(poznObrazky(id));
+    for (const d of obrazky.docs) await deleteDoc(d.ref);
+    await deleteDoc(poznDoc(id));
 };
 
 /* ------------------------------------------------ zámek citlivých sekcí ---

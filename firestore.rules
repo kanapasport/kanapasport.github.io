@@ -347,6 +347,49 @@ service cloud.firestore {
                                       && request.auth.uid in resource.data.proUids));
     }
 
+    // --- poznámky: osobní zápisník problémů (screenshot + text) ----------
+    //
+    //   osobni/poznamky/listy/{id}                { nazev, uid, sdileni }
+    //   osobni/poznamky/zaznamy/{id}              poznámka, stav, komentáře
+    //   osobni/poznamky/zaznamy/{id}/obrazky/{n}  screenshoty (base64)
+    //
+    // Jako Quick TO-DO schválně MIMO `private` – nevidí je ani manažer.
+    // Vidí je jen autor a lidé v poli `sdileni` (autor si je volí sám).
+    // U čtení nesmí být pojistka `is list` – dotaz array-contains přes
+    // `sdileni` by pak spadl na právech (stejná past jako u Quick TO-DO).
+
+    match /artifacts/firemni-kb-app/osobni/poznamky/listy/{id} {
+      allow read: if clen() && (resource.data.uid == request.auth.uid
+                                || request.auth.uid in resource.data.sdileni);
+      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if clen() && resource.data.uid == request.auth.uid;
+    }
+
+    function poznData(id) {
+      return get(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/zaznamy/$(id)).data;
+    }
+
+    match /artifacts/firemni-kb-app/osobni/poznamky/zaznamy/{id} {
+      allow read: if clen() && (resource.data.uid == request.auth.uid
+                                || request.auth.uid in resource.data.sdileni);
+      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      // autor mění cokoliv (kromě `uid`); sdílený smí jen komentovat
+      // a přisdílet dalšího (upozornění) – stav „splněno" patří autorovi
+      allow update: if clen() && request.resource.data.uid == resource.data.uid
+                       && (resource.data.uid == request.auth.uid
+                           || (request.auth.uid in resource.data.sdileni
+                               && request.resource.data.diff(resource.data).affectedKeys()
+                                    .hasOnly(['komentare', 'sdileni', 'ms'])));
+      allow delete: if clen() && resource.data.uid == request.auth.uid;
+
+      match /obrazky/{n} {
+        // obrázek nenese uid – právo se bere z rodičovské poznámky
+        allow read: if clen() && (poznData(id).uid == request.auth.uid
+                                  || request.auth.uid in poznData(id).sdileni);
+        allow write: if clen() && poznData(id).uid == request.auth.uid;
+      }
+    }
+
     // všechno ostatní zavřené
     match /{document=**} {
       allow read, write: if false;

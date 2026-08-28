@@ -1415,6 +1415,10 @@
                                   .toISOString().slice(0, 10))) : "") + "</span>" : "") +
                     "</span>" +
                 "</span>" +
+                /* vzkaz svázaný s poznámkou nese odkaz – proklik přistane
+                   rovnou na té poznámce (poznamky.html si ji samo otevře) */
+                (q.poznamka ? '<a class="btn btn--ghost btn--sm" href="poznamky.html?pozn=' +
+                    esc(q.poznamka) + '">Otevřít</a>' : "") +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
                 (q.hotovo
                     ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
@@ -1441,16 +1445,22 @@
            v databázi a v týdenních lozích reportů, tady by jen překážely. */
         const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
         const mojeRezim = quickRezim !== "zadane";
+        // třetí přepínač: jen vzkazy svázané s poznámkou (upozornění kolegů)
+        const jenPozn = quickRezim === "poznamky";
         const splnene = (mojeRezim ? proMe : odeMe)
-            .filter(q => q.hotovo && (q.hotovoMs || q.ms || 0) >= tydenZpet);
-        const aktivni = mojeRezim ? aktivniProMe : aktivniOdeMe;
+            .filter(q => q.hotovo && (!jenPozn || q.poznamka)
+                && (q.hotovoMs || q.ms || 0) >= tydenZpet);
+        const aktivni = (mojeRezim ? aktivniProMe : aktivniOdeMe)
+            .filter(q => !jenPozn || q.poznamka);
 
         const seznamHtml =
             '<div class="row" style="gap:6px;margin-bottom:10px">' +
-                '<button type="button" class="chip' + (mojeRezim ? " chip--active" : "") +
+                '<button type="button" class="chip' + (quickRezim === "moje" ? " chip--active" : "") +
                     '" data-quick-rezim="moje">Moje</button>' +
-                '<button type="button" class="chip' + (mojeRezim ? "" : " chip--active") +
+                '<button type="button" class="chip' + (quickRezim === "zadane" ? " chip--active" : "") +
                     '" data-quick-rezim="zadane">Zadané</button>' +
+                '<button type="button" class="chip' + (jenPozn ? " chip--active" : "") +
+                    '" data-quick-rezim="poznamky">Poznámky</button>' +
             "</div>" +
             (aktivni.length
                 ? aktivni.map(q => radek(q, !mojeRezim)).join("")

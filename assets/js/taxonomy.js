@@ -198,9 +198,9 @@ window.KB_NAV = [
     // roletka se naplní projekty, ke kterým existují úkoly (viz taskMenu v ui.js)
     { title: 'ÚKOLY & TO-DO', href: 'ukoly.html', tasks: true },
     { title: 'QUICK TO-DO', href: 'quicktodo.html' },
+    /* osobní poznámky se screenshoty – každý má svoje, sdílí, komu chce */
+    { title: 'POZNÁMKY', href: 'poznamky.html' },
     { title: 'KALENDÁŘ', href: 'kalendar.html', icon: 'calendar' },
-    // podklady pater se společnými značkami – parta si značí naráz
-    { title: 'PLÁNY', href: 'plany.html', icon: 'map' },
     // roletka ukáže rovnou nejbližší termíny (viz milnikMenu v ui.js)
     { title: 'MILNÍKY', href: 'milniky.html', icon: 'flag', milniky: true },
     {
@@ -217,6 +217,8 @@ window.KB_NAV = [
             })))
     },
     { title: 'TABULE', href: 'tabule.html', icon: 'board' },
+    // podklady pater se společnými značkami – vedle Tabule (přání Michala)
+    { title: 'PLÁNY', href: 'plany.html', icon: 'map' },
     // přehledy hodin a peněz – jen manažeři
     { title: 'REPORT', href: 'reporty.html', need: 'vykaz.view' }
 ];
