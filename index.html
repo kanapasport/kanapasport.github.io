@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
+    <meta name="theme-color" content="#c8102e">
+    <title>Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Nástěnka: dlaždice stejné velikosti (přání Michala) – proto pevná
+           výška karty a rolování uvnitř, ne podle délky obsahu.
+           Dlaždice ve dvou sloupcích i na širokém monitoru: víc úzkých sloupců
+           ořezávalo názvy úkolů a jména víc, než kolik přineslo. */
+        .nastenka { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        @media (max-width: 900px)  { .nastenka { grid-template-columns: 1fr; } }
+        /* Dlaždice mají hlavičku jako blok nového výkazu: červený pruh
+           s bílým štítkem. Karta se tím dá poznat okem dřív, než se člověk
+           začte do nadpisu (přání Michala „udělej je barevnější"). */
+        .nastenka__karta { display: flex; flex-direction: column; height: 330px;
+            padding: 0; overflow: hidden; border-color: var(--accent-lt); }
+        /* Hlavička je proklik: kliknutím na červené se otevře, co dlaždice
+           nese (přání Michala – žádné drobné „otevřít" vpravo). Stejná výška
+           u všech, i když v ní nejsou tlačítka. */
+        .nastenka__hlava { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; min-height: 42px; padding: 4px 14px; background: var(--accent);
+            cursor: pointer; }
+        .nastenka__hlava:hover { background: var(--accent-dark); }
+        .nastenka__hlava b { font-size: 12px; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #fff; }
+        .nastenka__telo { overflow-y: auto; flex: 1; min-height: 0; padding: 12px 14px; }
+        /* přepínač rozsahu v hlavičce karty – drobnější než běžný chip,
+           aby hlavička zůstala jednořádková i na užším okně */
+        .nastenka__prep { display: flex; align-items: center; gap: 6px; }
+        .nastenka__prep .chip { padding: 3px 9px; font-size: 11px;
+            background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .45); color: #fff; }
+        .nastenka__prep .chip--active { background: #fff; color: var(--accent); border-color: #fff; }
+        /* „+ Zadat nový" není přepínač – nesmí vypadat jako třetí volba
+           vedle Moje/Zadané, tak má plný bílý rámeček. */
+        .nastenka__prep .chip--nove { border-color: #fff; font-weight: 900; }
+        .nastenka__prep .chip--nove:hover { background: #fff; color: var(--accent); }
+
+        /* Úkol i TO-DO nesou barvu podle rozpracovanosti – stejná stupnice
+           jako na stránce úkolů, ať se to nikde nečte jinak. */
+        .mujukol { display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+            border: 1px solid var(--line-soft); border-radius: var(--radius);
+            background: var(--surface); cursor: pointer; text-align: left; font: inherit; width: 100%; }
+        .mujukol:hover { border-color: var(--accent-lt); }
+        .mujukol.je-vybrany { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .mujukol--p0   { background: var(--p0-bg); }
+        .mujukol--p50  { background: var(--p50-bg); }
+        .mujukol--p75  { background: var(--p75-bg); }
+        .mujukol--p95  { background: var(--p95-bg); }
+        .mujukol--p100 { background: var(--p100-bg); }
+        .mujukol__nazev { font-weight: 800; font-size: 13.5px; }
+        .mujukol__meta { font-size: 11.5px; color: var(--text-soft); margin-top: 1px; }
+        .mujukol__prubeh { flex: none; width: 90px; height: 7px; border-radius: 99px;
+            background: rgba(255, 255, 255, .65); overflow: hidden; }
+        .mujukol__prubeh i { display: block; height: 100%; background: var(--accent); }
+        .mujukol--p100 .mujukol__prubeh i { background: var(--p100-fg); }
+        .mujukol__pct { flex: none; font-weight: 900; font-size: 12.5px; width: 40px; text-align: right; }
+        .mujukol--p0   .mujukol__pct { color: var(--p0-fg); }
+        .mujukol--p50  .mujukol__pct { color: var(--p50-fg); }
+        .mujukol--p75  .mujukol__pct { color: var(--p75-fg); }
+        .mujukol--p95  .mujukol__pct { color: var(--p95-fg); }
+        .mujukol--p100 .mujukol__pct { color: var(--p100-fg); }
+
+        /* Stejná výška řádku v obou stylech zapisování procent – přepnutí
+           na „styl %" nesmí řádky přeskládat (přání Michala). */
+        .ntodo { display: flex; align-items: center; gap: 10px; padding: 4px 10px;
+            min-height: 44px; border-radius: var(--radius); margin-bottom: 4px; }
+        .ntodo--p0   { background: var(--p0-bg); }
+        .ntodo--p50  { background: var(--p50-bg); }
+        .ntodo--p75  { background: var(--p75-bg); }
+        .ntodo--p95  { background: var(--p95-bg); }
+        .ntodo--p100 { background: var(--p100-bg); }
+        .ntodo__text { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; }
+        .ntodo--p100 .ntodo__text { text-decoration: line-through; opacity: .75; }
+        /* Posuvník vedle procent – tažením se skočí kamkoliv, bez klikání
+           přes všechny kroky. Užší na mobilu, ať zbyde místo na text. */
+        .ntodo__slider { flex: none; width: 96px; accent-color: var(--accent); cursor: pointer; }
+        @media (max-width: 620px) { .ntodo__slider { width: 62px; } }
+        .ntodo__pcts { display: flex; gap: 4px; flex-wrap: wrap; }
+        .ntodo__pct { border: 1px solid rgba(0, 0, 0, .12); background: rgba(255, 255, 255, .7);
+            border-radius: 99px; padding: 3px 8px; font-size: 11px; font-weight: 700;
+            cursor: pointer; color: var(--text-soft); }
+        .ntodo__pct.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .ntodo__pct:disabled { cursor: default; opacity: .55; }
+        /* jedno číslo, na které se klikne a posune se po krocích – výchozí
+           způsob ze starého webu; podrobná řada se zapne přepínačem */
+        .ntodo__cyklus { border: 1px solid rgba(0, 0, 0, .12); background: rgba(255, 255, 255, .7);
+            border-radius: 99px; padding: 4px 12px; font-size: 12px; font-weight: 900;
+            cursor: pointer; color: var(--text-soft); min-width: 56px; }
+        .ntodo--p0   .ntodo__cyklus { color: var(--p0-fg); }
+        .ntodo--p50  .ntodo__cyklus { color: var(--p50-fg); }
+        .ntodo--p75  .ntodo__cyklus { color: var(--p75-fg); }
+        .ntodo--p95  .ntodo__cyklus { color: var(--p95-fg); }
+        .ntodo--p100 .ntodo__cyklus { color: var(--p100-fg); }
+        /* Nadpis vybraného úkolu hned pod hlavičkou TO-DO – opravdový
+           nadpis, ne drobný řádek: podle něj se člověk orientuje, čí postup
+           dole odškrtává. Projekt za ním jde menším šedým písmem. */
+        .todonazev { font-size: 16px; font-weight: 900; line-height: 1.3;
+            padding: 10px 14px 0; }
+        .todonazev span { font-size: 12.5px; font-weight: 400; color: var(--muted); }
+
+        /* Upozornění pro kontrolu: řádek s datem a popisem nálezu. Ladí se
+           do červena decentně – je to varování, ne poplach. */
+        .kontrola__radek { display: flex; gap: 8px; align-items: center; padding: 7px 10px;
+            border-radius: var(--radius); background: #fdecec; border: 1px solid #f5c2c2;
+            font-size: 13px; color: inherit; }
+        .kontrola__radek:hover { border-color: var(--accent); }
+        .kontrola__odkaz { display: flex; gap: 10px; align-items: baseline; flex: 1; min-width: 0;
+            text-decoration: none; color: inherit; }
+        .kontrola__datum { flex: none; font-weight: 900; color: #b91c1c;
+            font-variant-numeric: tabular-nums; }
+        /* Fajfka „je to v pořádku" – zhasnutá je jen obrys, ať nevypadá
+           jako už odbavená věc. */
+        .kontrola__fajfka { flex: none; width: 26px; height: 26px; padding: 0; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid #f5c2c2; border-radius: 7px; background: #fff; color: #c8a0a0; }
+        .kontrola__fajfka svg { width: 14px; height: 14px; }
+        .kontrola__fajfka:hover { border-color: var(--ok, #15803d); color: var(--ok, #15803d); }
+        .kontrola__fajfka[aria-pressed="true"] { background: var(--ok, #15803d);
+            border-color: var(--ok, #15803d); color: #fff; }
+        /* odbavený nález: zůstává vidět, ale už nekřičí */
+        .kontrola__radek--ok { background: var(--bg-soft); border-color: var(--line); opacity: .75; }
+        .kontrola__radek--ok .kontrola__datum { color: var(--muted); }
+
+        /* Co je nového: jedno okno doprostřed po přihlášení. Nadpis nese
+           stejný červený pruh jako dlaždice, ať je jasné, že patří k webu. */
+        .novinky__radek { padding: 8px 0; border-bottom: 1px dashed var(--line-soft); }
+        .novinky__radek:last-child { border-bottom: none; }
+        .novinky__radek b { display: block; font-size: 14px; }
+        .novinky__radek span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+
+        /* Milníky: řádek jako zadaný úkol, jen místo procent je vlevo datum.
+           Termín je to, co se hledá očima první, tak stojí vepředu a nekrátí
+           se; ukrojí se až název za ním. */
+        .milrad { display: flex; align-items: center; gap: 11px; padding: 7px 10px;
+            border-radius: var(--radius); background: var(--bg-soft);
+            border: 1px solid var(--line-soft); text-decoration: none; color: inherit; }
+        .milrad:hover { border-color: var(--accent-lt); background: var(--surface); }
+        .milrad__datum { flex: none; width: 88px; font-size: 13px; font-weight: 900;
+            line-height: 1.25; font-variant-numeric: tabular-nums; }
+        .milrad__datum span { display: block; font-size: 11px; font-weight: 700;
+            color: var(--muted); text-transform: lowercase; }
+        .milrad__nazev { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.35;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .milrad__meta { display: block; font-size: 11.5px; color: var(--muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* prošlý termín červeně – stejně jako přečerpaný rozpočet ve výkazech */
+        /* můj milník – podbarvený stejně jako na stránce Milníky;
+           „po termínu" červená má přednost (stojí níž) */
+        .milrad--muj { background: var(--accent-tint); border-color: var(--accent-lt); }
+        .milrad--pozde { background: #fdecec; border-color: #f5c2c2; }
+        .milrad--pozde .milrad__datum { color: #b91c1c; }
+        .milrad--pozde .milrad__datum span { color: #b91c1c; }
+
+        /* Quick TO-DO: vzkaz s fajfkou vlevo; hotové řádky blednou, ať oči
+           táhnou jen ty, co ještě čekají. */
+        .qt { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0;
+            border-bottom: 1px dashed var(--line-soft); }
+        .qt:last-child { border-bottom: none; }
+        .qt__fajfka { flex: none; width: 15px; height: 15px; margin-top: 3px; cursor: pointer; }
+        .qt__text { font-weight: 700; font-size: 13.5px; line-height: 1.4; }
+        .qt--hotovy .qt__text { color: var(--muted); text-decoration: line-through; font-weight: 600; }
+
+        /* Splněné Quick TO-DO zezelená, stejně jako hotové patro nebo uzavřená
+           zakázka. Přeškrtnutí k tomu nepatří – barva to řekne sama a text
+           zůstane čitelný, kdyby se k němu někdo vracel. */
+        .qtrad { gap: 9px; padding: 6px 0; align-items: center;
+            border-bottom: 1px dashed var(--line-soft); }
+        .qtrad--hotovo { background: var(--p100-bg); border-bottom-color: transparent;
+            border-radius: var(--radius); padding: 6px 10px; margin-bottom: 3px; }
+        .qtrad--hotovo .muted { color: var(--p100-fg); opacity: .8; }
+        /* „co nejdříve" červené celé – stejný vzor jako na stránce Quick TODO */
+        .qtrad--asap { background: #fde3e3; border-bottom-color: transparent;
+            border-radius: var(--radius); padding: 6px 8px; color: var(--danger); }
+        .qtrad--asap .muted { color: var(--danger); opacity: .8; }
+        .qt__meta { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+        /* prošlý termín červeně – stejný odstín jako přečerpaný rozpočet ve výkazech */
+        .qt__meta--pozde { color: #b91c1c; font-weight: 700; }
+        .qt__smaz { flex: none; border: none; background: none; font: inherit; font-size: 16px;
+            line-height: 1; padding: 2px 5px; color: var(--muted); cursor: pointer; border-radius: 4px; }
+        .qt__smaz:hover { color: #b91c1c; background: var(--bg); }
+        .qtposlal { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+        .qtposlal__nadpis { font-size: 10.5px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .qtposlal__radek { display: flex; align-items: center; gap: 8px; padding: 3px 0;
+            font-size: 12px; color: var(--text-soft); min-width: 0; }
+        .qtposlal__stav { flex: none; color: var(--muted); }
+        .qtposlal__stav.je-hotovo { color: var(--ok); font-weight: 700; }
+
+        /* Kalendář na nástěnce: dny pod sebou, tečky nesou stejné barvy druhů
+           jako kalendar.html (.ud--*) – ať obě stránky čtou stejně. */
+        .kden__nazev { font-size: 10.5px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); padding: 6px 0 3px;
+            border-bottom: 1px solid var(--line-soft); margin-bottom: 3px; }
+        .kden--dnes .kden__nazev { color: var(--accent); }
+        .kudal { display: flex; align-items: center; gap: 8px; padding: 3px 0;
+            font-size: 13px; min-width: 0; }
+        /* neznámý druh (starší zápis) zůstane šedý, ať se neztratí beze stopy */
+        .kudal__tecka { flex: none; width: 9px; height: 9px; border-radius: 3px; background: var(--dim); }
+        .kudal--ukol { color: #c26a00; font-weight: 700; }
+        .ktyp--udalost { background: #0f62c4; }
+        .ktyp--dovolena { background: #0d7d3f; }
+        .ktyp--nemoc { background: #c8102e; }
+        .ktyp--skoleni { background: #8a2be2; }
+        .ktyp--homeoffice { background: #0e7490; }
+        .ktyp--volno { background: #6b8e23; }
+        .ktyp--ukol { background: #c26a00; }
+
+        /* Poslední aktivita: čas drobně nad textem, jméno tučně – jedno malé
+           písmo v řádku splývalo do šedé kaše a špatně se četlo. */
+        .akt { display: flex; flex-direction: column; gap: 1px; }
+        .akt__cas { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .akt__text { font-size: 13.5px; line-height: 1.55; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main>
+
+    <!-- ======================================================== výsledky -->
+    <section id="searchResults" class="wrap" hidden style="padding-top:24px;padding-bottom:56px">
+        <div class="section-head">
+            <h2>Výsledky hledání</h2>
+            <p id="searchCount"></p>
+        </div>
+        <div id="searchList" class="col" style="gap:10px"></div>
+    </section>
+
+    <!-- ================================================ nástěnka člověka -->
+    <section id="nastenka" class="wrap" style="padding-top:22px">
+        <!-- všechny dlaždice stejně velké; delší obsah roluje uvnitř -->
+        <div class="nastenka">
+            <div class="card nastenka__karta" id="wUkoly">
+                <div class="nastenka__hlava" data-otevri="ukoly.html?moje=1" title="Otevřít úkoly">
+                    <b>Zadané úkoly</b>
+                    <span class="nastenka__prep">
+                        <button type="button" class="chip" data-rozsah="moje">Moje</button>
+                        <button type="button" class="chip" data-rozsah="vse">Všechny</button>
+                                            </span>
+                </div>
+                <div id="mojeUkoly" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
+            <div class="card nastenka__karta" id="wTodo">
+                <div class="nastenka__hlava" data-otevri="ukoly.html" data-otevri-todo title="Otevřít úkol">
+                    <b>TO-DO — postup práce</b>
+                    <span class="nastenka__prep">
+                        <button type="button" class="chip" id="prepPodrobne" hidden
+                            title="Přepne mezi jedním číslem a řadou kroků">styl %</button>
+                                            </span>
+                </div>
+                <!-- nadpis vybraného úkolu – plní ho renderNastenka přes textContent -->
+                <div id="todoNazev" class="todonazev" hidden></div>
+                <div id="todoRozpad" class="nastenka__telo col" style="gap:2px"></div>
+            </div>
+            <div class="card nastenka__karta" id="wQuick">
+                <div class="nastenka__hlava" data-otevri="quicktodo.html" title="Otevřít přehled Quick TO-DO">
+                    <b>Quick TO-DO</b>
+                    <span class="nastenka__prep">
+                        <button type="button" class="chip" data-qrozsah="moje">Moje</button>
+                        <button type="button" class="chip" data-qrozsah="zadane">Zadané</button>
+                        <!-- otevře stejný panel jako tlačítko ve svislém pásu -->
+                        <button type="button" class="chip chip--nove" data-quick-otevri
+                                data-jen-prihlaseny hidden
+                                title="Zadat nový quick to-do">+ Zadat nový</button>
+                    </span>
+                </div>
+                <div id="quickSeznam" class="nastenka__telo"></div>
+            </div>
+            <div class="card nastenka__karta" id="wMilniky">
+                <div class="nastenka__hlava" data-otevri="milniky.html" title="Otevřít milníky">
+                    <b>Milníky — nejbližší termíny</b>
+                </div>
+                <div id="milnikySeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
+            <div class="card nastenka__karta" id="wKalendar">
+                <div class="nastenka__hlava" data-otevri="kalendar.html" title="Otevřít kalendář">
+                    <b>Kalendář — dnes a nejbližší dny</b>
+                </div>
+                <div id="kalendarSeznam" class="nastenka__telo"></div>
+            </div>
+            <!-- dovolené čekající na manažerovo razítko -->
+            <!-- Přehled první, potvrzení dovolených hned ZA ním
+                 (pořadí podle Michala 27. 8.). -->
+            <div class="card nastenka__karta nastenka__karta--man" id="wRychly" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="kalendar.html" title="Otevřít kalendář">
+                    <b>Přehled rychlého zápisu</b>
+                </div>
+                <div id="rychlySeznam" class="nastenka__telo"></div>
+            </div>
+            <div class="card nastenka__karta nastenka__karta--man" id="wDovolene" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="kalendar.html" title="Otevřít kalendář">
+                    <b>Potvrzení dovolených</b>
+                </div>
+                <div id="dovoleneSeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
+            <!-- kontrola výkazů: většinou prázdná, ale když někde něco nesedí,
+                 manažer to vidí hned a nemusí to dohledávat na konci měsíce -->
+            <div class="card nastenka__karta nastenka__karta--man" id="wKontrola" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="vykazy.html" title="Otevřít výkazy">
+                    <b>Upozornění pro kontrolu</b>
+                </div>
+                <div id="kontrolaSeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
+            <!-- „kdo tu byl" a aktivita až na konci – přání Michala z 20. 8. -->
+            <div class="card nastenka__karta" id="wOnline">
+                <div class="nastenka__hlava" data-otevri="reporty.html" data-jen-need="vykaz.view" title="Otevřít historii">
+                    <b>Kdo tu byl</b>
+                </div>
+                <div id="onlineSeznam" class="nastenka__telo col" style="gap:4px"></div>
+            </div>
+            <!-- poslední aktivita je jen pro manažery – bez práv se karta nevykreslí -->
+            <div class="card nastenka__karta nastenka__karta--man" id="wAktivita" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="reporty.html" title="Otevřít historii">
+                    <b>Poslední aktivita</b>
+                </div>
+                <div id="aktivitaSeznam" class="nastenka__telo col" style="gap:8px"></div>
+            </div>
+        </div>
+    </section>
+
+    <footer style="border-top:1px solid var(--line);padding:26px 0 calc(26px + env(safe-area-inset-bottom));text-align:center;font-size:12px;color:var(--dim)">
+        Pasport Kaňa · interní systém · data jsou určena pouze pro potřeby firmy
+    </footer>
+</main>
+
+<!-- ========================================================= CO JE NOVÉHO --
+     Okno po přihlášení: úkoly nově přiřazené mně a quick to-do od minulé
+     návštěvy. Ukazuje se jen, když opravdu něco přibylo. -->
+<div id="novinkyOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:460px;width:100%;gap:0;overflow:hidden;max-height:80vh">
+        <div style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Co je nového od tvé poslední návštěvy
+        </div>
+        <div id="novinkyObsah" style="padding:12px 18px;overflow-y:auto"></div>
+        <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
+            <div class="grow"></div>
+            <button type="button" id="btnNovinkyZavri" class="btn btn--primary btn--sm">Rozumím</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/doc.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+    const icon = (name) =>
+        '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' + (window.KB_ICONS[name] || "") + "</svg>";
+
+    /* ------------------------------------------------- nástěnka člověka --
+       Dvě poloviny: vlevo úkoly zadané přihlášenému, vpravo TO-DO rozpad
+       vybraného úkolu. Postup se zapisuje rovnou tady – posílá se jen
+       `todo` a `stav` (KB.ulozUkolPostup), víc pravidla nedovolí. */
+
+    const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+    /* Posuvník jede po pětkách a výsledek se přichytí na nejbližší krok
+       stupnice – jinak by vznikala procenta, která tlačítka neumí ukázat. */
+    const POSUVNIK_KROK = 5;
+    const naKrok = (hodnota) => PCT_KROKY.reduce((nej, p) =>
+        Math.abs(p - hodnota) < Math.abs(nej - hodnota) ? p : nej, PCT_KROKY[0]);
+    let vybranyUkol = "";
+    let sledovaniZapnuto = false;
+    // rozsah karty úkolů: "moje" | "vse"; drží se jen v paměti stránky,
+    // aby přepnutí přežilo překreslení, ale po načtení se začínalo od svých
+    let rozsahUkolu = "moje";
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid || !window.KB.currentUid()) return;
+        sledovaniZapnuto = true;
+        // manažer poslouchá všechno (kvůli roletce projektů v liště),
+        // ostatní jen svoje – širší dotaz by jim databáze odmítla
+        if (window.KBUI.can("vykaz.view")) {
+            window.KB.watchUkoly();
+            window.KB.watchProjekty();
+            window.KB.watchAktivity();
+            window.KB.watchGsync();     // hlášení ručních řádků z Tabulek
+            window.KB.watchVykazy();   // dlaždice Upozornění pro kontrolu
+        } else {
+            window.KB.watchMojeUkoly();
+            window.KB.watchMojeProjekty();
+        }
+    }
+
+    /* ---------------------------------------------- volitelné widgety ---
+       Každý si zvolí, co na nástěnce chce; volba se drží v prohlížeči
+       (na jiném počítači si ji člověk klikne znovu – to je v pořádku). */
+
+
+
+
+
+    /**
+     * Kdo tu byl. Otisk se obnovuje po pěti minutách, takže „před 3 minutami"
+     * znamená „je tady teď"; starší časy říkají, kdy kdo naposledy pracoval.
+     * Šest posledních – delší seznam patří do Reportů.
+     */
+    function predJakDlouho(ms) {
+        const minut = Math.max(0, Math.round((Date.now() - ms) / 60000));
+        if (minut < 6) return "právě teď";
+        if (minut < 60) return "před " + minut + " minutami";
+        const hodin = Math.round(minut / 60);
+        if (hodin < 24) return "před " + hodin + (hodin === 1 ? " hodinou" :
+            hodin < 5 ? " hodinami" : " hodinami");
+        const dnu = Math.round(hodin / 24);
+        return "před " + dnu + (dnu === 1 ? " dnem" : " dny");
+    }
+
+    function renderOnline() {
+        const tady = (window.KB.pritomnost || [])
+            .map(p => {
+                const u = (window.KB.users || []).find(x => x.id === p.id);
+                return { jmeno: u ? ((u.first || "") + " " + (u.last || "")).trim() : (p.jmeno || ""),
+                         ms: Number(p.ms) || 0 };
+            })
+            .filter(p => p.jmeno)
+            .sort((a, b) => b.ms - a.ms)
+            .slice(0, 6);
+
+        document.getElementById("onlineSeznam").innerHTML = tady.length
+            ? tady.map(p => {
+                // otisk chodí po deseti minutách, tak ať tečka nebliká
+                const cerstvy = Date.now() - p.ms <
+                    ((window.KB.PRITOMNOST_MINUT || 10) * 2.5) * 60 * 1000;
+                return '<div class="row" style="gap:8px;padding:4px 0;border-bottom:1px dashed var(--line-soft)">' +
+                    '<span style="flex:none;width:8px;height:8px;border-radius:50%;background:' +
+                        (cerstvy ? "var(--ok)" : "var(--dim)") + '"></span>' +
+                    '<span class="grow truncate" style="font-size:13px">' + esc(p.jmeno) + "</span>" +
+                    '<span class="tiny muted" style="flex:none">' + esc(predJakDlouho(p.ms)) + "</span>" +
+                "</div>";
+            }).join("")
+            : '<span class="tiny muted">Zatím tu nikdo nebyl – seznam se plní sám, jak se lidé přihlašují.</span>';
+    }
+
+    /** Poslední aktivita – jen manažeři (data chodí jen jim). */
+    function renderAktivita() {
+        const cas = (ms) => {
+            const d = new Date(ms);
+            return d.getDate() + ". " + (d.getMonth() + 1) + ". " +
+                String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        };
+        // čas drobně nad textem – v řádku vedle sebe se čas a věta praly o místo
+        document.getElementById("aktivitaSeznam").innerHTML =
+            (window.KB.aktivity || []).slice(0, 10).map(a =>
+                '<div class="akt">' +
+                    '<span class="akt__cas">' + esc(cas(a.ms)) + "</span>" +
+                    '<span class="akt__text"><b>' + esc(a.jmeno || "") + "</b> " + esc(a.text || "") + "</span>" +
+                "</div>").join("")
+            || '<span class="tiny muted">Zatím žádné záznamy – historie se začne plnit používáním webu.</span>';
+    }
+
+    const czDatum = (iso) => {
+        if (!iso) return "";
+        const [y, m, d] = iso.split("-");
+        return Number(d) + ". " + Number(m) + ". " + y;
+    };
+
+    const pctUkolu = (u) => (u.todo && u.todo.length)
+        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
+        : (u.stav === "hotovo" ? 100 : 0);
+
+    /* Stupeň rozpracovanosti pro barvu – stejná stupnice jako na stránce
+       úkolů a na starém webu, ať se to nikde nečte jinak. */
+    function pctUroven(pct) {
+        const v = Number(pct) || 0;
+        if (v >= 100) return "p100";
+        if (v >= 95)  return "p95";
+        if (v >= 75)  return "p75";
+        if (v > 0)    return "p50";
+        return "p0";
+    }
+
+    /* Jak si člověk přeje zapisovat procenta. Výchozí je jedno číslo
+       (jako na starém webu); „% podrobně" ukáže celou řadu kroků.
+       Volba je osobní, drží ji prohlížeč. */
+    const PODROBNE_KLIC = "kb-pct-podrobne";
+    const podrobne = () => {
+        try { return localStorage.getItem(PODROBNE_KLIC) === "1"; } catch (err) { return false; }
+    };
+    const nastavPodrobne = (zap) => {
+        try { localStorage.setItem(PODROBNE_KLIC, zap ? "1" : "0"); } catch (err) {}
+    };
+
+    const mojeUid = () => (window.KB.currentUid ? window.KB.currentUid() : "") || "";
+    const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
+    const jeMuj = (u) => (u.prirazeni || []).indexOf(mojeUid()) !== -1;
+
+    /**
+     * Co karta ukáže. „Moje" jsou úkoly, kde je přihlášený v `prirazeni`.
+     * „Všechny" je prostě celé `KB.ukoly` – manažerovi tam databáze pošle
+     * všechny úkoly, ostatním jen ty jejich (dotaz i pravidla to omezují),
+     * takže víc než svoje stejně neuvidí a přepínač jim nic neprozradí.
+     */
+    function seznamUkolu() {
+        return (window.KB.ukoly || []).filter(u => u.stav !== "hotovo" &&
+            (rozsahUkolu === "vse" || jeMuj(u)));
+    }
+
+    function renderNastenka() {
+        const seznam = seznamUkolu();
+        // po přepnutí rozsahu může vybraný úkol z výpisu zmizet – ať pak
+        // vpravo nesvítí TO-DO něčeho, co v seznamu vlevo není vidět
+        if (!seznam.some(u => u.id === vybranyUkol)) vybranyUkol = seznam.length ? seznam[0].id : "";
+
+        document.querySelectorAll("[data-rozsah]").forEach(tlacitko => {
+            const zapnuto = tlacitko.dataset.rozsah === rozsahUkolu;
+            tlacitko.classList.toggle("chip--active", zapnuto);
+            tlacitko.setAttribute("aria-pressed", zapnuto ? "true" : "false");
+        });
+
+        document.getElementById("mojeUkoly").innerHTML = seznam.map(u => {
+            const pct = pctUkolu(u);
+            // u cizího úkolu je potřeba vědět, komu patří – u svých je to zbytečné
+            const kdo = jeMuj(u) ? "" : (u.prirazeni || []).map(jmenoUid).filter(Boolean).join(", ");
+            const meta = [u.projekt, kdo, u.termin ? "termín " + czDatum(u.termin) : ""]
+                .filter(Boolean).join(" · ");
+            return '<button type="button" class="mujukol mujukol--' + pctUroven(pct) +
+                (u.id === vybranyUkol ? " je-vybrany" : "") + '" data-vyber="' + esc(u.id) + '">' +
+                '<span class="grow"><span class="mujukol__nazev">' + esc(u.nazev) + "</span>" +
+                '<span class="mujukol__meta" style="display:block">' + esc(meta) + "</span></span>" +
+                '<span class="mujukol__prubeh"><i style="width:' + pct + '%"></i></span>' +
+                '<span class="mujukol__pct">' + pct + " %</span>" +
+            "</button>";
+        }).join("") || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+            "Žádný otevřený úkol. Nové úkoly zadávají manažeři na stránce Úkoly.</div>";
+
+        const u = seznam.find(x => x.id === vybranyUkol);
+
+        // ať je na první pohled vidět, čí TO-DO se vpravo ukazuje
+        const nazev = document.getElementById("todoNazev");
+        nazev.hidden = !u;
+        nazev.innerHTML = u ? esc(u.nazev) +
+            (u.projekt ? " <span>· " + esc(u.projekt) + "</span>" : "") : "";
+
+        // přepínač „% podrobně" se ukáže, jen když je co odškrtávat
+        document.getElementById("prepPodrobne").hidden = !u;
+        document.getElementById("prepPodrobne").classList.toggle("chip--active", podrobne());
+
+        document.getElementById("todoRozpad").innerHTML = !u
+            ? '<div class="tiny muted" style="padding:10px 2px">Vyber vlevo úkol.</div>'
+            : ((u.todo || []).map(t => {
+                const pct = Number(t.pct) || 0;
+                /* Výchozí je jedno číslo jako na starém webu – kliknutím
+                   se posune po krocích. Podrobnou řadu si každý zapne sám
+                   a volba mu zůstane (localStorage). */
+                /* Posuvník je v obou stylech: tažením se dá skočit kamkoliv
+                   bez klikání přes všechny kroky. Drží se stejné stupnice
+                   jako tlačítka, takže z něj nevypadne hodnota mimo řadu. */
+                const posuvnik = '<input type="range" class="ntodo__slider" min="0" max="100" ' +
+                    'step="' + POSUVNIK_KROK + '" value="' + pct + '" ' +
+                    'data-nslider="' + esc(t.id) + '" title="Táhni pro nastavení procent">';
+
+                const ovladani = podrobne()
+                    ? posuvnik + '<span class="ntodo__pcts">' + PCT_KROKY.map(p =>
+                        '<button type="button" class="ntodo__pct' + (pct === p ? " je-aktivni" : "") +
+                        '" data-npct="' + p + '" data-ntodo="' + esc(t.id) + '">' + p + "&nbsp;%</button>").join("") +
+                      "</span>"
+                    : posuvnik + '<button type="button" class="ntodo__cyklus" data-ncyklus="' + esc(t.id) +
+                      '" title="Klikni pro další krok">' + pct + " %</button>";
+                return '<div class="ntodo ntodo--' + pctUroven(pct) + '">' +
+                    '<span class="ntodo__text">' + esc(t.text) + "</span>" + ovladani + "</div>";
+            }).join("") || '<div class="tiny muted" style="padding:10px 2px">Úkol nemá TO-DO rozpad.</div>');
+    }
+
+    /* ------------------------------------------- dvě sekce nástěnky ----
+       Manažer má dlaždice rozdělené: ZÁKLADNÍ je to, co vidí zaměstnanci,
+       MANAŽERSKÁ jsou okna navíc (dovolené, kontrola, aktivita). Přepíná
+       se nahoře v modré liště vedle „Zobrazit jako". Zaměstnanci žádné
+       přepínání nevidí – mají jen základ. */
+
+    const REZIM_KLIC = "kb-nastenka-rezim";
+    const MANAZERSKE_DLAZDICE = ["wDovolene", "wRychly", "wKontrola", "wAktivita"];
+
+    function rezimNastenky() {
+        try { return localStorage.getItem(REZIM_KLIC) || "zakladni"; }
+        catch (err) { return "zakladni"; }
+    }
+
+    function aplikujRezim() {
+        const manazer = window.KBUI.can("vykaz.view");
+        const rezim = manazer ? rezimNastenky() : "zakladni";
+        document.querySelectorAll(".nastenka > .nastenka__karta").forEach(k => {
+            const manazerska = MANAZERSKE_DLAZDICE.indexOf(k.id) !== -1;
+            /* hidden z data-need nechává na pokoji – tady se jen volí sekce */
+            k.style.display = (rezim === "manazerska") === manazerska ? "" : "none";
+        });
+        document.querySelectorAll("[data-rezim]").forEach(b => {
+            b.classList.toggle("chip--active", b.dataset.rezim === rezim);
+        });
+        const box = document.getElementById("rezimBox");
+        if (box) box.hidden = !manazer;
+    }
+
+    function pripravRezimy() {
+        if (document.getElementById("rezimBox")) return;
+        const kotva = document.querySelector("[data-nahled-box]");
+        const box = document.createElement("div");
+        box.id = "rezimBox";
+        box.className = "row no-print";
+        box.hidden = true;
+        box.style.cssText = "gap:6px;align-items:center";
+        box.innerHTML =
+            '<button type="button" class="chip" data-rezim="zakladni">Základní</button>' +
+            '<button type="button" class="chip" data-rezim="manazerska">Manažerská</button>';
+        if (kotva && kotva.parentNode) kotva.parentNode.insertBefore(box, kotva);
+        else document.getElementById("nastenka").prepend(box);
+        box.addEventListener("click", (event) => {
+            const b = event.target.closest("[data-rezim]");
+            if (!b) return;
+            try { localStorage.setItem(REZIM_KLIC, b.dataset.rezim); } catch (err) {}
+            aplikujRezim();
+        });
+    }
+
+    /* -------------------------------------------------- Quick TO-DO ----
+       Vzkazy pro mě nahoře (odškrtávají se), pod nimi drobně co jsem
+       poslal já. Nové se posílají z levého pásu. */
+
+    function renderQuick() {
+        const uid = mojeUid();
+        const vse = window.KB.quicktodo || [];
+        // adresáti jsou v `proUids`; starší záznamy mají jen `proUid`
+        const adresati = (q) => (q.proUids && q.proUids.length) ? q.proUids : [q.proUid];
+        const jeProMe = (q) => adresati(q).indexOf(uid) !== -1;
+
+        const proMe = vse.filter(jeProMe);
+        const odeMe = vse.filter(q => q.odKoho === uid && !jeProMe(q));
+
+        // vrací jen samotný kus, oddělovač doplní ten, kdo řádek skládá
+        const termin = (q) => {
+            if (q.asap) return '<span class="quickrad__asap">co nejdříve</span>';
+            if (!q.doKdy) return "";
+            const poTerminu = !q.hotovo && q.doKdy < V.dnesISO();
+            return '<span style="' + (poTerminu ? "color:var(--danger);font-weight:700" : "") +
+                '">do ' + esc(czDatum(q.doKdy)) + "</span>";
+        };
+
+        /* Stejné řazení jako v panelu: „co nejdříve" nahoru, pak termíny
+           od nejbližšího, nakonec vzkazy bez termínu. */
+        const naporadi = (a, b) =>
+            (b.asap ? 1 : 0) - (a.asap ? 1 : 0) ||
+            (a.doKdy ? 0 : 1) - (b.doKdy ? 0 : 1) ||
+            (a.doKdy || "").localeCompare(b.doKdy || "");
+
+        const spoluucast = (q) => adresati(q).filter(x => x !== uid)
+            .map(jmenoUid).filter(Boolean);
+
+        const radek = (q, mujVzkaz) =>
+            '<div class="row qtrad' +
+                (q.hotovo ? " qtrad--hotovo" : (q.asap ? " qtrad--asap" : "")) + '">' +
+                '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
+                    '<span style="font-weight:700">' + esc(q.text) + "</span>" +
+                    '<span class="muted" style="display:block;font-size:12.5px">' +
+                        /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
+                           zopakování toho, co už tam stojí – vynechává se. */
+                        /* Oddělovač se dává jen MEZI kusy, ne před první –
+                           u vlastního vzkazu chybí „Zadal:" a řádek by jinak
+                           začínal osamocenou tečkou. */
+                        [ mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?"),
+                          q.projekt ? esc(q.projekt) : "",
+                          termin(q)
+                        ].filter(Boolean).join(" · ") +
+                        // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
+                        (spoluucast(q).length
+                            ? "<br>Spoluúčast: " + esc(spoluucast(q).join(", ")) : "") +
+                        (q.hotovo && q.hotovoKdo
+                            ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
+                              (q.hotovoMs ? " · " + esc(czDatum(new Date(q.hotovoMs)
+                                  .toISOString().slice(0, 10))) : "") + "</span>" : "") +
+                    "</span>" +
+                "</span>" +
+                // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
+                (q.hotovo
+                    ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
+                        esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                    : '<button type="button" class="btn btn--sm quicksplnit" data-quick-hotovo="' +
+                        esc(q.id) + '">Splněno</button>') +
+                (q.odKoho === uid
+                    ? '<button type="button" class="linkbtn" data-quick-smaz="' + esc(q.id) +
+                      '" title="Smazat vzkaz" style="padding:2px 8px">×</button>' : "") +
+            "</div>";
+
+        /* Splněné se schovávají a seznam zůstává čistý; rozkliknou se dole. */
+        /* MOJE = co mi kdo poslal, ZADANÉ = co jsem poslal – stejný přepínač
+           jako u zadaných úkolů. Splněné drží jen poslední týden; starší
+           žijí v týdenních lozích reportů. */
+        const mojeRezim = quickRozsah !== "zadane";
+        const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
+        const aktivni = (mojeRezim ? proMe : odeMe).filter(q => !q.hotovo).sort(naporadi);
+        const splnene = (mojeRezim ? proMe : odeMe)
+            .filter(q => q.hotovo && (q.hotovoMs || q.ms || 0) >= tydenZpet);
+
+        document.querySelectorAll("[data-qrozsah]").forEach(ch => {
+            const zapnuto = ch.dataset.qrozsah === quickRozsah;
+            ch.classList.toggle("chip--active", zapnuto);
+            ch.setAttribute("aria-pressed", zapnuto ? "true" : "false");
+        });
+
+        document.getElementById("quickSeznam").innerHTML =
+            (aktivni.map(q => radek(q, !mojeRezim)).join("")
+                || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+                   (mojeRezim ? "Žiješ šťastný život, nikdo po tobě nic nechce."
+                              : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
+            (splnene.length
+                ? '<button type="button" class="linkbtn" data-quick-splnene-tile style="margin-top:12px">' +
+                    (quickSplneneTile ? "Skrýt historii" : "Splněné za poslední týden (" + splnene.length + ")") +
+                  "</button>" +
+                  (quickSplneneTile ? splnene.map(q => radek(q, !mojeRezim)).join("") : "")
+                : "");
+    }
+
+    let quickSplneneTile = false;
+    let quickRozsah = "moje";
+
+    /* Splněno / Vrátit / smazání / rozbalení splněných – panel v pásu má
+       vlastní obsluhu v ui.js, tohle patří jen dlaždici. */
+    document.addEventListener("click", (event) => {
+        const fajfka = event.target.closest("[data-ok]");
+        if (fajfka) return void prepniKontrolaOk(fajfka.dataset.ok);
+        const dovol = event.target.closest("[data-potvrd-dovolenou]");
+        if (dovol) {
+            dovol.disabled = true;
+            window.KB.potvrdDovolenou(dovol.dataset.potvrdDovolenou)
+                .then(() => window.KBUI.toast("Dovolená potvrzena."))
+                .catch(() => { dovol.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
+        const milPotvrd = event.target.closest("[data-potvrd-milnik]");
+        if (milPotvrd) {
+            milPotvrd.disabled = true;
+            window.KB.potvrdMilnik(milPotvrd.dataset.potvrdMilnik)
+                .then(() => window.KBUI.toast("Milník potvrzen."))
+                .catch(() => { milPotvrd.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
+        const potvrd = event.target.closest("[data-potvrd-ukol]");
+        if (potvrd) {
+            potvrd.disabled = true;
+            window.KB.potvrdUkol(potvrd.dataset.potvrdUkol)
+                .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
+                .catch(() => { potvrd.disabled = false;
+                    window.KBUI.toast("Potvrzení selhalo.", "error"); });
+            return;
+        }
+        if (event.target.closest("[data-odbavene]")) {
+            ukazOdbavene = !ukazOdbavene;
+            return void renderKontrola();
+        }
+        const qrozsah = event.target.closest("[data-qrozsah]");
+        if (qrozsah) { quickRozsah = qrozsah.dataset.qrozsah; return void renderQuick(); }
+        if (event.target.closest("[data-quick-splnene-tile]")) {
+            quickSplneneTile = !quickSplneneTile;
+            return void renderQuick();
+        }
+        const hotovoBtn = event.target.closest("#quickSeznam [data-quick-hotovo]");
+        if (hotovoBtn) {
+            const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
+            // u společného vzkazu se zapíše, kdo ho odškrtl za všechny
+            const jeHotovo = !hotovoBtn.dataset.zpet;
+            if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, {
+                hotovo: jeHotovo,
+                hotovoKdo: jeHotovo ? (window.KB_USER || "") : "",
+                hotovoMs: jeHotovo ? Date.now() : 0
+            }))
+                .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
+            return;
+        }
+        const smaz = event.target.closest("#quickSeznam [data-quick-smaz]");
+        if (smaz) window.KB.deleteQuickTodo(smaz.dataset.quickSmaz)
+            .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+    });
+
+    /* Klik na červenou hlavičku otevře, co dlaždice nese. Tlačítka a odkazy
+       uvnitř hlavičky mají přednost a proklik nespouští. */
+    document.addEventListener("click", (event) => {
+        const hlava = event.target.closest("[data-otevri]");
+        if (!hlava || event.target.closest("button, a, input, select")) return;
+        const cil = hlava.dataset.otevri;
+        if (hlava.dataset.jenNeed && !window.KBUI.can(hlava.dataset.jenNeed)) return;
+        if (cil === "panel") {
+            const tlacitko = document.querySelector("[data-quick-otevri]");
+            if (tlacitko) tlacitko.click();
+            return;
+        }
+        if (hlava.hasAttribute("data-otevri-todo")) {
+            const u = seznamUkolu().find(x => x.id === vybranyUkol);
+            location.href = u ? "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(u.projekt || "")) : cil;
+            return;
+        }
+        location.href = cil;
+    });
+
+    /* ------------------------------------------- kalendář na nástěnce ----
+       Dnešek a nejbližší dny: absence a události z kalendáře plus termíny
+       úkolů. Dny bez obsahu se vynechávají – prázdné řádky nic neřeknou. */
+
+    const TYP_BARVA = { udalost: "#0f62c4", doktor: "#00695c", dovolena: "#0d7d3f", nemoc: "#c8102e",
+        skoleni: "#8a2be2", homeoffice: "#0e7490", volno: "#6b8e23" };
+    const TYP_NAZEV = { udalost: "Firemní akce", doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
+        skoleni: "Školení", homeoffice: "Home office", volno: "Volno" };
+    // absence, které platí až po manažerově razítku
+    const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená", volno: "Nepotvrzené volno" };
+
+    function renderKalendarDlazdice() {
+        const dny = [];
+        const dnes = new Date();
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(dnes.getFullYear(), dnes.getMonth(), dnes.getDate() + i);
+            const iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+                "-" + String(d.getDate()).padStart(2, "0");
+
+            const radky = [];
+            (window.KB.kalendar || []).forEach(k => {
+                if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
+                    let druh = TYP_NAZEV[k.typ] || "událost";
+                    if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true) druh = NEPOTVRZENE[k.typ];
+                    radky.push({ barva: TYP_BARVA[k.typ] || TYP_BARVA.udalost,
+                        text: k.typ === "udalost"
+                            ? (k.text || "Firemní akce") + (k.osoba ? " – " + k.osoba : "")
+                            : druh + " – " + (k.osoba || "") });
+                }
+            });
+            const jedou = (window.KB.auta || [])
+                .filter(a => a.druh === "brno" && a.datum === iso)
+                .map(a => a.jmeno || jmenoUid(a.uid) || "?");
+            if (jedou.length) {
+                radky.push({ barva: "#8a5a00", text: "Auto Brno – " + jedou.join(", ") });
+            }
+            (window.KB.ukoly || []).forEach(u => {
+                if (u.termin === iso && u.stav !== "hotovo") {
+                    radky.push({ barva: "#c26a00", text: "Úkol: " + (u.nazev || "") });
+                }
+            });
+            (window.KB.milniky || []).forEach(m => {
+                if (m.datum === iso && !m.hotovo) {
+                    /* stejný zápis jako v roletce milníků: technologie
+                       a k ní náplň (v ní bývá patro a co se odevzdává) */
+                    radky.push({ barva: "#b3006b", text: "Milník: " + (m.cinnost || "") +
+                        (m.napln ? " – " + m.napln : "") +
+                        (m.zakazka ? " (" + m.zakazka + ")" : "") });
+                }
+            });
+            if (radky.length) dny.push({ iso, popis: i === 0 ? "Dnes" : i === 1 ? "Zítra" : czDatum(iso), radky });
+        }
+
+        /* Nabitý den (porada, dvě dovolené, tři úkoly) by dlaždici natáhl
+           na půl obrazovky. Od pěti řádků se proto sází do dvou sloupců –
+           ale jen když jsou názvy krátké, jinak by se všechno ořízlo
+           a nepřehlednost by byla horší než délka. */
+        const doSloupcu = (radky) =>
+            radky.length > 4 && radky.every(r => r.text.length <= 34);
+
+        document.getElementById("kalendarSeznam").innerHTML = dny.length
+            ? dny.map(den =>
+                '<div style="padding:5px 0;border-bottom:1px dashed var(--line-soft)">' +
+                    '<span class="muted" style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase">' +
+                        esc(den.popis) + "</span>" +
+                    /* Nejvýš tři sloupce (přání Michala): auto-fit by si
+                       na širokém monitoru nadrobil klidně pět a řádky by
+                       se přestaly číst zleva doprava. */
+                    '<div style="' + (doSloupcu(den.radky)
+                        ? "display:grid;column-gap:14px;grid-template-columns:repeat(" +
+                          Math.min(3, Math.ceil(den.radky.length / 3)) + ",minmax(0,1fr))"
+                        : "") + '">' +
+                    den.radky.map(r =>
+                        '<span class="row" style="gap:8px;padding:3px 0;font-size:14.5px">' +
+                            '<i style="flex:none;width:9px;height:9px;border-radius:3px;background:' + r.barva + '"></i>' +
+                            '<span class="truncate">' + esc(r.text) + "</span></span>").join("") +
+                    "</div>" +
+                "</div>").join("")
+            : '<span class="muted" style="font-size:14px">Nejbližších sedm dní je volných.</span>';
+    }
+
+    /**
+     * Nejbližší milníky. Bez omezení na týden – termín odevzdání za měsíc
+     * je pořád to, kvůli čemu se plánuje, a v kalendáři by ještě nebyl vidět.
+     * Prošlé nesplněné zůstávají nahoře a červeně: zmizet by neměly.
+     */
+    function renderMilniky() {
+        const dnes = V.dnesISO();
+        const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
+        const seznam = (window.KB.milniky || [])
+            .filter(m => m.datum && (!m.hotovo || m.potvrzeno === false))
+            .sort((a, b) => a.datum.localeCompare(b.datum))
+            .slice(0, 8);
+
+        document.getElementById("milnikySeznam").innerHTML = seznam.map(m => {
+            const ceka = m.hotovo && m.potvrzeno === false;
+            const pozde = !ceka && m.datum < dnes;
+            const zbyva = Math.round((new Date(m.datum + "T00:00:00") -
+                new Date(dnes + "T00:00:00")) / 86400000);
+            const kdy = ceka ? "čeká na potvrzení"
+                : pozde ? "po termínu"
+                : zbyva === 0 ? "dnes" : zbyva === 1 ? "zítra" : "za " + zbyva + " dní";
+
+            const kdo = (m.owners || []).map(jmenoUid).filter(Boolean).join(", ");
+            const meta = [m.zakazka, kdo].filter(Boolean).join(" · ");
+
+            const muj = uid && (m.owners || []).indexOf(uid) !== -1;
+            return '<a class="milrad' + (pozde ? " milrad--pozde" : (muj ? " milrad--muj" : "")) +
+                '" href="milniky.html" title="Otevřít milníky">' +
+                '<span class="milrad__datum">' + esc(czDatum(m.datum)) +
+                    '<span>' + esc(kdy) + "</span></span>" +
+                '<span class="grow" style="min-width:0">' +
+                    '<span class="milrad__nazev">' + esc(m.cinnost || "Bez názvu") + "</span>" +
+                    (meta ? '<span class="milrad__meta">' + esc(meta) + "</span>" : "") +
+                "</span>" +
+            "</a>";
+        }).join("") || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+            "Žádný nadcházející milník. Termíny odevzdání zadávají manažeři na stránce Milníky.</div>";
+    }
+
+    /* ---------------------------------------- potvrzování dovolených ---
+       Dovolená platí, až ji manažer odklepne. Dlaždice ukazuje nepotvrzené
+       – budoucí a čerstvé (do 30 dnů zpátky), starší už nikoho nezajímají. */
+
+    function renderDovolene() {
+        const box = document.getElementById("dovoleneSeznam");
+        if (!box || !window.KBUI.can("vykaz.view")) return;
+        const hranice = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+        const hraniceISO = hranice.getFullYear() + "-" +
+            String(hranice.getMonth() + 1).padStart(2, "0") + "-" +
+            String(hranice.getDate()).padStart(2, "0");
+
+        const ceka = (window.KB.kalendar || [])
+            .filter(k => (k.typ === "dovolena" || k.typ === "volno") && k.potvrzeno !== true &&
+                (k.do || k.od || "") >= hraniceISO)
+            .sort((a, b) => (a.od || "").localeCompare(b.od || ""));
+
+        box.innerHTML = (ceka.length
+            ? ceka.map(k =>
+                '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
+                    '<span class="kontrola__odkaz">' +
+                        '<span class="kontrola__datum" style="color:var(--accent)">' +
+                            esc(czDatum(k.od)) + (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>" +
+                        "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b>" +
+                            " · " + (k.typ === "volno" ? "volno" : "dovolená") + "</span></span>" +
+                    '<button type="button" class="btn btn--sm btn--primary" data-potvrd-dovolenou="' +
+                        esc(k.id) + '">Potvrdit</button>' +
+                "</div>").join("")
+            : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+              "Žádná dovolená nečeká na potvrzení.</div>");
+    }
+
+    /* --------------------------------- přehled rychlého zápisu ----------
+       Vlastní manažerská dlaždice: kdo si na příštích 14 dní zaklikl HO,
+       volno nebo dovolenou. U potvrzené dovolené je zkratka toho, kdo ji
+       potvrdil – „Dovolená (potvrzeno MK)". */
+
+    function iniciály(jmeno) {
+        return String(jmeno || "").split(/\s+/)
+            .map(k => (k[0] || "").toUpperCase()).join("").slice(0, 3);
+    }
+
+    function renderRychly() {
+        const box = document.getElementById("rychlySeznam");
+        if (!box || !window.KBUI.can("vykaz.view")) return;
+        const dnes = new Date().toISOString().slice(0, 10);
+        const za14 = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        const POPIS = { homeoffice: "Home office", volno: "Volno",
+            dovolena: "Dovolená", doktor: "Doktor" };
+
+        const radky = (window.KB.kalendar || [])
+            .filter(k => k.zdroj === "panel" && (k.do || k.od || "") >= dnes &&
+                (k.od || "") <= za14)
+            .sort((a, b) => (a.od || "").localeCompare(b.od || "") ||
+                (a.osoba || "").localeCompare(b.osoba || "", "cs"));
+
+        box.innerHTML = radky.length
+            ? radky.map(k => {
+                const potvrzovana = k.typ === "dovolena" || k.typ === "volno";
+                const stav = !potvrzovana ? ""
+                    : (k.potvrzeno === true
+                        ? ' <span style="color:var(--ok)">(potvrzeno ' +
+                            esc(iniciály(k.potvrdil)) + ")</span>"
+                        : ' <span style="color:var(--warn)">(nepotvrzeno)</span>');
+                return '<div class="row" style="gap:8px;padding:5px 0;border-bottom:1px dashed var(--line-soft);font-size:13px">' +
+                    '<b style="flex:none;min-width:74px">' + esc(czDatum(k.od)) + "</b>" +
+                    '<span class="grow truncate">' + esc(k.osoba || jmenoUid(k.uid) || "?") + "</span>" +
+                    '<span style="flex:none;font-weight:700;color:var(--accent)">' +
+                        esc(POPIS[k.typ] || k.typ) + "</span>" + stav +
+                "</div>";
+              }).join("")
+            : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+              "Na příštích čtrnáct dní si nikdo nic nezaklikl.</div>";
+    }
+
+    /* ------------------------------------------ upozornění pro kontrolu ---
+       Tři kontroly nad výkazy: přes 14 hodin za den, dva zápisy přes sebe
+       a práce v den celodenní absence. Většinou je dlaždice prázdná –
+       existuje pro tu chvíli, kdy něco nesedí. */
+
+    const naMin = (cas) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(cas || "");
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+
+    const FAJFKA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
+
+    /* Co už manažer odbavil. Drží se v databázi, ne v prohlížeči – kontroluje
+       to víc lidí a nikdo nemá procházet znovu to, co druhý odklepl. */
+    let kontrolaOk = new Set();
+    let ukazOdbavene = false;
+
+    async function nactiKontrolaOk() {
+        if (!window.KBUI.can("vykaz.view")) return;
+        try { kontrolaOk = new Set(await window.KB.nactiKontrolaOk()); }
+        catch (err) { console.error(err); }
+        renderKontrola();
+    }
+
+    async function prepniKontrolaOk(klic) {
+        kontrolaOk.has(klic) ? kontrolaOk.delete(klic) : kontrolaOk.add(klic);
+        renderKontrola();
+        try { await window.KB.ulozKontrolaOk(Array.from(kontrolaOk)); }
+        catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení se nepovedlo.", "error");
+        }
+    }
+
+    function renderKontrola() {
+        const box = document.getElementById("kontrolaSeznam");
+        if (!box || !window.KBUI.can("vykaz.view")) return;
+
+        // záznamy po dnech a lidech
+        const dny = new Map();
+        (window.KB.vykazy || []).forEach(z => {
+            if (!z.datum || !z.uid) return;
+            const k = z.uid + "|" + z.datum;
+            if (!dny.has(k)) dny.set(k, { prace: [], absenceCely: false, hodiny: 0 });
+            const den = dny.get(k);
+            if (z.absence === true) {
+                if (z.od === "00:00") den.absenceCely = true;
+                return;
+            }
+            den.prace.push(z);
+            den.hodiny += Number(z.hodiny) || 0;
+        });
+
+        const chyby = [];
+        dny.forEach((den, klic) => {
+            const [uid, datum] = klic.split("|");
+            const kdo = jmenoUid(uid) || "?";
+
+            /* Odkaz míří na konkrétní zápis – ne na celé výkazy. U chyb
+               přes celý den stačí kterýkoliv z nich, stránka ukáže ten den
+               celý (u překryvu je potřeba vidět i sousední zápis). */
+            const prvni = den.prace[0] || {};
+
+            if (den.hodiny > 14) chyby.push({ datum: datum, klic: klic + "|hodiny",
+                zapis: prvni.id || "",
+                text: kdo + " má " + V.hod(den.hodiny) + " za jeden den" });
+
+            if (den.absenceCely && den.prace.length) chyby.push({ datum: datum,
+                klic: klic + "|absence", zapis: prvni.id || "",
+                text: kdo + " má výkaz práce v den celodenní absence" });
+
+            // překryvy: seřadit podle začátku a porovnat sousedy
+            const sCasy = den.prace
+                .filter(z => naMin(z.od) !== null && naMin(z.do) !== null)
+                .sort((a, b) => naMin(a.od) - naMin(b.od));
+            for (let i = 1; i < sCasy.length; i++) {
+                if (naMin(sCasy[i].od) < naMin(sCasy[i - 1].do)) {
+                    chyby.push({ datum: datum, klic: klic + "|prekryv",
+                        zapis: sCasy[i].id || "",
+                        text: kdo + " má zápisy přes sebe (" +
+                        sCasy[i - 1].od + "–" + sCasy[i - 1].do + " a " +
+                        sCasy[i].od + "–" + sCasy[i].do + ")" });
+                    break;   // jeden den = jedno hlášení, ať se neopakuje
+                }
+            }
+        });
+
+        /* Výpomoc: hodiny zapsané na úkol, který člověku nepatří. Stává se
+           (lidi si pomáhají), ale manažer o tom má vědět a odklepnout to. */
+        (window.KB.vykazy || []).forEach(z => {
+            if (!z.ukolId || z.absence === true || !z.datum) return;
+            const u = (window.KB.ukoly || []).find(x => x.id === z.ukolId);
+            if (!u || (u.prirazeni || []).indexOf(z.uid) !== -1) return;
+            chyby.push({ datum: z.datum, klic: "vypomoc|" + z.id, zapis: z.id,
+                stitek: "CIZÍ ÚKOL",
+                text: (jmenoUid(z.uid) || "?") + " zapsal výkaz (" +
+                    czDatum(z.datum) + ") na cizí úkol „" + (u.nazev || "?") + "“" });
+        });
+
+        /* Ručně vepsané řádky pod čárou v Tabulkách Google – hlásí je
+           hodinová kontrola skriptu (řádek s datem od čáry, který nemá ID
+           z webu). Od 1. 9. se má zapisovat jen přes web, ruční řádek by
+           rozešel web a sešit. */
+        (window.KB.gsync || []).forEach(g => {
+            if (g.stav !== "rucni" || !(Number(g.pocet) > 0)) return;
+            // stará hlášení (skript už neběží / vyřešeno) nestraší donekonečna
+            if (Date.now() - (Number(g.ms) || 0) > 3 * 24 * 3600 * 1000) return;
+            chyby.push({
+                datum: new Date(Number(g.ms) || Date.now()).toISOString().slice(0, 10),
+                klic: "rucni|" + (g.id || "") + "|" + g.pocet,
+                stitek: "RUČNÍ ŘÁDEK",
+                text: "Výkaz " + (g.osoba || "?") + ": pod čárou je " +
+                    V.pocet(Number(g.pocet), ["ručně vepsaný řádek", "ručně vepsané řádky",
+                        "ručně vepsaných řádků"]) +
+                    " (" + (g.list || "?") + ", ř. " + (g.radky || []).join(", ") + ")" +
+                    " – nejsou z webu"
+            });
+        });
+
+        /* Hotové úkoly čekající na potvrzení – zaměstnanec označil hotovo,
+           manažer po kontrole potvrdí tlačítkem (ne fajfkou „v pořádku",
+           tohle opravdu mění úkol). */
+        const kPotvrzeni = (window.KB.ukoly || [])
+            .filter(u => u.stav === "hotovo" && u.potvrzeno !== true);
+
+        /* Milníky odškrtnuté přiřazeným člověkem – platí až po potvrzení.
+           Jen výslovné `potvrzeno: false`; staré splněné pole nemají. */
+        const milKPotvrzeni = (window.KB.milniky || [])
+            .filter(m => m.hotovo && m.potvrzeno === false);
+
+        chyby.sort((a, b) => b.datum.localeCompare(a.datum));
+
+        const otevrene = chyby.filter(ch => !kontrolaOk.has(ch.klic));
+        const odbavene = chyby.filter(ch => kontrolaOk.has(ch.klic));
+
+        const radek = (ch, hotovo) =>
+            '<div class="kontrola__radek' + (hotovo ? " kontrola__radek--ok" : "") + '">' +
+                '<a class="kontrola__odkaz" href="' +
+                    (ch.zapis ? "vykazy.html?zapis=" + encodeURIComponent(ch.zapis)
+                              : "vykazy.html") + '">' +
+                    '<span class="kontrola__datum"' +
+                        (ch.stitek ? ' style="color:var(--accent)"' : "") + ">" +
+                        esc(ch.stitek || czDatum(ch.datum)) + "</span>" +
+                    "<span>" + esc(ch.text) + "</span></a>" +
+                '<button type="button" class="kontrola__fajfka" data-ok="' + esc(ch.klic) + '"' +
+                    ' aria-pressed="' + (hotovo ? "true" : "false") + '"' +
+                    ' title="' + (hotovo ? "Vrátit mezi upozornění" : "Je to v pořádku – schovat") + '">' +
+                    FAJFKA + "</button>" +
+            "</div>";
+
+        const potvrzeniHtml = kPotvrzeni.map(u =>
+            '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
+                '<a class="kontrola__odkaz" href="ukoly.html?vse=1&otevri=' + esc(u.id) + '">' +
+                    '<span class="kontrola__datum" style="color:var(--accent)">HOTOVO?</span>' +
+                    "<span><b>" + esc(u.nazev || "?") + "</b> – označeno jako hotové, čeká na tvé potvrzení</span></a>" +
+                '<button type="button" class="btn btn--sm btn--primary" data-potvrd-ukol="' +
+                    esc(u.id) + '">Potvrdit</button>' +
+            "</div>").join("");
+
+        const milPotvrzeniHtml = milKPotvrzeni.map(m =>
+            '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
+                '<a class="kontrola__odkaz" href="milniky.html">' +
+                    '<span class="kontrola__datum" style="color:var(--accent)">MILNÍK?</span>' +
+                    "<span><b>" + esc(m.cinnost || "?") + "</b> – splněno (" +
+                        esc(m.hotovoKdo || "?") + "), čeká na tvé potvrzení</span></a>" +
+                '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' +
+                    esc(m.id) + '">Potvrdit</button>' +
+            "</div>").join("");
+
+        box.innerHTML = potvrzeniHtml + milPotvrzeniHtml +
+            (otevrene.length
+                ? otevrene.slice(0, 25).map(ch => radek(ch, false)).join("")
+                : ((kPotvrzeni.length || milKPotvrzeni.length) ? "" :
+                  '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+                  "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>")) +
+            /* Odbavené se nemažou, jen schovají – ať se dá odškrtnutí vzít
+               zpět a ať je vidět, že se na to někdo díval. */
+            (odbavene.length
+                ? '<button type="button" class="linkbtn" data-odbavene style="align-self:flex-start;margin-top:6px">' +
+                    (ukazOdbavene ? "Skrýt " : "Zobrazit ") + "označené jako v pořádku (" + odbavene.length + ")</button>" +
+                  (ukazOdbavene ? odbavene.map(ch => radek(ch, true)).join("") : "")
+                : "");
+    }
+
+    /* ----------------------------------------------------- co je nového ---
+       Po přihlášení jedno okno doprostřed: úkoly nově přiřazené mně a quick
+       to-do, které přišly od minulé návštěvy. Hranice „od kdy je to nové"
+       se drží v prohlížeči na člověka; první návštěva jen nastaví laťku
+       a nic nevypisuje – vysypat všechno by nebylo „nové". */
+
+    const NOVINKY_KLIC = () => "kb-novinky-" + mojeUid();
+    let novinkyHotovo = false;
+    let prisloUkoly = false, prisloQuick = false;
+
+    function novinkyZkus() {
+        if (novinkyHotovo || !prisloUkoly || !prisloQuick || !mojeUid()) return;
+        novinkyHotovo = true;
+
+        let odKdy = 0;
+        try { odKdy = Number(localStorage.getItem(NOVINKY_KLIC())) || 0; } catch (err) {}
+        const ted = Date.now();
+        try { localStorage.setItem(NOVINKY_KLIC(), String(ted)); } catch (err) {}
+        if (!odKdy) return;   // první návštěva – jen nastavit laťku
+
+        const ukoly = (window.KB.ukoly || []).filter(u =>
+            u.stav !== "hotovo" && jeMuj(u) && (u.createdMs || 0) > odKdy);
+        const vzkazy = (window.KB.quicktodo || []).filter(q =>
+            !q.hotovo && ((q.proUids && q.proUids.length) ? q.proUids : [q.proUid])
+                .indexOf(mojeUid()) !== -1 && (q.ms || 0) > odKdy);
+        if (!ukoly.length && !vzkazy.length) return;
+
+        const radek = (nadpis, text) =>
+            '<div class="novinky__radek"><b>' + esc(nadpis) + "</b>" +
+            '<span>' + esc(text) + "</span></div>";
+
+        document.getElementById("novinkyObsah").innerHTML =
+            ukoly.map(u => radek("Nový úkol: " + (u.nazev || ""),
+                [u.projekt, u.termin ? "termín " + czDatum(u.termin) : ""]
+                    .filter(Boolean).join(" · "))).join("") +
+            vzkazy.map(q => radek("Quick TO-DO: " + (q.text || ""),
+                "od " + (q.odKohoJmeno || jmenoUid(q.odKoho) || "?") +
+                (q.asap ? " · co nejdříve" : q.doKdy ? " · do " + czDatum(q.doKdy) : "")))
+                .join("");
+        document.getElementById("novinkyOverlay").hidden = false;
+    }
+
+    async function zapisPct(todoId, pct) {
+        const u = seznamUkolu().find(x => x.id === vybranyUkol);
+        if (!u) return;
+        const puvodni = (u.todo || []).find(t => t.id === todoId);
+        const todo = (u.todo || []).map(t => t.id === todoId
+            ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
+        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        try {
+            await window.KB.ulozUkolPostup(u.id, todo, hotovo ? "hotovo" : "otevreny",
+                puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
+            if (hotovo) window.KBUI.toast("Úkol je hotový. 🎉");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zápis se nepovedl.", "error");
+        }
+    }
+
+    document.addEventListener("click", (event) => {
+        const rozsah = event.target.closest("[data-rozsah]");
+        if (rozsah) { rozsahUkolu = rozsah.dataset.rozsah; return void renderNastenka(); }
+        const vyber = event.target.closest("[data-vyber]");
+        if (vyber) { vybranyUkol = vyber.dataset.vyber; return void renderNastenka(); }
+        const pct = event.target.closest("[data-npct]");
+        if (pct) return void zapisPct(pct.dataset.ntodo, Number(pct.dataset.npct));
+
+        // posuvník: zapisuje se až po puštění, ne při každém pixelu tažení
+        const slider = event.target.closest("[data-nslider]");
+        if (slider) return;
+
+        // klik na číslo posune procenta na další krok – jako na starém webu
+        const cyklus = event.target.closest("[data-ncyklus]");
+        if (cyklus) {
+            const u = seznamUkolu().find(x => x.id === vybranyUkol);
+            const t = u && (u.todo || []).find(x => x.id === cyklus.dataset.ncyklus);
+            if (t) {
+                const ted = Number(t.pct) || 0;
+                const dalsi = PCT_KROKY.find(p => p > ted);
+                zapisPct(t.id, dalsi === undefined ? 0 : dalsi);
+            }
+            return;
+        }
+        const prep = event.target.closest("#prepPodrobne");
+        if (prep) { nastavPodrobne(!podrobne()); renderNastenka(); }
+    });
+
+    /* Posuvník: během tažení se jen obarvuje řádek, do databáze se zapíše
+       až po puštění. Zápis při každém pixelu by překresloval seznam pod
+       prstem a poslal by desítky zbytečných zápisů. */
+    document.addEventListener("input", (event) => {
+        const slider = event.target.closest("[data-nslider]");
+        if (!slider) return;
+        const radek = slider.closest(".ntodo");
+        const pct = naKrok(Number(slider.value) || 0);
+        radek.className = "ntodo ntodo--" + pctUroven(pct);
+        const cislo = radek.querySelector(".ntodo__cyklus");
+        if (cislo) cislo.textContent = pct + " %";
+    });
+
+    document.addEventListener("change", (event) => {
+        const slider = event.target.closest("[data-nslider]");
+        if (!slider) return;
+        zapisPct(slider.dataset.nslider, naKrok(Number(slider.value) || 0));
+    });
+
+    /* ---------------------------------------------------------- hledání */
+
+    function guideRow(guide, query) {
+        return '<a class="guide-row" href="navod.html?id=' + encodeURIComponent(guide.id) + '">' +
+            '<div class="row row--wrap" style="gap:8px;margin-bottom:6px">' +
+                '<span class="tag">' + esc(window.KB_categoryLabel(guide)) + "</span>" +
+                '<span class="tiny muted">' + esc(guide.author || "Neznámý autor") + "</span>" +
+            "</div>" +
+            '<div style="font-size:15px;font-weight:900">' + window.KBUI.highlight(guide.title || "Bez názvu", query) + "</div>" +
+            (guide.desc ? '<div class="small muted" style="margin-top:4px;line-height:1.5">' +
+                window.KBUI.highlight(guide.desc, query) + "</div>" : "") +
+        "</a>";
+    }
+
+    /* Hledání zůstává i tady – při psaní do pole v pásu se místo nástěnky
+       ukážou nalezené návody. Dlaždice návodů na domovské stránce ale už
+       nejsou, na ty vede lišta. */
+    function runSearch(query) {
+        const results = document.getElementById("searchResults");
+        const nastenka = document.getElementById("nastenka");
+
+        if (!query) {
+            results.hidden = true;
+            nastenka.hidden = false;
+            return;
+        }
+
+        const found = window.KBUI.searchGuides(window.KB.guides, query);
+        results.hidden = false;
+        nastenka.hidden = true;
+        document.getElementById("searchCount").textContent =
+            found.length + " z " + window.KB.guides.length + " návodů";
+        document.getElementById("searchList").innerHTML = found.length
+            ? found.map(g => guideRow(g, query)).join("")
+            : '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
+              'Nic nenalezeno. Zkus jiné slovo nebo <a href="navody.html" style="color:var(--accent)">projdi celou databázi</a>.</div>';
+    }
+
+    /* ------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "index.html", big: true });
+        renderNastenka();
+        window.KBUI.onSearch(runSearch);
+
+        window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
+        const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
+            renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola();
+            renderDovolene(); renderRychly(); nactiKontrolaOk(); };
+        document.addEventListener("kb-role", obnov);
+        window.KB.on("users", obnov);
+        pripravRezimy();
+        aplikujRezim();
+        document.addEventListener("kb-role", aplikujRezim);
+
+        window.KB.on("gsync", renderKontrola);
+        window.KB.watchAuta();
+        window.KB.on("auta", renderKalendarDlazdice);
+        window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice();
+            renderKontrola(); });   // výpomoc a potvrzování hotových čtou úkoly
+        window.KB.on("pritomnost", renderOnline);
+        /* Kdo je online potřebuje jen tahle dlaždice – odběr proto visí
+           na ní, ne na každé stránce webu (viz store.js, cena otisků). */
+        window.KB.watchPritomnost();
+        window.KB.on("aktivity", renderAktivita);
+        window.KB.on("quicktodo", renderQuick);
+        window.KB.on("kalendar", () => {
+            renderKalendarDlazdice(); renderDovolene(); renderRychly();
+        });
+        window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky();
+            renderKontrola(); });   // potvrzování splněných milníků
+        window.KB.on("vykazy", renderKontrola);
+
+        // okno „Co je nového" – až když dorazí úkoly i vzkazy, ne dřív
+        window.KB.on("ukoly", () => { prisloUkoly = true; novinkyZkus(); });
+        window.KB.on("quicktodo", () => { prisloQuick = true; novinkyZkus(); });
+        document.getElementById("btnNovinkyZavri").addEventListener("click", () => {
+            document.getElementById("novinkyOverlay").hidden = true;
+        });
+
+        /* „Přizpůsobit" (schovávání dlaždic) je pryč – nikdo to nepoužíval
+           a nástěnka má ukazovat všem totéž. */
+        renderOnline();
+    });
+})();
+</script>
+</body>
+</html>

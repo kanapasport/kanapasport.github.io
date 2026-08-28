@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Editor návodu – Pasport Kaňa</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* vlevo úprava návodu, vpravo živý náhled – bez ničeho dalšího.
+           --pz je přiblížení panelu, mění se tlačítky + / − nahoře. */
+        .editor-layout { display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
+        .editor-panel { width: 100%; --pz: 1; }
+        /* POZOR: tohle pravidlo musí zůstat AŽ ZA .editor-panel nahoře,
+           jinak by ho přebilo a náhled by se srazil na nulovou šířku. */
+        @media (min-width: 1080px) {
+            .editor-layout { flex-direction: row; }
+            .editor-panel { width: calc(600px * var(--pz)); flex: none; position: sticky; top: 74px; }
+        }
+        .panel-scroll { max-height: calc(100vh - 150px); overflow-y: auto; }
+        @media (max-width: 1079px) { .panel-scroll { max-height: none; } }
+
+        /* pole se přiblížením zvětšují spolu s panelem */
+        .editor-panel .field { font-size: calc(13.5px * var(--pz)); min-height: calc(38px * var(--pz)); }
+        .editor-panel textarea.field { min-height: calc(52px * var(--pz)); }
+        .editor-panel .label { font-size: calc(11.5px * var(--pz)); }
+
+        /* krok je červený, ať jsou jednotlivé kroky na první pohled oddělené */
+        .stepcard {
+            background: var(--accent);
+            border: 1px solid var(--accent-dark);
+            border-radius: var(--radius);
+            padding: 12px;
+            color: #fff;
+        }
+        .stepcard .field { background: #fff; }
+        .stepcard__title { min-height: calc(34px * var(--pz)) !important; font-weight: 800; }
+        .stepcard .btn--ghost {
+            background: rgba(255, 255, 255, .16);
+            border-color: rgba(255, 255, 255, .45);
+            color: #fff;
+        }
+        .stepcard .btn--ghost:hover { background: #fff; color: var(--accent); border-color: #fff; }
+        .stepcard .thumb-add { border-color: rgba(255, 255, 255, .5); color: #fff; }
+        .stepcard .thumb-add:hover { border-color: #fff; color: #fff; background: rgba(255, 255, 255, .12); }
+        .stepcard__no { font-size: calc(11px * var(--pz)); font-weight: 900; letter-spacing: .08em; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap editor-layout" style="padding-top:20px;padding-bottom:50px;max-width:1720px">
+
+    <!-- ================================================== LEVÝ PANEL ==== -->
+    <section class="no-print editor-panel col" style="gap:14px">
+
+        <!-- ---------------------------------------------------- EDITOR -->
+        <div id="panelEdit" class="card panel-scroll col" style="padding:18px;gap:18px">
+
+            <div class="spread">
+                <b style="font-size:15px">Úprava návodu</b>
+                <div class="row" style="gap:8px">
+                    <div class="zoomctl">
+                        <button type="button" id="panelOut" title="Zmenšit panel">−</button>
+                        <span id="panelLabel">100 %</span>
+                        <button type="button" id="panelIn" title="Zvětšit panel">+</button>
+                    </div>
+                    <button id="btnClear" class="btn btn--sm btn--ghost">Nový prázdný</button>
+                    <button id="btnDelete" class="btn btn--sm btn--ghost" style="color:var(--danger)" hidden>Smazat</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="label" for="templateSelector">Šablona</label>
+                <select id="templateSelector" class="field">
+                    <option value="">— Vlastní / prázdná —</option>
+                    <option value="sop">Technický postup (SOP)</option>
+                    <option value="trouble">Řešení problému</option>
+                    <option value="tip">Rychlý tip / zkratka</option>
+                    <option value="program">Nastavení programu</option>
+                    <option value="skript">Popis skriptu</option>
+                </select>
+            </div>
+
+            <div class="col" style="gap:12px">
+                <div>
+                    <label class="label" for="docTitle">Název návodu</label>
+                    <input type="text" id="docTitle" class="field">
+                </div>
+                <div>
+                    <label class="label" for="docDesc">Stručný popis / cíl</label>
+                    <textarea id="docDesc" rows="2" class="field"></textarea>
+                </div>
+                <div>
+                    <label class="label" for="docCat">Kategorie</label>
+                    <select id="docCat" class="field"></select>
+                </div>
+                <div id="groupWrap" hidden>
+                    <label class="label" for="docGroup">Program / oblast</label>
+                    <select id="docGroup" class="field"></select>
+                </div>
+                <div id="subWrap" hidden>
+                    <label class="label" for="docSub">Téma</label>
+                    <select id="docSub" class="field"></select>
+                </div>
+                <div class="row" style="gap:12px;align-items:flex-end">
+                    <div style="width:96px;flex:none">
+                        <label class="label" for="docVersion">Verze</label>
+                        <input type="text" id="docVersion" value="v1.0" class="field">
+                    </div>
+                    <div class="grow">
+                        <label class="label" for="docAuthor">Autor</label>
+                        <input type="text" id="docAuthor" class="field">
+                    </div>
+                </div>
+                <div id="oldCatNote" hidden class="tiny" style="color:var(--warn)"></div>
+            </div>
+
+            <div>
+                <div class="spread" style="margin-bottom:10px">
+                    <span class="label" style="margin:0">Kroky návodu</span>
+                    <button id="btnAddStep" class="btn btn--sm btn--ghost">+ Přidat krok</button>
+                </div>
+                <div id="stepsContainer" class="col" style="gap:12px"></div>
+            </div>
+
+            <div class="tiny muted" style="line-height:1.7;border-top:1px solid var(--line-soft);padding-top:12px">
+                <b style="color:var(--text-soft)">Formátování:</b>
+                <code>**tučně**</code>, <code>`kód`</code>, řádek začínající <code>-&nbsp;</code> je odrážka.<br>
+                <b style="color:var(--text-soft)">Obrázek:</b> vlož ho u kroku (nebo rovnou <b>Ctrl+V</b> ze schránky)
+                a v textu na něj odkaž zápisem <code>[obr 1]</code> — vznikne z toho proklik.
+            </div>
+
+            <button id="btnSave" class="btn btn--primary" style="width:100%">
+                Uložit do cloudové databáze
+            </button>
+        </div>
+    </section>
+
+    <!-- ================================================= NÁHLED A4 ===== -->
+    <section class="grow col" style="gap:12px;width:100%">
+        <div class="no-print spread">
+            <div class="tiny muted">
+                Živý náhled — <b style="color:var(--text-soft)">přesně takto vypadne PDF</b>
+                <span id="pageInfo" style="color:var(--dim)"></span>
+            </div>
+            <div class="row" style="gap:8px">
+                <div class="row" style="gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:3px">
+                    <button id="zoomOut" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">−</button>
+                    <span id="zoomLabel" class="tiny muted" style="width:46px;text-align:center;font-variant-numeric:tabular-nums">auto</span>
+                    <button id="zoomIn" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">+</button>
+                </div>
+                <button id="btnPdf" class="btn btn--primary btn--sm">Uložit do PDF</button>
+            </div>
+        </div>
+
+        <div id="stageWrap" style="width:100%;display:flex;justify-content:center;overflow:hidden">
+            <div id="stage" class="a4-stage"></div>
+        </div>
+    </section>
+</main>
+
+<!-- ============================================================ IMPORT AI -->
+<div id="importOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="card col" style="padding:22px;max-width:680px;width:100%;gap:14px">
+        <b style="font-size:17px">Importovat návod od AI</b>
+        <p class="small muted" style="line-height:1.55">
+            Vlož JSON, který ti vygenerovala AI podle zkopírovaného pokynu.
+            Načte se do editoru, kde ho zkontroluješ, doplníš obrázky a teprve pak uložíš.
+        </p>
+        <textarea id="importText" rows="12" class="field"
+                  style="font-family:ui-monospace,Consolas,monospace;font-size:12px"
+                  placeholder='{ "title": "...", "steps": [ ... ] }'></textarea>
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button id="btnImportCancel" class="btn btn--ghost">Zrušit</button>
+            <button id="btnImportRun" class="btn btn--primary">Načíst do editoru</button>
+        </div>
+    </div>
+</div>
+
+<input type="file" id="filePicker" accept="image/*" multiple hidden>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/doc.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    const state = {
+        docId: null,
+        steps: [],
+        images: {},               // imageId -> data URL
+        savedImages: new Set(),   // co už je zapsané ve Firestore
+        legacyCategory: "",
+        activeStep: 0,
+        zoom: null,
+        panelZoom: 1
+    };
+
+    /* =============================================================== KROKY */
+
+    const blankStep = () => ({ title: "Nový krok", content: "", code: "", images: [] });
+
+    const TEMPLATES = {
+        sop: {
+            title: "SOP: ", desc: "Standardní pracovní postup.",
+            steps: [
+                { title: "Před začátkem", content: "Co je potřeba mít připravené:\n- podklad\n- přístupy", code: "", images: [] },
+                { title: "Postup", content: "", code: "", images: [] },
+                { title: "Kontrola výsledku", content: "Jak poznám, že je hotovo správně.", code: "", images: [] }
+            ]
+        },
+        trouble: {
+            title: "Oprava: ", desc: "Řešení konkrétní chyby.",
+            steps: [
+                { title: "Projev problému", content: "Co se děje a kdy to nastane.", code: "", images: [] },
+                { title: "Příčina", content: "", code: "", images: [] },
+                { title: "Řešení", content: "", code: "", images: [] }
+            ]
+        },
+        tip: {
+            title: "Tip: ", desc: "Rychlejší způsob práce.",
+            steps: [{ title: "Postup", content: "", code: "", images: [] }]
+        },
+        program: {
+            title: "Nastavení: ", desc: "Základní konfigurace programu.",
+            steps: [
+                { title: "Kde nastavení najdu", content: "", code: "", images: [] },
+                { title: "Doporučené hodnoty", content: "", code: "", images: [] },
+                { title: "Ověření", content: "", code: "", images: [] }
+            ]
+        },
+        skript: {
+            title: "Skript: ", desc: "K čemu skript slouží a jak se spouští.",
+            steps: [
+                { title: "K čemu to je", content: "", code: "", images: [] },
+                { title: "Co musí být připravené", content: "Sloupce v tabulce, vrstvy v mapě, uložené editace.", code: "", images: [] },
+                { title: "Vyplnění okna nástroje", content: "", code: "", images: [] },
+                { title: "Co skript udělá", content: "", code: "", images: [] },
+                { title: "Časté chyby", content: "", code: "", images: [] }
+            ]
+        }
+    };
+
+    /* =========================================================== KATEGORIE */
+
+    function fillSelect(select, options, selected, emptyLabel) {
+        select.innerHTML = '<option value="">' + emptyLabel + "</option>" +
+            options.map(o => '<option value="' + o.id + '"' + (o.id === selected ? " selected" : "") + ">" +
+                esc(o.title) + "</option>").join("");
+    }
+
+    /** Nastaví tři úrovně roletek podle uložených hodnot cat/subcat. */
+    function paintCategorySelects(catId, subId) {
+        fillSelect($("docCat"), window.KB_CATEGORIES, catId, "— nezařazeno —");
+
+        const category = window.KB_findCategory(catId);
+        const hit = window.KB_findNode(catId, subId);
+        const path = hit ? hit.path : [];
+        const groups = category && category.children ? category.children : [];
+
+        $("groupWrap").hidden = !groups.length;
+        if (groups.length) {
+            fillSelect($("docGroup"), groups, path[0] ? path[0].id : "", "— celá kategorie —");
+        }
+
+        const children = path[0] && path[0].children ? path[0].children : [];
+        $("subWrap").hidden = !children.length;
+        if (children.length) {
+            fillSelect($("docSub"), children, path[1] ? path[1].id : "", "— celá oblast —");
+        }
+    }
+
+    /** Nejnižší vybraná úroveň = to, co se uloží do pole subcat. */
+    function currentSub() {
+        if (!$("subWrap").hidden && $("docSub").value) return $("docSub").value;
+        if (!$("groupWrap").hidden && $("docGroup").value) return $("docGroup").value;
+        return "";
+    }
+
+    /* ============================================================== FORM */
+
+    function collect() {
+        const catId = $("docCat").value;
+        const subId = currentSub();
+        return {
+            title: $("docTitle").value,
+            desc: $("docDesc").value,
+            cat: catId,
+            subcat: subId,
+            category: catId ? window.KB_categoryLabel({ cat: catId, subcat: subId }) : state.legacyCategory,
+            version: $("docVersion").value,
+            author: $("docAuthor").value,
+            steps: state.steps,
+            dateLabel: new Date().toLocaleDateString("cs-CZ")
+        };
+    }
+
+    function fill(guide) {
+        $("docTitle").value = guide.title || "";
+        $("docDesc").value = guide.desc || "";
+        $("docVersion").value = guide.version || "v1.0";
+        $("docAuthor").value = guide.author || window.KB_USER || "";
+        state.legacyCategory = guide.cat ? "" : (guide.category || "");
+        state.steps = JSON.parse(JSON.stringify(guide.steps || []));
+        state.steps.forEach(s => { if (!Array.isArray(s.images)) s.images = []; });
+
+        paintCategorySelects(guide.cat || "", guide.subcat || "");
+        $("oldCatNote").hidden = !state.legacyCategory;
+        $("oldCatNote").textContent = state.legacyCategory
+            ? 'Původní kategorie z databáze: „' + state.legacyCategory + '". Vyber prosím novou z nabídky.'
+            : "";
+
+        renderSteps();
+        refresh();
+    }
+
+    /* ====================================================== EDITOR KROKŮ */
+
+    function renderSteps() {
+        $("stepsContainer").innerHTML = state.steps.map((step, index) => {
+            const thumbs = (step.images || []).map((img, ii) =>
+                '<div class="thumb" data-zoom="' + img.id + '">' +
+                    '<img src="' + (state.images[img.id] || "") + '" alt="">' +
+                    '<span class="thumb__idx">' + (index + 1) + "." + (ii + 1) + "</span>" +
+                    '<button class="thumb__del" data-delimg="' + index + ":" + ii + '" title="Odebrat">&times;</button>' +
+                    '<button class="thumb__size" data-sizeimg="' + index + ":" + ii + '" title="Velikost v dokumentu">' +
+                        (img.size || "m").toUpperCase() + "</button>" +
+                "</div>").join("");
+
+            return '<div class="stepcard" data-step="' + index + '">' +
+                '<div class="spread" style="margin-bottom:8px">' +
+                    '<span class="stepcard__no">KROK ' + (index + 1) + "</span>" +
+                    '<span class="row" style="gap:4px">' +
+                        (index > 0 ? '<button class="btn btn--sm btn--ghost" style="min-height:28px;padding:0 8px" data-move="' + index + ':-1">▲</button>' : "") +
+                        (index < state.steps.length - 1 ? '<button class="btn btn--sm btn--ghost" style="min-height:28px;padding:0 8px" data-move="' + index + ':1">▼</button>' : "") +
+                        '<button class="btn btn--sm btn--ghost" style="min-height:28px;padding:0 8px;color:var(--danger)" data-del="' + index + '">Odstranit</button>' +
+                    "</span>" +
+                "</div>" +
+                '<input type="text" class="field stepcard__title" style="margin-bottom:8px" value="' + esc(step.title) + '" data-field="' + index + ':title" placeholder="Nadpis kroku">' +
+                '<textarea class="field" style="margin-bottom:8px" data-field="' + index + ':content" rows="5" placeholder="Popis postupu…">' + esc(step.content) + "</textarea>" +
+                '<textarea class="field" style="margin-bottom:10px;font-family:ui-monospace,Consolas,monospace;font-size:calc(12px * var(--pz))" data-field="' + index + ':code" rows="1" placeholder="Volitelně: kód, cesta, příkaz">' + esc(step.code || "") + "</textarea>" +
+                '<div class="thumbs">' + thumbs +
+                    '<button class="thumb-add" data-addimg="' + index + '">+ obrázek<br><span style="font-size:9px">nebo Ctrl+V</span></button>' +
+                "</div>" +
+            "</div>";
+        }).join("") || '<div class="center small muted" style="padding:24px;border:1px dashed var(--line);border-radius:14px">Zatím žádné kroky — přidej první.</div>';
+    }
+
+    $("stepsContainer").addEventListener("input", (event) => {
+        const field = event.target.dataset.field;
+        if (!field) return;
+        const [index, key] = field.split(":");
+        state.steps[+index][key] = event.target.value;
+        refresh();
+    });
+
+    $("stepsContainer").addEventListener("focusin", (event) => {
+        const card = event.target.closest("[data-step]");
+        if (card) state.activeStep = +card.dataset.step;
+    });
+
+    $("stepsContainer").addEventListener("click", (event) => {
+        const target = event.target.closest("button") || event.target;
+
+        if (target.dataset.del !== undefined) {
+            const index = +target.dataset.del;
+            (state.steps[index].images || []).forEach(img => delete state.images[img.id]);
+            state.steps.splice(index, 1);
+            return renderSteps(), refresh();
+        }
+        if (target.dataset.move) {
+            const [index, direction] = target.dataset.move.split(":").map(Number);
+            const to = index + direction;
+            if (to < 0 || to >= state.steps.length) return;
+            [state.steps[index], state.steps[to]] = [state.steps[to], state.steps[index]];
+            return renderSteps(), refresh();
+        }
+        if (target.dataset.addimg !== undefined) {
+            state.activeStep = +target.dataset.addimg;
+            return $("filePicker").click();
+        }
+        if (target.dataset.delimg) {
+            const [si, ii] = target.dataset.delimg.split(":").map(Number);
+            const removed = state.steps[si].images.splice(ii, 1)[0];
+            if (removed) delete state.images[removed.id];
+            return renderSteps(), refresh();
+        }
+        if (target.dataset.sizeimg) {
+            const [si, ii] = target.dataset.sizeimg.split(":").map(Number);
+            const image = state.steps[si].images[ii];
+            const order = ["s", "m", "l"];
+            image.size = order[(order.indexOf(image.size || "m") + 1) % order.length];
+            return renderSteps(), refresh();
+        }
+        const thumb = event.target.closest("[data-zoom]");
+        if (thumb) window.KBDoc.openImage(state.images[thumb.dataset.zoom], "Náhled obrázku");
+    });
+
+    /* ============================================================ OBRÁZKY */
+
+    async function attachImages(files, stepIndex) {
+        const step = state.steps[stepIndex];
+        if (!step) return window.KBUI.toast("Nejdřív přidej krok, ke kterému obrázek patří.", "warn");
+
+        for (const file of files) {
+            if (!file.type.startsWith("image/")) continue;
+            try {
+                const result = await window.KBUI.compressImage(file);
+                const id = window.KB.newImageId();
+                state.images[id] = result.dataUrl;
+                step.images = step.images || [];
+                step.images.push({ id: id, size: "m", caption: "", w: result.w, h: result.h });
+
+                const marker = "[obr " + (stepIndex + 1) + "." + step.images.length + "]";
+                if (!String(step.content || "").includes(marker)) {
+                    step.content = (step.content ? step.content.replace(/\s*$/, "") + " " : "") + marker;
+                }
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Obrázek se nepodařilo zpracovat.", "error");
+            }
+        }
+        renderSteps();
+        refresh();
+    }
+
+    $("filePicker").addEventListener("change", async (event) => {
+        await attachImages(Array.from(event.target.files || []), state.activeStep);
+        event.target.value = "";
+    });
+
+    document.addEventListener("paste", (event) => {
+        if (!$("importOverlay").hidden) return;   // v import okně necháme vkládat text
+        const images = Array.from(event.clipboardData ? event.clipboardData.files : [])
+            .filter(f => f.type.startsWith("image/"));
+        if (!images.length) return;
+        event.preventDefault();
+        attachImages(images, state.activeStep);
+        window.KBUI.toast("Obrázek vložen ke kroku " + (state.activeStep + 1) + ".");
+    });
+
+    /* ============================================================= NÁHLED */
+
+    let refreshTimer = null;
+    function refresh() {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => {
+            const pages = window.KBDoc.render($("stage"), collect(), state.images);
+            $("pageInfo").textContent = " · " + pages + (pages === 1 ? " strana" : pages < 5 ? " strany" : " stran");
+            applyZoom();
+        }, 220);
+    }
+
+    function applyZoom() {
+        if (state.zoom === null) {
+            window.KBDoc.fitStage($("stage"), $("stageWrap"));
+            const current = parseFloat(($("stage").style.transform.match(/[\d.]+/) || [1])[0]);
+            $("zoomLabel").textContent = Math.round(current * 100) + " %";
+        } else {
+            $("stage").style.transform = "scale(" + state.zoom + ")";
+            const pages = $("stage").children.length || 1;
+            $("stageWrap").style.height = ((pages * 297 + (pages - 1) * 8) * 3.7795 * state.zoom + 20) + "px";
+            $("zoomLabel").textContent = Math.round(state.zoom * 100) + " %";
+        }
+    }
+
+    function stepZoom(delta) {
+        const current = parseFloat(($("stage").style.transform.match(/[\d.]+/) || [1])[0]) || 1;
+        state.zoom = Math.min(2, Math.max(0.3, Math.round((current + delta) * 20) / 20));
+        applyZoom();
+    }
+
+    /* ------------------------------------------- přiblížení panelu úprav */
+
+    const PANEL_KEY = "company_kb_panel_zoom";
+
+    function setPanelZoom(value) {
+        state.panelZoom = Math.min(1.5, Math.max(0.85, Math.round(value * 20) / 20));
+        document.querySelector(".editor-panel").style.setProperty("--pz", state.panelZoom);
+        $("panelLabel").textContent = Math.round(state.panelZoom * 100) + " %";
+        localStorage.setItem(PANEL_KEY, state.panelZoom);
+        if (state.zoom === null) applyZoom();   // náhledu se změnila dostupná šířka
+    }
+
+    /* ============================================================ UKLÁDÁNÍ */
+
+    async function save() {
+        const data = collect();
+        if (!data.title.trim()) return window.KBUI.toast("Návod musí mít název.", "warn");
+        if (!data.author.trim()) {
+            const name = window.KBUI.requireUser();
+            if (!name) return window.KBUI.toast("Doplň autora návodu.", "warn");
+            $("docAuthor").value = name;
+            data.author = name;
+        }
+
+        const button = $("btnSave");
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = "Ukládám…";
+
+        try {
+            await window.KB.saveGuide(state.docId, data);
+
+            const currentIds = new Set();
+            for (const step of state.steps) {
+                for (const img of (step.images || [])) {
+                    currentIds.add(img.id);
+                    if (!state.savedImages.has(img.id) && state.images[img.id]) {
+                        await window.KB.saveImage(state.docId, img.id, state.images[img.id], { w: img.w, h: img.h });
+                        state.savedImages.add(img.id);
+                    }
+                }
+            }
+            for (const id of Array.from(state.savedImages)) {
+                if (!currentIds.has(id)) {
+                    await window.KB.deleteImage(state.docId, id).catch(() => {});
+                    state.savedImages.delete(id);
+                }
+            }
+
+            history.replaceState(null, "", "editor.html?id=" + encodeURIComponent(state.docId));
+            window.KBUI.toast("Uloženo do firemního cloudu.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo: " + err.message, "error");
+        } finally {
+            button.disabled = false;
+            button.textContent = original;
+        }
+    }
+
+    /* ====================================================== NAČTENÍ A MAZÁNÍ */
+
+    /** Smazat dává smysl jen u uloženého návodu – a smí to jen správce. */
+    function paintDelete() {
+        const exists = (window.KB.guides || []).some(g => g.id === state.docId);
+        $("btnDelete").hidden = !exists || !window.KBUI.can("navod.delete");
+        $("btnPdf").hidden = !window.KBUI.can("navod.pdf");
+    }
+
+    async function loadGuide(id) {
+        try {
+            const guide = await window.KB.getGuide(id);
+            if (!guide) return window.KBUI.toast("Návod se nenašel.", "error");
+            state.docId = id;
+            state.images = await window.KB.loadImages(id).catch(() => ({}));
+            state.savedImages = new Set(Object.keys(state.images));
+            fill(guide);
+            paintDelete();
+            history.replaceState(null, "", "editor.html?id=" + encodeURIComponent(id));
+            window.KBUI.toast("Načteno k úpravě.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Načtení selhalo.", "error");
+        }
+    }
+
+    async function removeGuide() {
+        const guide = (window.KB.guides || []).find(g => g.id === state.docId);
+        if (!guide) return;
+        if (!confirm('Opravdu smazat návod „' + (guide.title || state.docId) + '" všem ve firmě?')) return;
+        try {
+            await window.KB.deleteGuide(state.docId);
+            window.KBUI.toast("Návod smazán.");
+            resetForm();
+        } catch (err) {
+            window.KBUI.toast("Smazání selhalo.", "error");
+        }
+    }
+
+    function resetForm() {
+        state.docId = window.KB.newId();
+        state.images = {};
+        state.savedImages = new Set();
+        state.legacyCategory = "";
+        $("templateSelector").value = "";
+        history.replaceState(null, "", "editor.html");
+        fill({ title: "", desc: "", version: "v1.0", author: window.KB_USER || "", steps: [blankStep()] });
+        paintDelete();
+    }
+
+    /* ============================================================== START */
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountNav({ active: "editor.html" });
+
+        paintCategorySelects("", "");
+        state.docId = window.KB.newId();
+        state.steps = [blankStep()];
+        $("docAuthor").value = window.KB_USER || "";
+        renderSteps();
+        refresh();
+
+        ["docTitle", "docDesc", "docVersion", "docAuthor"].forEach(id => $(id).addEventListener("input", refresh));
+
+        $("docCat").addEventListener("change", () => {
+            paintCategorySelects($("docCat").value, "");
+            if ($("docCat").value) { state.legacyCategory = ""; $("oldCatNote").hidden = true; }
+            refresh();
+        });
+        $("docGroup").addEventListener("change", () => {
+            paintCategorySelects($("docCat").value, $("docGroup").value);
+            refresh();
+        });
+        $("docSub").addEventListener("change", refresh);
+
+        $("templateSelector").addEventListener("change", (event) => {
+            const template = TEMPLATES[event.target.value];
+            if (!template) return;
+            if (!$("docTitle").value) $("docTitle").value = template.title;
+            if (!$("docDesc").value) $("docDesc").value = template.desc;
+            state.steps = JSON.parse(JSON.stringify(template.steps));
+            renderSteps();
+            refresh();
+        });
+
+        $("btnAddStep").addEventListener("click", () => {
+            state.steps.push(blankStep());
+            state.activeStep = state.steps.length - 1;
+            renderSteps();
+            refresh();
+        });
+        $("btnClear").addEventListener("click", () => {
+            if (confirm("Vyčistit formulář a začít nový návod?")) resetForm();
+        });
+        $("btnSave").addEventListener("click", save);
+        $("btnDelete").addEventListener("click", removeGuide);
+        $("panelIn").addEventListener("click", () => setPanelZoom(state.panelZoom + 0.1));
+        $("panelOut").addEventListener("click", () => setPanelZoom(state.panelZoom - 0.1));
+        setPanelZoom(parseFloat(localStorage.getItem(PANEL_KEY)) || 1);
+        $("zoomIn").addEventListener("click", () => stepZoom(0.1));
+        $("zoomOut").addEventListener("click", () => stepZoom(-0.1));
+        window.KBDoc.watchFit($("stageWrap"), () => { if (state.zoom === null) applyZoom(); });
+
+        // role dorazí až se seznamem lidí – tlačítka se pak přepočítají
+        window.KB.on("users", () => { window.KBUI.syncRole(); paintDelete(); });
+        document.addEventListener("kb-role", paintDelete);
+
+        $("btnPdf").addEventListener("click", async (event) => {
+            if (!window.KBUI.can("navod.pdf")) {
+                return window.KBUI.toast("Stahovat návody do PDF můžou jen správci.", "warn");
+            }
+            const button = event.currentTarget;
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = "Generuji…";
+            try {
+                await window.KBDoc.exportPdf($("stage"), $("docTitle").value || "Navod");
+                window.KBUI.toast("PDF staženo.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("PDF se nepodařilo vytvořit.", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+                applyZoom();
+            }
+        });
+
+        const overlay = $("importOverlay");
+        const openImport = () => { overlay.hidden = false; };
+        const closeImport = () => { overlay.hidden = true; $("importText").value = ""; };
+        $("btnImportCancel").addEventListener("click", closeImport);
+        $("btnImportRun").addEventListener("click", () => {
+            try {
+                const parsed = JSON.parse($("importText").value.trim().replace(/^```(json)?|```$/g, ""));
+                const guide = Array.isArray(parsed) ? parsed[0] : parsed;
+                state.docId = window.KB.newId();
+                state.images = {};
+                state.savedImages = new Set();
+                guide.author = window.KB_USER ? window.KB_USER + " / AI" : "AI";
+                fill(guide);
+                paintDelete();
+                closeImport();
+                window.KBUI.toast("Načteno. Zkontroluj, doplň obrázky a ulož.");
+            } catch (err) {
+                window.KBUI.toast("JSON se nepodařilo přečíst – zkontroluj, že jsi zkopíroval celý.", "error");
+            }
+        });
+        if (location.hash === "#import") openImport();
+        // import se dá otevřít i ikonou v hlavičce, když už jsme na editoru
+        window.addEventListener("hashchange", () => { if (location.hash === "#import") openImport(); });
+
+        window.KB.on("guides", paintDelete);
+        await window.KB.whenReady();
+        paintDelete();
+
+        const requestedId = new URLSearchParams(location.search).get("id");
+        if (requestedId) await loadGuide(requestedId);
+    });
+
+    window.KBDoc.enableImageZoom($("stage"), () => state.images);
+})();
+</script>
+</body>
+</html>

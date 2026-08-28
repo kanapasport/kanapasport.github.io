@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Report – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Řádek historie. Jedna sada tříd pro obě sekce na stránce: dokud
+           měla každá vlastní rozvržení, sloupce mezi nimi nelícovaly a stránka
+           se četla jako dvě různé tabulky nalepené pod sebe.
+
+           Sloupce jsou proto pevné a všude stejné: čas · štítek nebo jméno ·
+           text. Poslední je `minmax(0, 1fr)`, ne `1fr` – samotné `1fr` se
+           nesmrskne pod šířku obsahu, takže jeden dlouhý řádek bez mezer
+           rozstrkal mřížku celé sekce a levé okraje se rozjely. */
+        .hist {
+            display: grid;
+            grid-template-columns: 130px 150px minmax(0, 1fr);
+            gap: 10px;
+            align-items: baseline;
+            padding: 5px 0;
+            border-bottom: 1px dashed var(--line-soft);
+        }
+        .hist:last-child { border-bottom: none; }
+
+        .hist__cas {
+            color: var(--muted);
+            font-size: 11.5px;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;   /* ať čísla drží šířku a sloupec se nechvěje */
+        }
+        /* Štítek i jméno začínají vlevo – zarovnání na střed by z pevného
+           sloupce udělalo sloupec, který se pod sebou nekryje. */
+        .hist__stitek {
+            min-width: 0;
+            text-align: left;
+            overflow-wrap: anywhere;
+        }
+        /* Delší text se smí zalomit, ne roztáhnout mřížku. */
+        .hist__text { min-width: 0; overflow-wrap: anywhere; }
+        .hist__text--tichy { color: var(--muted); font-size: 11.5px; }
+
+        /* Na mobilu se tři sloupce nevejdou a text by zbyl na proužek –
+           radši pod sebe. */
+        @media (max-width: 700px) {
+            .hist { grid-template-columns: 1fr; gap: 3px; }
+        }
+        /* sekce jako bloky nového výkazu – jednotný kabát celého webu */
+        .rblok { border: 1px solid var(--accent); border-radius: var(--radius-lg);
+            background: var(--accent-tint); overflow: hidden; }
+        .rblok__hlava { display: flex; align-items: center; padding: 8px 14px; background: var(--accent); }
+        .rblok__stitek { font-size: 11px; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #fff; }
+        .rblok__telo { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        /* řádky historie na tónovaném podkladu dostanou bílý povrch */
+        .rblok__telo .hist { background: var(--surface); border: 1px solid var(--line-soft);
+            border-radius: var(--radius); padding: 7px 10px; margin-bottom: 4px; }
+        .rblok__telo .hist:last-child { border-bottom: 1px solid var(--line-soft); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Report vidí jen manažeři.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Je v nich vidět, kdo co na webu dělal a kdy se přihlásil. Když si
+            myslíš, že sem patříš, ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+        <div>
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Report</h2>
+            <p class="small muted" style="margin-top:3px;line-height:1.6">
+                Záznam o tom, kdo co na webu udělal a kdy se kdo naposledy přihlásil.
+                Pohledy na hodiny, peníze a vytížení lidí najdeš u výkazů.
+            </p>
+        </div>
+
+        <!-- ============================================ HISTORIE AKTIVIT -->
+        <section class="rblok">
+            <div class="rblok__hlava"><span class="rblok__stitek">Historie aktivit</span></div>
+            <!-- rozdělení podle druhu (přání Michala 19. 8.) – u TO-DO je
+                 v textu i z kolika na kolik procent se zapsalo -->
+            <div class="row row--wrap" style="gap:6px;padding:10px 14px 0" id="aktivityFiltr">
+                <button type="button" class="chip chip--active" data-adruh="">Vše</button>
+                <button type="button" class="chip" data-adruh="quicktodo">Quick TO-DO</button>
+                <button type="button" class="chip" data-adruh="postup">TO-DO</button>
+                <button type="button" class="chip" data-adruh="vykaz">Výkazy</button>
+                <button type="button" class="chip" data-adruh="ostatni">Ostatní</button>
+            </div>
+            <div class="rblok__telo">
+                <p class="tiny muted" style="margin:0;line-height:1.6">
+                    Kdo co uložil – projekty, úkoly, postup i výkazy. Plní se samo od chvíle,
+                    kdy lidé začnou nový web používat.
+                </p>
+                <div id="aktivity" style="font-size:13.5px"></div>
+            </div>
+        </section>
+
+        <!-- ====================================== ZÁPIS DO TABULEK GOOGLE -->
+        <section class="rblok">
+            <div class="rblok__hlava">
+                <span class="rblok__stitek">Zápis do osobních výkazů</span>
+                <span class="small muted" id="gsyncSouhrn"></span>
+            </div>
+            <div class="rblok__telo">
+                <p class="tiny muted" style="margin:0;line-height:1.6">
+                    Hodiny z webu se zapisují do osobních výkazů v Tabulkách Google.
+                    Tady je vidět, co se propsalo a co ne — zápis se posílá hned po
+                    uložení výkazu, a co nevyjde, dožene hodinová kontrola.
+                </p>
+                <div id="gsyncSeznam" style="font-size:13.5px"></div>
+                <details style="margin-top:10px">
+                    <summary class="tiny muted" style="cursor:pointer">Adresa skriptu</summary>
+                    <div class="row row--wrap" style="gap:8px;margin-top:8px">
+                        <input type="text" id="gsyncUrl" class="field grow"
+                            placeholder="https://script.google.com/macros/s/…/exec"
+                            style="min-width:280px">
+                        <button type="button" id="btnGsyncUrl" class="btn btn--sm btn--primary">Uložit</button>
+                    </div>
+                    <p class="tiny muted" style="margin:6px 0 0;line-height:1.6">
+                        Adresa webové aplikace z Apps Scriptu (Nasadit → Nová verze →
+                        Webová aplikace). Bydlí v databázi, ne ve zdroji webu — repozitář
+                        je veřejný a tohle je klíč k zápisu.
+                    </p>
+                </details>
+            </div>
+        </section>
+
+        <!-- ================================================ TÝDENNÍ LOGY -->
+        <section class="rblok">
+            <div class="rblok__hlava"><span class="rblok__stitek">Týdenní logy</span></div>
+            <div class="rblok__telo">
+                <p class="tiny muted" style="margin:0;line-height:1.6">
+                    Historie aktivit výš drží jen poslední týden. Vždy v pondělí se
+                    z uplynulého týdne udělá zápis – tady se dá rozkliknout.
+                </p>
+                <div id="tydenniLogy" style="font-size:13.5px"></div>
+            </div>
+        </section>
+
+        <!-- ======================================= POSLEDNÍ PŘIHLÁŠENÍ -->
+        <section class="rblok">
+            <div class="rblok__hlava"><span class="rblok__stitek">Poslední přihlášení</span></div>
+            <div class="rblok__telo">
+                <p class="tiny muted" style="margin:0;line-height:1.6">
+                    Kdo se kdy naposledy přihlásil. Slouží k přehledu, kdo web
+                    opravdu používá – ne ke kontrole docházky.
+                </p>
+                <div id="prihlaseni" style="font-size:13.5px"></div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+    let sledovaniZapnuto = false;
+
+    const DRUHY = { projekt: "projekt", ukol: "úkol", postup: "TO-DO", vykaz: "výkaz",
+                    kalendar: "kalendář", quicktodo: "quick to-do", milnik: "milník" };
+    const HLAVNI_DRUHY = ["quicktodo", "postup", "vykaz"];
+    let aktivniDruh = "";   // filtr záložek nad historií
+
+    /* Delší seznam přihlášení nikdo nečte a jen by odsunul zbytek stránky. */
+    const POSLEDNICH_PRIHLASENI = 30;
+
+    const hodinaMinuta = (d) =>
+        String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+
+    /** Den a měsíc stačí – rok si u čerstvého záznamu nikdo nedohledává. */
+    const cas = (ms) => {
+        if (!ms) return "—";
+        const d = new Date(ms);
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". " + hodinaMinuta(d);
+    };
+
+    /**
+     * Kolik je to dávno, česky. Samotné datum a čas se musí přepočítávat
+     * v hlavě; „před 20 minutami" je vidět na první pohled a právě to
+     * u přihlášení zajímá.
+     */
+    function predJakDlouho(ms) {
+        if (!ms) return "";
+        const ted = new Date();
+        const kdy = new Date(ms);
+        const minut = Math.floor((ted - kdy) / 60000);
+        // záporný rozdíl sem spadne taky – hodiny v počítači často jdou o kus napřed
+        if (minut < 1) return "právě teď";
+        if (minut < 60) return "před " + V.pocet(minut, ["minutou", "minutami", "minutami"]);
+
+        // po kalendářních dnech, ne po 24 hodinách – půlnoc dělí „dnes" a „včera"
+        const zacatekDne = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dnu = Math.round((zacatekDne(ted) - zacatekDne(kdy)) / 86400000);
+        if (dnu <= 0) return "před " + V.pocet(Math.floor(minut / 60), ["hodinou", "hodinami", "hodinami"]);
+        if (dnu === 1) return "včera " + hodinaMinuta(kdy);
+        if (dnu < 7) return "před " + V.pocet(dnu, ["dnem", "dny", "dny"]);
+        return kdy.getDate() + ". " + (kdy.getMonth() + 1) + ". " + kdy.getFullYear();
+    }
+
+    /** Uložené jméno platí i pro člověka, který už v seznamu uživatelů není. */
+    function kdoSePrihlasil(zaznam) {
+        const ulozene = String(zaznam.userName || "").trim();
+        if (ulozene) return ulozene;
+        const clovek = V.clovek(zaznam.uid);
+        return clovek ? V.jmeno(clovek) : "—";
+    }
+
+    /**
+     * Jeden řádek historie – tři sloupce, obě sekce stejně.
+     * Sloupce se drží i tehdy, když je prostřední nebo poslední prázdný;
+     * proto se buňky vypisují vždycky všechny.
+     */
+    const histRadek = (casText, stitek, text, tichy) =>
+        '<div class="hist">' +
+            '<span class="hist__cas">' + esc(casText) + "</span>" +
+            '<span class="hist__stitek">' + stitek + "</span>" +
+            '<span class="hist__text' + (tichy ? " hist__text--tichy" : "") + '">' + text + "</span>" +
+        "</div>";
+
+    function renderAktivity() {
+        document.querySelectorAll("[data-adruh]").forEach(ch =>
+            ch.classList.toggle("chip--active", ch.dataset.adruh === aktivniDruh));
+        /* jen poslední týden – starší kroky žijí v týdenních lozích níž */
+        const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
+        const vyber = (window.KB.aktivity || []).filter(a =>
+            (a.ms || 0) >= tydenZpet &&
+            (!aktivniDruh ||
+            (aktivniDruh === "ostatni"
+                ? HLAVNI_DRUHY.indexOf(a.druh) === -1
+                : a.druh === aktivniDruh)));
+        document.getElementById("aktivity").innerHTML =
+            vyber.map(a => histRadek(
+                cas(a.ms),
+                '<span class="tag">' + esc(DRUHY[a.druh] || a.druh || "") + "</span>",
+                "<b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "")
+            )).join("")
+            || '<span class="tiny muted">Zatím žádné záznamy.</span>';
+    }
+
+    function renderPrihlaseni() {
+        document.getElementById("prihlaseni").innerHTML =
+            (window.KB.logy || []).slice(0, POSLEDNICH_PRIHLASENI).map(z => histRadek(
+                cas(z.ms),
+                "<b>" + esc(kdoSePrihlasil(z)) + "</b>",
+                esc(predJakDlouho(z.ms)),
+                true
+            )).join("")
+            || '<span class="tiny muted">Zatím žádná přihlášení – ' +
+               "seznam se plní sám, jak se lidé přihlašují.</span>";
+    }
+
+    /* ------------------------------------------------- týdenní logy ----
+       Zápis dělá první manažer, který v novém týdnu otevře Reporty – id
+       dokumentu je pondělí LOGOVANÉHO (minulého) týdne, takže se týden
+       nezapíše dvakrát ani ze dvou počítačů. */
+
+    const isoDen = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+        "-" + String(d.getDate()).padStart(2, "0");
+    const czIso = (iso) => iso ? iso.split("-").reverse().map(Number).join(". ") : "";
+    let tydenniLogy = [];
+    const logyRozbalene = new Set();
+    let logyBezely = false;
+
+    async function zajistiTydenniLog() {
+        const ted = new Date();
+        const po = new Date(ted.getFullYear(), ted.getMonth(), ted.getDate());
+        po.setDate(po.getDate() - (po.getDay() + 6) % 7);   // pondělí tohoto týdne
+        const doMs = po.getTime();
+        const odMs = doMs - 7 * 86400000;
+        const id = isoDen(new Date(odMs));
+        if (await window.KB.nactiTydenniLog(id)) return;
+        const polozky = await window.KB.nactiAktivityRozsah(odMs, doMs);
+        await window.KB.ulozTydenniLog(id, {
+            od: isoDen(new Date(odMs)),
+            do: isoDen(new Date(doMs - 86400000)),
+            ms: Date.now(),
+            zapsal: window.KB_USER || "",
+            pocet: polozky.length,
+            // dokument unese 1 MB – pár tisíc krátkých řádků je bezpečný strop
+            items: polozky.slice(0, 4000).map(a => ({
+                ms: a.ms || 0, druh: a.druh || "", jmeno: a.jmeno || "", text: a.text || "" }))
+        });
+    }
+
+    function renderTydenniLogy() {
+        document.getElementById("tydenniLogy").innerHTML = tydenniLogy.map(l =>
+            '<div style="padding:6px 0;border-bottom:1px dashed var(--line-soft)">' +
+                '<button type="button" class="linkbtn" data-log="' + esc(l.id) + '">' +
+                    (logyRozbalene.has(l.id) ? "Skrýt" : "Rozbalit") + "</button> " +
+                "<b>Týden " + esc(czIso(l.od)) + " – " + esc(czIso(l.do)) + "</b>" +
+                ' <span class="tiny muted">· ' + (l.pocet || 0) + " záznamů</span>" +
+                (logyRozbalene.has(l.id)
+                    ? '<div style="margin-top:6px">' + (l.items || []).map(a => histRadek(
+                        cas(a.ms),
+                        '<span class="tag">' + esc(DRUHY[a.druh] || a.druh || "") + "</span>",
+                        "<b>" + esc(a.jmeno || "") + "</b> " + esc(a.text || "")
+                      )).join("") + "</div>"
+                    : "") +
+            "</div>").join("")
+            || '<span class="tiny muted">Zatím žádný log – první se zapíše v pondělí.</span>';
+    }
+
+    async function nactiTydenniLogy() {
+        try {
+            await zajistiTydenniLog();
+            tydenniLogy = (await window.KB.nactiTydenniLogy(12))
+                .map(l => Object.assign({ id: l.od || l.id }, l));
+        } catch (err) { console.warn("Týdenní logy se nenačetly:", err); }
+        renderTydenniLogy();
+    }
+
+    /* ------------------------------------- zápis do Tabulek Google ----
+       Stav ke každému zápisu píše Apps Script zpátky do databáze, takže
+       je tady vidět i to, co se nepovedlo – bez lezení do Tabulek. */
+
+    const GSYNC_STAV = {
+        zapsano:  { text: "zapsáno",  barva: "var(--p100-fg)" },
+        opraveno: { text: "opraveno", barva: "var(--accent)" },
+        chyba:    { text: "CHYBA",    barva: "var(--danger)" }
+    };
+
+    function renderGsync() {
+        const box = document.getElementById("gsyncSeznam");
+        if (!box) return;
+        const stavy = window.KB.gsync || [];
+        const chyb = stavy.filter(g => g.stav === "chyba").length;
+
+        document.getElementById("gsyncSouhrn").textContent = stavy.length
+            ? stavy.length + " posledních · " + (chyb ? chyb + " s chybou" : "vše v pořádku")
+            : "";
+
+        box.innerHTML = stavy.map(g => {
+            const s = GSYNC_STAV[g.stav] || { text: g.stav || "?", barva: "var(--muted)" };
+            const kam = g.stav === "chyba"
+                ? esc(g.chyba || "nepovedlo se")
+                : esc((g.sesit || "") + (g.list ? " / " + g.list : "") +
+                      (g.radek ? " · řádek " + g.radek : ""));
+            return histRadek(
+                cas(g.ms),
+                '<span class="tag" style="color:' + s.barva + '">' + esc(s.text) + "</span>",
+                "<b>" + esc(g.osoba || "?") + "</b> " + kam,
+                g.stav !== "chyba");
+        }).join("")
+            || '<span class="tiny muted">Zatím se nic nezapisovalo – ' +
+               "výkazy se do Tabulek propisují od 1. 9. 2026.</span>";
+
+        const pole = document.getElementById("gsyncUrl");
+        if (pole && document.activeElement !== pole) pole.value = window.KB.gsyncUrl || "";
+    }
+
+    function render() {
+        const smi = window.KBUI.can("vykaz.view");
+        document.getElementById("stop").hidden = smi;
+        document.getElementById("obsah").hidden = !smi;
+        if (smi && !sledovaniZapnuto && window.KB.currentUid()) {
+            sledovaniZapnuto = true;
+            window.KB.watchAktivity();
+            window.KB.watchLogy();
+            window.KB.watchGsync();
+        }
+        renderAktivity();
+        renderPrihlaseni();
+        renderGsync();
+        if (smi && !logyBezely && window.KB.currentUid()) {
+            logyBezely = true;
+            nactiTydenniLogy();
+        }
+    }
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "reporty.html" });
+        document.addEventListener("kb-role", render);
+        window.KB.on("users", render);
+        window.KB.on("aktivity", renderAktivity);
+        document.getElementById("aktivityFiltr").addEventListener("click", (event) => {
+            const chip = event.target.closest("[data-adruh]");
+            if (!chip) return;
+            aktivniDruh = chip.dataset.adruh;
+            renderAktivity();
+        });
+        window.KB.on("logy", renderPrihlaseni);
+        window.KB.on("gsync", renderGsync);
+        window.KB.on("gsync-url", renderGsync);
+        document.getElementById("btnGsyncUrl").addEventListener("click", async (event) => {
+            const tlacitko = event.currentTarget;
+            tlacitko.disabled = true;
+            try {
+                await window.KB.ulozGsyncUrl(document.getElementById("gsyncUrl").value);
+                window.KBUI.toast("Adresa skriptu uložena.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Uložení selhalo.", "error");
+            } finally {
+                tlacitko.disabled = false;
+            }
+        });
+        document.getElementById("tydenniLogy").addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-log]");
+            if (!btn) return;
+            logyRozbalene.has(btn.dataset.log)
+                ? logyRozbalene.delete(btn.dataset.log)
+                : logyRozbalene.add(btn.dataset.log);
+            renderTydenniLogy();
+        });
+        render();
+    });
+})();
+</script>
+</body>
+</html>

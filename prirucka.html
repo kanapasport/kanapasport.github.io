@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Jak web používat – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
+           a u stejné síly pravidla musí vyhrát to pozdější. */
+
+        /* Příručka se čte odshora dolů, ne skenuje jako tabulka. Proto užší
+           sloupec než zbytek webu: dlouhý řádek přes celou obrazovku se
+           špatně čte a oko ztrácí začátek dalšího. */
+        .pr { max-width: 860px; }
+
+        .pr__uvod { font-size: 16px; line-height: 1.7; color: var(--text-soft); }
+
+        /* Obsah nahoře – stránka je dlouhá a většina lidí sem chodí kvůli
+           jedné konkrétní věci. */
+        .pr__obsah {
+            display: flex; flex-wrap: wrap; gap: 8px;
+        }
+        .pr__obsah a {
+            padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px;
+            font-size: 12.5px; font-weight: 700; color: var(--accent);
+            text-decoration: none; background: var(--surface);
+        }
+        .pr__obsah a:hover { background: var(--accent-tint); border-color: var(--accent-lt); }
+
+        .pr__kap { display: flex; flex-direction: column; gap: 12px; }
+        /* kotvy sedí na nadpisech – ať skok počítá s pevnou lištou */
+        #prTelo h3 { scroll-margin-top: 90px; }
+
+        .pr__kap h3 {
+            margin: 0; font-size: 19px; font-weight: 900; line-height: 1.25;
+            padding-bottom: 8px; border-bottom: 2px solid var(--accent-lt);
+        }
+        .pr__kap h4 {
+            margin: 6px 0 0; font-size: 14.5px; font-weight: 900; color: var(--accent);
+        }
+        .pr__kap p { margin: 0; line-height: 1.7; }
+        .pr__kap ul, .pr__kap ol { margin: 0; padding-left: 20px; line-height: 1.7; }
+        .pr__kap li { margin-bottom: 4px; }
+
+        /* Zvýrazněná poznámka – pravidlo, na kterém se firma dohodla. */
+        .pr__pozn {
+            border-left: 4px solid var(--accent);
+            background: var(--accent-tint);
+            padding: 12px 16px; border-radius: 0 6px 6px 0;
+            font-size: 14px; line-height: 1.65;
+        }
+        .pr__pozn--pozor { border-left-color: var(--warn); background: #fdf6ec; }
+
+        .pr__kroky { counter-reset: krok; display: flex; flex-direction: column; gap: 10px; }
+        .pr__krok {
+            display: grid; grid-template-columns: 26px minmax(0, 1fr);
+            gap: 12px; align-items: start;
+        }
+        .pr__krok::before {
+            counter-increment: krok; content: counter(krok);
+            width: 26px; height: 26px; border-radius: 50%;
+            background: var(--accent); color: #fff;
+            font-size: 13px; font-weight: 900;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .pr__krok div { line-height: 1.65; }
+
+        /* Režim úprav: rámeček kolem textu, ať je vidět, kam se smí psát. */
+        #prTelo[contenteditable="true"] {
+            outline: 2px dashed var(--accent-lt);
+            outline-offset: 12px;
+            border-radius: 4px;
+        }
+        #prTelo[contenteditable="true"] a { pointer-events: none; }
+
+        .pr__nedodelano {
+            border: 1px dashed var(--line);
+            border-radius: 8px; padding: 14px 16px;
+            font-size: 13.5px; line-height: 1.7; color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap pr" style="padding-top:26px;padding-bottom:70px;display:flex;flex-direction:column;gap:22px">
+
+    <div class="hlavicka">
+        <div class="hlavicka__text">
+            <h2 style="font-size:24px;font-weight:900;line-height:1.15">Jak web používat</h2>
+            <p class="small muted" style="margin-top:3px">
+                Co na webu je, k čemu to slouží a jak se to má vyplňovat.
+            </p>
+        </div>
+        <div class="row hlavicka__akce" style="gap:8px">
+            <span id="prStav" class="small muted" hidden>Upravuješ text – klikni do něj a piš.</span>
+            <button type="button" id="btnPrUprav" class="btn btn--ghost btn--sm"
+                    data-need="zakazky.manage" hidden>Upravit text</button>
+            <button type="button" id="btnPrZrus" class="btn btn--ghost btn--sm" hidden>Zrušit</button>
+            <button type="button" id="btnPrUloz" class="btn btn--primary btn--sm" hidden>Uložit</button>
+        </div>
+    </div>
+
+    <!-- Obsah se skládá sám z nadpisů kapitol (h3) v textu. Je schválně
+         MIMO editovatelné tělo: při úpravách se nadpisy mění a ručně
+         udržované odkazy by ukazovaly vedle – přesně to se stalo 26. 8. -->
+    <nav class="pr__obsah" id="prObsah" aria-label="Obsah příručky"></nav>
+
+    <div id="prTelo">
+
+    <p class="pr__uvod">
+        Web má tři vrstvy, které na sebe navazují. <b>Projekt</b> je zakázka, na které se
+        vydělává. <b>Úkol</b> je kus práce na projektu — jedna technologie v jednom patře.
+        <b>Výkaz</b> je hodina, kterou na tom někdo strávil. Když se to vyplňuje takhle
+        po řadě, spočítá si web sám, kolik která zakázka stála a kolik na ní zbývá.
+    </p>
+
+
+    <!-- ==================================================== VÝKAZY -->
+    <section class="pr__kap" id="vykazy">
+        <h3>Výkazy — co se dělá každý den</h3>
+
+        <p>
+            Výkaz je jeden den práce. Den se dělí na <b>záznamy</b>: ráno focení, odpoledne
+            kreslení v ArcGISu jsou dva záznamy pod jedním výkazem. Podle nich se počítají
+            peníze na projektu, takže je to ta nejdůležitější věc, kterou na webu vyplňuješ.
+        </p>
+
+        <h4>Jak zapsat den</h4>
+        <div class="pr__kroky">
+            <div class="pr__krok"><div>
+                Nahoře vpravo <b>Přidat výkaz</b>, nebo v pásu vlevo <b>Nový výkaz</b>.
+            </div></div>
+            <div class="pr__krok"><div>
+                Vyber <b>projekt</b>. Tím se nastaví firma a nabídnou se úkoly a patra,
+                která k projektu patří.
+            </div></div>
+            <div class="pr__krok"><div>
+                Vyber <b>úkol</b> — do pole se píše a ono hledá. Hledá i podle jména, takže
+                když napíšeš „Trávník", vyjedou úkoly Petra Trávníka.
+            </div></div>
+            <div class="pr__krok"><div>
+                Doplň <b>čas od–do</b>, případně pauzu, oběd a kilometry.
+            </div></div>
+            <div class="pr__krok"><div>
+                <b>Uložit.</b> Když jsi ten den dělal víc věcí, dej předtím
+                <b>Přidat záznam do tohoto výkazu</b>.
+            </div></div>
+        </div>
+
+        <h4>Úkol je povinný</h4>
+        <p>
+            Bez úkolu se výkaz neuloží. Je to schválně: hodiny bez úkolu se nedají přiřadit
+            k ničemu a v plnění projektu pak chybí. Když na projektu úkol není, musí ho
+            někdo z manažerů nejdřív založit.
+        </p>
+
+        <h4>Cizí úkoly — výpomoc</h4>
+        <p>
+            V nabídce úkolů jsou nejdřív tvoje, pod čarou ve skupině <b>cizí úkoly
+            (výpomoc)</b> i ty ostatní, u každého jméno majitele. Když někomu vypomáháš,
+            vyber jeho úkol — pole zmodrá, ať je jasné, že to není tvoje práce. Manažerovi
+            se to objeví v upozornění na nástěnce, aby o tom věděl.
+        </p>
+
+        <h4>Až tři technologie na jeden záznam</h4>
+        <p>
+            Když na jednom patře děláš zároveň kanalizaci a vodu, není potřeba psát dva
+            výkazy. Tlačítkem <b>+ další technologie</b> se přidají až tři. První určuje
+            vybraný úkol a je zamčená, další si volíš sám. Do výkazu se to zapíše jako
+            „KAN, VOD".
+        </p>
+
+        <h4>Rychlejší druhý záznam</h4>
+        <p>
+            Když v jednom výkazu přidáš druhý záznam, nabídka úkolů začne skupinou
+            <b>už v tomhle výkazu</b> — jsou v ní úkoly, které jsi vybral u předchozích
+            záznamů. Den práce je obvykle pár úkolů dokola.
+        </p>
+
+        <div class="pr__pozn">
+            <b>Opravit svůj výkaz můžeš jen v den zápisu.</b> Potom už jen manažer. Je to
+            proto, že se z výkazů fakturuje — zpětné úpravy by rozešly čísla, která už
+            někdo poslal zákazníkovi.
+        </div>
+
+        <h4>Kam hodiny putují dál</h4>
+        <p>
+            Od 1. 9. 2026 se hodiny zapsané na webu <b>samy propisují do tvého osobního
+            výkazu v Tabulkách Google</b>, pod fialovou čáru. Ručně už se tam nic
+            nepřepisuje. Nad čarou zůstává historie, které se nikdo nedotkne.
+        </p>
+    </section>
+
+    <!-- ==================================================== ÚKOLY -->
+    <section class="pr__kap" id="ukoly">
+        <h3>Úkoly a TO-DO</h3>
+
+        <p>
+            Úkol je kus práce na projektu — typicky jedna technologie v jednom patře jedné
+            budovy, třeba „SLN – G61 1NP". Zakládají je manažeři, ale <b>vidí je každý</b>,
+            aby si šlo najít úkol kolegy, kterému vypomáháš.
+        </p>
+
+        <h4>TO-DO rozpad</h4>
+        <p>
+            Úkol se dá rozepsat na jednotlivé kroky — TO-DO položky. U každé se táhne
+            procento, jak daleko je. Plnění celého úkolu je jejich průměr, takže
+            <b>úkol nemusí být buď nezačatý, nebo hotový</b>. K jednotlivým TO-DO se dají
+            psát poznámky.
+        </p>
+
+        <h4>Hotový úkol potvrzuje manažer</h4>
+        <p>
+            Když označíš úkol za hotový, přesune se manažerovi do upozornění na nástěnce
+            a čeká na potvrzení. Do té doby zůstává mezi rozdělanými. Stejně to funguje
+            u milníků.
+        </p>
+
+        <h4>Jak si v tom najít své</h4>
+        <ul>
+            <li>Přepínač <b>Moje úkoly / Všechny</b> nahoře.</li>
+            <li>Pod ním <b>oblíbené projekty</b> jako štítky — jedním klikem.</li>
+            <li>Seznam je dělený <b>podle projektu a v něm podle druhu práce</b>.</li>
+            <li>Do filtru projektů se píše, hledá se za tebe.</li>
+        </ul>
+    </section>
+
+    <!-- ==================================================== PROJEKTY -->
+    <section class="pr__kap" id="projekty">
+        <h3>Projekty — jen manažeři</h3>
+
+        <p>
+            Zaměstnanci a studenti tuhle část v liště vůbec nevidí. Jsou v ní peníze,
+            sazby a fáze zakázky, což není nic, co by se mělo řešit při zapisování hodin.
+        </p>
+
+        <h4>Čtyři záložky projektu</h4>
+        <ul>
+            <li><b>Údaje</b> — číslo, název, objednatel a zákazník, termíny, fáze zakázky,
+                budovy, patra a technologie.</li>
+            <li><b>Spolupracovníci</b> — kdo na projektu dělá a kdo dělá kterou technologii,
+                plus sazby platné jen pro tenhle projekt.</li>
+            <li><b>Plnění projektu</b> — rozpočet, matice po budovách a patrech, vyfakturováno
+                a externí náklady.</li>
+            <li><b>Úkoly projektu</b> — seznam úkolů rozdělený po technologiích. Kliknutím na
+                procento se rozbalí jednotlivé TO-DO i s tím, jak daleko jsou.</li>
+        </ul>
+
+        <h4>Osm fází zakázky</h4>
+        <p>
+            Od přijaté poptávky po fakturaci. Poslední fáze projekt <b>uzavírá</b> — schová
+            se z výběru ve výkazech a přesune se mezi hotové. Nemazat: hotové projekty tam
+            zůstávají.
+        </p>
+
+        <h4>Jednoduchá zakázka</h4>
+        <p>
+            U rodinných domů a drobných zakázek se zaškrtne <b>Jednoduchý projekt</b>. Zmizí
+            dělení na budovy, patra a technologie a místo matice se ukáže souhrn: kolik hodin
+            na skenování, kolik na kreslení, cesťáky a externí náklady.
+        </p>
+
+        <div class="pr__pozn">
+            <b>Všechny částky se zadávají bez DPH.</b> Rozpočty, rezervy, budgety úkolů
+            i sazby. Web s DPH nikde nepočítá.
+        </div>
+    </section>
+
+    <!-- ==================================================== QUICK -->
+    <section class="pr__kap" id="quick">
+        <h3>Quick TO-DO — vzkaz kolegovi</h3>
+        <p>
+            Na krátkou věc, která nestojí za zakládání úkolu: „mrkni na tohle", „dodej mi
+            fotku". Otevře se z pásu vlevo nebo tlačítkem <b>+ Zadat nový</b> na nástěnce
+            a smí ho poslat každý každému.
+        </p>
+        <ul>
+            <li>Přepínač <b>Moje / Zadané</b> — co čeká na tebe a co jsi poslal ty.</li>
+            <li><b>Udělej co nejdříve</b> zčervená celý řádek a řadí se první.</li>
+            <li>Splněné se drží týden, pak se z nich udělá záznam do reportu.</li>
+        </ul>
+    </section>
+
+    <!-- ==================================================== KALENDÁŘ -->
+    <section class="pr__kap" id="kalendar">
+        <h3>Kalendář, dovolená a nemoc</h3>
+        <p>
+            Dovolená, volno, nemoc a školení se zapisují <b>jako výkaz</b> — v projektu se
+            místo zakázky vybere druh absence. Zaškrtnutím <b>Celý den</b> se to počítá jako
+            osm hodin. Do výkazu v Tabulkách jde absence bez sazby, takže se nikomu nic
+            neproplácí; je tam kvůli přehledu.
+        </p>
+        <p>
+            Zapsaná absence se rovnou objeví v <b>kalendáři</b>, kde ji vidí všichni —
+            schválně, ať se dá plánovat, kdo kdy bude.
+        </p>
+    </section>
+
+    <!-- ==================================================== PŘEHLEDY -->
+    <section class="pr__kap" id="prehledy">
+        <h3>Přehledy — jen manažeři</h3>
+        <ul>
+            <li><b>Celkový přehled</b> — hodiny a peníze v grafech, po lidech, projektech,
+                druzích práce a technologiích.</li>
+            <li><b>Vytížení týmu</b> — mřížka po dnech nebo týdnech, kdo kolik odpracoval,
+                rozdělená na zaměstnance, OSVČ a studenty.</li>
+            <li><b>Reporty</b> — co se za týden stalo, plus týdenní logy.</li>
+            <li><b>Plán projektů</b> — zakázky na časové ose.</li>
+            <li><b>Faktury</b> a <b>Správa firem</b>.</li>
+        </ul>
+        <p>
+            Sazby a částky jsou i manažerovi schované za <b>⋯ zobrazit</b>. Při zapisování
+            často někdo stojí za zády.
+        </p>
+    </section>
+
+    <!-- ==================================================== NÁVODY -->
+    <section class="pr__kap" id="navody">
+        <h3>Návody a tabule</h3>
+        <p>
+            <b>Návody</b> jsou knihovna postupů a skriptů — pasportizační metodiky, ArcGIS,
+            práce se skripty. Kvůli nim web původně vznikl a jsou to nejčtenější stránky.
+            Nový návod se zakládá ikonou vpravo nahoře.
+        </p>
+        <p>
+            <b>Tabule</b> je volná plocha na poznámky a nákresy, <b>milníky</b> hlídají
+            termíny zakázek.
+        </p>
+    </section>
+
+    <!-- ==================================================== ROLE -->
+    <section class="pr__kap" id="role">
+        <h3>Kdo co vidí</h3>
+        <ul>
+            <li><b>Zaměstnanec, OSVČ, student</b> — svoje výkazy, všechny úkoly, návody,
+                kalendář, tabule, Quick TO-DO. Cizí hodiny ani sazby nevidí a databáze
+                mu je ani nevydá.</li>
+            <li><b>Manažer, asistentka, majitel, hlavní správce</b> — navíc projekty,
+                peníze, přehledy a nastavení.</li>
+        </ul>
+        <p>
+            Není to jen schované tlačítko — pravidla databáze cizí data nevydají ani
+            tomu, kdo by je zkoušel načíst jinudy.
+        </p>
+    </section>
+
+    <!-- ==================================================== PRAVIDLA -->
+    <section class="pr__kap" id="pravidla">
+        <h3>Pravidla, na kterých se firma dohodla</h3>
+        <ul>
+            <li><b>Hodiny se zapisují průběžně</b>, ne na konci měsíce zpětně. Vlastní výkaz
+                jde opravit jen v den zápisu.</li>
+            <li><b>Částky bez DPH</b> — všude.</li>
+            <li><b>Úkol u výkazu je povinný.</b></li>
+            <li><b>Projekty se nemažou.</b> Hotová zakázka se uzavře poslední fází a zůstane
+                mezi hotovými.</li>
+            <li><b>Výkaz na cizí úkol</b> je v pořádku, jen se o něm dozví manažer.</li>
+        </ul>
+
+        <div class="pr__pozn pr__pozn--pozor">
+            <b>Do pátku musí být týden zapsaný.</b> Web na to sám upozorní, když v týdnu
+            chybí hodiny.
+        </div>
+    </section>
+
+    <div class="pr__nedodelano">
+        <b>Tohle je první verze příručky.</b> Něco chybí nebo je to napsané jinak, než jak
+        to doopravdy funguje? Řekni manažerovi – text jde upravit přímo tady na stránce.
+    </div>
+
+    </div><!-- /prTelo -->
+
+</main>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+
+    /* Text v HTML souboru je jen výchozí verze. Jakmile někdo příručku
+       na webu upraví, žije v databázi (public/data/meta/prirucka) a odsud
+       se při každém otevření načte – změna se tak nemusí nasazovat. */
+
+    let puvodni = "";        // pro Zrušit
+    let upravuje = false;
+
+    async function nactiUlozene() {
+        try {
+            const data = await window.KB.nactiPrirucku();
+            if (data.html) $("prTelo").innerHTML = data.html;
+        } catch (err) {
+            // bez uložené verze (nebo bez práv na čtení) zůstane text ze souboru
+            console.warn("Příručka z databáze se nenačetla:", err);
+        }
+        postavObsah();
+    }
+
+    /**
+     * Obsah nahoře se skládá z nadpisů kapitol (h3) v textu. Díky tomu se
+     * nedá rozbít úpravami: smazaná kapitola z obsahu zmizí, přejmenovaná
+     * se přejmenuje, nová se objeví. Volá se po načtení i po každém uložení.
+     */
+    function postavObsah() {
+        const telo = $("prTelo");
+        // starší uložené verze nesly obsah uvnitř textu – uklidit
+        telo.querySelectorAll(".pr__obsah").forEach(el => el.remove());
+
+        const pouzita = {};
+        const chipy = [];
+        telo.querySelectorAll("h3").forEach(h => {
+            const text = h.textContent.trim();
+            if (!text) return;
+            // kotva ze začátku nadpisu („Výkazy — co se dělá…" → vykazy)
+            let id = window.KBUI.slug(text.split(/[—–\-(]/)[0]) || "kapitola";
+            while (pouzita[id]) id += "-2";
+            pouzita[id] = true;
+            h.id = id;
+            chipy.push('<a href="#' + id + '">' +
+                window.KBUI.esc(text.split(/\s+[—–]\s+/)[0]) + "</a>");
+        });
+        $("prObsah").innerHTML = chipy.join("");
+        $("prObsah").hidden = !chipy.length;
+    }
+
+    function prepni(zapnout) {
+        upravuje = zapnout;
+        const telo = $("prTelo");
+        telo.contentEditable = zapnout ? "true" : "false";
+        $("btnPrUprav").hidden = zapnout || !window.KBUI.can("zakazky.manage");
+        $("btnPrZrus").hidden = !zapnout;
+        $("btnPrUloz").hidden = !zapnout;
+        $("prStav").hidden = !zapnout;
+        if (zapnout) {
+            puvodni = telo.innerHTML;
+            telo.focus();
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "prirucka.html" });
+
+        $("btnPrUprav").addEventListener("click", () => prepni(true));
+        $("btnPrZrus").addEventListener("click", () => {
+            $("prTelo").innerHTML = puvodni;
+            prepni(false);
+            postavObsah();
+        });
+        $("btnPrUloz").addEventListener("click", async () => {
+            $("btnPrUloz").disabled = true;
+            try {
+                await window.KB.ulozPrirucku($("prTelo").innerHTML);
+                prepni(false);
+                postavObsah();
+                window.KBUI.toast("Příručka uložena – uvidí ji tak všichni.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Uložení selhalo.", "error");
+            } finally {
+                $("btnPrUloz").disabled = false;
+            }
+        });
+
+        /* Rozepsané úpravy nesmí zmizet omylem – zavření záložky se zeptá. */
+        window.addEventListener("beforeunload", (event) => {
+            if (upravuje && $("prTelo").innerHTML !== puvodni) event.preventDefault();
+        });
+
+        document.addEventListener("kb-role", () => {
+            if (!upravuje) $("btnPrUprav").hidden = !window.KBUI.can("zakazky.manage");
+        });
+        nactiUlozene();
+    });
+})();
+</script>
+</body>
+</html>

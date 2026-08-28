@@ -1,0 +1,355 @@
+rules_version = '2';
+
+// ============================================================================
+// Pravidla pro Firestore – Pasport Kaňa
+//
+// TENHLE SOUBOR SE SÁM NIKAM NENASADÍ. Je to předloha, kterou je potřeba
+// vložit ve Firebase Console → Firestore Database → Rules → Publish.
+//
+// Nasadit ho ale dává smysl AŽ VE CHVÍLI, kdy web přejde z anonymního
+// přihlášení na Firebase Auth (e-mail + heslo). Do té doby by pravidla
+// zamkla i běžné uživatele, protože všichni jedou pod anonymním účtem.
+//
+// Postup, jak se k tomu dostat:
+//   1. Firebase Console → Authentication → Sign-in method → povolit
+//      „Email/Password".
+//   2. Každému člověku ze seznamu založit účet (e-mail = ten ze Seznam.xlsx,
+//      heslo = to vygenerované).
+//   3. K účtu vytvořit dokument users/{uid} s polem `role`, kde uid je
+//      Firebase UID daného účtu.
+//   4. Web přepnout ze `signInAnonymously` na `signInWithEmailAndPassword`
+//      (assets/js/store.js) a přihlašovací okno napojit na Firebase Auth
+//      (assets/js/ui.js, funkce UI.login).
+//   5. Teprve pak vložit tahle pravidla.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function zaznam() {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/public/data/users/$(request.auth.uid);
+    }
+
+    // Samotné přihlášení nestačí. Firebase nikomu nebrání si účet vytvořit
+    // (klíč je ve zdroji stránky), takže se musí ověřit, že je člověk
+    // opravdu v seznamu a že mu účet není pozastavený. Bez záznamu se
+    // nedostane ani ke čtení.
+    function clen() {
+      return request.auth != null
+        && exists(zaznam())
+        && get(zaznam()).data.active != false;
+    }
+
+    function role() {
+      return get(zaznam()).data.role;
+    }
+
+    function spravce() {
+      // majitel a asistentka mají zatím práva manažera (21. 8.)
+      return clen() && role() in ['hlavni-spravce', 'majitel', 'spravce', 'asistentka'];
+    }
+
+    function hlavniSpravce() {
+      return clen() && role() == 'hlavni-spravce';
+    }
+
+    match /artifacts/firemni-kb-app/public/data/{document=**} {
+      // číst smí každý, kdo je v seznamu lidí
+      allow read: if clen();
+    }
+
+    // --- výkazy práce -------------------------------------------------------
+    //
+    // Schválně leží mimo `public/data`, a to je celý ten trik. Pravidla se
+    // sčítají – jakmile jednou nahoře stojí `allow read: if clen()` pro celý
+    // podstrom `public/data/**`, nedá se to níž ničím odebrat. Kdyby výkazy
+    // ležely tam, přečetl by si je každý zaměstnanec – stačilo by mu jít na
+    // databázi mimo web, kde na něj naše schovaná tlačítka neplatí.
+    //
+    //   private/vykazy/zaznamy/{id}          odpracovaný čas (bez peněz)
+    //   private/vykazy/castky/{id}           sazba a částka k témuž zápisu
+    //   private/vykazy/ciselniky/nastaveni   sazby lidí, rozpočty zakázek
+    //
+    // Peníze jsou v samostatném dokumentu proto, že Firestore neumí schovat
+    // jednotlivé pole – kdo dokument přečte, přečte ho celý. Zaměstnanec tak
+    // uvidí své hodiny, ale ne to, za kolik se jeho hodina fakturuje.
+    // Obojí má stejné `{id}`, takže se to spáruje jedním pohledem.
+
+    match /artifacts/firemni-kb-app/private/vykazy/zaznamy/{id} {
+      // svoje vidí každý, cizí jen správce
+      allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
+      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
+      // vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho jiného
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      /* Vlastní záznam z rychlého zápisu (volno/dovolená naklikaná
+         dopředu) si člověk smí zase odkliknout – jiné záznamy maže jen
+         správce. */
+      allow delete: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && resource.data.zdroj == "panel");
+    }
+
+    // částky nikdy nikomu jinému než správci
+    match /artifacts/firemni-kb-app/private/vykazy/castky/{id} {
+      allow read, write: if spravce();
+    }
+
+    // --- projekty (dřív „zakázky") --------------------------------------
+    //
+    //   private/projekty/seznam/{id}    hlavička: název, firma, stav,
+    //                                   priorita, termíny, lidé (pole UID)
+    //   private/projekty/finance/{id}   příjmy a výdaje – JEN manažeři
+    //
+    // Zaměstnanec vidí jen projekty, ke kterým je přiřazený – proto leží
+    // mimo `public/data` (tam se čtení níž odebrat nedá) a peníze jsou
+    // zase ve vedlejším dokumentu, protože pravidla neumí schovat pole.
+    // Zápis hlaviček i financí drží spodní pravidlo pro `private` (manažer).
+
+    match /artifacts/firemni-kb-app/private/projekty/seznam/{id} {
+      allow read: if spravce() || (clen() && request.auth.uid in resource.data.lide);
+    }
+
+    // --- úkoly s TO-DO rozpadem -----------------------------------------
+    //
+    //   private/ukoly/seznam/{id}    projekt, druh, technologie, budova,
+    //                                patro, přiřazení lidé, todo: [{text,pct}]
+    //   private/ukoly/budgety/{id}   budget a rezerva hodin – JEN manažeři
+    //                                (kryje je spodní pravidlo pro private)
+    //
+    // Úkol čte každý člen: kdo pomáhal kolegovi, zapisuje si výkaz na jeho
+    // úkol a musí ho umět najít. Jde to bezpečně až od chvíle, kdy budget
+    // neleží v dokumentu úkolu – pravidla neumí schovat jednotlivé pole,
+    // proto je ve vedlejším dokumentu `budgety/{id}` (stejný trik jako
+    // výkazy: zaznamy × castky).
+    //
+    // Postup smí zapisovat jen přiřazený – a jen pole `todo` a `stav`;
+    // zadání ani přiřazení mu pravidlo změnit nedovolí. Zakládání a mazání
+    // je manažerská práce (spodní pravidlo).
+
+    match /artifacts/firemni-kb-app/private/ukoly/seznam/{id} {
+      allow read: if clen();
+      allow update: if spravce() || (clen()
+                       && request.auth.uid in resource.data.prirazeni
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['todo', 'stav', 'historie', 'updatedMs', 'updatedBy']));
+    }
+
+    // --- faktury ---------------------------------------------------------
+    //
+    //   private/faktury/seznam/{id}       faktura (přijatá i vydaná) vč. částek
+    //   private/faktury/meta/nastaveni    naše fakturační údaje pro tisk
+    //
+    // Faktura nese peníze, proto je celá jen pro manažery. Vlastní pravidlo
+    // nepotřebuje – kryje ji spodní zachytávací blok pro `private` (správce).
+    // Komentář tu je, aby kolekce nezapadla při příštím čtení pravidel.
+
+    // --- historie aktivit ------------------------------------------------
+    // Každý přihlášený zapisuje svoje kroky (jinak by log nešel plnit),
+    // ale číst je smí jen manažer – jsou tam i zmínky o výkazech.
+    match /artifacts/firemni-kb-app/private/aktivity/seznam/{id} {
+      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      allow read: if spravce();
+      allow update, delete: if false;
+    }
+
+    // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
+    // projektů, zakládání úkolů…) jen správce
+    match /artifacts/firemni-kb-app/private/{document=**} {
+      allow read, write: if spravce();
+    }
+
+    // --- návody: tvořit a upravovat může každý, mazat jen správce ---
+    match /artifacts/firemni-kb-app/public/data/guides/{guideId} {
+      allow create, update: if clen();
+      allow delete: if spravce();
+
+      match /images/{imageId} {
+        allow create, update: if clen();
+        allow delete: if spravce();
+      }
+    }
+
+    // --- úkoly: zakládat a mazat správce a zaměstnanci, zapisovat všichni ---
+    match /artifacts/firemni-kb-app/public/data/tasks/{taskId} {
+      allow update: if clen();
+      allow create: if clen() && role() != 'student';
+      allow delete: if spravce();
+    }
+
+    // --- číselníky (zakázky, skupiny) jen správci ---
+    match /artifacts/firemni-kb-app/public/data/meta/{docId} {
+      // Milníky si odškrtává i řadový člen („Splněno" u milníku, kde je
+      // v owners). Seznam je jedno pole v jednom dokumentu a pravidla
+      // neumí ohlídat změnu jediné položky – proto se u milníků věří
+      // každému členovi. Zbytek meta zůstává jen správcům.
+      allow write: if spravce() || (docId == 'milniky' && clen());
+    }
+
+    // --- seznam lidí spravuje jen hlavní správce ---
+    match /artifacts/firemni-kb-app/public/data/users/{userId} {
+      allow write: if hlavniSpravce();
+    }
+
+    // --- plány (podklady pater s živými značkami) -------------------------
+    //
+    //   private/plany/slozky/{id}                 složky stromu
+    //   private/plany/soubory/{id}                hlavička plánu (bez obrázku)
+    //   private/plany/soubory/{id}/kousky/{n}     obrázek po kouscích (base64)
+    //   private/plany/soubory/{id}/znacky/{zid}   značky se stavem – živě
+    //
+    // Vidí a upravují všichni členové – parta na patře si značí společně.
+    match /artifacts/firemni-kb-app/private/plany/{dokument=**} {
+      allow read, write: if clen();
+    }
+
+    // --- postup dne (denní screenshoty práce) -----------------------------
+    //
+    //   private/postup/zaznamy/{uid_datum}            { uid, osoba, datum, text }
+    //   private/postup/zaznamy/{uid_datum}/obrazky/{n} { data }  (JPEG base64)
+    //
+    // Svoje čte a píše každý; cizí vidí jen manažer – je to doklad práce,
+    // ne veřejná nástěnka.
+    match /artifacts/firemni-kb-app/private/postup/zaznamy/{id} {
+      allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
+      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      allow delete: if spravce();
+
+      match /obrazky/{n} {
+        // obrázek nenese uid – právo se bere z rodičovského záznamu
+        allow read, write: if spravce() || (clen() &&
+            get(/databases/$(database)/documents/artifacts/firemni-kb-app/private/postup/zaznamy/$(id)).data.uid == request.auth.uid);
+      }
+    }
+
+    // --- tabule -----------------------------------------------------------
+    //
+    //   private/tabule/seznam/{id}                hlavička: název, kdo ji
+    //                                            založil, viditelnost, proUids
+    //   private/tabule/seznam/{id}/content/data   prvky tabule
+    //   private/tabule/seznam/{id}/images/{img}   vložené obrázky
+    //
+    // Tabule se sem stěhovaly z `public/data`. Důvod je volba „vidí ji jen
+    // vybraní lidé": v `public/data` stojí nahoře plošné `allow read`, které
+    // se níž nedá odebrat, takže by to byla jen schovaná položka v liště.
+    // Tady o čtení rozhoduje sama hlavička.
+    //
+    // Web se proto na tabule ptá třemi dotazy (pro všechny / moje / sdílené
+    // se mnou) – pravidla umí dotaz povolit nebo zakázat, ne ho profiltrovat,
+    // takže jedna zamčená tabule by jinak strhla celý seznam.
+
+    function tabuleData(id) {
+      return get(/databases/$(database)/documents/artifacts/firemni-kb-app/private/tabule/seznam/$(id)).data;
+    }
+
+    // Chybějící pole není v pravidlech prázdná hodnota, ale chyba – a chyba
+    // znamená zamítnuto. Proto se každé pole nejdřív ověří přes `in`.
+    function vidiTabuli(d) {
+      return clen() && (
+           !('viditelnost' in d) || d.viditelnost != 'vybrani'
+        || ('createdUid' in d && d.createdUid == request.auth.uid)
+        || ('proUids' in d && d.proUids is list && request.auth.uid in d.proUids)
+      );
+    }
+
+    match /artifacts/firemni-kb-app/private/tabule/seznam/{id} {
+      allow read:   if vidiTabuli(resource.data);
+      allow create: if clen() && request.resource.data.createdUid == request.auth.uid;
+      allow update: if vidiTabuli(resource.data);
+      // smazat smí zakladatel a manažer – ne kdokoliv, kdo tabuli vidí
+      allow delete: if spravce() || (clen() && resource.data.createdUid == request.auth.uid);
+
+      // obsah a obrázky se řídí viditelností hlavičky – jinak by stačilo
+      // sáhnout rovnou na `content/data` a zámek by nebyl k ničemu
+      match /{sub=**} {
+        allow read, write: if spravce() || vidiTabuli(tabuleData(id));
+      }
+    }
+
+    // --- staré umístění tabulí --------------------------------------------
+    // Zůstává jen kvůli přesunu dat (Import dat → Přesun tabulí). Až bude
+    // staré místo prázdné, tenhle blok se může smazat.
+    match /artifacts/firemni-kb-app/public/data/boards/{boardId} {
+      allow write: if clen();
+      match /{sub=**} {
+        allow write: if clen();
+      }
+    }
+
+    // --- kalendář: události, dovolené, nemoci a školení -----------------
+    // Vidí je všichni členové (blanket `read` výš), tak jsou schválně
+    // v `public/data`. Každý zapisuje svoje; cizí smí měnit jen správce.
+    match /artifacts/firemni-kb-app/public/data/kalendar/{id} {
+      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+    }
+
+    // --- auta: rozvrh cest do Brna a rezervace vozů --------------------
+    // Vidí to celá firma (blanket `read` výš) – o to jde, aby se dva
+    // nedomlouvali na tomtéž autě přes hlavu toho druhého. Zapisuje každý
+    // sám za sebe; cizí zápis smaže jen manažer (když někdo zapomene).
+    // Kdo veze partu, přihlásí kolegy za ně – proto se nehlídá `uid` (ten,
+    // kdo jede), ale `zapsalUid` (kdo zápis pořídil). Smazat smí ten, koho
+    // se to týká, ten kdo ho zapsal, a manažer.
+    match /artifacts/firemni-kb-app/public/data/auta/{id} {
+      allow create: if clen() && request.resource.data.zapsalUid == request.auth.uid;
+      allow update: if spravce() || (clen()
+                       && resource.data.zapsalUid == request.auth.uid
+                       && request.resource.data.zapsalUid == request.auth.uid);
+      allow delete: if spravce() || (clen() && (resource.data.uid == request.auth.uid
+                                                || resource.data.zapsalUid == request.auth.uid));
+    }
+
+    // --- kdo je právě na webu: každý píše jen svůj otisk ---
+    match /artifacts/firemni-kb-app/public/data/pritomnost/{uid} {
+      allow write: if clen() && request.auth.uid == uid;
+    }
+
+    // --- záznamy přihlášení: zapsat smí každý, mazat nikdo ---
+    match /artifacts/firemni-kb-app/public/data/logs/{logId} {
+      allow create: if clen();
+      allow update, delete: if false;
+    }
+
+    // --- Quick TO-DO: rychlé vzkazy mezi dvěma lidmi ---------------------
+    // Schválně MIMO `private` – tam má správce plošné čtení, kdežto tohle
+    // má vidět jen autor a adresát. Nikdo jiný, ani manažer.
+    match /artifacts/firemni-kb-app/osobni/quicktodo/seznam/{id} {
+      /* Vzkaz může mít víc adresátů – `proUids`. Starší záznamy mají jen
+         `proUid`, proto se hlídají obě podoby. Splní-li společný vzkaz
+         kdokoliv z adresátů, zhasne všem, takže update musí smět každý
+         z nich – ne jen ten, komu „patří". */
+      /* U čtení NESMÍ být pojistka `is list`: dotaz array-contains přes
+         `proUids` pak Firestore neumí ověřit a celý spadne na právech
+         (u jednotlivého dokumentu `in` na ne-seznamu prostě vyjde false). */
+      allow read: if clen() && (resource.data.odKoho == request.auth.uid
+                                || resource.data.proUid == request.auth.uid
+                                || request.auth.uid in resource.data.proUids);
+      allow create: if clen() && request.resource.data.odKoho == request.auth.uid;
+      // přeposlat vzkaz jinému nejde – adresáti ani autor se měnit nesmí
+      allow update: if clen()
+                       && (resource.data.odKoho == request.auth.uid
+                           || resource.data.proUid == request.auth.uid
+                           || (resource.data.proUids is list
+                               && request.auth.uid in resource.data.proUids))
+                       && request.resource.data.proUids == resource.data.proUids
+                       && request.resource.data.odKoho == resource.data.odKoho;
+      allow delete: if clen() && (resource.data.odKoho == request.auth.uid
+                                  || resource.data.proUid == request.auth.uid
+                                  || (resource.data.proUids is list
+                                      && request.auth.uid in resource.data.proUids));
+    }
+
+    // všechno ostatní zavřené
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

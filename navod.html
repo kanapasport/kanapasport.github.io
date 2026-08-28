@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Návod – Pasport Kaňa</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:22px;padding-bottom:60px">
+
+    <div id="loadingBox" class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        <div class="loader" style="margin:0 auto 16px"></div>
+        Načítám návod z databáze…
+    </div>
+
+    <div id="docBox" hidden class="col" style="gap:16px">
+
+        <!-- ------------------------------------------------------ lišta -->
+        <div class="no-print card spread" style="padding:14px 18px">
+            <div class="grow" style="min-width:200px">
+                <div id="docTitle" style="font-size:16px;font-weight:900;line-height:1.3">…</div>
+                <div id="docMeta" class="tiny muted" style="margin-top:3px"></div>
+            </div>
+            <div class="row" style="gap:8px">
+                <div class="row" style="gap:2px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:3px">
+                    <button id="zoomOut" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">−</button>
+                    <span id="zoomLabel" class="tiny muted" style="width:46px;text-align:center;font-variant-numeric:tabular-nums">100 %</span>
+                    <button id="zoomIn" class="btn btn--sm btn--ghost" style="min-height:32px;padding:0 11px;border:none;background:none">+</button>
+                </div>
+                <a id="btnEdit" href="#" class="btn btn--ghost btn--sm">Upravit</a>
+                <button id="btnPdf" class="btn btn--primary btn--sm" data-need="navod.pdf" hidden>
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/>
+                    </svg>
+                    Uložit do PDF
+                </button>
+            </div>
+        </div>
+
+        <p class="no-print tiny center" style="color:var(--dim);margin-top:-6px">
+            Náhled odpovídá 1:1 výslednému PDF. Klikni na obrázek nebo na odkaz
+            <span style="color:var(--accent);font-weight:700">obr. 1</span> v textu pro zvětšení.
+        </p>
+
+        <div id="stageWrap" style="width:100%;display:flex;justify-content:center;overflow:hidden">
+            <div id="stage" class="a4-stage"></div>
+        </div>
+    </div>
+
+    <div id="errorBox" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        Návod se nepodařilo najít.
+        <a href="navody.html" style="color:var(--accent);font-weight:700;display:block;margin-top:12px">Zpět na seznam návodů</a>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/doc.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    const guideId = new URLSearchParams(location.search).get("id");
+    let guide = null;
+    let images = {};
+    let zoom = null;   // null = automaticky podle šířky okna
+
+    const stage = () => document.getElementById("stage");
+    const wrap = () => document.getElementById("stageWrap");
+
+    function applyZoom() {
+        if (zoom === null) {
+            window.KBDoc.fitStage(stage(), wrap());
+            const current = parseFloat((stage().style.transform.match(/[\d.]+/) || [1])[0]);
+            document.getElementById("zoomLabel").textContent = Math.round(current * 100) + " %";
+        } else {
+            stage().style.transform = "scale(" + zoom + ")";
+            const pages = stage().children.length || 1;
+            wrap().style.height = ((pages * 297 + (pages - 1) * 8) * 3.7795 * zoom + 20) + "px";
+            document.getElementById("zoomLabel").textContent = Math.round(zoom * 100) + " %";
+        }
+    }
+
+    function stepZoom(delta) {
+        const current = parseFloat((stage().style.transform.match(/[\d.]+/) || [1])[0]) || 1;
+        zoom = Math.min(2, Math.max(0.3, Math.round((current + delta) * 20) / 20));
+        applyZoom();
+    }
+
+    async function load() {
+        if (!guideId) return fail();
+        await window.KB.whenReady();
+
+        guide = await window.KB.getGuide(guideId).catch(() => null);
+        if (!guide) return fail();
+
+        images = await window.KB.loadImages(guideId).catch(() => ({}));
+
+        guide.dateLabel = new Date(guide.updatedMs || Date.now()).toLocaleDateString("cs-CZ");
+
+        document.getElementById("loadingBox").hidden = true;
+        document.getElementById("docBox").hidden = false;
+        document.getElementById("docTitle").textContent = guide.title || "Bez názvu";
+        document.getElementById("docMeta").textContent =
+            [window.KB_categoryLabel(guide), guide.author, guide.version, guide.dateLabel]
+                .filter(Boolean).join("  ·  ");
+        document.getElementById("btnEdit").href = "editor.html?id=" + encodeURIComponent(guideId);
+
+        stage().style.setProperty("--doc-accent", window.KB_katBarva(guide.cat));
+        window.KBDoc.render(stage(), guide, images);
+        window.KBDoc.enableImageZoom(stage(), () => images);
+        applyZoom();
+    }
+
+    function fail() {
+        document.getElementById("loadingBox").hidden = true;
+        document.getElementById("errorBox").hidden = false;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "navody.html" });
+
+        document.getElementById("zoomIn").addEventListener("click", () => stepZoom(0.1));
+        document.getElementById("zoomOut").addEventListener("click", () => stepZoom(-0.1));
+
+        // role může dorazit až s daty – tlačítko se pak samo odkryje
+        window.KB.on("users", () => { window.KBUI.syncRole(); window.KBUI.paintUser(); });
+        document.addEventListener("kb-role", () => window.KBUI.paintUser());
+
+        document.getElementById("btnPdf").addEventListener("click", async (event) => {
+            if (!window.KBUI.can("navod.pdf")) {
+                return window.KBUI.toast("Stahovat návody do PDF můžou jen správci.", "warn");
+            }
+            const button = event.currentTarget;
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.textContent = "Generuji…";
+            try {
+                await window.KBDoc.exportPdf(stage(), guide.title || "Navod");
+                window.KBUI.toast("PDF staženo.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("PDF se nepodařilo vytvořit.", "error");
+            } finally {
+                button.disabled = false;
+                button.innerHTML = original;
+                applyZoom();
+            }
+        });
+
+        window.KBDoc.watchFit(wrap(), () => { if (zoom === null) applyZoom(); });
+        load();
+    });
+})();
+</script>
+</body>
+</html>

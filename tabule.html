@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Tabule – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+
+    <style>
+    /* ---- plátno přes většinu obrazovky ----
+       Tabule se nelistuje jako text, kreslí se do ní – proto nemá šířku
+       omezenou .wrapem a dolů sahá až k okraji okna. Kolik lišt nad ní
+       zrovna sedí se mění (zalomení nástrojů, podlišta, režim zvětšení),
+       takže výšku hlásí JS proměnnou --deska-nad. */
+    #boardView { width: 100%; }
+    #bStage {
+        height: calc(100vh - var(--deska-nad, 300px));
+        height: calc(100dvh - var(--deska-nad, 300px));   /* mobil: bez adresního řádku */
+        min-height: 320px;
+    }
+
+    /* ---- podlišta se seznamem tabulí ----
+       Při větším počtu tabulí se radši posouvá do strany, než aby se
+       zalomila na další řádek – každý řádek navíc ubírá z plátna. */
+    #appSubbar .subbar__left {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        padding-bottom: 2px;
+    }
+    #appSubbar .chip { flex: none; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    #appSubbar .subbar__cat { flex: none; }
+
+    /* ---- zvětšení ----
+       Zůstane jen červená lišta nahoře a svislý pás vlevo, zbytek zmizí.
+       Schválně bez Fullscreen API: prohlížeč nepřebírá okno, takže se dá
+       pořád normálně přepnout jinam a stav přežije i překreslení. */
+    /* Zvětšení na maximum: zmizí lišta, podlišta i svislý pás – zůstanou
+       jen nástroje tabule (přání Michala). Zpátky stejným tlačítkem. */
+    body.deska-max .appbar,
+    body.deska-max .siderail,
+    body.deska-max #kbNahledPruh { display: none; }
+    body.deska-max { padding-left: 0 !important; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<!-- Výzva k založení první tabule. Schválně NENÍ <main>: přihlášení
+     odkrývá všechny <main> na stránce naráz, takže tahle hláška vyskakovala
+     i nad otevřenou tabulí („zatím tu není žádná tabule" a pod tím tabule).
+     Jako <div> si o svém zobrazení rozhoduje jen kód níž. -->
+<div id="listView" class="wrap" hidden style="padding-top:30px;padding-bottom:60px">
+    <div class="card center" style="padding:38px 22px">
+        <b style="font-size:16px">Zatím tu není žádná tabule.</b>
+        <p class="small muted" style="margin:8px 0 16px;line-height:1.6">
+            Nekonečné plátno na myšlenkové mapy a náčrtky – všichni vidí to samé.
+        </p>
+        <button id="btnNewBoard" class="btn btn--primary">+ Nová tabule</button>
+    </div>
+</div>
+
+<!-- ========================================================== TABULE ==== -->
+<main id="boardView" hidden>
+    <div class="board">
+        <div class="board__bar no-print">
+            <input id="bTitle" class="board__title" placeholder="Název tabule" spellcheck="false">
+
+            <div class="board__group" role="group" aria-label="Nástroje">
+                <button class="btool" data-tool="select" title="Výběr a posun (V)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linejoin="round" d="M5 3l14 8-6 1.5L10.5 19 5 3z"/></svg></button>
+                <button class="btool" data-tool="hand" title="Posun plátna">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8 13V5a1.5 1.5 0 013 0v6m0-1V4a1.5 1.5 0 113 0v7m0-2a1.5 1.5 0 113 0v6a6 6 0 01-6 6h-1a6 6 0 01-6-6v-3a1.5 1.5 0 113 0"/></svg></button>
+                <button class="btool" data-tool="pen" title="Kreslení (P) – Apple Pencil kreslí i bez přepnutí">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15.2 4.8l4 4L8.5 19.5 3 21l1.5-5.5L15.2 4.8z"/></svg></button>
+                <button class="btool" data-tool="erase" title="Guma – smaže, na co sáhneš">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linejoin="round" d="M8 20l-4-4 9-9 4 4-9 9zM10 20h10"/></svg></button>
+                <button class="btool" data-tool="mind" title="Myšlenková mapa (M)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="8" y="9" width="8" height="6" rx="1.5" stroke-width="2"/><path stroke-width="2" stroke-linecap="round" d="M12 9V4m0 11v5M8 12H3m13 0h5"/></svg></button>
+                <button class="btool" data-tool="note" title="Lepítko (N)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linejoin="round" d="M4 4h16v10l-6 6H4z"/><path stroke-width="2" d="M20 14h-6v6"/></svg></button>
+                <button class="btool" data-tool="text" title="Text (T)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M5 6h14M12 6v13M9 19h6"/></svg></button>
+                <button class="btool" data-tool="rect" title="Obdélník">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="6" width="16" height="12" rx="2" stroke-width="2"/></svg></button>
+                <button class="btool" data-tool="ellipse" title="Elipsa">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><ellipse cx="12" cy="12" rx="8" ry="7" stroke-width="2"/></svg></button>
+                <button class="btool" data-tool="arrow" title="Šipka – konce se přichytí k prvku">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 18L20 6m0 0h-7m7 0v7"/></svg></button>
+                <button class="btool" data-tool="table" title="Tabulka – tažením určíš počet řádků a sloupců">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2" stroke-width="2"/><path stroke-width="2" d="M3 10h18M3 15h18M9 5v14m6-14v14"/></svg></button>
+                <button class="btool" id="bPickImg" title="Obrázek (nebo Ctrl+V)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2" stroke-width="2"/><path stroke-width="2" stroke-linejoin="round" d="M3 16l5-5 4 4 3-3 6 6"/></svg></button>
+            </div>
+
+            <div class="board__group">
+                <button class="btool" id="bUndo" title="Zpět (Ctrl+Z)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 14L4 9l5-5"/><path stroke-width="2" stroke-linecap="round" d="M4 9h9a7 7 0 010 14h-3"/></svg></button>
+                <button class="btool" id="bRedo" title="Znovu (Ctrl+Shift+Z)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 14l5-5-5-5"/><path stroke-width="2" stroke-linecap="round" d="M20 9h-9a7 7 0 000 14h3"/></svg></button>
+            </div>
+
+            <div class="board__group">
+                <button class="btool" id="bZoomOut" title="Oddálit">−</button>
+                <span id="bZoomLabel" class="board__zoom">100 %</span>
+                <button class="btool" id="bZoomIn" title="Přiblížit">+</button>
+                <button class="btool" id="bFit" title="Zobrazit celou tabuli">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="6" width="16" height="12" rx="2" stroke-width="2"/><path stroke-width="2" stroke-linecap="round" d="M9 12h6"/></svg></button>
+            </div>
+
+            <div class="board__group board__group--end">
+                <span id="bStatus" class="tiny" style="color:var(--dim)">Načítám…</span>
+                <!-- rohové šipky = na celou obrazovku; druhé kliknutí vrátí lišty -->
+                <button type="button" id="bMax" class="btool" aria-pressed="false"
+                        title="Vejít se do okna – schová lišty; dalším kliknutím se vrátí">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+            </div>
+        </div>
+
+        <!-- ------- co se dá dělat s vybraným prvkem (nebo nastavení pro nové) ------- -->
+        <div class="board__selbar no-print">
+            <span class="board__selinfo" id="bSelInfo">Nastavení pro nové prvky</span>
+
+            <div class="board__group" role="group" aria-label="Kam barvu nanést">
+                <button class="btool btool--txt" data-paint="stroke" title="Barva okraje a čáry">Okraj</button>
+                <button class="btool btool--txt" data-paint="fill" title="Barva výplně">Výplň</button>
+            </div>
+
+            <div class="board__group board__colors" role="group" aria-label="Barvy">
+                <button data-color="#ffffff" style="--c:#ffffff" title="Bílá"></button>
+                <button data-color="#ffd45e" style="--c:#ffd45e" title="Žlutá"></button>
+                <button data-color="#ffb3c1" style="--c:#ffb3c1" title="Růžová"></button>
+                <button data-color="#a8e6cf" style="--c:#a8e6cf" title="Zelená"></button>
+                <button data-color="#a9d6ff" style="--c:#a9d6ff" title="Modrá"></button>
+                <button data-color="#e4d4ff" style="--c:#e4d4ff" title="Fialová"></button>
+                <button data-color="#ffc9a3" style="--c:#ffc9a3" title="Oranžová"></button>
+                <button data-color="#c8102e" style="--c:#c8102e" title="Červená"></button>
+                <button data-color="#1b6ec2" style="--c:#1b6ec2" title="Modrá tmavá"></button>
+                <button data-color="#16794a" style="--c:#16794a" title="Zelená tmavá"></button>
+                <button data-color="#16191d" style="--c:#16191d" title="Černá"></button>
+            </div>
+
+            <div class="board__group board__shapes" role="group" aria-label="Tvar pole">
+                <button data-shape="none" title="Bez rámečku"><i class="sh sh--none"></i></button>
+                <button data-shape="pill" title="Oblá"><i class="sh sh--pill"></i></button>
+                <button data-shape="round" title="Zakulacené rohy"><i class="sh sh--round"></i></button>
+                <button data-shape="rect" title="Hranatá"><i class="sh sh--rect"></i></button>
+            </div>
+
+            <div class="board__group" role="group" aria-label="Text">
+                <button class="btool btool--txt" data-bold="1" title="Tučně">B</button>
+                <button class="btool btool--txt" data-bold="0" title="Normálně">A</button>
+                <button class="btool" data-align="left" title="Vlevo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M4 6h16M4 12h10M4 18h13"/></svg></button>
+                <button class="btool" data-align="center" title="Na střed">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M4 6h16M7 12h10M6 18h12"/></svg></button>
+                <button class="btool" data-align="right" title="Vpravo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M4 6h16M10 12h10M7 18h13"/></svg></button>
+                <button class="btool btool--txt" data-size="13" title="Malé písmo">13</button>
+                <button class="btool btool--txt" data-size="15" title="Střední písmo">15</button>
+                <button class="btool btool--txt" data-size="20" title="Velké písmo">20</button>
+                <button class="btool btool--txt" data-size="28" title="Nadpis">28</button>
+            </div>
+
+            <div class="board__group board__colors" role="group" aria-label="Barva písma">
+                <button data-tcolor="#16191d" style="--c:#16191d" title="Písmo černé"></button>
+                <button data-tcolor="#c8102e" style="--c:#c8102e" title="Písmo červené"></button>
+                <button data-tcolor="#1b6ec2" style="--c:#1b6ec2" title="Písmo modré"></button>
+                <button data-tcolor="#16794a" style="--c:#16794a" title="Písmo zelené"></button>
+                <button data-tcolor="#6b7480" style="--c:#6b7480" title="Písmo šedé"></button>
+            </div>
+
+            <div class="board__group board__widths" role="group" aria-label="Tloušťka čáry">
+                <button data-width="2" title="Tenká"><i style="height:2px"></i></button>
+                <button data-width="4" title="Střední"><i style="height:4px"></i></button>
+                <button data-width="8" title="Silná"><i style="height:8px"></i></button>
+            </div>
+
+            <div class="board__group" role="group" aria-label="Uspořádání mapy">
+                <button class="btool" data-layout="down" data-needsel title="Srovnat mapu shora dolů">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M12 4v16m0 0l-5-5m5 5l5-5M4 4h16"/></svg></button>
+                <button class="btool" data-layout="right" data-needsel title="Srovnat mapu zleva doprava">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M4 12h16m0 0l-5-5m5 5l-5 5M4 4v16"/></svg></button>
+            </div>
+
+            <div class="board__group board__group--end" id="bSelbar">
+                <button class="btool" id="bCopy" data-needsel title="Duplikovat (Ctrl+D)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="11" height="11" rx="2" stroke-width="2"/><path stroke-width="2" d="M5 15V5a2 2 0 012-2h10"/></svg></button>
+                <button class="btool" id="bFront" data-needsel title="Dát dopředu">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linejoin="round" d="M12 3l9 5-9 5-9-5 9-5z"/><path stroke-width="2" stroke-linejoin="round" d="M3 16l9 5 9-5"/></svg></button>
+                <button class="btool btool--danger" id="bDelete" data-needsel title="Smazat (Delete)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" stroke-linecap="round" d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></button>
+            </div>
+        </div>
+
+        <div class="board__stage" id="bStage">
+            <div class="board__world" id="bWorld">
+                <svg class="board__svg" id="bSvg" width="1" height="1" overflow="visible"></svg>
+                <div class="board__html" id="bHtml"></div>
+            </div>
+            <div class="board__band" id="bBand" hidden></div>
+            <div class="board__hint" id="bHint">
+                Levé tlačítko vybírá (i rámečkem) · prostřední tlačítko nebo mezerník posouvá ·
+                kolečko přibližuje · dvojklik založí lepítko
+            </div>
+        </div>
+    </div>
+</main>
+
+<input type="file" id="bFile" accept="image/*" hidden>
+
+<!-- ===================================================== KDO TABULI VIDÍ ==
+     Zamčená tabule zmizí ostatním z lišty a hlavně se jim nenačte: tabule
+     leží v `private/tabule`, kde o čtení rozhoduje sama hlavička (kdo ji
+     založil a kdo je v proUids). Manažeři vidí všechny. -->
+<div id="kdoOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:520px;width:100%;gap:0;overflow:hidden;max-height:82vh">
+        <div style="padding:14px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Kdo tuhle tabuli vidí
+        </div>
+        <div style="padding:14px 18px;overflow-y:auto">
+            <label class="row" style="gap:9px;cursor:pointer;padding:5px 0">
+                <input type="radio" name="kdoRezim" value="vsichni" checked>
+                <span><b>Všichni ve firmě</b><br>
+                    <span class="tiny muted">Tabule je v liště každému, kdo se přihlásí.</span></span>
+            </label>
+            <label class="row" style="gap:9px;cursor:pointer;padding:5px 0">
+                <input type="radio" name="kdoRezim" value="vybrani">
+                <span><b>Jen vybraní lidé</b><br>
+                    <span class="tiny muted">Ostatním se v liště neukáže. Manažeři a zakladatel ji vidí vždycky.</span></span>
+            </label>
+            <div id="kdoLide" class="quickpanel__lide" style="margin-top:12px"></div>
+            <p class="tiny muted" style="margin:14px 0 0;line-height:1.6">
+                Omezení platí i v databázi, ne jen tady ve webu – komu tabuli
+                nedáš, ten si její obsah nenačte.
+            </p>
+        </div>
+        <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
+            <div class="grow"></div>
+            <button type="button" id="btnKdoZrus" class="btn btn--sm btn--ghost">Zrušit</button>
+            <button type="button" id="btnKdoUloz" class="btn btn--primary btn--sm">Uložit</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/doc.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/board.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    /* Adresa tabule: tabule.html#deska=ID. Dřív ?id=ID, jenže místní server
+       (npx serve) při „hezkých adresách" otazníkovou část zahazoval – stránka
+       pak nevěděla, kterou tabuli otevřít, skočila na první, server zase
+       všechno zahodil… a tak pořád dokola (to bylo to věčné problikávání).
+       Část za # serveru vůbec nedojde, takže ji zahodit nemůže.
+       Staré odkazy s ?id= dál fungují. */
+    const boardId = (() => {
+        const hash = location.hash.replace(/^#/, "");
+        if (hash.indexOf("deska=") === 0) return decodeURIComponent(hash.slice(6));
+        return new URLSearchParams(location.search).get("id") || "";
+    })();
+
+    /* ------------------------------------------------------ seznam tabulí */
+
+    /* Visací zámek u názvu tabule, která není pro všechny. */
+    const ZAMEK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"' +
+        ' style="width:11px;height:11px;flex:none;margin-right:5px;vertical-align:-1px">' +
+        '<rect x="5" y="11" width="14" height="9" rx="2" stroke-width="2.4"/>' +
+        '<path stroke-width="2.4" stroke-linecap="round" d="M8 11V8a4 4 0 018 0v3"/></svg>';
+
+    const stamp = (ms) => {
+        if (!ms) return "";
+        const d = new Date(ms);
+        return d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+    };
+
+    /* ------------------------------------- podlišta se seznamem tabulí ---
+       Přeskočit z tabule na tabuli je nejčastější pohyb po téhle stránce,
+       tak ať na to není potřeba chodit přes rozcestník. */
+
+    /* Události `boards` chodí při každém uložení tahu (mění se updatedMs).
+       Podlišta se ale smí překreslit jen, když se změní seznam nebo názvy –
+       jinak při kreslení problikává a stránka poskakuje.
+       Startovní hodnota je null, ne "": prázdný seznam tabulí má otisk ""
+       a první malování (s tlačítkem + Nová tabule) se přeskočit nesmí. */
+    let podlistaOtisk = null;
+
+    function paintSubbar() {
+        const slot = $("appSubbar");
+        if (!slot) return;
+
+        // Řadíme podle názvu, ne podle poslední změny jako KB.boards –
+        // jinak by tabule v liště poskakovaly pokaždé, když do některé
+        // někdo píše, a klikalo by se do nich vedle.
+        const boards = window.KB.tabuleProMne().slice().sort((a, b) =>
+            String(a.title || "").localeCompare(String(b.title || ""), "cs"));
+
+        const otevrena = boards.find(b => b.id === boardId) || null;
+        const otisk = boards.map(b => b.id + "|" + (b.title || "") + "|" +
+            (b.viditelnost || "") + "|" + (b.proUids || []).join(",")).join("¦");
+        if (otisk === podlistaOtisk) return;
+        podlistaOtisk = otisk;
+
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            '<a class="subbar__cat' + (boardId ? " subbar__cat--up" : "") + '" href="tabule.html">' +
+                "VŠECHNY TABULE</a>" +
+            (boards.length ? '<span class="subbar__sep"></span>' : "") +
+            boards.map(board =>
+                '<a class="chip' + (board.id === boardId ? " chip--active" : "") + '"' +
+                    ' href="tabule.html#deska=' + encodeURIComponent(board.id) + '"' +
+                    ' title="' + esc(board.title || "Bez názvu") +
+                        (board.viditelnost === "vybrani" ? " · vidí jen vybraní lidé" : "") + '">' +
+                    (board.viditelnost === "vybrani" ? ZAMEK : "") +
+                    esc(board.title || "Bez názvu") +
+                "</a>").join("") +
+        '</div><div class="subbar__right">' +
+            /* Správa se týká otevřené tabule – bez ní by tlačítka neměla co
+               přejmenovat ani smazat, tak se ukážou až v otevřené tabuli. */
+            (otevrena
+                ? '<button type="button" class="btn btn--sm btn--ghost" data-rename="' + esc(otevrena.id) + '">Přejmenovat</button>' +
+                  '<button type="button" class="btn btn--sm btn--ghost" data-kdo="' + esc(otevrena.id) + '">Kdo ji vidí</button>' +
+                  '<button type="button" class="btn btn--sm btn--ghost" data-del="' + esc(otevrena.id) + '">Smazat</button>'
+                : "") +
+            '<button type="button" class="btn btn--primary btn--sm" data-nova>+ Nová tabule</button>' +
+        "</div></div>";
+
+        sizeStage();   // podlišta mohla změnit výšku, plátno se přizpůsobí
+    }
+
+    async function createBoard() {
+        const title = (prompt("Název nové tabule:", "Nápady") || "").trim();
+        if (!title) return;
+        try {
+            const id = window.KB.newBoardId();
+            /* Při zakládání se vyplní všechno najednou. Viditelnost proto,
+               že seznam tabulí se skládá mimo jiné z dotazu
+               `viditelnost == "vsichni"` a co to pole nemá, do něj
+               nespadne. `createdUid` proto, že podle něj pravidla poznají
+               zakladatele – bez něj by tabule nešla ani založit. */
+            await window.KB.saveBoardMeta(id, {
+                title: title,
+                viditelnost: "vsichni",
+                createdMs: Date.now(),
+                createdBy: window.KB_USER || "",
+                createdUid: window.KB.currentUid() || ""
+            });
+            await window.KB.saveBoard(id, [], "");
+            location.href = "tabule.html#deska=" + encodeURIComponent(id);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Tabuli se nepodařilo založit.", "error");
+        }
+    }
+
+    /* ------------------------------------------------- kdo tabuli vidí --- */
+
+    let kdoProId = "";
+
+    function otevriKdo(id) {
+        const board = (window.KB.boards || []).find(b => b.id === id);
+        if (!board) return;
+        kdoProId = id;
+
+        const uid = window.KB.currentUid();
+        const PORADI = { "hlavni-spravce": 0, "majitel": 1, "spravce": 2, "asistentka": 3,
+                         "zamestnanec": 4, "student": 5 };
+        // zakladatel v seznamu není – o svou tabuli přijít nemůže
+        const lide = (window.KB.users || [])
+            .filter(u => u.active !== false && u.id !== uid)
+            .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
+                            (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
+                            (a.last || "").localeCompare(b.last || "", "cs"));
+        const vybrani = Array.isArray(board.proUids) ? board.proUids : [];
+
+        $("kdoLide").innerHTML = lide.map(u =>
+            '<label><input type="checkbox" value="' + esc(u.id) + '"' +
+                (vybrani.indexOf(u.id) !== -1 ? " checked" : "") + "> " +
+            esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("") ||
+            '<span class="tiny muted">Zatím tu není nikdo další.</span>';
+
+        const rezim = board.viditelnost === "vybrani" ? "vybrani" : "vsichni";
+        document.querySelectorAll('[name="kdoRezim"]').forEach(r => { r.checked = r.value === rezim; });
+        prekresliKdo();
+        $("kdoOverlay").hidden = false;
+    }
+
+    /** Seznam lidí má smysl jen u „jen vybraní" – jinak se zašedne. */
+    function prekresliKdo() {
+        const vybrani = document.querySelector('[name="kdoRezim"]:checked');
+        const zap = vybrani && vybrani.value === "vybrani";
+        $("kdoLide").style.opacity = zap ? "1" : ".4";
+        $("kdoLide").querySelectorAll("input").forEach(i => { i.disabled = !zap; });
+    }
+
+    async function ulozKdo() {
+        const rezim = (document.querySelector('[name="kdoRezim"]:checked') || {}).value || "vsichni";
+        const proUids = Array.from($("kdoLide").querySelectorAll("input:checked")).map(i => i.value);
+        try {
+            await window.KB.saveBoardMeta(kdoProId, { viditelnost: rezim, proUids: proUids });
+            $("kdoOverlay").hidden = true;
+            podlistaOtisk = null;   // viditelnost se změnila, lišta se musí přemalovat
+            paintSubbar();
+            window.KBUI.toast(rezim === "vybrani"
+                ? "Tabuli teď vidí jen vybraní lidé."
+                : "Tabuli vidí všichni.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    document.addEventListener("click", async (event) => {
+        if (event.target.closest("[data-nova]")) return createBoard();
+
+        const kdo = event.target.closest("[data-kdo]");
+        if (kdo) return otevriKdo(kdo.dataset.kdo);
+
+        const rename = event.target.closest("[data-rename]");
+        if (rename) {
+            const board = (window.KB.boards || []).find(b => b.id === rename.dataset.rename);
+            const title = (prompt("Nový název tabule:", board ? board.title : "") || "").trim();
+            if (!title) return;
+            await window.KB.saveBoardMeta(rename.dataset.rename, { title: title });
+            podlistaOtisk = null;
+            paintSubbar();
+            return window.KBUI.toast("Přejmenováno.");
+        }
+
+        const del = event.target.closest("[data-del]");
+        if (del) {
+            const board = (window.KB.boards || []).find(b => b.id === del.dataset.del);
+            /* Tabule se maže i s obsahem a obrázky – zpátky se to nevrátí,
+               tak ať se název opíše ručně, ne že se to odklikne omylem. */
+            const nazev = board ? (board.title || "Bez názvu") : "";
+            const opis = prompt('Smazání tabule „' + nazev + '" i s obsahem nejde vzít zpět.\n' +
+                "Pro potvrzení opiš její název:", "");
+            if (opis === null) return;
+            if (opis.trim() !== nazev.trim()) return window.KBUI.toast("Název nesedí, nemažu.", "warn");
+            try {
+                await window.KB.deleteBoard(del.dataset.del);
+                window.KBUI.toast("Tabule smazána.");
+                // mazala se právě otevřená tabule – zůstalo by prázdné plátno
+                if (del.dataset.del === boardId) location.href = "tabule.html";
+            } catch (err) {
+                window.KBUI.toast("Smazání selhalo.", "error");
+            }
+        }
+    });
+
+    /* --------------------------------------------------------------- start */
+
+    /**
+     * Plátno má zabrat zbytek okna pod lištami. Výšku všeho nad ním
+     * (hlavička s podlištou + obě lišty nástrojů) neumíme napsat natvrdo –
+     * mění se zalomením tlačítek i režimem zvětšení – tak ji změříme
+     * a předáme do CSS, kde už si výšku dopočítá calc().
+     */
+    let posledniNad = -1;
+
+    function sizeStage() {
+        const stage = $("bStage");
+        if (!stage || $("boardView").hidden) return;
+        const nad = Math.round(stage.getBoundingClientRect().top + window.scrollY);
+        // zapisovat jen změnu – zápis hýbe rozvržením a ResizeObserver
+        // by se s ním jinak honil dokola (bliká celá stránka)
+        if (nad === posledniNad) return;
+        posledniNad = nad;
+        document.documentElement.style.setProperty("--deska-nad", nad + "px");
+    }
+
+    /* ------------------------------------------------ režim zvětšení ---
+       Přání Michala: „můžu si dát zvětšení a zbude tam jen nahoře lišta
+       červená, vlevo pás může být". Volba se pamatuje, protože kdo kreslí,
+       chce zvětšeno pokaždé – a zpět se dá stejným tlačítkem. */
+
+    const MAX_KLIC = "kb-tabule-zvetseno";
+
+    function setMax(on) {
+        document.body.classList.toggle("deska-max", on);
+        const button = $("bMax");
+        if (button) {
+            button.setAttribute("aria-pressed", on ? "true" : "false");
+            button.title = on ? "Vrátit lišty zpět" : "Vejít se do okna – schová lišty";
+        }
+        sizeStage();
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountNav({ active: "tabule.html", subbar: true });
+        paintSubbar();
+
+        document.querySelectorAll('[name="kdoRezim"]').forEach(r =>
+            r.addEventListener("change", prekresliKdo));
+        $("btnKdoZrus").addEventListener("click", () => { $("kdoOverlay").hidden = true; });
+        $("btnKdoUloz").addEventListener("click", ulozKdo);
+
+        /* Přepnutí tabule v podliště mění jen část adresy za # – to samo
+           o sobě stránku nepřenačte, tak se o to postaráme. */
+        window.addEventListener("hashchange", () => location.reload());
+
+        if (!boardId) {
+            /* Seznam s dlaždicemi zmizel (podlišta ho nahradila) – bez adresy
+               konkrétní tabule se rovnou otevře naposledy upravovaná. Výzva
+               k založení zůstává jen pro chvíli, kdy žádná tabule neexistuje.
+               Nepřihlášenému se neukazuje: ten nemá seznam tabulí načtený,
+               takže by mu to tvrdilo, že tu nic není. */
+            $("btnNewBoard").addEventListener("click", createBoard);
+            const prihlasen = () => !!(window.KB.currentUid && window.KB.currentUid());
+            const skoc = () => {
+                const boards = window.KB.tabuleProMne();
+                if (boards.length) {
+                    location.replace("tabule.html#deska=" + encodeURIComponent(boards[0].id));
+                    return true;
+                }
+                return false;
+            };
+            const ukazVyzvu = () => { $("listView").hidden = !prihlasen(); };
+            document.addEventListener("kb-role", ukazVyzvu);
+            window.KB.on("boards", () => { if (!skoc()) { ukazVyzvu(); paintSubbar(); } });
+            await window.KB.whenReady();
+            if (!skoc()) ukazVyzvu();
+            paintSubbar();
+            return;
+        }
+
+        $("boardView").hidden = false;
+        window.KB.on("boards", paintSubbar);
+
+        /* Zvětšení se schválně NEPAMATUJE: teď schovává úplně všechno
+           včetně lišt, a kdo by ho měl uložené z minula, otevřel by tabuli
+           „bez webu" a myslel si, že se stránka rozbila. Začíná se normálně
+           a zvětšuje se rohovým tlačítkem. */
+        try { localStorage.removeItem(MAX_KLIC); } catch (err) { /* soukromé okno */ }
+        setMax(false);
+        $("bMax").addEventListener("click", () => setMax(!document.body.classList.contains("deska-max")));
+
+        sizeStage();
+        window.addEventListener("resize", sizeStage);
+        window.addEventListener("orientationchange", () => setTimeout(sizeStage, 300));
+        setTimeout(sizeStage, 300);   // po dopočítání lišty (zalomení tlačítek)
+        // lišty se zalamují i podle šířky obsahu (delší název tabule, přibylá
+        // tlačítka) – tohle chytí i změny, které resize okna nehlásí
+        if (window.ResizeObserver) {
+            const hlidac = new ResizeObserver(sizeStage);
+            document.querySelectorAll(".appbar, .board__bar, .board__selbar")
+                .forEach(el => hlidac.observe(el));
+        }
+
+        await window.KB.whenReady();
+
+        /* Odkaz na zamčenou tabuli (přeposlaný, ze záložek) nemá vést do
+           plátna, kam ten člověk nepatří. Hlídá se až tady, po dorazení dat –
+           dokud tabuli neznáme, nemá se podle čeho rozhodnout. */
+        const otevirana = (window.KB.boards || []).find(b => b.id === boardId);
+        if (otevirana && !window.KB.tabuleViditelna(otevirana)) {
+            window.KBUI.toast("Tuhle tabuli nemáš zpřístupněnou.", "warn");
+            return void setTimeout(() => { location.href = "tabule.html"; }, 1200);
+        }
+
+        await window.KBBoard.open(boardId, {
+            stage: $("bStage"), world: $("bWorld"), svg: $("bSvg"), html: $("bHtml"),
+            title: $("bTitle"), status: $("bStatus"), selbar: null, selinfo: $("bSelInfo"),
+            undo: $("bUndo"), redo: $("bRedo"), del: $("bDelete"), front: $("bFront"), copy: $("bCopy"),
+            fit: $("bFit"), zoomIn: $("bZoomIn"), zoomOut: $("bZoomOut"), zoomLabel: $("bZoomLabel"),
+            pick: $("bFile"), band: $("bBand")
+        });
+
+        $("bPickImg").addEventListener("click", () => $("bFile").click());
+        setTimeout(() => { $("bHint").classList.add("is-gone"); }, 6000);
+    });
+})();
+</script>
+</body>
+</html>

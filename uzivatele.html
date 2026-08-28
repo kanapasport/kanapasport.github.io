@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <title>Uživatelé – Pasport Kaňa</title>
+    <style>
+        /* Hlavička stránky: nadpis a hned vedle něj tlačítka, všechno doleva.
+           Stránka je široká (--sirka-stranky až 1720 px), takže rozhození na
+           opačné konce (justify-content:space-between) by mezi nadpis
+           a tlačítka udělalo přes půl obrazovky prázdna. */
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        /* Popis patří POD nadpis, ne vedle něj: na široké stránce by nadpisový
+           blok roztáhl na celou šířku a tlačítka by spadla na druhý řádek. */
+        .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
+
+        .zamek__hlava { display: flex; align-items: flex-start; gap: 12px; }
+        .zamek__ikona { width: 26px; height: 26px; flex: none; color: var(--accent); }
+        /* Pevné tři sloupce, ne auto-fit: pole pak sedí na stejném místě bez
+           ohledu na to, jestli se zrovna odemyká, zakládá nebo mění heslo,
+           a formulář pod rukama nepřeskakuje. */
+        .zamek__mrizka {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px; align-items: end; max-width: 780px;
+        }
+        .zamek__mrizka label { display: block; min-width: 0; }
+        .zamek__mrizka .field { width: 100%; }
+        @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
+    </style>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:20px">
+
+    <!-- sem se nedostane nikdo kromě hlavního správce -->
+    <div id="denied" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        Tuhle stránku spravuje jen <b>hlavní správce</b>.
+        <div style="margin-top:14px"><button id="btnLogin" class="btn btn--primary btn--sm">Přihlásit se</button></div>
+    </div>
+
+    <!-- ============================================ ZÁMEK CITLIVÝCH SEKCÍ -->
+    <section class="card col zamek" id="zamek" style="padding:18px 20px;gap:14px" hidden>
+        <div class="zamek__hlava">
+            <svg class="zamek__ikona" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/>
+            </svg>
+            <div>
+                <b id="zamekNadpis" style="font-size:16px"></b>
+                <p class="small muted" id="zamekPopis" style="margin-top:4px;line-height:1.6"></p>
+            </div>
+        </div>
+
+        <!-- odemknutí: zámek už někdo založil -->
+        <div id="zamekOdemk" class="col" style="gap:12px" hidden>
+            <div class="zamek__mrizka">
+                <label>
+                    <span class="label">Heslo k citlivým sekcím</span>
+                    <input type="password" id="zHeslo" class="field" autocomplete="off">
+                </label>
+            </div>
+            <div class="row row--wrap" style="gap:10px">
+                <button type="button" id="btnOdemknout" class="btn btn--primary">Odemknout</button>
+            </div>
+        </div>
+
+        <!-- založení i změna hesla: stejný formulář, jen se stávajícím
+             heslem navíc (to se ověřuje, když už nějaké je) -->
+        <div id="zamekZmena" class="col" style="gap:12px" hidden>
+            <div class="zamek__mrizka">
+                <label id="zStareBox">
+                    <span class="label">Stávající heslo</span>
+                    <input type="password" id="zStare" class="field" autocomplete="off">
+                </label>
+                <label>
+                    <span class="label">Nové heslo</span>
+                    <input type="password" id="zNove" class="field" autocomplete="off">
+                </label>
+                <label>
+                    <span class="label">Nové heslo znovu</span>
+                    <input type="password" id="zNove2" class="field" autocomplete="off">
+                </label>
+            </div>
+            <div class="row row--wrap" style="gap:10px">
+                <button type="button" id="btnZmenaUloz" class="btn btn--primary">Nastavit heslo</button>
+                <button type="button" id="btnZmenaZrus" class="btn btn--ghost" hidden>Zrušit</button>
+            </div>
+        </div>
+
+        <p class="tiny muted" style="margin:0;line-height:1.6">
+            Tohle <b>není</b> heslo k trezoru níž na téhle stránce – tím se šifrují
+            uložená hesla lidí a je to jiná věc.
+        </p>
+    </section>
+
+    <div id="app" hidden class="col" style="gap:20px">
+
+        <div>
+            <div class="hlavicka">
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Uživatelé</h2>
+                <div class="hlavicka__akce">
+                    <button id="btnNew" class="btn btn--primary btn--sm">+ Přidat člověka</button>
+                    <button id="btnBackup" class="btn btn--ghost btn--sm">Stáhnout zálohu</button>
+                    <button type="button" id="btnZamknout" class="btn btn--ghost btn--sm">Zamknout</button>
+                    <button type="button" id="btnZmenit" class="btn btn--ghost btn--sm">Změnit heslo k citlivým sekcím</button>
+                </div>
+            </div>
+            <p class="small muted hlavicka__popis">
+                Kdo má na web přístup a co smí. Změna role se lidem projeví sama, bez odhlášení.
+            </p>
+        </div>
+
+        <div class="card" style="padding:14px 16px;font-size:12.5px;line-height:1.6;color:var(--ok);background:var(--ok-tint);border-color:#bfe3d0">
+            <b>Přístup je hlídaný i v databázi.</b> Přihlašuje se přes Firebase Auth a pravidla
+            Firestore pouštějí k datům jen člověka, který je v tomhle seznamu a má aktivní účet.
+            Role tedy neřídí jen to, co je vidět, ale i to, co kdo smí uložit.
+        </div>
+
+        <!-- ------------------------------------------------------- trezor -->
+        <div id="vaultBar" class="card row" style="padding:12px 16px;gap:12px;flex-wrap:wrap">
+            <div class="grow" style="min-width:220px">
+                <b style="font-size:13.5px">Trezor na hesla</b>
+                <div id="vaultInfo" class="tiny muted" style="margin-top:2px"></div>
+            </div>
+            <div class="row" style="gap:8px">
+                <input type="password" id="fVault" class="field" style="width:210px"
+                       placeholder="heslo k trezoru" autocomplete="off">
+                <button type="button" id="btnVault" class="btn btn--primary btn--sm">Odemknout</button>
+                <button type="button" id="btnVaultPass" class="btn btn--ghost btn--sm" hidden>Změnit heslo trezoru</button>
+                <button type="button" id="btnVaultLock" class="btn btn--ghost btn--sm" hidden>Zamknout</button>
+            </div>
+        </div>
+
+        <div id="list" class="col" style="gap:8px"></div>
+
+        <!-- ------------------------------------------------ přehled pravomocí -->
+        <div>
+            <h3 style="font-size:15px;font-weight:900;margin-bottom:10px">Co která role smí</h3>
+            <div style="overflow-x:auto">
+                <table id="matrix" class="permtable"></table>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- ================================================= OKNO S E-MAILEM ===== -->
+<div id="mailOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:620px;width:100%;gap:14px;max-height:92vh;overflow-y:auto">
+        <b style="font-size:17px">Přihlašovací údaje e-mailem</b>
+
+        <div class="tiny muted" style="line-height:1.6">
+            Text je připravený. <b>Odeslat ho musíš ty</b> ze své schránky – do webmailu
+            se za tebe přihlásit nemůžu a ani bych neměl znát heslo k poště.
+        </div>
+
+        <div class="row" style="gap:16px;flex-wrap:wrap">
+            <div><span class="label">Komu</span><code id="mailTo" class="pwd"></code></div>
+            <div class="grow"><span class="label">Předmět</span><code id="mailSubject" class="pwd"></code></div>
+        </div>
+
+        <div>
+            <span class="label">Text zprávy</span>
+            <textarea id="mailBody" rows="14" class="field" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px"></textarea>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+            <button id="btnMailCopy" class="btn btn--primary">Zkopírovat text</button>
+            <a id="mailLink" class="btn btn--ghost" href="#">Otevřít v poštovním programu</a>
+            <button id="btnMailClose" class="btn btn--ghost" style="margin-left:auto">Zavřít</button>
+        </div>
+
+        <div class="tiny muted" style="line-height:1.6">
+            Ve <b>Vedos webmailu</b> to je nejrychleji takhle: <i>Zkopírovat text</i>,
+            pak nová zpráva, vložit a odeslat. Adresu i předmět máš nahoře.
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== OKNO NA HESLO -->
+<div id="passOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:460px;width:100%;gap:14px">
+        <b id="passTitle" style="font-size:17px">Změna hesla</b>
+
+        <div>
+            <span class="label">Stávající heslo</span>
+            <div class="row" style="gap:8px">
+                <code id="pStare" class="pwd grow" style="padding:9px 12px"></code>
+                <button type="button" id="btnCopyStare" class="btn btn--ghost btn--sm">Kopírovat</button>
+            </div>
+            <div class="tiny muted" style="margin-top:6px">Tohle platí právě teď.</div>
+        </div>
+
+        <div>
+            <label class="label" for="pNove">Nové heslo</label>
+            <div class="row" style="gap:8px">
+                <input type="text" id="pNove" class="field grow" autocomplete="off">
+                <button type="button" id="btnGenNove" class="btn btn--ghost btn--sm">Vygenerovat</button>
+            </div>
+            <div class="tiny muted" style="margin-top:6px">
+                Nech prázdné a nic se nezmění. Po uložení platí okamžitě a zapíše se do trezoru.
+            </div>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button id="btnPassCancel" class="btn btn--ghost">Zavřít</button>
+            <button id="btnPassSave" class="btn btn--primary">Nastavit nové heslo</button>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================== OKNO UŽIVATELE -->
+<div id="userOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:520px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b id="userFormTitle" style="font-size:17px">Přidat člověka</b>
+
+        <div class="row" style="gap:12px">
+            <div class="grow">
+                <label class="label" for="fFirst">Jméno</label>
+                <input type="text" id="fFirst" class="field">
+            </div>
+            <div class="grow">
+                <label class="label" for="fLast">Příjmení</label>
+                <input type="text" id="fLast" class="field">
+            </div>
+        </div>
+        <div>
+            <label class="label" for="fEmail">E-mail (slouží jako přihlašovací jméno)</label>
+            <input type="email" id="fEmail" class="field" placeholder="jmeno@pasport.eu">
+        </div>
+        <div>
+            <label class="label" for="fRole">Role</label>
+            <select id="fRole" class="field"></select>
+        </div>
+        <div>
+            <label class="label" for="fTyp">Typ spolupráce</label>
+            <select id="fTyp" class="field"></select>
+            <div class="tiny muted" style="margin-top:4px">Podle typu se dělí hodinové sazby i seznam lidí.</div>
+        </div>
+        <div>
+            <label class="label" for="fPass">Heslo</label>
+            <div class="row" style="gap:8px">
+                <input type="text" id="fPass" class="field grow" placeholder="nechat prázdné = ponechat stávající">
+                <button type="button" id="btnGen" class="btn btn--ghost btn--sm">Vygenerovat</button>
+            </div>
+            <div class="tiny muted" style="margin-top:6px">
+                Do databáze se ukládá jen otisk hesla, ne heslo samotné – proto si ho po vygenerování
+                <b>zkopíruj a předej</b>, zpětně už se nikde nepřečte.
+            </div>
+        </div>
+        <label class="row" style="gap:8px;cursor:pointer">
+            <input type="checkbox" id="fActive" checked style="width:18px;height:18px">
+            <span class="small">Účet je aktivní</span>
+        </label>
+
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button id="btnFormCancel" class="btn btn--ghost">Zrušit</button>
+            <button id="btnFormSave" class="btn btn--primary">Uložit</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/doc.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    let editingId = null;
+    let vaultKey = null;      // odvozený klíč trezoru, drží se jen v paměti stránky
+    let vaultMeta = null;     // { salt, check } z databáze
+    let passUserId = null;    // komu se právě mění heslo
+    let mailUser = null;      // komu se chystá e-mail
+    let mailBody = "";
+
+    /* --------------------------------------------------------- podlišta ---
+       Druhý řádek lišty je na všech třech stránkách nastavení stejný a liší
+       se jen aktivní položkou. Michal na to narazil: z barev webu se nedalo
+       přeskočit jinam, protože tam podlišta chyběla. Nastavení samo v horní
+       liště není (bydlí ve svislém pásu), takže nahoře nic nesvítí. */
+
+    const PODLISTA = [
+        { klic: "sazby",     text: "HODINOVÉ SAZBY",    href: "nastaveni.html",              need: "vykaz.view" },
+        { klic: "uzivatele", text: "UŽIVATELÉ A HESLA", href: "uzivatele.html",              need: "users.manage" },
+        { klic: "barvy",     text: "BARVY WEBU",        href: "barvy.html",                  need: "web.design" },
+        { klic: "import",    text: "IMPORT DAT",        href: "import.html",                 need: "vykaz.view" }
+    ];
+
+    function paintPodlista(aktivni) {
+        const slot = $("appSubbar");
+        if (!slot) return;
+
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            PODLISTA.map(polozka => {
+                const prava = ' data-need="' + polozka.need + '" hidden';
+                const cil = polozka.href;
+                return polozka.klic === aktivni
+                    ? '<span class="subbar__cat"' + prava + ">" + esc(polozka.text) + "</span>"
+                    : '<a class="subbar__cat subbar__cat--up" href="' + esc(cil) + '"' +
+                      prava + ">" + esc(polozka.text) + "</a>";
+            }).join("") +
+        "</div></div>";
+
+        // odkazy vznikly až teď, práva se na nich musí dorovnat
+        window.KBUI.paintUser();
+    }
+
+    /* ------------------------------------------- zámek citlivých sekcí ----
+       Hesla lidí jsou to nejcitlivější, co na webu je. Role je hlídá, ale to
+       nestačí – stačí odejít od odemčeného počítače. Proto se obsah stránky
+       nevykreslí sám od sebe a chce to ještě heslo navíc.
+
+       Odemčení si pamatuje sessionStorage, takže platí do zavření záložky
+       a přenese se i na hodinové sazby v nastavení. Ukládá se do něj otisk
+       hesla, ne heslo: nic navíc tím neprozradíme (otisk je i v databázi)
+       a hlavně se odemčení samo zruší, jakmile se heslo změní.
+
+       POZOR: tohle NENÍ heslo k trezoru níž na stránce. Trezor šifruje
+       uložená hesla lidí, tenhle zámek jen schovává obsah stránky. */
+
+    const ZAMEK_KLIC = "company_kb_zamek";
+    const ZAMEK_NADPIS = "Uživatelé a hesla jsou zamčení";
+
+    let zamekMeta = null;        // { salt, hash } z databáze, null = nikdo nezaložil
+    let zamekStav = "nacitam";   // nacitam | hotovo | chyba
+    let zamekNacteno = false;
+    let zamekNacita = false;
+    let zamekOdemceno = false;
+    let zmenaOtevrena = false;
+
+    /* Odemčení má tříminutovou platnost od poslední práce se stránkou
+       (KBUI.zamekPamet) – kdo odejde od počítače, nenechá hesla otevřená. */
+    const zamekPamet = () => window.KBUI.zamekPamet(ZAMEK_KLIC);
+    const zamekZapamatuj = (hash) => window.KBUI.zamekZapamatuj(ZAMEK_KLIC, hash);
+
+    function paintZamek() {
+        const hlavni = window.KBUI.isOwner();
+        const zalozeno = !!zamekMeta;
+        // zakládat heslo smí jen hlavní správce a jen když ještě žádné není
+        const zakladat = !zalozeno && hlavni && zamekStav === "hotovo";
+        // karta zámku dává smysl jen tomu, kdo se na stránku vůbec dostane
+        const kartaVidet = hlavni && (!zamekOdemceno || zmenaOtevrena);
+
+        $("zamek").hidden = !kartaVidet;
+        $("btnZmenit").hidden = !hlavni || zmenaOtevrena;
+
+        $("zamekOdemk").hidden = !(kartaVidet && !zamekOdemceno && zalozeno);
+        $("zamekZmena").hidden = !(kartaVidet && (zakladat || zmenaOtevrena));
+        $("zStareBox").hidden = !zalozeno;
+        $("btnZmenaZrus").hidden = !zmenaOtevrena;
+        $("btnZmenaUloz").textContent = zalozeno ? "Uložit nové heslo" : "Nastavit heslo";
+
+        $("zamekNadpis").textContent = zmenaOtevrena
+            ? "Změna hesla k citlivým sekcím"
+            : (zalozeno ? ZAMEK_NADPIS : "Heslo k citlivým sekcím zatím není");
+
+        $("zamekPopis").textContent = zmenaOtevrena
+            ? "Nové heslo platí hned. Komu se stránka odemkla starým heslem, bude ho muset zadat znovu."
+            : zamekStav === "nacitam"
+                ? "Zjišťuji, jestli je zámek nastavený…"
+                : zamekStav === "chyba"
+                    ? "Nedaří se spojit s databází. Zkus stránku načíst znovu."
+                    : zalozeno
+                        ? "Odemčení platí tři minuty od poslední práce a přenese se i na hodinové sazby v nastavení."
+                        : hlavni
+                            ? "Zvol heslo, kterým se budou citlivé sekce otevírat. Zapiš si ho – z databáze se zpětně přečíst nedá."
+                            : "Zámek zatím nikdo nezaložil. Ozvi se hlavnímu správci, ať heslo nastaví.";
+    }
+
+    async function nactiZamek() {
+        // dokud není jasné, kdo je přihlášený, nemá smysl se databáze ptát;
+        // `zamekNacita` brání tomu, aby se dotaz pustil dvakrát naráz
+        if (zamekNacteno || zamekNacita || !window.KBUI.isOwner()) return;
+        zamekNacita = true;
+        try {
+            zamekMeta = await window.KB.loadZamek();
+            zamekStav = "hotovo";
+            zamekNacteno = true;
+        } catch (err) {
+            // typicky ještě neproběhlo přihlášení – zkusí se znovu při kb-role
+            zamekStav = "chyba";
+        } finally {
+            zamekNacita = false;
+        }
+        zamekOdemceno = !!(zamekMeta && zamekMeta.hash && zamekPamet() === zamekMeta.hash);
+        render();
+    }
+
+    async function odemkni() {
+        if (!zamekMeta) return void window.KBUI.toast("Zámek zatím není nastavený.", "warn");
+        const heslo = $("zHeslo").value;
+        if (!heslo) return void window.KBUI.toast("Zadej heslo.", "warn");
+
+        const otisk = await window.KBUI.hashPassword(heslo, zamekMeta.salt);
+        if (otisk !== zamekMeta.hash) return void window.KBUI.toast("Nesprávné heslo.", "error");
+
+        zamekOdemceno = true;
+        zamekZapamatuj(otisk);
+        $("zHeslo").value = "";
+        render();
+        loadVaultMeta();
+        window.KBUI.toast("Odemčeno do zavření záložky.");
+    }
+
+    function zamkni() {
+        zamekOdemceno = false;
+        zmenaOtevrena = false;
+        zamekZapamatuj("");
+        // trezor se zamyká spolu se stránkou, jinak by klíč zůstal v paměti
+        vaultKey = null;
+        paintVault();
+        render();
+        window.KBUI.toast("Zamčeno.");
+    }
+
+    /** Založení i změna hesla. Staré se ověřuje jen tehdy, když nějaké je. */
+    async function ulozZamek() {
+        if (!window.KBUI.isOwner()) return void window.KBUI.toast("Heslo mění jen hlavní správce.", "warn");
+
+        if (zamekMeta) {
+            const stare = await window.KBUI.hashPassword($("zStare").value, zamekMeta.salt);
+            if (stare !== zamekMeta.hash) return void window.KBUI.toast("Stávající heslo nesedí.", "error");
+        }
+
+        const nove = $("zNove").value;
+        if (nove.trim().length < 6) return void window.KBUI.toast("Zvol aspoň 6 znaků.", "warn");
+        if (nove !== $("zNove2").value) return void window.KBUI.toast("Hesla se neshodují.", "warn");
+
+        const salt = window.KBUI.newSalt();
+        const hash = await window.KBUI.hashPassword(nove, salt);
+        try {
+            await window.KB.saveZamek(salt, hash);
+        } catch (err) {
+            console.error(err);
+            return void window.KBUI.toast("Heslo se nepodařilo uložit.", "error");
+        }
+
+        zamekMeta = { salt: salt, hash: hash };
+        zamekStav = "hotovo";
+        zamekNacteno = true;
+        zamekOdemceno = true;
+        zmenaOtevrena = false;
+        zamekZapamatuj(hash);
+        ["zStare", "zNove", "zNove2"].forEach(id => { $(id).value = ""; });
+        render();
+        loadVaultMeta();
+        window.KBUI.toast("Heslo k citlivým sekcím uloženo.");
+    }
+
+    /* --------------------------------------------------- generování hesel --
+       Skládá se jméno z e-mailu + firemní slovo + tři číslice + znaménko.
+       Stejné pravidlo jako u prvního rozdání hesel, ať jsou konzistentní. */
+
+    const BRAND = ["Kana", "Pasport", "Psprt", "Kn", "PasportKana"];
+
+    const bezDiakritiky = (text) => String(text || "")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z]/g, "");
+
+    function generatePassword(email) {
+        const rnd = (max) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
+        const pick = (list) => list[rnd(list.length)];
+
+        // základ ze jména v e-mailu (stohr@pasport.eu -> Stohr)
+        const local = String(email || "").split("@")[0].replace(/[._-]/g, " ").trim();
+        const parts = local.split(/\s+/).filter(Boolean).map(bezDiakritiky).filter(Boolean);
+        let base = parts.length ? parts[parts.length - 1] : "Pasport";
+        base = base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
+
+        const digits = String(rnd(1000)).padStart(3, "0");
+        const sign = pick(["+", "-", ""]);
+        const brand = pick(BRAND);
+
+        return (rnd(2) ? base + brand : brand + base) + digits + sign;
+    }
+
+    /* ------------------------------------------------------------ seznam */
+
+    function rowHtml(user) {
+        const role = window.KBUI.ROLES.find(r => r.id === user.role) ||
+            window.KBUI.ROLES.find(r => r.id === "student");
+        const typ = window.KBUI.TYPY.find(t => t.id === window.KBUI.typUvazku(user));
+        const me = (window.KB_EMAIL || "").toLowerCase() === (user.email || "").toLowerCase();
+
+        // heslo se ukáže jen po odemčení trezoru a jen když je uložené šifrovaně
+        const pwdCell = vaultKey
+            ? (user.enc
+                ? '<code class="pwd" data-pwd="' + esc(user.id) + '">••••••••</code>' +
+                  '<button type="button" class="linkbtn" data-show="' + esc(user.id) + '">zobrazit</button>' +
+                  '<button type="button" class="linkbtn" data-copy="' + esc(user.id) + '">kopírovat</button>'
+                : '<span class="tiny muted">heslo uložené jen jako otisk – zobrazit nelze, nastav nové</span>')
+            : "";
+
+        return '<div class="zakrow' + (user.active === false ? " zakrow--off" : "") + '">' +
+            "<div><b>" + esc(((user.first || "") + " " + (user.last || "")).trim() || user.email) + "</b>" +
+                (me ? ' <span class="tiny" style="color:var(--accent);font-weight:800">(to jsi ty)</span>' : "") +
+                '<div class="tiny muted">' + esc(user.email) + " · " + esc(role.title) +
+                (typ ? " · " + esc(typ.title) : "") +
+                (user.active === false ? " · pozastavený" : "") +
+                (user.hash ? "" : ' · <span style="color:var(--warn)">bez hesla</span>') + "</div>" +
+                (pwdCell ? '<div class="pwdrow">' + pwdCell + "</div>" : "") +
+            "</div>" +
+            '<div class="row" style="gap:6px">' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-pass="' + esc(user.id) + '" ' +
+                    'title="Nastaví nové heslo (potřebuje odemčený trezor)">Změnit heslo</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-send="' + esc(user.id) + '" ' +
+                    'title="Připraví e-mail s přihlašovacími údaji">Poslat údaje</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-reset="' + esc(user.id) + '" ' +
+                    'title="Pošle odkaz na e-mail – použij, když heslo v trezoru není">Odkaz e-mailem</button>' +
+                '<button type="button" class="btn btn--sm btn--ghost" data-edit="' + esc(user.id) + '">Upravit</button>' +
+                (me ? "" : '<button type="button" class="btn btn--sm btn--ghost" style="color:var(--danger)" ' +
+                    'data-del="' + esc(user.id) + '">Odebrat</button>') +
+            "</div>" +
+        "</div>";
+    }
+
+    function render() {
+        const owner = window.KBUI.isOwner();
+        const pustit = owner && zamekOdemceno;
+
+        $("denied").hidden = owner;
+        $("app").hidden = !pustit;
+        paintZamek();
+
+        /* Dokud je zamčeno, nesmí být seznam lidí ve stránce vůbec. Schovat
+           ho přes `hidden` by nestačilo – v kódu stránky by pořád byl. */
+        if (!pustit) {
+            vaultKey = null;
+            paintVault();
+            $("list").innerHTML = "";
+            $("matrix").innerHTML = "";
+            return;
+        }
+
+        const users = window.KB.users || [];
+        /* Seznam se dělí podle typu spolupráce – stejně jako hodinové sazby,
+           ať se to navzájem rovná (přání Michala 21. 8.). */
+        $("list").innerHTML = users.length
+            ? window.KBUI.TYPY.map(t => {
+                const skupina = users.filter(u => window.KBUI.typUvazku(u) === t.id);
+                return skupina.length
+                    ? '<div class="popisek" style="margin:14px 0 6px">' + esc(t.mnozne) +
+                        ' <span class="muted">(' + skupina.length + ")</span></div>" +
+                      skupina.map(rowHtml).join("")
+                    : "";
+              }).join("")
+            : '<div class="card center small muted" style="padding:30px">Zatím tu nikdo není.</div>';
+
+        paintMatrix();
+    }
+
+    /** Tabulka „co která role smí" – čte se přímo z pravidel v ui.js. */
+    function paintMatrix() {
+        const actions = Object.keys(window.KBUI.PERMISSION_LABELS);
+        const roles = window.KBUI.ROLES;
+
+        $("matrix").innerHTML =
+            "<thead><tr><th></th>" +
+                roles.map(r => "<th>" + esc(r.title) + "</th>").join("") +
+            "</tr></thead><tbody>" +
+            actions.map(action =>
+                "<tr><td>" + esc(window.KBUI.PERMISSION_LABELS[action]) + "</td>" +
+                roles.map(r => '<td class="' + (window.KBUI.canAs(r.id, action) ? "yes" : "no") + '">' +
+                    (window.KBUI.canAs(r.id, action) ? "✓" : "–") + "</td>").join("") +
+                "</tr>").join("") +
+            "</tbody>";
+    }
+
+    /* ------------------------------------------------------------ trezor */
+
+    function paintVault() {
+        const zamceno = !vaultKey;
+        $("vaultInfo").innerHTML = vaultMeta
+            ? (zamceno
+                ? "Zadej heslo k trezoru a uvidíš hesla lidí. Klíč se nikam neukládá – po zavření stránky se zamkne sám."
+                : '<span style="color:var(--ok);font-weight:700">Odemčeno.</span> Hesla jdou zobrazit a kopírovat.')
+            : "Trezor ještě nemá heslo. Zadej si ho – jím se hesla lidí zašifrují, " +
+              "aby si je z databáze nikdo cizí nepřečetl. <b>Zapiš si ho, zpětně se nedá obnovit.</b>";
+
+        $("btnVault").textContent = vaultMeta ? "Odemknout" : "Nastavit heslo trezoru";
+        $("btnVault").hidden = !zamceno;
+        $("fVault").hidden = !zamceno;
+        $("btnVaultLock").hidden = zamceno;
+        $("btnVaultPass").hidden = zamceno;
+    }
+
+    /** Načte nastavení trezoru z databáze (jen pro odemčeného hlavního správce). */
+    async function loadVaultMeta() {
+        if (!window.KBUI.isOwner() || !zamekOdemceno) return;
+        vaultMeta = await window.KB.loadVault().catch(() => null);
+        paintVault();
+    }
+
+    async function unlockVault() {
+        const passphrase = $("fVault").value;
+        if (!passphrase) return window.KBUI.toast("Zadej heslo k trezoru.", "warn");
+
+        // POJISTKA: než prohlásíme trezor za nenastavený, ověříme to v databázi.
+        // Bez toho by se dal existující trezor přepsat novým klíčem a už uložená
+        // hesla by se nedala rozšifrovat.
+        if (!vaultMeta) await loadVaultMeta();
+
+        try {
+            if (!vaultMeta) {
+                if (!confirm("Trezor ještě není nastavený a tímhle heslem se založí.\n\n" +
+                             "Pokud už nastavený být měl, zavři to a načti stránku znovu.\n\nPokračovat?")) return;
+            }
+            if (!vaultMeta) {
+                // první nastavení – vyrobíme sůl a kontrolní blok
+                const salt = window.KBUI.newSalt();
+                const key = await window.KBUI.deriveVaultKey(passphrase, salt);
+                const check = await window.KBUI.vaultEncrypt(key, window.KBUI.VAULT_CHECK);
+                await window.KB.saveVault(salt, check);
+                vaultMeta = { salt: salt, check: check };
+                vaultKey = key;
+                window.KBUI.toast("Trezor nastaven. Heslo si dobře zapiš.");
+            } else {
+                const key = await window.KBUI.deriveVaultKey(passphrase, vaultMeta.salt);
+                const text = await window.KBUI.vaultDecrypt(key, vaultMeta.check).catch(() => "");
+                if (text !== window.KBUI.VAULT_CHECK) {
+                    return window.KBUI.toast("Nesprávné heslo k trezoru.", "error");
+                }
+                vaultKey = key;
+                window.KBUI.toast("Trezor odemčen.");
+            }
+            $("fVault").value = "";
+            paintVault();
+            render();
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Trezor se nepodařilo otevřít.", "error");
+        }
+    }
+
+    function lockVault() {
+        vaultKey = null;
+        paintVault();
+        render();
+        window.KBUI.toast("Trezor zamčen.");
+    }
+
+    /**
+     * Změna hesla k trezoru. Musí se přešifrovat všechna uložená hesla –
+     * starým klíčem se rozšifrují, novým zase zašifrují. Proto to jde jen
+     * z odemčeného trezoru.
+     */
+    async function changeVaultPassphrase() {
+        if (!vaultKey) return window.KBUI.toast("Nejdřív trezor odemkni.", "warn");
+
+        const nove = prompt("Nové heslo k trezoru:\n\nZapiš si ho – zpětně se nedá obnovit.");
+        if (nove === null) return;
+        if (nove.trim().length < 6) return window.KBUI.toast("Zvol aspoň 6 znaků.", "warn");
+        if (prompt("Pro jistotu ho napiš ještě jednou:") !== nove) {
+            return window.KBUI.toast("Hesla se neshodují, nic se nezměnilo.", "warn");
+        }
+
+        const uzivatele = (window.KB.users || []).filter(u => u.enc);
+        try {
+            // napřed všechno rozšifrujeme starým klíčem – kdyby to selhalo,
+            // ještě jsme nic nepřepsali
+            const hesla = [];
+            for (const user of uzivatele) {
+                hesla.push({ user: user, heslo: await window.KBUI.vaultDecrypt(vaultKey, user.enc) });
+            }
+
+            const salt = window.KBUI.newSalt();
+            const key = await window.KBUI.deriveVaultKey(nove, salt);
+            const check = await window.KBUI.vaultEncrypt(key, window.KBUI.VAULT_CHECK);
+
+            for (const item of hesla) {
+                await window.KB.saveUser({
+                    id: item.user.id,
+                    email: item.user.email, first: item.user.first, last: item.user.last,
+                    role: item.user.role, active: item.user.active !== false,
+                    enc: await window.KBUI.vaultEncrypt(key, item.heslo)
+                });
+            }
+            await window.KB.saveVault(salt, check);
+
+            vaultMeta = { salt: salt, check: check };
+            vaultKey = key;
+            paintVault();
+            render();
+            window.KBUI.toast("Heslo k trezoru změněno, " + hesla.length + " hesel přešifrováno.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Změna se nezdařila, staré heslo dál platí.", "error");
+        }
+    }
+
+    const findUser = (id) => (window.KB.users || []).find(u => u.id === id);
+
+    async function revealPassword(id) {
+        const user = findUser(id);
+        if (!user || !user.enc || !vaultKey) return "";
+        try {
+            return await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+        } catch (err) {
+            window.KBUI.toast("Heslo se nepodařilo rozšifrovat.", "error");
+            return "";
+        }
+    }
+
+    /* ------------------------------------------- e-mail s přihlašováním --
+       Text se jen připraví; odeslání zůstává na správci, aby šel z firemní
+       schránky a bylo vidět, komu se co poslalo. */
+
+    const WEB_URL = "https://kanapasport.github.io";
+
+    function mailText(user, heslo) {
+        const jmeno = (user.first || "").trim() || user.email;
+        return [
+            "Ahoj " + jmeno + ",",
+            "",
+            "spustili jsme firemní web Pasport Kaňa – najdeš na něm návody,",
+            "úkolovník se zakázkami a termíny milníků.",
+            "",
+            "Odkaz:  " + WEB_URL,
+            "Přihlašovací jméno:  " + user.email,
+            "Heslo:  " + heslo,
+            "",
+            "Přihlásíš se tlačítkem na úvodní stránce. Bez přihlášení web nic neukáže.",
+            "Heslo si nikam nepřeposílej; kdyby ti nefungovalo, napiš mi a nastavím nové.",
+            "",
+            "Díky,",
+            "Michal"
+        ].join("\n");
+    }
+
+    async function sendCredentials(id) {
+        const user = findUser(id);
+        if (!user) return;
+
+        if (!vaultKey) {
+            window.KBUI.toast("Nejdřív odemkni trezor – bez něj heslo do e-mailu nedostanu.", "warn");
+            $("fVault").focus();
+            return;
+        }
+        if (!user.enc) {
+            window.KBUI.toast("U tohohle účtu není v trezoru heslo. Nastav mu nové přes Změnit heslo.", "warn");
+            return;
+        }
+
+        const heslo = await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+        const telo = mailText(user, heslo);
+        const predmet = "Přístup na firemní web Pasport Kaňa";
+
+        mailUser = user;
+        mailBody = telo;
+        $("mailTo").textContent = user.email;
+        $("mailSubject").textContent = predmet;
+        $("mailBody").value = telo;
+        $("mailLink").href = "mailto:" + encodeURIComponent(user.email) +
+            "?subject=" + encodeURIComponent(predmet) +
+            "&body=" + encodeURIComponent(telo);
+        $("mailOverlay").hidden = false;
+    }
+
+    /* ------------------------------------------------------------ záloha */
+
+    async function stahnoutZalohu() {
+        const button = $("btnBackup");
+        const puvodni = button.textContent;
+        button.disabled = true;
+
+        try {
+            const data = await window.KB.exportAll(text => { button.textContent = "Stahuji " + text + "…"; });
+            const blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
+
+            const dnes = new Date().toISOString().slice(0, 10);
+            const odkaz = document.createElement("a");
+            odkaz.href = URL.createObjectURL(blob);
+            odkaz.download = "pasport-kana-zaloha-" + dnes + ".json";
+            odkaz.click();
+            setTimeout(() => URL.revokeObjectURL(odkaz.href), 5000);
+
+            const mb = (blob.size / 1048576).toFixed(1);
+            window.KBUI.toast("Záloha stažena (" + mb + " MB) – " +
+                data.guides.length + " návodů, " + data.tasks.length + " úkolů, " +
+                data.boards.length + " tabulí.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zálohu se nepodařilo vytvořit.", "error");
+        } finally {
+            button.disabled = false;
+            button.textContent = puvodni;
+        }
+    }
+
+    /* ------------------------------------------------------ změna hesla */
+
+    /**
+     * Změna hesla za správce. Jde to díky trezoru: známe stávající heslo,
+     * takže se pod tím účtem v druhé instanci Firebase přihlásíme a heslo
+     * změníme. Bez odemčeného trezoru zbývá jen odkaz na e-mail.
+     */
+    async function changePassword(id) {
+        const user = findUser(id);
+        if (!user) return;
+
+        const jmeno = ((user.first || "") + " " + (user.last || "")).trim() || user.email;
+
+        // Zamčený trezor neznamená e-mail – jen se musí odemknout.
+        if (!vaultKey) {
+            window.KBUI.toast("Nejdřív odemkni trezor nahoře, pak heslo změníš rovnou tady.", "warn");
+            $("fVault").focus();
+            return;
+        }
+        if (!user.enc) {
+            window.KBUI.toast("U tohohle účtu není v trezoru uložené heslo, " +
+                              "takže ho nejde přepsat. Použij Poslat odkaz na e-mail.", "warn");
+            return;
+        }
+
+        // v okně je vidět stávající heslo i pole na nové, ať se nepletou
+        passUserId = id;
+        $("passTitle").textContent = "Heslo · " + jmeno;
+        $("pStare").textContent = await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+        $("pNove").value = "";
+        $("pNove").placeholder = "prázdné = ponechat stávající";
+        $("passOverlay").hidden = false;
+        $("pNove").focus();
+    }
+
+    /** Uloží nové heslo: přepíše ho u účtu i v trezoru. */
+    async function savePassword() {
+        const user = findUser(passUserId);
+        if (!user || !vaultKey) return;
+
+        const nove = $("pNove").value.trim();
+        if (!nove) { $("passOverlay").hidden = true; return; }
+        if (nove.length < 6) return window.KBUI.toast("Heslo musí mít aspoň 6 znaků.", "warn");
+
+        const jmeno = ((user.first || "") + " " + (user.last || "")).trim() || user.email;
+        const button = $("btnPassSave");
+        button.disabled = true;
+
+        try {
+            const stare = await window.KBUI.vaultDecrypt(vaultKey, user.enc);
+            await window.KB.changeUserPassword(user.email, stare, nove);
+
+            await window.KB.saveUser({
+                id: user.id, email: user.email, first: user.first, last: user.last,
+                role: user.role, active: user.active !== false,
+                salt: window.KBUI.newSalt(),
+                enc: await window.KBUI.vaultEncrypt(vaultKey, nove)
+            });
+            $("passOverlay").hidden = true;
+            window.KBUI.toast("Heslo pro " + jmeno + " změněno. Nezapomeň ho přepsat i v seznamu.");
+        } catch (err) {
+            console.error(err);
+            const hlaska = err.code === "auth/invalid-credential" || err.code === "auth/wrong-password"
+                ? "Heslo v trezoru už neplatí – člověk si ho nejspíš změnil sám. Použij Odkaz e-mailem."
+                : "Změna se nezdařila: " + (err.code || err.message);
+            window.KBUI.toast(hlaska, "error");
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    /* ---------------------------------------------------------- formulář */
+
+    function openForm(id) {
+        editingId = id || null;
+        const user = id ? (window.KB.users || []).find(u => u.id === id) : null;
+
+        $("userFormTitle").textContent = user ? "Upravit člověka" : "Přidat člověka";
+        $("fFirst").value = user ? (user.first || "") : "";
+        $("fLast").value  = user ? (user.last || "") : "";
+        $("fEmail").value = user ? (user.email || "") : "";
+        $("fEmail").disabled = !!user;   // e-mail je klíč záznamu, ten se nemění
+        $("fActive").checked = user ? user.active !== false : true;
+        // heslo se zadává jen při zakládání účtu – měnit ho pak jde už
+        // jen odkazem na e-mail (Firebase cizí heslo přepsat nedovolí)
+        $("fPass").value = "";
+        $("fPass").disabled = !!user;
+        $("btnGen").disabled = !!user;
+        $("fPass").placeholder = user
+            ? "u existujícího účtu použij Reset hesla"
+            : "vygeneruj nebo napiš";
+
+        $("fRole").innerHTML = window.KBUI.ROLES.map(r =>
+            '<option value="' + r.id + '"' +
+            ((user ? user.role : "zamestnanec") === r.id ? " selected" : "") + ">" + esc(r.title) + "</option>").join("");
+        const typ = user ? window.KBUI.typUvazku(user) : "zamestnanec";
+        $("fTyp").innerHTML = window.KBUI.TYPY.map(t =>
+            '<option value="' + t.id + '"' + (typ === t.id ? " selected" : "") + ">" +
+            esc(t.title) + "</option>").join("");
+
+        $("userOverlay").hidden = false;
+        $(user ? "fRole" : "fFirst").focus();
+    }
+
+    async function saveForm() {
+        const email = $("fEmail").value.trim().toLowerCase();
+        if (!email || email.indexOf("@") === -1) return window.KBUI.toast("Doplň platný e-mail.", "warn");
+
+        const data = {
+            id: editingId || "",
+            email: email,
+            first: $("fFirst").value.trim(),
+            last:  $("fLast").value.trim(),
+            role:  $("fRole").value,
+            typ:   $("fTyp").value,
+            active: $("fActive").checked
+        };
+
+        const password = $("fPass").value.trim();
+
+        // U nového člověka je potřeba nejdřív účet ve Firebase – jeho UID
+        // se pak stane názvem záznamu, protože jen podle něj si člověka
+        // umí najít i pravidla databáze.
+        if (!editingId) {
+            if (!password) return window.KBUI.toast("Novému člověku zadej heslo.", "warn");
+            try {
+                data.id = await window.KB.createAccount(email, password);
+            } catch (err) {
+                console.error(err);
+                const hlaska = err.code === "auth/email-already-in-use"
+                    ? "Účet s tímhle e-mailem už existuje."
+                    : err.code === "auth/weak-password"
+                        ? "Heslo je moc krátké, dej aspoň 6 znaků."
+                        : "Účet se nepodařilo založit: " + (err.code || err.message);
+                return window.KBUI.toast(hlaska, "error");
+            }
+            data.createdMs = Date.now();
+        }
+
+        if (password) {
+            data.salt = window.KBUI.newSalt();
+            data.hash = await window.KBUI.hashPassword(password, data.salt);
+            if (vaultKey) data.enc = await window.KBUI.vaultEncrypt(vaultKey, password);
+        }
+
+        try {
+            await window.KB.saveUser(data);
+            $("userOverlay").hidden = true;
+            window.KBUI.toast(password
+                ? "Účet založen. Heslo předej osobně."
+                : "Uloženo.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    /* ------------------------------------------------------------- start */
+
+    $("list").addEventListener("click", async (event) => {
+        const edit = event.target.closest("[data-edit]");
+        if (edit) return openForm(edit.dataset.edit);
+
+        const pass = event.target.closest("[data-pass]");
+        if (pass) return changePassword(pass.dataset.pass);
+
+        const send = event.target.closest("[data-send]");
+        if (send) return sendCredentials(send.dataset.send);
+
+        const reset = event.target.closest("[data-reset]");
+        if (reset) {
+            const user = findUser(reset.dataset.reset);
+            if (!user) return;
+            if (!confirm("Poslat " + user.email + " odkaz na změnu hesla?\n\n" +
+                         "Heslo si nastaví sám a ty ho pak neuvidíš ani v trezoru.")) return;
+            try {
+                await window.KB.sendPasswordReset(user.email);
+                window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
+            } catch (err) {
+                window.KBUI.toast("Odkaz se nepodařilo odeslat: " + (err.code || err.message), "error");
+            }
+            return;
+        }
+
+        const show = event.target.closest("[data-show]");
+        if (show) {
+            const cell = document.querySelector('[data-pwd="' + show.dataset.show + '"]');
+            if (!cell) return;
+            if (cell.dataset.open === "1") {          // druhé kliknutí zase schová
+                cell.textContent = "••••••••";
+                cell.dataset.open = "";
+                show.textContent = "zobrazit";
+                return;
+            }
+            const heslo = await revealPassword(show.dataset.show);
+            if (!heslo) return;
+            cell.textContent = heslo;
+            cell.dataset.open = "1";
+            show.textContent = "skrýt";
+            return;
+        }
+
+        const copy = event.target.closest("[data-copy]");
+        if (copy) {
+            const heslo = await revealPassword(copy.dataset.copy);
+            if (!heslo) return;
+            try {
+                await navigator.clipboard.writeText(heslo);
+                window.KBUI.toast("Heslo zkopírováno do schránky.");
+            } catch (err) {
+                window.KBUI.toast("Kopírování se nezdařilo.", "error");
+            }
+            return;
+        }
+
+        const del = event.target.closest("[data-del]");
+        if (!del) return;
+
+        const user = (window.KB.users || []).find(u => u.id === del.dataset.del);
+        if (!user) return;
+        if (!confirm('Opravdu odebrat přístup pro „' + (user.first + " " + user.last).trim() + '"?')) return;
+
+        try {
+            await window.KB.deleteUser(user.id);
+            window.KBUI.toast("Přístup odebrán.");
+        } catch (err) {
+            window.KBUI.toast("Odebrání selhalo.", "error");
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        // práce se stránkou prodlužuje odemčení; bez ní se po třech
+        // minutách sekce zase zamkne a heslo se chce znovu
+        window.KBUI.zamekObnovujPri(ZAMEK_KLIC);
+        setInterval(() => {
+            if (zamekOdemceno && !zamekPamet()) {
+                zamekOdemceno = false;
+                paintZamek();
+            }
+        }, 15000);
+
+        // v horní liště nastavení není (bydlí ve svislém pásu), zato podlišta
+        // je stejná na sazbách, uživatelích i barvách
+        window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
+        paintPodlista("uzivatele");
+
+        $("btnOdemknout").addEventListener("click", odemkni);
+        $("zHeslo").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); odemkni(); }
+        });
+        $("btnZamknout").addEventListener("click", zamkni);
+        $("btnZmenit").addEventListener("click", () => {
+            zmenaOtevrena = true;
+            render();
+            $(zamekMeta ? "zStare" : "zNove").focus();
+        });
+        $("btnZmenaZrus").addEventListener("click", () => {
+            zmenaOtevrena = false;
+            ["zStare", "zNove", "zNove2"].forEach(id => { $(id).value = ""; });
+            render();
+        });
+        $("btnZmenaUloz").addEventListener("click", ulozZamek);
+
+        $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnBackup").addEventListener("click", stahnoutZalohu);
+        $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
+        $("btnFormCancel").addEventListener("click", () => { $("userOverlay").hidden = true; });
+        $("btnFormSave").addEventListener("click", saveForm);
+        $("btnGen").addEventListener("click", () => {
+            $("fPass").value = generatePassword($("fEmail").value);
+        });
+
+        $("btnMailClose").addEventListener("click", () => { $("mailOverlay").hidden = true; });
+        $("btnMailCopy").addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText($("mailBody").value);
+                window.KBUI.toast("Text zkopírován – vlož ho do nové zprávy ve webmailu.");
+            } catch (err) {
+                $("mailBody").select();
+                window.KBUI.toast("Zkopíruj text ručně (Ctrl+C) – je označený.", "warn");
+            }
+        });
+
+        $("btnPassCancel").addEventListener("click", () => { $("passOverlay").hidden = true; });
+        $("btnPassSave").addEventListener("click", savePassword);
+        $("btnGenNove").addEventListener("click", () => {
+            const user = findUser(passUserId);
+            $("pNove").value = generatePassword(user ? user.email : "");
+        });
+        $("btnCopyStare").addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText($("pStare").textContent);
+                window.KBUI.toast("Stávající heslo zkopírováno.");
+            } catch (err) {
+                window.KBUI.toast("Kopírování se nezdařilo.", "error");
+            }
+        });
+        $("pNove").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); savePassword(); }
+        });
+
+        $("btnVault").addEventListener("click", unlockVault);
+        $("btnVaultLock").addEventListener("click", lockVault);
+        $("btnVaultPass").addEventListener("click", changeVaultPassphrase);
+        $("fVault").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); unlockVault(); }
+        });
+
+        // po přihlášení je potřeba zámek i nastavení trezoru dotáhnout znovu –
+        // při načtení stránky ještě nemusí být jasné, kdo je přihlášený
+        document.addEventListener("kb-role", () => { nactiZamek(); loadVaultMeta(); render(); });
+        window.KB.on("users", () => { window.KBUI.syncRole(); nactiZamek(); render(); });
+
+        paintVault();
+        render();
+        await window.KB.whenReady();
+        window.KBUI.syncRole();
+        await nactiZamek();
+        await loadVaultMeta();
+        render();
+    });
+})();
+</script>
+</body>
+</html>

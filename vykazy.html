@@ -1,0 +1,2408 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Výkazy práce – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
+           a u stejné síly pravidla musí vyhrát to pozdější. */
+
+        /* Hlavička stránky: nadpis a tlačítka hned vedle sebe u levého okraje.
+           Stránka je široká (--sirka-stranky), takže rozhození na oba konce
+           udělá mezi nadpisem a tlačítkem prázdné půlmetrové pole. */
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__text { min-width: 0; }
+        /* tlačítko k pravému okraji obsahu, ať lícuje s tabulkou pod ním */
+        .hlavicka__akce { margin-left: auto; }
+
+        /* ZAROVNÁNÍ FORMULÁŘE. Automatické sloupce (auto-fit) si šířku braly
+           podle obsahu, takže pole na sousedních řádcích nelícovala. Pevné
+           tři sloupce, pole přes celou buňku a popisky na společné lince. */
+        .zblok__grid,
+        .polozka__grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            align-items: end;
+        }
+        .zblok__grid .field,
+        .polozka__grid .field,
+        .polozka__pozn .field { width: 100%; }
+        @media (max-width: 980px) {
+            .zblok__grid, .polozka__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 620px) {
+            .zblok__grid, .polozka__grid { grid-template-columns: minmax(0, 1fr); }
+        }
+
+        /* Dovolená / Nemoc / Školení: popis práce ZŮSTÁVÁ (předvyplní se
+           jménem toho, kdo je pryč, ať je v přehledu hned vidět, o koho jde).
+           Schová se jen to, co u absence nedává smysl – část, druh vypracování,
+           technologie, sazba a příplatky; přibude „Celý den". */
+        .celyden { display: none; align-items: center; gap: 7px; font-size: 13px;
+            cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
+        .zblok--absence .celyden, .polozka--absence .celyden { display: flex; }
+        /* Rozsah dnů dává smysl jen u absence – běžný záznam je vždycky jeden den. */
+        .datumdo { display: none; }
+        .zblok--absence .datumdo, .polozka--absence .datumdo { display: block; }
+        .zblok--absence .zblok__grid > div:has([data-z="projekt"]),
+        .zblok--absence .polozka__grid > div:not(.polozka__nazev),
+        .zblok--absence .priplatky,
+        .zblok--absence .polozka__cas > div:has([data-f="sazba"]),
+        .polozka--absence .polozka__grid > div:has([data-f="projekt"]),
+        .polozka--absence .polozka__grid > div:has([data-f="cinnost"]),
+        .polozka--absence .polozka__grid > div:has([data-f="technologie"]),
+        .polozka--absence .priplatky,
+        .polozka--absence .polozka__ukolvyber,
+        .polozka--absence .polozka__cas > div:has([data-f="sazba"]) { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <!-- kdo na výkazy nemá právo, uvidí jen tohle -->
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Výkazy práce vidí jen správci.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou v nich hodinové sazby a výdělky lidí. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+
+        <div class="hlavicka">
+            <div class="hlavicka__text">
+                <h2 style="font-size:24px;font-weight:900;line-height:1.15">Výkazy práce</h2>
+                <p class="small muted" style="margin-top:3px">
+                    Den se zapisuje po záznamech – ráno focení, odpoledne ArcGIS jsou dva záznamy.
+                    Podle nich se pak počítají peníze na projektu.
+                </p>
+            </div>
+            <!-- Firmy a sazby patří do Nastavení, ne sem: tahle stránka je
+                 o zapisování a prohlížení, ne o číselnících. -->
+            <div class="row hlavicka__akce" style="gap:8px">
+                <button id="btnZpetne" class="btn btn--ghost" data-need="vykaz.view" hidden
+                    title="Povolit někomu zápis do uzavřených týdnů">Zpětný zápis</button>
+                <button id="btnZapis" class="btn btn--primary">Přidat výkaz</button>
+            </div>
+        </div>
+
+        <!-- ================================================== ZÁPIS DNE -->
+        <section id="zapis" class="card col" style="padding:18px;gap:14px" hidden>
+
+            <div class="spread">
+                <b style="font-size:16px">Přidat výkaz</b>
+                <button type="button" class="linkbtn" id="btnZapisZavri">Zavřít</button>
+            </div>
+
+            <div class="row row--wrap" style="gap:12px;align-items:flex-end">
+                <!-- zaměstnanec zapisuje vždycky sám za sebe, výběr nevidí -->
+                <div id="dOsobaBox" class="grow" style="min-width:220px;max-width:340px">
+                    <label class="label" for="dOsoba">Kdo pracoval</label>
+                    <select id="dOsoba" class="field"></select>
+                </div>
+            </div>
+
+            <div id="radky"></div>
+
+            <div class="row row--wrap" style="gap:10px">
+                <button type="button" id="btnPlus" class="btn btn--ghost btn--sm">Přidat další výkaz</button>
+                <div class="grow"></div>
+                <div class="small muted" id="denSoucet" style="font-variant-numeric:tabular-nums"></div>
+                <button type="button" id="btnUloz" class="btn btn--primary">Uložit</button>
+            </div>
+        </section>
+
+        <!-- =================================================== FILTRY -->
+        <div class="card col" style="padding:14px 16px;gap:12px">
+            <div class="row row--wrap" style="gap:8px">
+                <span class="label" style="margin:0;align-self:center">Období</span>
+                <button type="button" class="chip" data-obdobi="vse">Vše</button>
+                <button type="button" class="chip" data-obdobi="mesic">Tento měsíc</button>
+                <button type="button" class="chip" data-obdobi="minuly">Minulý měsíc</button>
+                <button type="button" class="chip" data-obdobi="rok">Tento rok</button>
+                <div class="row" style="gap:6px;margin-left:auto">
+                    <input type="date" id="fOd" class="field" style="width:158px" aria-label="Od data">
+                    <span class="muted small">–</span>
+                    <input type="date" id="fDo" class="field" style="width:158px" aria-label="Do data">
+                </div>
+            </div>
+
+            <div class="row row--wrap" style="gap:10px">
+                <select id="fOsoba" class="field" style="width:auto;min-width:170px"></select>
+                <select id="fZakazka" class="field" style="width:auto;min-width:170px"></select>
+                <select id="fFirma" class="field" style="width:auto;min-width:170px"></select>
+                <select id="fCinnost" class="field" style="width:auto;min-width:150px"></select>
+                <select id="fTech" class="field" style="width:auto;min-width:150px"></select>
+                <button type="button" id="btnResetFiltr" class="btn btn--ghost btn--sm">Reset</button>
+                <!-- Když se sem přijde z Úkolů nebo ze Správy přes „Zobrazit
+                     výkazy", musí být na první pohled vidět, proč je v tabulce
+                     jen pár řádků – jinak to vypadá jako ztracená data. -->
+                <span id="filtrUkol" class="chip chip--active" hidden style="cursor:pointer"
+                    title="Zrušit filtr úkolu"></span>
+                <div class="grow"></div>
+                <button type="button" id="btnCsv" class="btn btn--ghost btn--sm">Stáhnout CSV</button>
+            </div>
+        </div>
+
+        <div id="souhrn" class="vyksum"></div>
+
+        <!-- Vytížení toho, čí výkazy jsou zrovna vidět. Stejná mřížka jako
+             Vytížení týmu, jen na jednoho člověka – ať se nemusí přepínat
+             na jinou stránku kvůli jednomu řádku. -->
+        <div id="vytizeniBox" class="card col" style="padding:14px 16px;gap:10px" hidden>
+            <div class="spread">
+                <b id="vytizeniNadpis" style="font-size:14px"></b>
+                <div class="row" style="gap:6px">
+                    <button type="button" class="btn btn--ghost btn--sm" id="vtZpet">‹</button>
+                    <span id="vtMesic" class="small" style="align-self:center;min-width:120px;text-align:center"></span>
+                    <button type="button" class="btn btn--ghost btn--sm" id="vtDal">›</button>
+                </div>
+            </div>
+            <div class="vt-wrap">
+                <table class="vt"><thead id="vtHlava"></thead><tbody id="vtTelo"></tbody></table>
+            </div>
+            <div class="tiny muted" style="line-height:1.7">
+                <span class="vt-leg-x vt--malo">méně než 7 h</span>
+                <span class="vt-leg-x vt--akorat">7–8 h</span>
+                <span class="vt-leg-x vt--hodne">víc než 8 h</span>
+                <span class="vt-leg-x vt--abs">A</span> dovolená, nemoc nebo školení
+            </div>
+        </div>
+
+        <div id="prazdno" class="card center small muted" style="padding:40px" hidden>
+            Pro tenhle výběr tu zatím žádný záznam není.
+        </div>
+
+        <div id="tabulkaWrap" style="overflow-x:auto">
+            <table id="tabulka" class="vyk"></table>
+        </div>
+    </div>
+</main>
+
+<!-- ==================================================== ÚPRAVA POLOŽKY -->
+<!-- ============================================ ZPĚTNÝ ZÁPIS ==
+     Manažer povolí konkrétnímu člověku zápis do uzavřených týdnů, do
+     zvoleného dne. Do té doby člověku neprojde nic staršího než pondělí
+     půlnoc (viz uzávěrka). -->
+<!-- ======================================== TÝDEN JE UZAVŘENÝ ==
+     Zaměstnanci se místo tiché hlášky ukáže okno s vysvětlením a rovnou
+     s tlačítkem, kterým o zpětný zápis požádá manažery (Quick TO-DO). -->
+<div id="lhutaOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:130;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:480px;width:100%;gap:0;overflow:hidden">
+        <div style="padding:13px 18px;background:var(--danger);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Týden je uzavřený
+        </div>
+        <div class="col" style="padding:16px 18px;gap:10px">
+            <p style="margin:0;line-height:1.65" id="lhutaText">
+                Na tenhle den už zapsat nejde — výkazy se zapisují nejpozději
+                do pondělí půlnoci týdne následujícího.
+            </p>
+            <p class="small muted" style="margin:0;line-height:1.6">
+                Tlačítko pošle manažerům Quick TO-DO s prosbou o povolení.
+                Jakmile ti zpětný zápis povolí, zapíšeš den normálně.
+            </p>
+        </div>
+        <div class="row" style="gap:10px;padding:13px 18px;border-top:1px solid var(--line)">
+            <button type="button" id="lhutaZadost" class="btn btn--primary btn--sm">Požádat manažera o zpětný zápis</button>
+            <div class="grow"></div>
+            <button type="button" id="lhutaZavri" class="btn btn--ghost btn--sm">Zavřít</button>
+        </div>
+    </div>
+</div>
+
+<div id="zpetneOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:115;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:560px;width:100%;gap:0;overflow:hidden;max-height:88vh">
+        <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Zpětný zápis výkazů
+        </div>
+        <div class="col" style="padding:16px 18px;gap:12px;overflow-y:auto">
+            <p class="small muted" style="margin:0;line-height:1.6">
+                Vybraný člověk může do zvoleného dne zapisovat výkazy i do
+                uzavřených týdnů. Po tom dni platí zase běžná uzávěrka.
+            </p>
+            <div class="row row--wrap" style="gap:8px;align-items:flex-end">
+                <label class="pole" style="flex:1 1 200px"><span class="popisek">Komu</span>
+                    <select id="zpKomu" class="field"></select></label>
+                <label class="pole" style="flex:0 0 150px"><span class="popisek">Povolit do</span>
+                    <input type="date" id="zpDoKdy" class="field"></label>
+                <button type="button" id="zpPovol" class="btn btn--sm btn--primary">Povolit</button>
+            </div>
+            <div id="zpSeznam"></div>
+        </div>
+        <div class="row" style="gap:10px;padding:13px 18px;border-top:1px solid var(--line)">
+            <div class="grow"></div>
+            <button type="button" id="zpZavri" class="btn btn--ghost btn--sm">Zavřít</button>
+        </div>
+    </div>
+</div>
+
+<div id="editOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:680px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b style="font-size:17px">Úprava záznamu</b>
+
+        <div class="row row--wrap" style="gap:12px;align-items:flex-end">
+            <div style="width:180px">
+                <label class="label" for="eDatum">Datum</label>
+                <input type="date" id="eDatum" class="field">
+            </div>
+            <div class="grow" style="min-width:200px">
+                <label class="label" for="eOsoba">Kdo pracoval</label>
+                <select id="eOsoba" class="field"></select>
+            </div>
+        </div>
+
+        <div id="editRadek"></div>
+
+        <div class="row" style="justify-content:space-between;gap:10px">
+            <button id="btnSmaz" class="btn btn--ghost" style="color:var(--danger)">Smazat</button>
+            <div class="row" style="gap:10px;margin-left:auto">
+                <button id="btnEditZrus" class="btn btn--ghost">Zrušit</button>
+                <button id="btnEditUloz" class="btn btn--primary">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    let sledovaniZapnuto = false;
+    let editId = null;
+    let vychoziSazba = 0;          // sazba člověka vybraného ve formuláři dne
+
+    /* Nový zápis začíná v sedm – tak se u nás chodí do práce. Kdo přijde
+       jindy, přepíše to; předvyplněné je to proto, ať většina lidí nemusí. */
+    const ZACATEK_DNE = "07:00";
+
+    /* Části projektu se zatím nikde nepoužívají, tak se podle nich ani
+       nefiltruje – prázdná roletka „Všechny části" jen mátla. */
+    const filtr = { od: "", do: "", uid: "", zakazka: "", firma: "",
+                    cinnost: "", tech: "", text: "", ukolId: "" };
+
+    /* Stránka začíná u vlastní práce. Manažer si cizí lidi nafiltruje, ale
+       otevřít se mu má to jeho – celá firma patří do Celkového přehledu. */
+    const vychoziOsoba = () => (window.KB.currentUid && window.KB.currentUid()) || "";
+    let osobaNastavena = false;
+
+    /* ================================================= FORMULÁŘ ZÁZNAMU ==
+       Tentýž kus formuláře slouží pro nový záznam dne i pro úpravu
+       existujícího záznamu – ať se pole nemusí udržovat na dvou místech. */
+
+    /* Dovolená, nemoc, školení a volno se zapisují jako zvláštní „projekty":
+       bez části, bez činnosti a bez peněz, jen datum a čas (nebo celý den).
+       Evidují se, ale do součtů odpracovaných hodin se nepočítají.
+       Volno = neplacené / náhradní volno; chová se přesně jako dovolená
+       včetně potvrzování manažerem. */
+    const ABSENCE = ["Dovolená", "Volno", "Nemoc", "Doktor", "Školení"];
+    /* Režie, která se nevykazuje na konkrétní zakázku. Není to absence –
+       je to odpracovaný čas, jen bez projektu. Porada stejně (přání
+       Michala 26. 8. 2026): platí se, ale nevisí na žádné zakázce. */
+    const ADMINISTRATIVA = "Administrativa";
+    const PORADA = "Porada";
+    /* Práce na tomhle webu – placený čas bez zakázky, vidí ji všichni. */
+    const WEB_PRACE = "Web";
+    const jeAbsence = (nazev) => ABSENCE.indexOf(nazev) !== -1;
+    const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
+        "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
+
+    /* Celý den u absence. V časech stojí 00:00–23:59, ať je na první pohled
+       vidět, že je pryč celý den; do fondu se ale počítá jedna směna. */
+    const CELY_DEN_OD = "00:00";
+    const CELY_DEN_DO = "23:59";
+    const HODIN_ZA_DEN = 8;
+
+    /* U absence se hodí vědět, kam člověk jede a kdo ho zastupuje – proto
+       má poznámka jinou nápovědu než u běžné práce. */
+
+    /**
+     * Nabídka projektů do zápisu. Bere se z evidence projektů – manažerovi
+     * všechny otevřené, ostatním jen ty, ke kterým je přiřazený. Starý
+     * číselník `KB.zakazky` slouží už jen jako záloha, dokud projekty
+     * nejsou v databázi: sdílí ho ostrý web a nové projekty do něj
+     * schválně nepřibývají.
+     */
+    function nabidkaProjektu() {
+        const zEvidence = (window.KB.projektyDocs || [])
+            .filter(p => !p.uzavreno).map(p => p.nazev).filter(Boolean);
+        /* Výpomoc na cizím úkolu: jeho projekt v mé evidenci být nemusí
+           (zaměstnanec vidí jen projekty, kde je přiřazený). Projekty
+           z viditelných úkolů se proto přidají – zapsat hodiny na cizí
+           projekt pravidla dovolují, jen by nebyl v roletce. */
+        (window.KB.ukoly || []).forEach(u => {
+            if (u.projekt && zEvidence.indexOf(u.projekt) === -1) zEvidence.push(u.projekt);
+        });
+        // oblíbené projekty (hvězdička ve Správě) drží první místa
+        const oblibene = window.KBUI.oblibeneProjekty();
+        const oblibenaJmena = ((window.KB.projektyDocs || [])
+            .filter(p => oblibene.indexOf(p.id) !== -1).map(p => p.nazev));
+        zEvidence.sort((a, b) =>
+            (oblibenaJmena.indexOf(a) === -1) - (oblibenaJmena.indexOf(b) === -1));
+        const jmena = zEvidence.length ? zEvidence : V.zakazky();
+
+        /* Administrativa se nabízí vždycky – režie se odpracuje na každé
+           zakázce a nikdo ji nechce zakládat jako projekt. Firma se k ní
+           doplní z `firmaMap` stejně jako u ostatních; nastavuje se tím,
+           že se v číselníku firem přiřadí k projektu „Administrativa". */
+        const zvlastni = ABSENCE.concat([ADMINISTRATIVA, PORADA, WEB_PRACE]);
+        return zvlastni.concat(
+            jmena.filter(z => zvlastni.indexOf(z) === -1));
+    }
+
+    /**
+     * Úkoly k projektu – nepovinná vazba zápisu na úkol z plánu. Až se bude
+     * počítat efektivita (budget hodin vs. skutečnost), sedí na tomhle poli.
+     */
+    /** Moje otevřené úkoly projektu – z nich se skládá nabídka. */
+    function mojeUkolyProjektu(zakazka) {
+        const uid = window.KB.currentUid();
+        return (window.KB.ukoly || []).filter(u =>
+            u.projekt === zakazka && u.stav !== "hotovo" &&
+            (u.prirazeni || []).indexOf(uid) !== -1);
+    }
+
+    /** Otevřené úkoly projektu, které patří někomu jinému. */
+    function ciziUkolyProjektu(zakazka) {
+        const uid = window.KB.currentUid();
+        return (window.KB.ukoly || []).filter(u =>
+            u.projekt === zakazka && u.stav !== "hotovo" &&
+            (u.prirazeni || []).indexOf(uid) === -1);
+    }
+
+    /** Komu úkol patří – u cizího musí být na první pohled vidět. */
+    function kdoMaUkol(u) {
+        const jmena = (u.prirazeni || []).map(id => V.jmeno(V.clovek(id))).filter(Boolean);
+        if (!jmena.length) return "nepřiřazeno";
+        return jmena.length > 2
+            ? jmena.slice(0, 2).join(", ") + " +" + (jmena.length - 2)
+            : jmena.join(", ");
+    }
+
+    function ukolOptions(zakazka, vybrany, misto) {
+        /* Napřed moje úkoly – každý pracuje primárně na svých. Pod čarou
+           i cizí, protože si lidi vypomáhají a chodit kvůli tomu oklikou
+           přes stránku Úkoly nedávalo smysl. Že jde o cizí úkol, musí být
+           vidět: vlastní skupina, u každého jméno majitele a jiná barva.
+           Vybraná budova / patro / technologie nabídku zužuje – u projektu
+           se stovkou úkolů se jinak nedá trefit ten pravý. */
+        const m = misto || {};
+        /* Úkol, který budovu/patro/technologii neurčuje, se nabízí
+           u každé – jinak by po vyplnění technologie z nabídky zmizel. */
+        const sedi = (u) => (!m.budova || !u.budova || u.budova === m.budova) &&
+                            (!m.patro || !u.patro || u.patro === m.patro) &&
+                            (!m.technologie || !u.technologie ||
+                             u.technologie === m.technologie);
+
+        const moje = mojeUkolyProjektu(zakazka).filter(sedi);
+        const cizi = ciziUkolyProjektu(zakazka).filter(sedi);
+
+        const volba = (u, jeCizi) =>
+            '<option value="' + esc(u.id) + '"' +
+            (u.id === vybrany ? " selected" : "") +
+            (jeCizi ? ' class="opt--cizi"' : "") + ">" +
+            esc(u.nazev + (jeCizi ? "   ·   " + kdoMaUkol(u) : "")) + "</option>";
+
+        /* Zavřený úkol nebo úkol z jiného projektu (příchod přes ?ukol=ID)
+           by z nabídky vypadl a výběr by se tiše ztratil. */
+        let navic = "";
+        if (vybrany && !moje.concat(cizi).some(u => u.id === vybrany)) {
+            const jiny = (window.KB.ukoly || []).find(u => u.id === vybrany);
+            if (jiny) navic = volba(jiny, true);
+        }
+
+        if (!moje.length && !cizi.length && !navic) {
+            return '<option value="">— žádný úkol —</option>';
+        }
+        return '<option value="">— vyber úkol —</option>' +
+            moje.map(u => volba(u, false)).join("") +
+            ((cizi.length || navic)
+                ? '<optgroup label="– – – – –  cizí úkoly (výpomoc)  – – – – –">' +
+                  navic + cizi.map(u => volba(u, true)).join("") + "</optgroup>"
+                : "");
+    }
+
+    /* ------------------------------------------- našeptávač úkolů ------
+       Roletku úkolů obsluhuje sdílený našeptávač z ui.js (KBUI.naseptavac).
+       Tady zůstává jen jeho nastavení a srovnání po vykreslení položky. */
+
+    /**
+     * Úkoly, které v tomhle výkazu už padly u dřívějších záznamů. Jeden
+     * výkaz bývá jeden den práce na pár úkolech dokola, takže se vytáhnou
+     * nahoru a druhý záznam se dá vybrat bez hledání (přání Michala
+     * 25. 8. 2026). Čte se to při každém otevření nabídky, ať to sedí
+     * i na záznam, který se doplnil mezitím.
+     */
+    function ukolyVBloku(select) {
+        const blok = select.closest("[data-zblok]");
+        if (!blok) return [];        // okno úpravy je jediný záznam
+        const videne = [];
+        blok.querySelectorAll('[data-f="ukolId"]').forEach(jiny => {
+            if (jiny !== select && jiny.value && videne.indexOf(jiny.value) === -1) {
+                videne.push(jiny.value);
+            }
+        });
+        return videne;
+    }
+
+    /** Srovná našeptávač s tím, co je v roletce vybrané. */
+    function obnovUkolVyber(select) {
+        window.KBUI.naseptavac(select, {
+            nazev: "Hledat úkol",
+            popis: "Piš název úkolu nebo jméno…",
+            prazdne: "Projekt nemá otevřené úkoly",
+            nahorePopis: "už v tomhle výkazu",
+            nahore: () => ukolyVBloku(select)
+        });
+    }
+
+    /** Po vložení položky do stránky oživí její roletku úkolů. */
+    function ozivVybery(koren) {
+        (koren || document).querySelectorAll('[data-f="ukolId"]')
+            .forEach(select => obnovUkolVyber(select));
+        (koren || document).querySelectorAll("[data-polozka]")
+            .forEach(box => { obnovHoHlasku(box); obnovLhutu(box); });
+    }
+
+    /**
+     * Nahlášené HO z rychlého zápisu: když datum záznamu padne do dne,
+     * na který má člověk v kalendáři home office, předvyplní se zaškrtnutí
+     * a ukáže se dotaz. Ruční změna zaškrtnutí se pak už nepřepisuje.
+     */
+    function obnovHoHlasku(box) {
+        const hobox = box.querySelector("[data-hobox]");
+        if (!hobox || hobox.hidden) return;
+        const datum = (box.querySelector('[data-f="datum"]') || {}).value ||
+            V.dnesISO();
+        const uid = $("dOsoba") && $("dOsoba").value
+            ? $("dOsoba").value : (window.KB.currentUid ? window.KB.currentUid() : "");
+        const pokryva = (k) => k.uid === uid &&
+            (k.od || "") <= datum && datum <= (k.do || k.od || "");
+
+        const nahlaseno = (window.KB.kalendar || []).some(k =>
+            k.typ === "homeoffice" && pokryva(k));
+        hobox.querySelector("[data-ho-hlaska]").hidden = !nahlaseno;
+        const pole = hobox.querySelector('[data-f="ho"]');
+        if (nahlaseno && pole.dataset.rucne !== "1") pole.checked = true;
+
+        /* Na den s nahlášenou dovolenou nebo volnem se běžně pracovat
+           nemá – červené upozornění, ať si toho člověk všimne dřív,
+           než den vykáže. */
+        const abs = (window.KB.kalendar || []).find(k =>
+            (k.typ === "dovolena" || k.typ === "volno") && pokryva(k));
+        const absHlaska = hobox.querySelector("[data-abs-hlaska]");
+        absHlaska.hidden = !abs;
+        if (abs) {
+            absHlaska.textContent = "Pozor: na tento den máš nahlášenou " +
+                (abs.typ === "volno" ? "volno" : "dovolenou") + ".";
+        }
+    }
+
+    document.addEventListener("change", (event) => {
+        if (event.target.matches && event.target.matches('[data-f="ho"]')) {
+            event.target.dataset.rucne = "1";   // ruční volba má přednost
+        }
+    });
+
+    /** Doskáče na zápis, kvůli kterému sem člověk z upozornění přišel.
+        Zvýraznění drží i po překreslení, sjíždí se k němu jen poprvé. */
+    let uzNajeto = false;
+
+    function zvyrazniZapis() {
+        if (!zvyraznitZapis) return;
+        const tr = document.querySelector('[data-zid="' +
+            zvyraznitZapis.replace(/"/g, "") + '"]');
+        if (!tr) return;
+        tr.classList.add("vyk--najeto");
+        if (uzNajeto) return;
+        uzNajeto = true;
+        tr.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    /** Zápis na úkol, který má přiřazený někdo jiný – výpomoc. */
+    function jeVypomoc(z) {
+        if (!z.ukolId || z.absence === true) return false;
+        const u = (window.KB.ukoly || []).find(x => x.id === z.ukolId);
+        return !!u && (u.prirazeni || []).indexOf(z.uid) === -1;
+    }
+
+    /** Projekt záznamu: z hlavičky bloku, nebo z pole v okně úpravy. */
+    function zakazkaZaznamu(box) {
+        const vlastni = box.querySelector('[data-f="zakazka"]');
+        if (vlastni) return vlastni.value;
+        const blok = box.closest("[data-zblok]");
+        const sel = blok && blok.querySelector('[data-z="zakazka"]');
+        return sel ? sel.value : "";
+    }
+
+    /**
+     * Výběr úkolu zamkne budovu, patro a technologii – určuje je úkol
+     * a zápis se váže k němu. Druh se předvyplní primárním druhem úkolu,
+     * ale zůstává na člověku (fotit se jezdí i na kreslicí úkol).
+     */
+    function zamkniPodleUkolu(box) {
+        const select = box.querySelector('[data-f="ukolId"]');
+        if (!select) return;
+        obnovUkolVyber(select);      // vybral si cizí úkol? ať je to vidět
+        const u = (window.KB.ukoly || []).find(x => x.id === select.value);
+
+        [["budova", u && u.budova], ["patro", u && u.patro],
+         ["technologie", u && u.technologie]].forEach(([klic, hodnota]) => {
+            const pole = box.querySelector('[data-f="' + klic + '"]');
+            if (!pole) return;
+            /* Zamyká se jen to, co úkol OPRAVDU určuje. Když úkol třeba
+               technologii nemá, pole zůstane volné – dřív se zamklo
+               prázdné a člověk ji do výkazu nedostal vůbec. */
+            if (u && hodnota) {
+                if (!Array.from(pole.options).some(o2 => o2.value === hodnota)) {
+                    pole.insertAdjacentHTML("beforeend",
+                        '<option value="' + esc(hodnota) + '">' + esc(hodnota) + "</option>");
+                }
+                pole.value = hodnota;
+                pole.disabled = true;
+                pole.title = "Určuje vybraný úkol";
+            } else {
+                pole.disabled = false;
+                pole.title = "";
+            }
+        });
+
+        if (u && u.druh) {
+            const cinnost = box.querySelector('[data-f="cinnost"]');
+            if (cinnost && !cinnost.value) cinnost.value = u.druh;
+        }
+    }
+
+    /** Změna budovy/patra/technologie přeskládá nabídku úkolů. */
+    function prefiltrujUkoly(box) {
+        const select = box.querySelector('[data-f="ukolId"]');
+        if (!select || select.disabled) return;
+        const misto = {
+            budova: (box.querySelector('[data-f="budova"]') || {}).value || "",
+            patro: (box.querySelector('[data-f="patro"]') || {}).value || "",
+            technologie: (box.querySelector('[data-f="technologie"]') || {}).value || ""
+        };
+        const drzena = select.value;
+        select.innerHTML = ukolOptions(zakazkaZaznamu(box), drzena, misto);
+        obnovUkolVyber(select);
+        select.value = drzena;
+        if (select.value !== drzena) select.value = "";
+    }
+
+    /* Budovy a patra projektu – z nastavení ve Správě projektů (číselník
+       `budget`). Kde projekt nic nemá, roletky se vůbec nekreslí. */
+    /** Jednoduchá zakázka (RD): jeden celek bez úkolů, dělí se jen na patra. */
+    function jeJednoduchy(zakazka) {
+        const p = (window.KB.projektyDocs || []).find(x => (x.nazev || "") === zakazka);
+        return !!(p && p.jednoduchy === true);
+    }
+
+    function mistoProjektu(zakazka) {
+        const b = (window.KB.budgetCiselnik || {})[zakazka] || {};
+        return { budovy: Array.isArray(b.budovy) ? b.budovy : [],
+                 patra:  Array.isArray(b.patra)  ? b.patra  : [] };
+    }
+
+    /**
+     * Technologie do roletky. PRVNÍ jsou ty z nastavení projektu – přesně
+     * ty, ze kterých se skládají úkoly i řádky matice plnění. Firemní
+     * číselník slouží jen projektům, které vlastní seznam nemají.
+     *
+     * Dřív tu byl natvrdo firemní číselník (STA, SLP…), zatímco úkoly nesly
+     * projektový (STAVBA, SLN…). Hodinu zapsanou na úkol se pak nedalo
+     * spárovat s technologií v matici.
+     */
+    function technologieProjektu(zakazka, vybrana) {
+        const c = (window.KB.budgetCiselnik || {})[zakazka] || {};
+        let seznam;
+        if (Array.isArray(c.technologie) && c.technologie.length) {
+            seznam = c.technologie.map(t => ({ value: t, label: t }));
+        } else {
+            seznam = V.technologie().map(t =>
+                ({ value: t.zkratka, label: V.techLabel(t.zkratka) }));
+        }
+        /* Co zápis nese, musí v nabídce zůstat, i když to číselník už nezná –
+           jinak by se při úpravě tiše přepsalo na první položku. */
+        if (vybrana && !seznam.some(x => x.value === vybrana)) {
+            seznam = seznam.concat([{ value: vybrana, label: vybrana }]);
+        }
+        return seznam;
+    }
+
+    /* Roletky Budova + Patro: ať se dá sečíst, kolik hodin stálo jedno patro.
+       Obal [data-misto] s display:contents drží místo v mřížce a překresluje
+       se při změně projektu – jiný projekt má jiné budovy. */
+    function mistoHtml(zakazka, d) {
+        const misto = mistoProjektu(zakazka);
+        const patroDiv = misto.patra.length
+            ? '<div><label class="label">Patro</label>' +
+                '<select class="field" data-f="patro">' +
+                V.options(misto.patra, (d && d.patro) || "", "— nezadáno —") + "</select></div>"
+            : "";
+        /* Jednoduchý projekt: jen patro (a druh vedle) – budovu ani
+           technologie nemá, zapisuje se na projekt jako celek. */
+        if (jeJednoduchy(zakazka)) {
+            return '<span data-misto style="display:contents">' + patroDiv + "</span>";
+        }
+        return '<span data-misto style="display:contents">' +
+            (misto.budovy.length
+                ? '<div><label class="label">Budova</label>' +
+                    '<select class="field" data-f="budova">' +
+                    V.options(misto.budovy, (d && d.budova) || "", "— nezadáno —") + "</select></div>"
+                : "") +
+            patroDiv +
+            technologieHtml(zakazka, d) +
+        "</span>";
+    }
+
+
+    /**
+     * Technologie zápisu – až tři. Kdo na jednom patře kreslí kanalizaci
+     * a vodu zároveň, nemá to psát na dva výkazy: úkol určí první (a tu
+     * zamkne), zbytek si přidá tlačítkem. Do databáze i do Tabulek Google
+     * jdou spojené do „KAN, VOD, SLB" (přání Michala 25. 8. 2026).
+     */
+    const TECH_POLE = ["technologie", "technologie2", "technologie3"];
+
+    function technologieHtml(zakazka, d) {
+        const casti = V.techCasti(d && d.technologie);
+        const roletka = (klic, hodnota, skryta) =>
+            '<select class="field" data-f="' + klic + '"' + (skryta ? " hidden" : "") + ">" +
+            V.options(technologieProjektu(zakazka, hodnota), hodnota, "— nezadáno —") +
+            "</select>";
+
+        return '<div><label class="label">Technologie</label>' +
+            '<div class="techvic" data-techvic>' +
+                TECH_POLE.map((klic, i) =>
+                    roletka(klic, casti[i] || "", i > 0 && !casti[i])).join("") +
+                '<button type="button" class="linkbtn techvic__pridej" data-tech-pridej' +
+                    (casti.length >= TECH_POLE.length ? " hidden" : "") +
+                    ' title="Práce na víc technologiích naráz">+ další technologie</button>' +
+            "</div></div>";
+    }
+
+    /** Technologie zápisu jako jeden text – „KAN, VOD, SLB". */
+    function techZapisu(box) {
+        const videne = [];
+        TECH_POLE.forEach(klic => {
+            const pole = box.querySelector('[data-f="' + klic + '"]');
+            const hodnota = pole ? String(pole.value || "").trim() : "";
+            if (hodnota && videne.indexOf(hodnota) === -1) videne.push(hodnota);
+        });
+        return videne.join(", ");
+    }
+
+    document.addEventListener("click", (event) => {
+        const tlacitko = event.target.closest && event.target.closest("[data-tech-pridej]");
+        if (!tlacitko) return;
+        const obal = tlacitko.closest("[data-techvic]");
+        const dalsi = obal.querySelector("select[hidden]");
+        if (dalsi) {
+            dalsi.hidden = false;
+            dalsi.focus();
+        }
+        // víc než tři technologie na jeden zápis už nedávají smysl
+        if (!obal.querySelector("select[hidden]")) tlacitko.hidden = true;
+    });
+
+    /** Pole pro čas: psaní i rozbalovací nabídka po čtvrthodinách. */
+    function casPole(klic, hodnota) {
+        return '<input type="text" class="field cas" data-f="' + klic + '" data-cas ' +
+            'list="' + V.CAS_LIST_ID + '" inputmode="numeric" autocomplete="off" ' +
+            'placeholder="--:--" value="' + esc(hodnota || "") + '">';
+    }
+
+    /**
+     * Příplatky k zápisu – pauza, oběd a cestovné. Většina zápisů je nemá,
+     * tak jsou schované za zaškrtávátkem a pole vyjede až po zaškrtnutí.
+     * Částky jsou pevné firemní paušály, ne tajemství – ať je člověk vidí.
+     */
+    function priplatkyHtml(d) {
+        const pauza = Number(d.pauza) || 0;
+        const km = Number(d.km) || 0;
+
+        const prepinac = (klic, popis, zapnuto, vnitrek) =>
+            '<div class="priplatek" data-priplatek="' + klic + '">' +
+                '<label class="priplatek__prepinac">' +
+                    '<input type="checkbox" data-zapni="' + klic + '"' + (zapnuto ? " checked" : "") + ">" +
+                    "<span>" + popis + "</span>" +
+                "</label>" +
+                '<div class="priplatek__pole"' + (zapnuto ? "" : " hidden") + ">" + vnitrek + "</div>" +
+            "</div>";
+
+        return '<div class="priplatky">' +
+            prepinac("pauza", "Vložit pauzu", pauza > 0,
+                '<input type="number" class="field" data-f="pauza" min="0" step="5" value="' +
+                    (pauza || 30) + '"><span class="priplatek__jednotka">min</span>') +
+
+            prepinac("obed", "Vložit placený oběd", d.obed === true,
+                '<span class="priplatek__pausal">' + window.KB.OBED_KC + " Kč</span>") +
+
+            prepinac("km", "Vložit cestovní náhrady", km > 0,
+                '<input type="number" class="field" data-f="km" min="0" step="1" value="' +
+                    (km || "") + '" placeholder="0"><span class="priplatek__jednotka">km &middot; ' +
+                    window.KB.KM_KC + " Kč/km</span>") +
+        "</div>";
+    }
+
+    /**
+     * Jeden záznam práce. Zakázku, projekt a firmu si nese výkaz nad ním –
+     * ve formuláři dne se proto nekreslí (`opts.sZakazkou`), kdežto v okně
+     * úpravy jednoho záznamu ano, protože tam žádný blok není.
+     */
+    /**
+     * Varování k datu: uzavřený týden se hlásí hned při výběru dne,
+     * ne až po kliknutí na Uložit. Manažera a povolené se netýká.
+     */
+    function obnovLhutu(box) {
+        const pole = box.querySelector("[data-lhuta]");
+        if (!pole) return;
+        const datum = (box.querySelector('[data-f="datum"]') || {}).value;
+        const zakazka = zakazkaZaznamu(box);
+        const zavreno = !!datum && !window.KBUI.can("vykaz.view") &&
+            !mamZpetnePovoleni() && poLhute(datum) && !bezUzaverky(zakazka);
+        pole.hidden = !zavreno;
+    }
+
+    function polozkaHtml(data, opts) {
+        const d = data || {};
+        const o = opts || {};
+
+        const zakazkaCast = o.sZakazkou
+            ? '<div><label class="label">Projekt</label>' +
+                  '<select class="field" data-f="zakazka">' +
+                      V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
+
+              '<div><label class="label">Fakturovat firmě</label>' +
+                  '<select class="field" data-f="firma">' +
+                      V.options(V.firmy(), d.firma || "", "— vyber —") + "</select></div>"
+            : "";
+
+        /* U absence se dá zadat rozsah – týden dovolené je jeden zápis, ne pět.
+           Prázdné „do" znamená jediný den, takže se běžné zadání nezmění. */
+        const datumCast = o.sDatem
+            ? '<div class="polozka__datum"><label class="label">Datum</label>' +
+                  '<input type="date" class="field" data-f="datum" value="' + esc(d.datum || "") + '">' +
+                  '<span class="hobox__pozor tiny" data-lhuta hidden style="display:block;margin-top:3px">' +
+                      "Tenhle den už je uzavřený — požádej o zpětný zápis.</span></div>" +
+              '<div class="polozka__datum datumdo"><label class="label">Do dne (nepovinné)</label>' +
+                  '<input type="date" class="field" data-f="datumDo" value="' + esc(d.datumDo || "") + '"></div>'
+            : "";
+
+        // absence poznáme u okna úpravy rovnou z dat – blok dne řeší třídu sám
+        const absentni = o.sZakazkou && jeAbsence(d.zakazka || "");
+        return '<div class="polozka' + (absentni ? " polozka--absence" : "") + '" data-polozka>' +
+            '<div class="polozka__head">' +
+                '<span class="polozka__poradi">Záznam</span>' +
+                (o.odebrat ? '<button type="button" class="linkbtn" data-odeber>Odebrat</button>' : "") +
+            "</div>" +
+
+            /* Pořadí (přání Michala 19. 8.): primární je výběr úkolu; pod ním
+               budova – patro – technologie, kterými se úkoly filtrují (a po
+               výběru úkolu se zamknou, protože je určuje úkol). Až pod tím
+               povinný druh vypracování a NEPOVINNÝ popis práce. */
+            '<div class="polozka__grid">' +
+                zakazkaCast +
+                /* Úkolů bývá na projektu i dvacet, tak se nevybírají
+                   z roletky, ale píše se do pole – našeptávač (KBUI) ji
+                   po vykreslení zabalí, viz ozivVybery(). */
+                '<div class="polozka__ukolvyber" style="grid-column:1/-1"' +
+                    (jeJednoduchy(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""))
+                        ? " hidden" : "") + ">" +
+                    '<label class="label">Úkol</label>' +
+                    '<select class="field" data-f="ukolId">' +
+                        ukolOptions(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d.ukolId || "", d) +
+                    "</select></div>" +
+
+                /* Budova, patro, technologie a druh drží pohromadě ve
+                   vlastní mřížce: v té velké se druh zalamoval sám na
+                   další řádek a technologie se svisle rozjížděla, jak jí
+                   přibývaly roletky. `align-items:start` srovná všechna
+                   pole na první technologii (přání Michala 25. 8. 2026).
+                   Druh je schválně AŽ ZA `[data-misto]` – ten se při změně
+                   projektu překresluje přes outerHTML a vzal by ho s sebou. */
+                '<div class="polozka__misto">' +
+                    mistoHtml(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d) +
+                    '<div><label class="label">Druh vypracování</label>' +
+                        '<select class="field" data-f="cinnost">' +
+                            V.options(V.cinnosti(), d.cinnost || "", "— vyber —") + "</select></div>" +
+                "</div>" +
+
+                /* Popis má vlastní řádek pod výběry – bývá to nejdelší text
+                   formuláře a vedle roletek se usekával (přání Michala
+                   25. 8. 2026). */
+                '<div class="polozka__nazev" style="grid-column:1/-1">' +
+                    '<label class="label">Popis práce (nepovinné)</label>' +
+                    '<input type="text" class="field" data-f="nazev" placeholder="doplnění k úkolu" ' +
+                        'value="' + esc(d.nazev || "") + '">' +
+                "</div>" +
+            "</div>" +
+
+            // kdy a za kolik
+            '<div class="polozka__cas">' +
+                datumCast +
+                '<div><label class="label">Od</label>' + casPole("od", d.od) + "</div>" +
+                '<div><label class="label">Do</label>' + casPole("do", d.do) + "</div>" +
+                // u dovolené, nemoci a školení: celý den = 8 hodin evidenčně
+                '<label class="celyden"><input type="checkbox" data-f="celyden"' +
+                    (d.celyden ? " checked" : "") + "> <b>Celý den</b></label>" +
+                /* Sazba se jen ukazuje. Platí ta z projektu (nebo obecná)
+                   a přepisovat ji u jednoho záznamu by tiše rozešlo výkaz
+                   s tím, co je nastavené ve Správě projektů. */
+                /* Sazba je i manažerovi schovaná za „⋯ zobrazit" – na obrazovce
+                   při zapisování často někdo stojí za zády. Hodnota jede ve
+                   skrytém poli, ať ji ctiPolozku přečte jako dřív. */
+                (window.KBUI.can("vykaz.view")
+                    ? '<div><label class="label">Sazba (Kč/h)</label>' +
+                          '<input type="hidden" data-f="sazba" value="' +
+                              (d.sazba ? Number(d.sazba) : "") + '">' +
+                          '<span class="field tajne" style="display:flex;align-items:center;gap:8px">' +
+                              '<b data-sazba-cislo hidden>' + (d.sazba ? Number(d.sazba) : "–") + "</b>" +
+                              '<span data-sazba-tecky>⋯</span>' +
+                              '<button type="button" class="linkbtn" data-sazba-ukaz ' +
+                                  'style="margin-left:auto">zobrazit</button>' +
+                          "</span></div>"
+                    : "") +
+            "</div>" +
+
+            /* Home office: hodiny odvedené z domu. Když je na ten den
+               nahlášené HO z rychlého zápisu, ukáže se dotaz – ale zaškrtnout
+               jde i bez nahlášení. Jde do Tabulek (sloupec HO) a časem do
+               přehledů, kdo kolik dělá z domu. */
+            '<div class="hobox" data-hobox' + (absentni ? " hidden" : "") + ">" +
+                '<span class="hobox__pozor" data-ho-hlaska hidden>' +
+                    "Na tento den byl nahlášen HO — potvrď zde:</span>" +
+                '<label class="celyden"><input type="checkbox" data-f="ho"' +
+                    (d.ho ? " checked" : "") + "> <b>Home office</b></label>" +
+                '<span class="hobox__pozor" data-abs-hlaska hidden></span>' +
+            "</div>" +
+
+            priplatkyHtml(d) +
+
+            /* Poznámka se z formuláře vypustila (přání Michala 25. 8. 2026):
+               dublovala popis práce. Zobrazení v tabulce zůstává, ať se
+               ukáže, co přijde odjinud – zapisovat ji ale nejde. */
+
+            '<div class="polozka__vysledek">' +
+                '<span class="polozka__hod" data-vysledek-hod>0 h</span>' +
+                '<span class="polozka__kc" data-vysledek-kc>0 Kč</span>' +
+                '<span class="polozka__rozpis" data-vysledek-rozpis hidden></span>' +
+                '<span class="polozka__varovani" data-vysledek-pozn hidden></span>' +
+            "</div>" +
+        "</div>";
+    }
+
+    /**
+     * Jeden výkaz. Projekt, část a firma se vyberou jednou nahoře a platí
+     * pro všechny záznamy pod nimi – další práce na témže projektu se přidá
+     * jako další záznam, ne jako celý nový výkaz.
+     */
+    function zblokHtml(data) {
+        const d = data || {};
+        return '<div class="zblok' + (jeAbsence(d.zakazka || "") ? " zblok--absence" : "") + '" data-zblok>' +
+            '<div class="zblok__hlava">' +
+                '<div class="zblok__stitek">Výkaz</div>' +
+                '<button type="button" class="linkbtn" data-zodeber hidden>Odebrat výkaz</button>' +
+            "</div>" +
+
+            '<div class="zblok__grid">' +
+                '<div><label class="label">Projekt</label>' +
+                    '<select class="field" data-z="zakazka">' +
+                        V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
+
+
+
+                '<div><label class="label">Fakturovat firmě</label>' +
+                    '<select class="field" data-z="firma">' +
+                        V.options(V.firmy(), d.firma || "", "— vyber —") + "</select></div>" +
+            "</div>" +
+
+            '<div class="zblok__polozky" data-polozky></div>' +
+
+            '<button type="button" class="btn btn--ghost btn--sm zblok__pridej" data-pridej-polozku>' +
+                "Přidat záznam do tohoto výkazu</button>" +
+        "</div>";
+    }
+
+    /** Přečte položku z DOM. Zakázku vrátí jen tam, kde je součástí položky. */
+    function ctiPolozku(box) {
+        const val = (klic) => {
+            const el = box.querySelector('[data-f="' + klic + '"]');
+            return el ? el.value : "";
+        };
+        // příplatek se počítá jen když je zaškrtnutý – schované pole je nula
+        const zapnuto = (klic) => {
+            const el = box.querySelector('[data-zapni="' + klic + '"]');
+            return !!(el && el.checked);
+        };
+        /* „Celý den" je obyčejné pole formuláře (`data-f`), ne příplatek –
+           přes `zapnuto()` se nikdy nenašlo a vracelo se natvrdo false. Kvůli
+           tomu chodily do kalendáře i celodenní absence s časem 07:00–15:00
+           a stavěly se doprostřed mřížky mezi skutečnou práci. */
+        const zaskrtnuto = (klic) => {
+            const el = box.querySelector('[data-f="' + klic + '"]');
+            return !!(el && el.checked);
+        };
+
+        return {
+            nazev: val("nazev").trim(),
+            zakazka: val("zakazka"),
+            projekt: val("projekt"),
+            firma: val("firma"),
+            cinnost: val("cinnost"),
+            technologie: techZapisu(box),
+            datum: val("datum"),
+            datumDo: val("datumDo"),
+            ukolId: val("ukolId"),
+            budova: val("budova"),
+            patro: val("patro"),
+            od: val("od"),
+            do: val("do"),
+            celyden: zaskrtnuto("celyden"),
+            pauza: zapnuto("pauza") ? (Number(val("pauza")) || 0) : 0,
+            obed: zapnuto("obed"),
+            ho: zaskrtnuto("ho"),
+            km: zapnuto("km") ? (Number(val("km")) || 0) : 0,
+            sazba: Number(val("sazba")) || 0,
+            poznamka: val("poznamka").trim()
+        };
+    }
+
+    /** Přečte hlavičku výkazu – projekt, část a firmu společné pro jeho záznamy. */
+    function ctiZblok(blok) {
+        const val = (klic) => {
+            const el = blok.querySelector('[data-z="' + klic + '"]');
+            return el ? el.value : "";
+        };
+        return { zakazka: val("zakazka"), projekt: val("projekt"), firma: val("firma") };
+    }
+
+    /** Přepočítá hodiny a částku pod položkou. */
+    /* =================================================== SKRYTÉ PENÍZE ==
+       Peníze se nezobrazí samy. Kdo si zapisuje výkaz v kanceláři a někdo
+       mu stojí za zády, nechce mít sazbu a vydělek rovnou na obrazovce –
+       odkryje si je tlačítkem v rohu dlaždice a stejným je zase schová.
+       Není to zabezpečení, jen slušnost k okolí; data má stejně jen ten,
+       komu je databáze vydá. */
+
+    let penizeVidet = false;
+
+    function penizeDlazdice(label, value, note, money) {
+        return '<div class="card vyktile vyktile--tajne' + (money ? " vyktile--money" : "") + '">' +
+            '<button type="button" class="vyktile__oko" data-penize-prepni></button>' +
+            '<div class="vyktile__label">' + esc(label) + "</div>" +
+            '<div class="vyktile__value"><span class="tajne">' + value + "</span>" +
+                '<span class="tajne__zastup">•••</span></div>' +
+            (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
+        "</div>";
+    }
+
+    /** Projede stránku a nastaví, co je vidět a co zastupují tečky. */
+    function pouzijSkryti() {
+        document.body.classList.toggle("penize-videt", penizeVidet);
+        document.querySelectorAll("[data-penize-prepni]").forEach(b => {
+            b.textContent = penizeVidet ? "skrýt" : "zobrazit";
+        });
+    }
+
+    /* ================================================ VYTÍŽENÍ ČLOVĚKA ==
+       Stejná mřížka jako na stránce Vytížení týmu, jen na jednoho člověka –
+       toho, čí výkazy jsou zrovna vidět. Manažer si rozkliknutím jiného
+       ve filtru „Kdo" prohlédne i jeho. */
+
+    let vtKotva = new Date();     // libovolný den zobrazeného měsíce
+
+    const vtIso = (d) => d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+    const vtHodiny = (h) => Number(h).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+
+    const VT_MESICE = ["leden", "únor", "březen", "duben", "květen", "červen",
+        "červenec", "srpen", "září", "říjen", "listopad", "prosinec"];
+
+    function vykresliVytizeni(uid) {
+        const box = $("vytizeniBox");
+        box.hidden = !uid;
+        if (!uid) return;
+
+        const clovek = V.clovek(uid);
+        $("vytizeniNadpis").textContent = "Vytížení – " + (clovek ? V.jmeno(clovek) : "");
+        $("vtMesic").textContent = VT_MESICE[vtKotva.getMonth()] + " " + vtKotva.getFullYear();
+
+        /* Počítá se ze VŠECH záznamů toho člověka, ne z vyfiltrovaných –
+           mřížka má ukázat, jak měl obsazený měsíc, ne kolik toho odvedl
+           na jednom projektu. Absence se počítá taky, jinak by dovolená
+           vypadala jako prázdný den. */
+        const hodiny = new Map();
+        const absence = new Set();
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.uid !== uid) return;
+            const k = z.datum;
+            if (z.absence === true || jeAbsence(z.zakazka)) return void absence.add(k);
+            hodiny.set(k, (hodiny.get(k) || 0) + (Number(z.hodiny) || 0));
+        });
+
+        const y = vtKotva.getFullYear(), m = vtKotva.getMonth();
+        const dnesIso = V.dnesISO();
+        const dny = [];
+        for (let c = 1; c <= new Date(y, m + 1, 0).getDate(); c++) {
+            const d = new Date(y, m, c);
+            dny.push({ iso: vtIso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6 });
+        }
+
+        $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + dny.map(x =>
+            '<th class="' + (x.vikend ? "vt--vik " : "") +
+            (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") + "</tr>";
+
+        $("vtTelo").innerHTML = "<tr><td>" + esc(clovek ? V.jmeno(clovek) : "") + "</td>" +
+            dny.map(x => {
+                const h = hodiny.get(x.iso) || 0;
+                let cls = x.vikend ? "vt--vik" : "";
+                let text = "";
+                if (absence.has(x.iso)) { cls = "vt--abs"; text = "A"; }
+                else if (h > 8)  { cls = "vt--hodne";  text = vtHodiny(h); }
+                else if (h >= 7) { cls = "vt--akorat"; text = vtHodiny(h); }
+                else if (h > 0)  { cls = "vt--malo";   text = vtHodiny(h); }
+                return '<td class="' + cls + '">' + esc(text) + "</td>";
+            }).join("") + "</tr>";
+    }
+
+    /** Absence položky – zakázku má buď sama (okno úpravy), nebo blok nad ní. */
+    function polozkaJeAbsence(box, p) {
+        const blok = box.closest("[data-zblok]");
+        return jeAbsence(p.zakazka || (blok ? ctiZblok(blok).zakazka : ""));
+    }
+
+    function prepocti(box) {
+        if (!box) return 0;
+        const p = ctiPolozku(box);
+        // u absence se peníze neúčtují – ať formulář neslibuje, co se neuloží
+        if (polozkaJeAbsence(box, p)) p.sazba = 0;
+        // celý den je v časech 00:00–23:59, ale do fondu jde jedna směna
+        const hodiny = p.celyden
+            ? HODIN_ZA_DEN
+            : window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+        const castky = window.KB.spocitejCastky(Object.assign({}, p, { hodiny: hodiny }), p.sazba);
+
+        box.querySelector("[data-vysledek-hod]").textContent = V.hod(hodiny);
+        box.querySelector("[data-vysledek-kc]").textContent = V.kc(castky.castka);
+
+        // paušály se rozepíšou, ať je vidět, z čeho se ta částka skládá
+        const rozpis = box.querySelector("[data-vysledek-rozpis]");
+        const casti = [];
+        if (castky.obedKc) casti.push("oběd " + V.kc(castky.obedKc));
+        if (castky.dopravaKc) casti.push(p.km + " km " + V.kc(castky.dopravaKc));
+        rozpis.textContent = casti.length ? "v tom " + casti.join(" · ") : "";
+        rozpis.hidden = !casti.length;
+
+        // Konec dřív než začátek se počítá jako práce přes půlnoc. Když z toho
+        // vyjde nesmyslně dlouhý den, je to skoro jistě překlep – řekneme to.
+        const pozn = box.querySelector("[data-vysledek-pozn]");
+        let text = "";
+        if (p.od && p.do && p.do < p.od) text = "počítáno přes půlnoc";
+        if (hodiny > 16) text = "přes 16 hodin – není to překlep?";
+        if (p.od && p.do && hodiny === 0) text = "pauza je delší než odpracovaný čas";
+        pozn.textContent = text;
+        pozn.hidden = !text;
+
+        return hodiny;
+    }
+
+    /* ==================================================== ZÁPIS DNE ==== */
+
+    const radkyBox = () => $("radky");
+    const bloky = () => Array.from(radkyBox().querySelectorAll("[data-zblok]"));
+    const polozkyBloku = (blok) => Array.from(blok.querySelectorAll("[data-polozka]"));
+
+    /**
+     * Všechny záznamy ze všech výkazů, doplněné o projekt z jejich hlavičky.
+     * `_popis` je jen pro hlášky – čísluje se stejně jako popisky na obrazovce,
+     * ať člověk podle chybové hlášky pozná ten pravý řádek. Do databáze se
+     * nedostane, `zaznamPayload` si bere jen pole, která zná.
+     */
+    function prectiRadky() {
+        const out = [];
+        const vsechnyBloky = bloky();
+        vsechnyBloky.forEach((blok, bi) => {
+            const hlava = ctiZblok(blok);
+            polozkyBloku(blok).forEach((box, i) => {
+                out.push(Object.assign(ctiPolozku(box), hlava, {
+                    _popis: vsechnyBloky.length > 1
+                        ? "Výkaz " + (bi + 1) + ", záznam " + (i + 1)
+                        : "Záznam " + (i + 1)
+                }));
+            });
+        });
+        return out;
+    }
+
+    /** Popisky záznamů a „Odebrat" jen tam, kde je co odebírat. */
+    function precisluj() {
+        const vsechnyBloky = bloky();
+        vsechnyBloky.forEach(blok => {
+            const boxy = polozkyBloku(blok);
+            boxy.forEach((box, i) => {
+                box.querySelector(".polozka__poradi").textContent = "Záznam " + (i + 1);
+                const odeber = box.querySelector("[data-odeber]");
+                if (odeber) odeber.hidden = boxy.length < 2;
+            });
+            const zodeber = blok.querySelector("[data-zodeber]");
+            if (zodeber) zodeber.hidden = vsechnyBloky.length < 2;
+        });
+        soucetDne();
+    }
+
+    function soucetDne() {
+        let hodiny = 0, castka = 0;
+        prectiRadky().forEach(p => {
+            // celý den se počítá jako jedna směna, ne jako 24 hodin v časech
+            const h = p.celyden
+                ? HODIN_ZA_DEN
+                : window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+            hodiny += h;
+            castka += h * (jeAbsence(p.zakazka) ? 0 : p.sazba);
+        });
+        $("denSoucet").innerHTML = hodiny
+            ? "Celkem: <b>" + V.hod(hodiny) + "</b> · <b>" + V.kc(castka) + "</b>"
+            : "";
+    }
+
+    /**
+     * Přidá záznam do výkazu. Navazuje na předchozí záznam téhož výkazu –
+     * začne časem, kterým ten předchozí skončil, a podědí datum i sazbu.
+     */
+    function pridejPolozku(blok) {
+        const boxy = polozkyBloku(blok);
+        const zdroj = boxy.length ? ctiPolozku(boxy[boxy.length - 1]) : null;
+
+        const zakazkaBloku = ctiZblok(blok).zakazka;
+        const data = zdroj ? {
+            nazev: "",
+            cinnost: zdroj.cinnost,
+            technologie: zdroj.technologie,
+            datum: zdroj.datum || V.dnesISO(),
+            od: zdroj.do || ZACATEK_DNE,
+            do: "",
+            pauza: 0,                       // pauza ani paušály se do další práce netáhnou
+            sazba: zdroj.sazba || vychoziSazba,
+            _zakazkaBloku: zakazkaBloku     // ať nabídka úkolů sedí na projekt bloku
+        } : { datum: V.dnesISO(), od: ZACATEK_DNE, sazba: vychoziSazba, pauza: 0,
+              _zakazkaBloku: zakazkaBloku };
+
+        blok.querySelector("[data-polozky]")
+            .insertAdjacentHTML("beforeend", polozkaHtml(data, { odebrat: true, sDatem: true }));
+        precisluj();
+
+        const novy = polozkyBloku(blok).pop();
+        ozivVybery(novy);
+        // do výkazu na absenci patří i nový záznam s předvyplněným jménem
+        predvyplnAbsenci(novy, zakazkaBloku, $("dOsoba").value);
+        prepocti(novy);
+        return novy;
+    }
+
+    /** Přidá celý nový výkaz i s prvním záznamem uvnitř. */
+    function pridejBlok() {
+        radkyBox().insertAdjacentHTML("beforeend", zblokHtml({}));
+        const blok = bloky().pop();
+        pridejPolozku(blok);
+        return blok;
+    }
+
+    function novyZapis() {
+        naplnOsoby();
+        radkyBox().innerHTML = "";
+        pridejBlok();
+        const prvni = radkyBox().querySelector('[data-z="zakazka"]');
+        if (prvni) prvni.focus();
+    }
+
+    /** Lidé do roletky po skupinách – zaměstnanci, OSVČ, studenti. */
+    function osobyOptions(lide, vybrany) {
+        return window.KBUI.TYPY.map(t => {
+            const moji = lide.filter(u => window.KBUI.typUvazku(u) === t.id);
+            if (!moji.length) return "";
+            return '<optgroup label="' + esc(t.mnozne) + '">' +
+                moji.map(u => '<option value="' + esc(u.id) + '"' +
+                    (u.id === vybrany ? " selected" : "") + ">" +
+                    esc(V.jmeno(u)) + "</option>").join("") + "</optgroup>";
+        }).join("");
+    }
+
+    function naplnOsoby() {
+        const muj = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        // zaměstnanec zapisuje jen sám za sebe – nabídka je jen on
+        const vsichni = V.lide();
+        const volby = window.KBUI.can("vykaz.view") ? vsichni : vsichni.filter(u => u.id === muj);
+        const vybrany = $("dOsoba").value || muj;
+        $("dOsoba").innerHTML = volby.length
+            ? osobyOptions(volby, vybrany)
+            : '<option value="">— nikdo v seznamu —</option>';
+        nastavVychoziSazbu(true);
+    }
+
+    /**
+     * Sazba člověka se propíše do řádků, které si ji ještě nepřepsaly ručně.
+     * Ručně zadané číslo přebít nesmíme – proto se mění jen to, co je prázdné
+     * nebo se rovná dosavadní výchozí hodnotě.
+     */
+    function nastavVychoziSazbu(tiche) {
+        const stara = vychoziSazba;
+        vychoziSazba = Number((window.KB.sazby || {})[$("dOsoba").value]) || 0;
+        if (tiche || stara === vychoziSazba) return;
+
+        radkyBox().querySelectorAll('[data-f="sazba"]').forEach(input => {
+            if (!input.value || Number(input.value) === stara) input.value = vychoziSazba || "";
+            // sazba je schovaná za „⋯ zobrazit" – číslo vedle se musí dorovnat
+            const cislo = input.parentElement.querySelector("[data-sazba-cislo]");
+            if (cislo) cislo.textContent = input.value || "–";
+        });
+        radkyBox().querySelectorAll("[data-polozka]").forEach(prepocti);
+        soucetDne();
+    }
+
+    /* ------------------------------------------------------- ABSENCE ----
+       Dovolená, nemoc a školení se v přehledu i v kalendáři čtou nejlíp
+       jako „Dovolená – Jméno Příjmení". Nikdo to tam ale nechce psát ručně,
+       tak se to předvyplní; kdo si to přepíše, tomu to zůstane. */
+
+    /** Text do popisu práce u absence – druh a jméno toho, kdo je pryč. */
+    function absenceText(druh, uid) {
+        const u = V.clovek(uid);
+        const jmeno = u ? V.jmeno(u) : "";
+        return jmeno ? druh + " – " + jmeno : druh;
+    }
+
+    /**
+     * Předvyplní popis práce podle vybraného druhu.
+     * Přepisuje jen text, který jsme sami doplnili (`data-auto`) – ručně
+     * napsaný popis zůstává, i když se pak přepne člověk nebo druh absence.
+     */
+    function predvyplnAbsenci(box, druh, uid) {
+        const pole = box.querySelector('[data-f="nazev"]');
+        const absence = jeAbsence(druh);
+        if (!pole) return;
+
+        if (!absence) {
+            // zpátky na běžný projekt: náš vlastní text už nedává smysl
+            if (pole.dataset.auto === "1") { pole.value = ""; delete pole.dataset.auto; }
+            return;
+        }
+        /* Absence je skoro vždycky na celý den – zaškrtne se sama, kdo má jen
+           půlku, si to odškrtne. Sahá se na to jen při přepnutí na absenci,
+           ať se ručně odškrtnuté políčko nevrátí zpátky pod rukama. */
+        const celyden = box.querySelector('[data-f="celyden"]');
+        if (celyden && !celyden.dataset.dotknuto) {
+            celyden.checked = true;
+            celyden.dataset.dotknuto = "1";
+            prepniCelyDen(box);
+        }
+
+        if (pole.value && pole.dataset.auto !== "1") return;   // ruční text má přednost
+        pole.value = absenceText(druh, uid);
+        pole.dataset.auto = "1";
+    }
+
+    /** Po přepnutí člověka se předvyplněné texty absence přepíšou na jeho jméno. */
+    function obnovAbsenceTexty() {
+        const uid = $("dOsoba").value;
+        bloky().forEach(blok => {
+            const druh = ctiZblok(blok).zakazka;
+            polozkyBloku(blok).forEach(box => predvyplnAbsenci(box, druh, uid));
+        });
+    }
+
+    /**
+     * Srovná absenci do podoby, ve které se ukládá: bez části, činnosti,
+     * peněz a příplatků; celý den = 07:00–15:00, tedy 8 hodin evidenčně.
+     */
+    function srovnejAbsenci(p) {
+        p.absence = jeAbsence(p.zakazka);
+        if (!p.absence) return p;
+        p.projekt = ""; p.cinnost = ""; p.technologie = "";
+        p.pauza = 0; p.obed = false; p.km = 0; p.sazba = 0;
+        p.nazev = p.nazev || p.zakazka;
+        /* Celý den je opravdu celý den: 00:00–23:59. Do fondu se ale počítá
+           jedna směna (8 h) – kdo je týden na dovolené, nemá odpracováno
+           120 hodin. Proto `hodinyPevne` vedle časů. */
+        if (p.celyden) { p.od = CELY_DEN_OD; p.do = CELY_DEN_DO; p.hodinyPevne = HODIN_ZA_DEN; }
+        return p;
+    }
+
+    /** Dny od–do včetně, ale jen pracovní: týden dovolené je pět dnů, ne sedm. */
+    function pracovniDny(odIso, doIso) {
+        const dny = [];
+        const konec = doIso && doIso > odIso ? doIso : odIso;
+        const d = new Date(odIso + "T00:00:00");
+        const posledni = new Date(konec + "T00:00:00");
+
+        while (d <= posledni && dny.length < 200) {   // pojistka proti překlepu v roce
+            const den = d.getDay();
+            if (den !== 0 && den !== 6) {
+                dny.push(d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(d.getDate()).padStart(2, "0"));
+            }
+            d.setDate(d.getDate() + 1);
+        }
+        return dny.length ? dny : [odIso];
+    }
+
+    /* ------------------------------------------------------ uzávěrka ----
+       Týden se zapisuje nejpozději do pondělí půlnoci týdne následujícího
+       a vlastní záznam jde opravit jen do půlnoci dne, kdy vznikl. Potom
+       už jen manažer – zpětné zásahy do uzavřených týdnů mají jít přes
+       něj, ne potichu. */
+
+    /** Konec lhůty pro zápis dne `datum`: úterý 00:00 následujícího týdne. */
+    function konecLhuty(datum) {
+        const d = new Date(datum + "T00:00:00");
+        if (isNaN(d)) return 0;
+        // pondělí týdne + 8 dní = půlnoc na konci pondělí týdne dalšího
+        d.setDate(d.getDate() - (d.getDay() + 6) % 7 + 8);
+        return d.getTime();
+    }
+
+    const poLhute = (datum) => Date.now() >= konecLhuty(datum);
+
+    /** Okno „týden je uzavřený" – výkaz se NEuložil, žádost jde manažerům. */
+    let lhutaDatum = "";
+
+    function otevriLhutu(datum) {
+        lhutaDatum = datum || "";
+        $("lhutaText").textContent = "Na " + (datum ? V.czDatum(datum) : "tenhle den") +
+            " už zapsat nejde — výkazy se zapisují nejpozději do pondělí" +
+            " půlnoci týdne následujícího. Výkaz se NEuložil.";
+        $("lhutaOverlay").hidden = false;
+    }
+
+    async function posliZadostOZpetny() {
+        const jmeno = window.KB_USER || "";
+        const manazeri = V.lide()
+            .filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1)
+            .map(u => u.id);
+        if (!manazeri.length) return window.KBUI.toast("Nenašel se žádný manažer.", "error");
+        try {
+            await window.KB.saveQuickTodo("qt_" + Date.now() + "_" + Math.floor(Math.random() * 1000), {
+                text: "Zpětný zápis: povol mi prosím zapsat výkaz na " +
+                    (lhutaDatum ? V.czDatum(lhutaDatum) : "uzavřený týden") +
+                    " (Výkazy → Zpětný zápis).",
+                proUids: manazeri,
+                asap: true
+            });
+            $("lhutaOverlay").hidden = true;
+            window.KBUI.toast("Žádost odešla manažerům do Quick TO-DO.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Žádost se nepodařilo poslat.", "error");
+        }
+    }
+
+    /** Osobní povolení od manažera: do vraceného dne (včetně) smí člověk
+        zapisovat i do uzavřených týdnů. */
+    function mamZpetnePovoleni() {
+        const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
+        const doKdy = (window.KB.zpetnePovoleni || {})[uid] || "";
+        return !!doKdy && doKdy >= V.dnesISO();
+    }
+
+    function vykresliZpetne() {
+        const mapa = window.KB.zpetnePovoleni || {};
+        $("zpKomu").innerHTML = osobyOptions(V.lide(), "");
+        const dnes = V.dnesISO();
+        const radky = Object.keys(mapa)
+            .filter(uid => mapa[uid])
+            .map(uid => ({ uid: uid, doKdy: mapa[uid],
+                jmeno: V.jmeno(V.clovek(uid)) || uid }))
+            .sort((a, b) => a.jmeno.localeCompare(b.jmeno, "cs"));
+        $("zpSeznam").innerHTML = radky.length
+            ? '<table class="pt pt--cist"><thead><tr><th>Kdo</th><th>Smí zpětně do</th>' +
+              "<th></th></tr></thead><tbody>" +
+              radky.map(r =>
+                "<tr><td><b>" + esc(r.jmeno) + "</b></td>" +
+                "<td>" + esc(V.czDatum(r.doKdy)) +
+                    (r.doKdy < dnes ? ' <span class="tiny muted">(prošlé)</span>' : "") + "</td>" +
+                '<td class="num"><button type="button" class="linkbtn" data-zp-zrus="' +
+                    esc(r.uid) + '" style="color:var(--danger)">zrušit</button></td></tr>').join("")
+              + "</tbody></table>"
+            : '<p class="tiny muted" style="margin:0">Teď nemá povolení nikdo.</p>';
+    }
+
+    /** Projekt s povoleným zpětným zápisem (2026-027) uzávěrku nemá –
+        hodiny se do něj doplňují za celou zakázku dozadu. Pole `zpetne`
+        zatím nemá obrazovku, zapíná se ručně. */
+    function bezUzaverky(zakazka) {
+        const p = (window.KB.projektyDocs || []).find(x => (x.nazev || "") === zakazka);
+        return !!(p && p.zpetne === true);
+    }
+
+    /** Smí přihlášený tenhle záznam ještě upravit? */
+    function smimUpravit(z) {
+        if (window.KBUI.can("vykaz.view")) return true;       // manažer kdykoli
+        const vznik = new Date(Number(z.createdMs) || 0);
+        const ted = new Date();
+        return vznik.getFullYear() === ted.getFullYear() &&
+            vznik.getMonth() === ted.getMonth() &&
+            vznik.getDate() === ted.getDate();
+    }
+
+    /**
+     * Absence se propíše i do kalendáře, ať ji vidí celá firma.
+     * Celý den se ukládá jako 00:00–23:59: v kalendáři pak stojí v pruhu
+     * nahoře a neplete se do hodinové mřížky mezi skutečnou práci.
+     */
+    function udalostZVykazu(p, uid, jmeno) {
+        return {
+            typ: TYP_ABSENCE[p.zakazka] || "udalost",
+            uid: uid,
+            osoba: jmeno,
+            od: p.datum,
+            do: p.datumDo && p.datumDo > p.datum ? p.datumDo : p.datum,
+            celyDen: !!p.celyden,
+            odCas: p.celyden ? CELY_DEN_OD : p.od,
+            doCas: p.celyden ? CELY_DEN_DO : p.do,
+            /* Druh nese `typ`, takže do textu patří jen to, co druh nedoplní.
+               Jinak by v kalendáři stálo „Nemoc · Nemoc". */
+            text: "",
+            zdroj: "vykaz"
+        };
+    }
+
+    function zapisDoKalendare(p, uid, jmeno, vykazId) {
+        return window.KB.saveUdalost(window.KB.newUdalostId(),
+            Object.assign(udalostZVykazu(p, uid, jmeno), { vykazId: vykazId || "" }));
+    }
+
+    async function ulozDen() {
+        const uid = $("dOsoba").value;
+        if (!uid) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
+
+        const polozky = prectiRadky().map(srovnejAbsenci);
+        /* Popis práce je NEPOVINNÝ (19. 8.) – povinný je druh vypracování
+           a tam, kde projekt úkoly má, i úkol: zápis se váže k úkolu. */
+        const chybny = polozky.find(p =>
+            !p.datum || !p.od || !p.do || !p.zakazka ||
+            window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0);
+        if (chybny) {
+            return window.KBUI.toast(chybny._popis +
+                ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
+        }
+        const pozdni = !window.KBUI.can("vykaz.view") && !mamZpetnePovoleni() &&
+            polozky.find(p => poLhute(p.datum) && !bezUzaverky(p.zakazka));
+        if (pozdni) return otevriLhutu(pozdni.datum);
+        const bezDruhu = polozky.find(p => !p.absence && !p.cinnost);
+        if (bezDruhu) {
+            return window.KBUI.toast(bezDruhu._popis +
+                ": vyber druh vypracování.", "warn");
+        }
+        const bezUkolu = polozky.find(p => !p.absence && !p.ukolId &&
+            mojeUkolyProjektu(p.zakazka).length);
+        if (bezUkolu) {
+            return window.KBUI.toast(bezUkolu._popis +
+                ": vyber úkol – zápis se váže k úkolu.", "warn");
+        }
+        /* Prázdný popis dostane název úkolu, ať přehledy nečtou prázdno. */
+        polozky.forEach(p => {
+            if (!p.nazev && p.ukolId) {
+                const u = (window.KB.ukoly || []).find(x => x.id === p.ukolId);
+                if (u) p.nazev = u.nazev || "";
+            }
+        });
+
+        const u = V.clovek(uid);
+        const jmeno = u ? V.jmeno(u) : "";
+        // zaměstnanec ukládá jen čas, sazbu a částku k tomu doplní správce
+        const uloz = window.KBUI.can("vykaz.view") ? window.KB.saveVykaz : window.KB.saveMujVykaz;
+
+        /* Absence se do výkazu rozpadne na jednotlivé pracovní dny – hodiny se
+           musí sečíst za každý den zvlášť. Do kalendáře jde naopak jedna
+           událost přes celý rozsah, ať v něm dovolená drží pohromadě. */
+        const kZapisu = [];
+        polozky.forEach(p => {
+            const dny = p.absence ? pracovniDny(p.datum, p.datumDo) : [p.datum];
+            dny.forEach((den, i) => kZapisu.push({
+                data: Object.assign({}, p, { datum: den, uid: uid, osoba: jmeno }),
+                prvni: i === 0,
+                puvodni: p
+            }));
+        });
+
+        try {
+            const idcka = await Promise.all(kZapisu.map(z =>
+                uloz(window.KB.newVykazId(), z.data)));
+
+            // dovolené, nemoci a školení navíc do kalendáře; bez zdržování zápisu
+            Promise.all(kZapisu
+                .map((z, i) => (z.puvodni.absence && z.prvni)
+                    ? zapisDoKalendare(z.puvodni, uid, jmeno, idcka[i]) : null)
+                .filter(Boolean))
+                .catch(err => console.warn("Zápis do kalendáře se nepovedl:", err));
+
+            window.KBUI.toast(kZapisu.length === 1
+                ? "Záznam uložen."
+                : "Uloženo " + V.pocet(kZapisu.length, ["záznam", "záznamy", "záznamů"]) + ".");
+            radkyBox().innerHTML = "";
+            pridejBlok();
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo – zkus to prosím znovu.", "error");
+        }
+    }
+
+    /* ======================================================== FILTRY ==== */
+
+    function nastavObdobi(druh) {
+        const meze = V.obdobi(druh);
+        filtr.od = meze.od;
+        filtr.do = meze.do;
+        $("fOd").value = filtr.od;
+        $("fDo").value = filtr.do;
+        render();
+    }
+
+    /** Zruší všechna zúžení naráz – po pár filtrech se to jinak rozklikává. */
+    /**
+     * ?ukolFiltr=ID – příchod z „Zobrazit výkazy" v Úkolech nebo ve Správě.
+     * Rozsah se rozšíří na všechno a osoba na všechny lidi, jinak by
+     * výchozí měsíc a „moje výkazy" schovaly zrovna to, kvůli čemu sem
+     * člověk šel.
+     *
+     * Volá se i po příchodu role: `can("vykaz.view")` je hned po načtení
+     * stránky ještě false a filtr by se tiše zahodil.
+     */
+    let filtrZAdresyHotov = false;
+
+    /* Zápis, na který se má stránka po otevření podívat (?zapis=ID). */
+    let zvyraznitZapis = "";
+
+    function nastavFiltrZAdresy() {
+        if (filtrZAdresyHotov) return;
+        const par = new URLSearchParams(location.search);
+        if (!window.KBUI.can("vykaz.view")) return;
+
+        /* ?zapis=ID – klik na upozornění „pro kontrolu" na hlavní stránce.
+           Ukáže se celý ten den toho člověka (u překryvu je potřeba vidět
+           i sousední zápis) a vadný řádek se zvýrazní. */
+        const zapisId = par.get("zapis");
+        if (zapisId) {
+            const z = (window.KB.vykazy || []).find(x => x.id === zapisId);
+            if (!z) return;             // ještě se nenačetly, zkusí se po dalším renderu
+            filtrZAdresyHotov = true;
+            zvyraznitZapis = zapisId;
+            filtr.uid = z.uid || "";
+            osobaNastavena = true;
+            filtr.od = z.datum;
+            filtr.do = z.datum;
+            $("fOd").value = filtr.od;
+            $("fDo").value = filtr.do;
+            document.querySelectorAll("[data-obdobi]").forEach(c =>
+                c.classList.remove("chip--active"));
+            render();
+            return;
+        }
+
+        const id = par.get("ukolFiltr");
+        if (!id) return;
+        filtrZAdresyHotov = true;
+
+        filtr.ukolId = id;
+        filtr.uid = "";
+        osobaNastavena = true;
+        document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+        const vse = document.querySelector('[data-obdobi="vse"]');
+        if (vse) vse.classList.add("chip--active");
+        nastavObdobi("vse");        // render si zavolá samo
+    }
+
+    function resetFiltru() {
+        ["uid", "zakazka", "firma", "cinnost", "tech", "text", "ukolId"]
+            .forEach(k => { filtr[k] = ""; });
+        filtr.uid = vychoziOsoba();     // zpátky na „moje výkazy", ne na celou firmu
+        window.KBUI.setSearch("");
+        document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+        document.querySelector('[data-obdobi="vse"]').classList.add("chip--active");
+        // až TADY: výchozí zvýraznění výš by jinak přebilo rozsah z adresy
+        nastavFiltrZAdresy();
+        nastavObdobi("vse");       // render si zavolá samo
+    }
+
+    function naplnFiltry() {
+        /* Stránka je primárně „moje výkazy" – i manažerovi. Cizí lidi si
+           nafiltruje, ale výchozí pohled je jeho vlastní práce, ne celá firma. */
+        $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
+            filtr.uid, "Všichni lidé");
+        $("fZakazka").innerHTML = V.options(nabidkaProjektu(), filtr.zakazka, "Všechny projekty");
+        $("fFirma").innerHTML = V.options(V.firmy(), filtr.firma, "Všechny firmy");
+        const stitek = $("filtrUkol");
+        if (filtr.ukolId) {
+            const u = (window.KB.ukoly || []).find(x => x.id === filtr.ukolId);
+            stitek.textContent = "Úkol: " + ((u && u.nazev) || filtr.ukolId) + "  ✕";
+            stitek.hidden = false;
+        } else {
+            stitek.hidden = true;
+        }
+
+        $("fCinnost").innerHTML = V.options(V.cinnosti(), filtr.cinnost, "Všechny druhy vypracování");
+        $("fTech").innerHTML = V.options(
+            V.technologie().map(t => ({ value: t.zkratka, label: V.techLabel(t.zkratka) })),
+            filtr.tech, "Všechny technologie");
+    }
+
+    /**
+     * Druhý řádek lišty – rozcestník všeho, co se počítá z výkazů. Na všech
+     * třech stránkách výkazů je stejný a liší se jen tím, která položka je
+     * zvýrazněná: aktivní je `<span>`, ostatní odkazy `subbar__cat--up`.
+     */
+    function paintSubbar() {
+        const slot = $("appSubbar");
+        if (!slot) return;
+        // přehled i vytížení jsou o penězích a lidech celé firmy –
+        // zaměstnanci je ani nenabízíme, stejně by je databáze nevydala
+        const manazer = window.KBUI.can("vykaz.view");
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            '<span class="subbar__cat">PŘEHLED VÝKAZŮ</span>' +
+            (manazer
+                ? '<a class="subbar__cat subbar__cat--up" href="vykazy-prehled.html">CELKOVÝ PŘEHLED</a>' +
+                  '<a class="subbar__cat subbar__cat--up" href="vytizeni.html">VYTÍŽENÍ TÝMU</a>' +
+                  /* Za čárkou schválně: přehled BP nepočítá z výkazů na tomhle
+                     webu, je to hotový sesbíraný přehled odvedené práce
+                     z minula. Patří k výkazům, ale stranou od nich. */
+                  '<span class="subbar__sep"></span>' +
+                  '<a class="subbar__cat subbar__cat--up" href="vykazy-bp.html">PŘEHLED BP</a>'
+                : "") +
+        "</div></div>";
+    }
+
+    /* ======================================================== VÝPIS ==== */
+
+    function render() {
+        if (!window.KBUI.can("vykaz.otevrit")) {
+            $("stop").hidden = false;
+            $("obsah").hidden = true;
+            return;
+        }
+        $("stop").hidden = true;
+        $("obsah").hidden = false;
+
+        /* Správce vidí všechny a peníze, zaměstnanec jen svoje hodiny.
+           Není to jen schované tlačítko – databáze mu cizí zápisy ani sazby
+           nevydá (firestore.rules). */
+        const spravce = window.KBUI.can("vykaz.view");
+        $("fOsoba").hidden = !spravce;
+        $("btnCsv").hidden = !spravce;
+        $("dOsobaBox").hidden = !spravce;
+
+        zapniSledovani();
+
+        // až se ví, kdo je přihlášený, nastav filtr na něj – ale jen jednou,
+        // ať to nepřepisuje volbu, kterou si člověk mezitím udělal
+        if (!osobaNastavena && vychoziOsoba()) {
+            filtr.uid = vychoziOsoba();
+            osobaNastavena = true;
+        }
+        naplnFiltry();
+
+        /* Kdo nesmí vidět cizí, dostane výhradně svoje – a to i v náhledu
+           „prohlížím web jako zaměstnanec". Náhled totiž mění jen vykreslení;
+           data pořád chodí podle skutečného účtu, takže hlavnímu správci
+           zůstávaly v paměti výkazy všech a stránka je ukazovala. */
+        const zaklad = spravce
+            ? (window.KB.vykazy || [])
+            : (window.KB.vykazy || []).filter(z => z.uid === window.KB.currentUid());
+
+        const zaznamy = V.vyber(zaklad, filtr).slice().sort((a, b) =>
+            (b.datum || "").localeCompare(a.datum || "") || (a.od || "").localeCompare(b.od || ""));
+
+        /* Mřížka patří jednomu člověku. Zaměstnanec vidí vždycky sebe,
+           manažer toho, koho má ve filtru – bez výběru („Všichni lidé")
+           by nebylo čí vytížení ukazovat. */
+        vykresliVytizeni(spravce ? filtr.uid : window.KB.currentUid());
+
+        const s = V.soucty(zaznamy);
+
+        /* Pořadí: odpracováno, dny, pak teprve peníze. „Napříč lidmi" dává
+           smysl jen u výběru přes víc lidí – u vlastního výkazu je to matoucí. */
+        const vicLidi = spravce && !filtr.uid;
+
+        $("souhrn").innerHTML =
+            V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
+            V.dlazdice("Odpracovaných dní", V.cislo(s.dny), vicLidi ? "napříč lidmi" : "") +
+            (spravce
+                ? penizeDlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
+                  penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
+                : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady"));
+
+        // po překreslení se peníze zase schovají, dokud si je někdo nevyžádá
+        pouzijSkryti();
+
+        $("prazdno").hidden = !!zaznamy.length;
+        $("tabulkaWrap").hidden = !zaznamy.length;
+        if (!zaznamy.length) {
+            // ať v DOMu nezůstane viset stará tabulka jen schovaná
+            $("tabulka").innerHTML = "";
+            return;
+        }
+
+        // seskupení po dnech – v jednom dni může být víc lidí i víc položek
+        const dny = new Map();
+        zaznamy.forEach(z => {
+            if (!dny.has(z.datum)) dny.set(z.datum, []);
+            dny.get(z.datum).push(z);
+        });
+
+        // sloupce s penězi vidí jen správce – zaměstnanci se úplně vynechají
+        const sloupcu = spravce ? 11 : 8;
+
+        $("tabulka").innerHTML =
+            "<thead><tr>" +
+                (spravce ? "<th>Kdo</th>" : "") +
+                "<th>Úkol</th><th>Projekt</th><th>Firma</th>" +
+                "<th>Druh</th><th>Tech.</th><th>Čas</th>" +
+                '<th class="vyk__num">Hodin</th>' +
+                (spravce ? '<th class="vyk__num">Sazba</th><th class="vyk__num">Částka</th>' : "") +
+                "<th></th>" +
+            "</tr></thead><tbody>" +
+            Array.from(dny.entries()).map(([datum, radky]) => {
+                const den = V.soucty(radky);
+                return '<tr class="vyk__den"><td colspan="' + sloupcu + '">' +
+                        "<b>" + esc(V.czDatum(datum)) + "</b>" +
+                        "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
+                            (spravce ? " · <span class=\"tajne\">" + V.kc(den.castka) + "</span><span class=\"tajne__zastup\">•••</span>" : "") + "</span>" +
+                    "</td></tr>" + radky.map(radek).join("");
+            }).join("") +
+            "</tbody>";
+
+        zvyrazniZapis();
+
+        function radek(z) {
+            const pauza = Number(z.pauza) || 0;
+            // co k zápisu patří navíc – ať je vidět i bez otvírání úpravy
+            const navic = [];
+            if (pauza) navic.push("pauza " + pauza + " min");
+            if (z.obed) navic.push("oběd");
+            if (Number(z.km)) navic.push(Number(z.km) + " km");
+
+            return '<tr data-zid="' + esc(z.id || "") + '">' +
+                (spravce ? "<td>" + esc(V.osobaText(z)) + "</td>" : "") +
+                '<td class="vyk__nazev">' + esc(z.nazev || "") +
+                    (jeVypomoc(z) ? ' <span class="tag" title="Hodiny na úkolu, který má přiřazený někdo jiný" ' +
+                        'style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">výpomoc</span>' : "") +
+                    (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
+                "<td>" + esc(z.zakazka || "") +
+                    (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
+                "<td>" + esc(z.firma || "") + "</td>" +
+                "<td>" + esc(z.cinnost || "") + "</td>" +
+                '<td title="' + esc(V.techLabel(z.technologie)) + '">' + esc(z.technologie || "") + "</td>" +
+                "<td>" + esc((z.od || "") + "–" + (z.do || "")) +
+                    (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
+                '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
+                (spravce
+                    ? '<td class="vyk__num">' + "<span class=\"tajne\">" + V.cislo(z.sazba) + "</span><span class=\"tajne__zastup\">•••</span>" + "</td>" +
+                      '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
+                    : "") +
+                '<td class="vyk__akce">' +
+                    /* vlastní záznam jde opravit jen v den zápisu – potom
+                       tlačítko zmizí a opravy dělá manažer */
+                    (smimUpravit(z)
+                        ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>'
+                        : "") +
+                "</td>" +
+            "</tr>";
+        }
+    }
+
+    /* ======================================================== ÚPRAVA ==== */
+
+    function otevriUpravu(id) {
+        const z = (window.KB.vykazy || []).find(v => v.id === id);
+        if (!z) return;
+        if (!smimUpravit(z)) {
+            return window.KBUI.toast("Vlastní záznam jde opravit jen do půlnoci" +
+                " dne zápisu – změnu domluv s manažerem.", "warn");
+        }
+
+        editId = id;
+        $("eDatum").value = z.datum || "";
+        $("eOsoba").innerHTML = osobyOptions(V.lide(), z.uid);
+
+        /* Výkaz si příznak „celý den" nenese – pozná se z časů 00:00–23:59.
+           Bez odvození se okno otevřelo s odškrtnutým políčkem, počítalo
+           24 hodin a hlásilo „přes 16 hodin – není to překlep?" u obyčejné
+           celodenní dovolené. */
+        const celyden = z.od === CELY_DEN_OD && z.do === CELY_DEN_DO;
+        $("editRadek").innerHTML = polozkaHtml(Object.assign({}, z, { celyden: celyden }),
+            { sZakazkou: true });
+        const box = $("editRadek").querySelector("[data-polozka]");
+        ozivVybery(box);
+        if (celyden) prepniCelyDen(box);
+        prepocti(box);
+        $("editOverlay").hidden = false;
+    }
+
+    async function ulozUpravu() {
+        const p = srovnejAbsenci(ctiPolozku($("editRadek").querySelector("[data-polozka]")));
+        const puvodni = (window.KB.vykazy || []).find(v => v.id === editId) || {};
+
+        if (!p.od || !p.do || !p.zakazka) {
+            return window.KBUI.toast("Doplň projekt a časy.", "warn");
+        }
+        if (!p.absence && !p.cinnost) {
+            return window.KBUI.toast("Vyber druh vypracování.", "warn");
+        }
+        if (!p.nazev && p.ukolId) {
+            const u = (window.KB.ukoly || []).find(x => x.id === p.ukolId);
+            if (u) p.nazev = u.nazev || "";
+        }
+        if (window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0) {
+            return window.KBUI.toast("Z časů a pauzy nevyjde žádný odpracovaný čas.", "warn");
+        }
+
+        const uid = $("eOsoba").value;
+        const u = V.clovek(uid);
+        const jmeno = u ? V.jmeno(u) : (puvodni.osoba || "");
+        const datum = $("eDatum").value;
+
+        if (!window.KBUI.can("vykaz.view")) {
+            if (!smimUpravit(puvodni)) {
+                return window.KBUI.toast("Záznam už je po uzávěrce – změnu" +
+                    " domluv s manažerem.", "warn");
+            }
+            if (poLhute(datum) && !bezUzaverky(p.zakazka) && !mamZpetnePovoleni()) {
+                return otevriLhutu(datum);
+            }
+        }
+
+        try {
+            await window.KB.saveVykaz(editId, Object.assign({}, p, {
+                uid: uid,
+                osoba: jmeno,
+                datum: datum,
+                createdMs: puvodni.createdMs,
+                createdBy: puvodni.createdBy
+            }));
+            await srovnejKalendar(Object.assign({}, p, { datum: datum }), uid, jmeno, puvodni);
+            $("editOverlay").hidden = true;
+            window.KBUI.toast("Záznam upraven.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo.", "error");
+        }
+    }
+
+    /**
+     * Událost v kalendáři patřící k tomuhle zápisu.
+     *
+     * Nejdřív podle `vykazId`. Události zapsané dřív, než se `vykazId` začalo
+     * ukládat, ho nemají – ty se poznají podle toho, že vznikly z výkazu,
+     * patří témuž člověku a začínají v původní den zápisu. Bez téhle
+     * záložky se při úpravě zakládala druhá událost a v kalendáři zůstala
+     * viset stará i nová.
+     */
+    function udalostZapisu(vykazId, puvodni) {
+        const vse = window.KB.kalendar || [];
+        const podleId = vse.find(x => x.vykazId === vykazId);
+        if (podleId) return podleId;
+
+        if (!puvodni || !puvodni.datum) return null;
+        return vse.find(x => x.zdroj === "vykaz" && !x.vykazId &&
+            x.uid === puvodni.uid && (x.od || "") === puvodni.datum) || null;
+    }
+
+    /**
+     * Po úpravě zápisu srovná i kalendář. Řeší všechny tři přechody:
+     * absence zůstala (přepsat), přestala jí být (událost pryč) a naopak
+     * se jí stala (událost přibude). Bez toho zůstávala v kalendáři viset
+     * dovolená na původním datu, i když se zápis přesunul jinam.
+     */
+    async function srovnejKalendar(p, uid, jmeno, puvodni) {
+        const stara = udalostZapisu(editId, puvodni);
+
+        if (!p.absence) {
+            if (stara) await window.KB.deleteUdalost(stara.id).catch(() => {});
+            return;
+        }
+        // stejné id = přepis, nové id = přírůstek; obojí umí saveUdalost
+        await window.KB.saveUdalost(stara ? stara.id : window.KB.newUdalostId(),
+            Object.assign(udalostZVykazu(p, uid, jmeno), { vykazId: editId }));
+    }
+
+    async function smazZapis() {
+        const z = (window.KB.vykazy || []).find(v => v.id === editId);
+        if (!z) return;
+        if (!confirm("Opravdu smazat záznam „" + (z.nazev || "") + "“ ze dne " +
+                     V.czDatum(z.datum) + "?")) return;
+        try {
+            // s absencí zmizí i její událost, ať v kalendáři nezůstane viset
+            const udalost = udalostZapisu(editId, z);
+            await window.KB.deleteVykaz(editId);
+            if (udalost) await window.KB.deleteUdalost(udalost.id).catch(() => {});
+            $("editOverlay").hidden = true;
+            window.KBUI.toast("Záznam smazán.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Smazání selhalo.", "error");
+        }
+    }
+
+    /* ========================================================= START ==== */
+
+    /* Zaměstnanec si musí o svoje zápisy říct dotazem – pravidla nejsou filtr
+       a na celou kolekci by databáze odpověděla odmítnutím. */
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KBUI.can("vykaz.otevrit")) return;
+        sledovaniZapnuto = true;
+        if (window.KBUI.can("vykaz.view")) {
+            window.KB.watchVykazy();
+            window.KB.watchProjekty();
+            window.KB.watchUkoly();
+        } else {
+            window.KB.watchMojeVykazy();
+            // projekty jen svoje (pravidla víc nedovolí); úkoly ale všechny –
+            // proklik „Zapsat výkaz" z cizího úkolu ho musí umět předvyplnit
+            window.KB.watchMojeProjekty();
+            window.KB.watchUkoly();
+        }
+    }
+
+    // živý přepočet – jeden posluchač na celou stránku, ať se nemusí navazovat
+    // na každé nově vzniklé pole zvlášť
+    /** Doplní firmu podle propojení projekt → firma z nastavení. */
+    function doplnFirmu(kontejner, atribut, projekt) {
+        const firma = (window.KB.firmaMap || {})[projekt] || "";
+        const select = kontejner.querySelector('[' + atribut + '="firma"]');
+        if (!select) return;
+        if (firma) select.value = firma;
+        /* Když má projekt firmu nastavenou ve Správě, roletka se zamkne –
+           fakturuje se vždycky té, přepsáním vznikaly jen omyly. */
+        select.disabled = !!firma;
+        select.title = firma
+            ? "Firmu určuje nastavení projektu ve Správě projektů"
+            : "";
+    }
+
+    /** Celý den u absence: časy se předvyplní na 8 hodin a zamknou. */
+    function prepniCelyDen(box) {
+        const prepinac = box.querySelector('[data-f="celyden"]');
+        if (prepinac) prepinac.dataset.dotknuto = "1";
+        const zapnuto = !!box.querySelector('[data-f="celyden"]:checked');
+        box.querySelectorAll("[data-cas]").forEach(input => {
+            input.disabled = zapnuto;
+            if (zapnuto) input.value = input.dataset.f === "od" ? CELY_DEN_OD : CELY_DEN_DO;
+        });
+        prepocti(box);
+        if (radkyBox().contains(box)) soucetDne();
+    }
+
+    /* Odkrytí sazby v jedné položce – a zase schování. */
+    document.addEventListener("click", (event) => {
+        const prepinac = event.target.closest("[data-sazba-ukaz]");
+        if (!prepinac) return;
+        const obal = prepinac.closest("span");
+        const cislo = obal.querySelector("[data-sazba-cislo]");
+        const tecky = obal.querySelector("[data-sazba-tecky]");
+        const odkryt = cislo.hidden;
+        cislo.hidden = !odkryt;
+        tecky.hidden = odkryt;
+        prepinac.textContent = odkryt ? "skrýt" : "zobrazit";
+    });
+
+    document.addEventListener("input", (event) => {
+        // hlavička bloku: jiný projekt = jiná nabídka firmy
+        const blok = event.target.closest("[data-zblok]");
+        if (blok && event.target.dataset.z === "zakazka") {
+            doplnFirmu(blok, "data-z", event.target.value);
+            blok.classList.toggle("zblok--absence", jeAbsence(event.target.value));
+            // jiný projekt = jiná nabídka úkolů ve všech záznamech výkazu
+            blok.querySelectorAll('[data-f="ukolId"]').forEach(select => {
+                select.innerHTML = ukolOptions(event.target.value, "");
+                obnovUkolVyber(select);
+            });
+            // jednoduchý projekt úkoly nemá – pole se schová úplně
+            const jednoduchyBlok = jeJednoduchy(event.target.value);
+            blok.querySelectorAll(".polozka__ukolvyber").forEach(el => {
+                el.hidden = jednoduchyBlok;
+            });
+            // ...a jiné budovy a patra – vybrané hodnoty stejně jinde neplatí
+            blok.querySelectorAll("[data-misto]").forEach(el => {
+                el.outerHTML = mistoHtml(event.target.value, null);
+            });
+            // u absence se do popisu práce doplní „Dovolená – Jméno"
+            polozkyBloku(blok).forEach(box =>
+                predvyplnAbsenci(box, event.target.value, $("dOsoba").value));
+            return;
+        }
+
+        const box = event.target.closest("[data-polozka]");
+        if (!box) return;
+
+        if (event.target.dataset.f === "celyden") return void prepniCelyDen(box);
+
+        // výběr úkolu zamkne budovu/patro/technologii a předvyplní druh
+        if (event.target.dataset.f === "ukolId") zamkniPodleUkolu(box);
+        // budova/patro/technologie zužují nabídku úkolů
+        if (["budova", "patro", "technologie"].indexOf(event.target.dataset.f) !== -1) {
+            prefiltrujUkoly(box);
+        }
+
+        // popis si člověk přepsal sám – od téhle chvíle mu ho předvyplňování nesahá
+        if (event.target.dataset.f === "nazev") delete event.target.dataset.auto;
+        // jiné datum = jiný den, hlídka HO se přepočítá
+        if (event.target.dataset.f === "datum") { obnovHoHlasku(box); obnovLhutu(box); }
+
+        // v okně úpravy je projekt součástí záznamu
+        if (event.target.dataset.f === "zakazka") {
+            doplnFirmu(box, "data-f", event.target.value);
+            box.classList.toggle("polozka--absence", jeAbsence(event.target.value));
+            predvyplnAbsenci(box, event.target.value, $("eOsoba").value);
+            const ukolSelect = box.querySelector('[data-f="ukolId"]');
+            if (ukolSelect) {
+                ukolSelect.innerHTML = ukolOptions(event.target.value, "");
+                obnovUkolVyber(ukolSelect);
+            }
+            const obalUkolu = box.querySelector(".polozka__ukolvyber");
+            if (obalUkolu) obalUkolu.hidden = jeJednoduchy(event.target.value);
+            const misto = box.querySelector("[data-misto]");
+            if (misto) misto.outerHTML = mistoHtml(event.target.value, null);
+        }
+        prepocti(box);
+        if (radkyBox().contains(box)) soucetDne();
+    });
+
+    /* Napsaný čas srovnáme, až když z pole odejde – během psaní by to
+       přepisovalo pod rukama. „8" se tak stane 08:00, „1737" → 17:30. */
+    document.addEventListener("change", (event) => {
+        if (!event.target.matches("[data-cas]")) return;
+        const box = event.target.closest("[data-polozka]");
+        // člověk hodnotu sám změnil – původní se už při odchodu nevrací
+        delete event.target.dataset.puvodni;
+        event.target.value = V.normalizujCas(event.target.value);
+        prepocti(box);
+        if (radkyBox().contains(box)) soucetDne();
+    });
+
+    /* Prohlížeč nabídku časů filtruje podle toho, co v poli je – jakmile se
+       jednou vybere 7:00, roletka ukazuje už jen 7:00. Proto se pole při
+       vstupu vyprázdní (nabídka je zase celá) a když člověk nic nenapíše
+       ani nevybere, při odchodu se mu původní čas vrátí. */
+    /* Vyprázdnit se musí UŽ PŘI STISKU. Prohlížeč si obsah nabídky zamkne
+       ve chvíli, kdy ji otevírá – to je na `mousedown`, tedy dřív, než
+       stihne doběhnout `focusin`. Proto se to při prvním kliknutí ukazovalo
+       zúžené a teprve napodruhé celé. */
+    const uvolniNabidku = (el) => {
+        if (el.dataset.puvodni === undefined) el.dataset.puvodni = el.value;
+        el.value = "";
+    };
+
+    document.addEventListener("mousedown", (event) => {
+        if (event.target.matches("[data-cas]")) uvolniNabidku(event.target);
+    });
+    document.addEventListener("focusin", (event) => {
+        if (event.target.matches("[data-cas]")) uvolniNabidku(event.target);
+    });
+    document.addEventListener("focusout", (event) => {
+        if (!event.target.matches("[data-cas]")) return;
+        if (!event.target.value && event.target.dataset.puvodni) {
+            event.target.value = event.target.dataset.puvodni;
+        }
+        delete event.target.dataset.puvodni;
+    });
+
+    /* Zaškrtávátka příplatků – po zapnutí vyjede pole a rovnou se do něj
+       skočí, po vypnutí se schová a hodnota se přestane počítat. */
+    document.addEventListener("change", (event) => {
+        const prepinac = event.target.closest("[data-zapni]");
+        if (!prepinac) return;
+
+        const box = prepinac.closest("[data-polozka]");
+        const pole = prepinac.closest("[data-priplatek]").querySelector(".priplatek__pole");
+        pole.hidden = !prepinac.checked;
+
+        const vstup = pole.querySelector("input");
+        if (prepinac.checked && vstup) { vstup.focus(); vstup.select(); }
+
+        prepocti(box);
+        if (radkyBox().contains(box)) soucetDne();
+    });
+
+    document.addEventListener("click", (event) => {
+        const pridejP = event.target.closest("[data-pridej-polozku]");
+        if (pridejP) {
+            pridejPolozku(pridejP.closest("[data-zblok]"))
+                .querySelector('[data-f="nazev"]').focus();
+            return;
+        }
+
+        const odeber = event.target.closest("[data-odeber]");
+        if (odeber) {
+            odeber.closest("[data-polozka]").remove();
+            precisluj();
+            return;
+        }
+
+        const zodeber = event.target.closest("[data-zodeber]");
+        if (zodeber) {
+            zodeber.closest("[data-zblok]").remove();
+            precisluj();
+            return;
+        }
+
+        const uprav = event.target.closest("[data-uprav]");
+        if (uprav) otevriUpravu(uprav.dataset.uprav);
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
+        // nabídka časů po čtvrthodinách – jedna pro celou stránku
+        document.body.insertAdjacentHTML("beforeend", V.casDatalist());
+        paintSubbar();
+        /* Výchozí je „Vše" – měsíc schovával starší zápisy a lidi mysleli,
+           že se jim ztratily (přání Michala 24. 8. 2026). */
+        nastavObdobi("vse");
+
+        $("lhutaZavri").addEventListener("click", () => { $("lhutaOverlay").hidden = true; });
+        $("lhutaOverlay").addEventListener("click", (event) => {
+            if (event.target === $("lhutaOverlay")) $("lhutaOverlay").hidden = true;
+        });
+        $("lhutaZadost").addEventListener("click", posliZadostOZpetny);
+
+        $("btnZpetne").addEventListener("click", () => {
+            vykresliZpetne();
+            $("zpDoKdy").value = "";
+            $("zpetneOverlay").hidden = false;
+        });
+        $("zpZavri").addEventListener("click", () => { $("zpetneOverlay").hidden = true; });
+        $("zpetneOverlay").addEventListener("click", (event) => {
+            if (event.target === $("zpetneOverlay")) $("zpetneOverlay").hidden = true;
+        });
+        $("zpPovol").addEventListener("click", async () => {
+            const uid = $("zpKomu").value, doKdy = $("zpDoKdy").value;
+            if (!uid || !doKdy) return window.KBUI.toast("Vyber komu a do kdy.", "warn");
+            const mapa = Object.assign({}, window.KB.zpetnePovoleni);
+            mapa[uid] = doKdy;
+            try {
+                await window.KB.ulozZpetnePovoleni(mapa);
+                window.KBUI.toast("Povoleno.");
+                vykresliZpetne();
+            } catch (err) { console.error(err); window.KBUI.toast("Uložení selhalo.", "error"); }
+        });
+        $("zpSeznam").addEventListener("click", async (event) => {
+            const zrus = event.target.closest("[data-zp-zrus]");
+            if (!zrus) return;
+            const mapa = Object.assign({}, window.KB.zpetnePovoleni);
+            mapa[zrus.dataset.zpZrus] = "";     // hluboký merge klíče nemaže
+            try {
+                await window.KB.ulozZpetnePovoleni(mapa);
+                vykresliZpetne();
+            } catch (err) { console.error(err); window.KBUI.toast("Zrušení selhalo.", "error"); }
+        });
+        window.KB.on("zpetne", () => {
+            if (!$("zpetneOverlay").hidden) vykresliZpetne();
+        });
+
+        $("btnZapis").addEventListener("click", () => {
+            $("zapis").hidden = false;
+            novyZapis();
+            $("zapis").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        // rychlá akce „Nový výkaz" ze svislého pásu vede rovnou do formuláře
+        if (location.hash === "#novy") {
+            $("zapis").hidden = false;
+            novyZapis();
+        }
+        $("btnZapisZavri").addEventListener("click", () => { $("zapis").hidden = true; });
+        $("btnPlus").addEventListener("click", () => {
+            pridejBlok().querySelector('[data-z="zakazka"]').focus();
+        });
+        $("btnUloz").addEventListener("click", ulozDen);
+        $("dOsoba").addEventListener("change", () => {
+            nastavVychoziSazbu(false);
+            obnovAbsenceTexty();        // „Dovolená – Jméno" musí sedět na vybraného člověka
+        });
+        $("eOsoba").addEventListener("change", () => {
+            const box = $("editRadek").querySelector("[data-polozka]");
+            if (box) {
+                const druh = box.querySelector('[data-f="zakazka"]');
+                predvyplnAbsenci(box, druh ? druh.value : "", $("eOsoba").value);
+            }
+        });
+
+        $("btnResetFiltr").addEventListener("click", resetFiltru);
+        $("filtrUkol").addEventListener("click", () => {
+            filtr.ukolId = "";
+            render();
+        });
+
+        // odkrytí peněz platí pro celou stránku – dlaždice i tabulku
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest("[data-penize-prepni]")) return;
+            penizeVidet = !penizeVidet;
+            pouzijSkryti();
+        });
+        pouzijSkryti();
+
+        // měsíc v mřížce vytížení se přepíná nezávisle na filtru období výše
+        $("vtZpet").addEventListener("click", () => {
+            vtKotva = new Date(vtKotva.getFullYear(), vtKotva.getMonth() - 1, 1);
+            render();
+        });
+        $("vtDal").addEventListener("click", () => {
+            vtKotva = new Date(vtKotva.getFullYear(), vtKotva.getMonth() + 1, 1);
+            render();
+        });
+
+        $("btnEditZrus").addEventListener("click", () => { $("editOverlay").hidden = true; });
+        $("btnEditUloz").addEventListener("click", ulozUpravu);
+        $("btnSmaz").addEventListener("click", smazZapis);
+
+        $("btnCsv").addEventListener("click", () => {
+            const zaznamy = V.vyber(window.KB.vykazy || [], filtr).slice()
+                .sort((a, b) => (a.datum || "").localeCompare(b.datum || "") ||
+                                (a.od || "").localeCompare(b.od || ""));
+            if (!zaznamy.length) return window.KBUI.toast("Není co stahovat.", "warn");
+            V.stahni(V.csv(zaznamy),
+                "vykazy_" + (filtr.od || "vse") + "_" + (filtr.do || "vse") + ".csv");
+            window.KBUI.toast("Staženo " +
+                V.pocet(zaznamy.length, ["záznam", "záznamy", "záznamů"]) + ".");
+        });
+
+        document.querySelectorAll("[data-obdobi]").forEach(chip => {
+            chip.addEventListener("click", () => {
+                document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+                chip.classList.add("chip--active");
+                nastavObdobi(chip.dataset.obdobi);
+            });
+        });
+        document.querySelector('[data-obdobi="vse"]').classList.add("chip--active");
+
+        [["fOd", "od"], ["fDo", "do"], ["fOsoba", "uid"], ["fZakazka", "zakazka"],
+         ["fFirma", "firma"], ["fCinnost", "cinnost"], ["fTech", "tech"]]
+        .forEach(([id, klic]) => {
+            $(id).addEventListener("change", () => {
+                filtr[klic] = $(id).value;
+                render();
+            });
+        });
+
+        // hledání v liště prohledává zápisy – práci, zakázku, firmu i člověka
+        window.KBUI.onSearch((dotaz) => { filtr.text = dotaz; render(); });
+
+        /* Role dorazí až s daty o lidech – do té doby je z člověka „zaměstnanec"
+           a podlišta by manažerovi zůstala bez přehledu a vytížení. */
+        document.addEventListener("kb-role", () => {
+            paintSubbar();
+            nastavFiltrZAdresy();
+            render();
+        });
+        // název úkolu do štítku dorazí až se seznamem úkolů
+        window.KB.on("ukoly", render);
+        /* Hlídka HO se přepočítá, až dorazí kalendář – při otevření
+           formuláře hned po načtení stránky tam ještě nemusel být. */
+        window.KB.on("kalendar", () => {
+            document.querySelectorAll("[data-polozka]").forEach(obnovHoHlasku);
+        });
+        document.addEventListener("kb-role", () => {
+            document.querySelectorAll("[data-polozka]").forEach(box => {
+                obnovHoHlasku(box); obnovLhutu(box);
+            });
+        });
+        window.KB.on("zpetne", () => {
+            document.querySelectorAll("[data-polozka]").forEach(obnovLhutu);
+        });
+
+        /* Proklik z upozornění „pro kontrolu": `?zapis=ID`. Výkazy dorazí
+           až po načtení stránky, tak se filtr nastaví, jakmile jsou tady. */
+        if (new URLSearchParams(location.search).get("zapis")) {
+            const zkusZapis = () => {
+                nastavFiltrZAdresy();
+                if (filtrZAdresyHotov) window.KB.off("vykazy", zkusZapis);
+            };
+            window.KB.on("vykazy", zkusZapis);
+        }
+
+        /* Proklik z kalendáře: `?upravit=ID` rovnou otevře opravu toho zápisu.
+           Čeká se na data – po načtení stránky ještě žádná nejsou. Adresa se
+           pak uklidí, ať se okno neotevřelo znovu po obnovení stránky. */
+        const kUprave = new URLSearchParams(location.search).get("upravit");
+        if (kUprave) {
+            const zkusOtevrit = () => {
+                if (!(window.KB.vykazy || []).some(v => v.id === kUprave)) return;
+                window.KB.off("vykazy", zkusOtevrit);
+                history.replaceState(null, "", location.pathname);
+                otevriUpravu(kUprave);
+            };
+            window.KB.on("vykazy", zkusOtevrit);
+        }
+
+        /* Proklik z úkolu: `?ukol=ID` otevře nový výkaz s předvyplněným
+           projektem, úkolem, druhem a názvem – ať se to samé nepřepisuje
+           ručně. Čeká se, až úkoly dorazí z databáze. */
+        const zUkolu = new URLSearchParams(location.search).get("ukol");
+        if (zUkolu) {
+            const predvypln = () => {
+                const u = (window.KB.ukoly || []).find(x => x.id === zUkolu);
+                if (!u) return;
+                window.KB.off("ukoly", predvypln);
+                history.replaceState(null, "", location.pathname);
+
+                $("btnZapis").click();
+                const blok = radkyBox().querySelector("[data-zblok]");
+                const sel = blok.querySelector('[data-z="zakazka"]');
+                sel.value = u.projekt || "";
+                sel.dispatchEvent(new Event("input", { bubbles: true }));
+
+                const box = blok.querySelector("[data-polozka]");
+                const nastav = (klic, hodnota) => {
+                    const el = box.querySelector('[data-f="' + klic + '"]');
+                    if (el && hodnota) el.value = hodnota;
+                };
+                /* Roletka úkolů se právě přepsala změnou projektu – bez id
+                   vybraného úkolu, takže cizí úkol (výpomoc) v ní není.
+                   Postaví se znovu i s ním, jinak by se hodnota neujala. */
+                const ukolSelect = box.querySelector('[data-f="ukolId"]');
+                if (ukolSelect) {
+                    ukolSelect.innerHTML = ukolOptions(u.projekt || "", zUkolu);
+                    obnovUkolVyber(ukolSelect);
+                }
+                nastav("ukolId", zUkolu);
+                nastav("cinnost", u.druh);
+                // budovu, patro a technologii nastaví a zamkne zámek úkolu
+                zamkniPodleUkolu(box);
+                prepocti(box);
+            };
+            window.KB.on("ukoly", predvypln);
+            predvypln();
+        }
+
+        window.KB.on("vykazy", render);
+        window.KB.on("vykazy-meta", () => { naplnFiltry(); nastavVychoziSazbu(true); });
+        window.KB.on("users", render);
+        window.KB.on("zakazky", naplnFiltry);
+        window.KB.on("vykazy-chyba", () => {
+            window.KBUI.toast("Databáze výkazy nevydala – zkontroluj pravidla Firestore.", "error");
+        });
+
+        render();
+    });
+})();
+</script>
+</body>
+</html>

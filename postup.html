@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Postup dne – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji. */
+
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__text { min-width: 0; }
+
+        .nahledy { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+        .nahled { position: relative; border: 1px solid var(--line); border-radius: var(--radius);
+            overflow: hidden; background: var(--bg-soft); }
+        .nahled img { display: block; width: 100%; height: 130px; object-fit: cover; cursor: zoom-in; }
+        .nahled .linkbtn { position: absolute; right: 6px; top: 4px; background: rgba(255,255,255,.9);
+            border-radius: 4px; padding: 1px 7px; }
+
+        /* historie: čtvereček na den */
+        .dnyrada { display: flex; gap: 6px; flex-wrap: wrap; }
+        .denbod { width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--line);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10.5px; font-weight: 900; color: var(--muted); background: var(--surface); }
+        .denbod--ma { background: var(--ok-tint); border-color: var(--ok); color: var(--ok); }
+
+        /* manažerská mřížka */
+        .pmr { border-collapse: collapse; width: 100%; }
+        .pmr th, .pmr td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft);
+            font-size: 13px; text-align: center; }
+        .pmr th:first-child, .pmr td:first-child { text-align: left; white-space: nowrap; }
+        .pmr thead th { font-size: 10.5px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--muted); }
+        .pbod { display: inline-block; width: 22px; height: 22px; border-radius: 50%;
+            border: 1px solid var(--line); background: var(--bg-soft); cursor: default; }
+        .pbod--ma { background: var(--ok); border-color: var(--ok); cursor: pointer; }
+        .pbod--ho { box-shadow: 0 0 0 2px var(--accent-lt); }
+        .pbod--chybi { background: #fdeff1; border-color: var(--danger); }
+
+        /* prohlížeč obrázku */
+        .lupa { position: fixed; inset: 0; z-index: 160; background: rgba(11,13,16,.9);
+            display: flex; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; }
+        .lupa img { max-width: 96%; max-height: 92%; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px;max-width:1100px">
+
+    <div class="hlavicka">
+        <div class="hlavicka__text">
+            <h2 style="font-size:24px;font-weight:900;line-height:1.15">Postup dne</h2>
+            <p class="small muted" style="margin-top:3px;max-width:760px;line-height:1.6">
+                Jednou za den sem hoď screenshot rozdělané práce a případně větu
+                k tomu — hlavně ve dnech na home office. Rychlejší než dlouhé
+                vysvětlování, co se stihlo.
+            </p>
+        </div>
+    </div>
+
+    <!-- ------------------------------------------------ můj dnešek -->
+    <section class="card col" style="padding:16px 18px;gap:12px">
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+            <b style="font-size:15px" id="mujDenNadpis">Dnes</b>
+            <span class="tiny muted" id="mujHoStitek" hidden
+                style="color:var(--accent);font-weight:700">máš nahlášený home office</span>
+            <div class="grow"></div>
+            <button type="button" id="btnPridat" class="btn btn--primary btn--sm"
+                title="Stiskni PrintScreen (nebo Win+Shift+S) a pak sem klikni">+ Vložit screenshot</button>
+            <button type="button" id="btnVybrat" class="btn btn--ghost btn--sm">Vybrat z PC</button>
+            <input type="file" id="soubor" accept="image/*" multiple hidden>
+        </div>
+        <div class="nahledy" id="mojeNahledy"></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <label class="pole grow" style="min-width:240px"><span class="popisek">Co se dnes udělalo (nepovinné)</span>
+                <input type="text" id="mujText" class="field" maxlength="300"
+                    placeholder="dokresleno 2NP VZT, zbývá strojovna"></label>
+            <button type="button" id="btnTextUloz" class="btn btn--sm btn--ghost">Uložit text</button>
+        </div>
+        <div class="popisek" style="margin-top:4px">Posledních 14 dní</div>
+        <div class="dnyrada" id="mojeDny"></div>
+    </section>
+
+    <!-- ------------------------------------- přehled (jen manažeři) -->
+    <section class="card col" id="prehledBox" data-need="vykaz.view" hidden
+             style="padding:16px 18px;gap:12px">
+        <b style="font-size:15px">Přehled týmu — posledních 7 dní</b>
+        <div class="row row--wrap" style="gap:14px;font-size:12px;color:var(--text-soft)">
+            <span><span class="pbod pbod--ma" style="vertical-align:-6px"></span> nahraný postup (klikem otevřeš)</span>
+            <span><span class="pbod pbod--ho" style="vertical-align:-6px"></span> ten den měl home office</span>
+            <span><span class="pbod pbod--chybi" style="vertical-align:-6px"></span> HO bez záznamu</span>
+            <span><span class="pbod" style="vertical-align:-6px"></span> běžný den bez záznamu</span>
+        </div>
+        <div style="overflow-x:auto"><table class="pmr" id="prehled"></table></div>
+    </section>
+
+</main>
+
+<div id="lupa" class="lupa" hidden><img id="lupaImg" alt=""></div>
+
+<!-- ------------------------------------------ detail dne (manažer) -->
+<div id="detail" class="hookno no-print" hidden>
+    <div class="hookno__deska card">
+        <div class="hookno__hlava"><span id="detailNadpis">Postup</span>
+            <button type="button" class="linkbtn" id="btnDetailZavri" style="color:#fff">Zavřít</button></div>
+        <div class="hookno__telo col" style="gap:10px">
+            <p id="detailText" class="small" style="margin:0;line-height:1.6"></p>
+            <div class="nahledy" id="detailNahledy"></div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (v) => window.KBUI.esc(v);
+    const dnesIso = () => new Date().toISOString().slice(0, 10);
+
+    const czDatum = (iso) => {
+        const [r, m, d] = String(iso).split("-");
+        return Number(d) + ". " + Number(m) + ".";
+    };
+
+    /* ------------------------------------------------------ můj dnešek -- */
+
+    function mujZaznam(datum) {
+        const uid = window.KB.currentUid ? window.KB.currentUid() : "";
+        return (window.KB.postupy || []).find(z => z.uid === uid && z.datum === datum);
+    }
+
+    function mamHo(uid, datum) {
+        return (window.KB.kalendar || []).some(k => k.typ === "homeoffice" &&
+            k.uid === uid && (k.od || "") <= datum && datum <= (k.do || k.od || ""));
+    }
+
+    let mojeNactene = "";       // pro který den jsou načtené náhledy
+
+    async function vykresliMuj() {
+        const dnes = dnesIso();
+        const uid = window.KB.currentUid ? window.KB.currentUid() : "";
+        $("mujDenNadpis").textContent = "Dnes — " + new Date().toLocaleDateString("cs-CZ");
+        $("mujHoStitek").hidden = !mamHo(uid, dnes);
+
+        const z = mujZaznam(dnes);
+        if ($("mujText") !== document.activeElement) $("mujText").value = (z && z.text) || "";
+
+        // posledních 14 dní jako čtverečky
+        const dny = [];
+        for (let i = 13; i >= 0; i--) {
+            const d = new Date(Date.now() - i * 24 * 3600 * 1000);
+            const iso = d.toISOString().slice(0, 10);
+            const ma = (window.KB.postupy || []).some(x => x.uid === uid && x.datum === iso &&
+                (Number(x.pocet) > 0 || x.text));
+            dny.push('<span class="denbod' + (ma ? " denbod--ma" : "") + '" title="' +
+                esc(iso) + '">' + d.getDate() + "</span>");
+        }
+        $("mojeDny").innerHTML = dny.join("");
+
+        // náhledy dneška – načítají se jen jednou na den
+        const id = window.KB.postupId(uid, dnes);
+        if (mojeNactene === id) return;
+        mojeNactene = id;
+        obnovNahledy();
+    }
+
+    async function obnovNahledy() {
+        const uid = window.KB.currentUid();
+        const id = window.KB.postupId(uid, dnesIso());
+        let obrazky = [];
+        try { obrazky = await window.KB.nactiPostupObrazky(id); } catch (err) { /* žádné */ }
+        $("mojeNahledy").innerHTML = obrazky.map(o =>
+            '<div class="nahled"><img src="' + o.data + '" data-lupa alt="">' +
+                '<button type="button" class="linkbtn" data-smaz="' + esc(o.id) +
+                    '" style="color:var(--danger)">smazat</button></div>').join("") ||
+            '<span class="tiny muted">Zatím nic — přidej screenshot tlačítkem vpravo.</span>';
+    }
+
+    /** Screenshot se před uložením zmenší, ať se den vejde do databáze. */
+    function zmensi(soubor) {
+        return new Promise((ok, ne) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 1800;
+                let w = img.naturalWidth, h = img.naturalHeight;
+                const k = Math.min(1, MAX / Math.max(w, h));
+                const c = document.createElement("canvas");
+                c.width = Math.round(w * k); c.height = Math.round(h * k);
+                c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+                ok(c.toDataURL("image/jpeg", 0.8));
+            };
+            img.onerror = ne;
+            img.src = URL.createObjectURL(soubor);
+        });
+    }
+
+    async function nahraj(soubory) {
+        for (const f of Array.from(soubory).slice(0, 3)) {
+            try {
+                const dataUrl = await zmensi(f);
+                if (dataUrl.length > 900000) {
+                    window.KBUI.toast("Obrázek je i po zmenšení moc velký.", "warn");
+                    continue;
+                }
+                await window.KB.pridejPostupObrazek(dnesIso(), dataUrl);
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Nahrání selhalo.", "error");
+            }
+        }
+        obnovNahledy();
+        window.KBUI.toast("Uloženo.");
+    }
+
+    /* ------------------------------------------------ přehled manažera -- */
+
+    function vykresliPrehled() {
+        if (!window.KBUI.can("vykaz.view")) return;
+        const dny = [];
+        for (let i = 6; i >= 0; i--) {
+            dny.push(new Date(Date.now() - i * 24 * 3600 * 1000).toISOString().slice(0, 10));
+        }
+        const lide = window.KBVYK.lide();
+
+        /* Po skupinách jako všude jinde – zaměstnanci, OSVČ, studenti. */
+        const radekCloveka = (u) => {
+                const bunky = dny.map(datum => {
+                    const z = (window.KB.postupy || []).find(x => x.uid === u.id &&
+                        x.datum === datum && (Number(x.pocet) > 0 || x.text));
+                    const ho = mamHo(u.id, datum);
+                    let cls = "pbod";
+                    if (z) cls += " pbod--ma";
+                    else if (ho) cls += " pbod--chybi";
+                    if (ho) cls += " pbod--ho";
+                    return "<td><span class=\"" + cls + "\"" +
+                        (z ? ' data-detail="' + esc(z.id) + '"' : "") +
+                        ' title="' + esc((u.last || "") + " " + czDatum(datum) +
+                            (ho ? " · HO" : "") + (z ? " · nahráno" : " · nic")) + '"></span></td>';
+                }).join("");
+                return "<tr><td>" + esc(window.KBVYK.jmeno(u)) + "</td>" + bunky + "</tr>";
+        };
+
+        $("prehled").innerHTML =
+            "<thead><tr><th>Kdo</th>" +
+            dny.map(d => "<th>" + esc(czDatum(d)) + "</th>").join("") +
+            "</tr></thead><tbody>" +
+            window.KBUI.TYPY.map(t => {
+                const moji = lide.filter(u => window.KBUI.typUvazku(u) === t.id);
+                if (!moji.length) return "";
+                return '<tr><td colspan="' + (dny.length + 1) +
+                    '" style="background:var(--bg-soft);font-size:10.5px;font-weight:900;' +
+                    'letter-spacing:.07em;text-transform:uppercase;color:var(--dim)">' +
+                    esc(t.mnozne) + "</td></tr>" + moji.map(radekCloveka).join("");
+            }).join("") + "</tbody>";
+    }
+
+    async function otevriDetail(zaznamId) {
+        const z = (window.KB.postupy || []).find(x => x.id === zaznamId);
+        if (!z) return;
+        $("detailNadpis").textContent = (z.osoba || "?") + " — " + czDatum(z.datum);
+        $("detailText").textContent = z.text || "";
+        $("detailNahledy").innerHTML = '<span class="tiny muted">Načítám…</span>';
+        $("detail").hidden = false;
+        try {
+            const obrazky = await window.KB.nactiPostupObrazky(zaznamId);
+            $("detailNahledy").innerHTML = obrazky.map(o =>
+                '<div class="nahled"><img src="' + o.data + '" data-lupa alt=""></div>').join("") ||
+                '<span class="tiny muted">Bez obrázků – jen text.</span>';
+        } catch (err) {
+            $("detailNahledy").innerHTML = '<span class="tiny muted">Nepodařilo se načíst.</span>';
+        }
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "postup.html" });
+
+        /* Vložit screenshot: PrintScreen → klik. Čte se schránka; kde ji
+           prohlížeč nedá, poradí se Ctrl+V (to funguje vždycky, viz níž). */
+        $("btnPridat").addEventListener("click", async () => {
+            try {
+                const polozky = await navigator.clipboard.read();
+                for (const p of polozky) {
+                    const typ = (p.types || []).find(t => t.indexOf("image/") === 0);
+                    if (typ) return void nahraj([await p.getType(typ)]);
+                }
+                window.KBUI.toast("Ve schránce není obrázek – stiskni PrintScreen" +
+                    " (nebo Win+Shift+S) a klikni znovu.", "warn");
+            } catch (err) {
+                window.KBUI.toast("Prohlížeč schránku nevydal – vlož screenshot" +
+                    " klávesami Ctrl+V přímo tady na stránce.", "warn");
+            }
+        });
+        $("btnVybrat").addEventListener("click", () => $("soubor").click());
+        $("soubor").addEventListener("change", () => {
+            if ($("soubor").files.length) nahraj($("soubor").files);
+            $("soubor").value = "";
+        });
+        // Ctrl+V kdekoliv na stránce vloží obrázek ze schránky
+        document.addEventListener("paste", (e) => {
+            const obrazek = Array.from((e.clipboardData || {}).items || [])
+                .find(i => i.type && i.type.indexOf("image/") === 0);
+            if (obrazek) { e.preventDefault(); nahraj([obrazek.getAsFile()]); }
+        });
+        $("btnTextUloz").addEventListener("click", async () => {
+            await window.KB.ulozPostup(dnesIso(), { text: $("mujText").value.trim() })
+                .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
+            window.KBUI.toast("Text uložen.");
+        });
+
+        $("mojeNahledy").addEventListener("click", async (e) => {
+            const smaz = e.target.closest("[data-smaz]");
+            if (smaz) {
+                const uid = window.KB.currentUid();
+                await window.KB.smazPostupObrazek(window.KB.postupId(uid, dnesIso()),
+                    smaz.dataset.smaz).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+                return void obnovNahledy();
+            }
+        });
+
+        document.addEventListener("click", (e) => {
+            const img = e.target.closest("[data-lupa]");
+            if (img) { $("lupaImg").src = img.src; $("lupa").hidden = false; return; }
+            if (e.target.closest("#lupa")) { $("lupa").hidden = true; return; }
+            const det = e.target.closest("[data-detail]");
+            if (det) otevriDetail(det.dataset.detail);
+        });
+        $("btnDetailZavri").addEventListener("click", () => { $("detail").hidden = true; });
+        $("detail").addEventListener("click", (e) => {
+            if (e.target === $("detail")) $("detail").hidden = true;
+        });
+
+        const obnov = () => { window.KB.watchPostupy(); vykresliMuj(); vykresliPrehled(); };
+        document.addEventListener("kb-role", obnov);
+        window.KB.on("postupy", () => { vykresliMuj(); vykresliPrehled(); });
+        window.KB.on("kalendar", () => { vykresliMuj(); vykresliPrehled(); });
+        window.KB.on("users", vykresliPrehled);
+        obnov();
+    });
+})();
+</script>
+</body>
+</html>

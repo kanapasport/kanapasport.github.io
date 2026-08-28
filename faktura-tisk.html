@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Tisk faktury – Pasport Kaňa</title>
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Tisková stránka je schválně bez lišty a bez app.css – je to dokument
+           na A4, ne obrazovka webu. Tiskne se přes Ctrl+P (uložit jako PDF). */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, Helvetica, sans-serif; background: #e5e5e5; color: #111; }
+
+        .listok { position: relative; width: 210mm; min-height: 297mm; margin: 18px auto;
+            background: #fff; padding: 16mm 16mm 14mm; box-shadow: 0 2px 14px rgba(0,0,0,.18);
+            display: flex; flex-direction: column; gap: 8mm; overflow: hidden; }
+
+        .hlava { display: flex; justify-content: space-between; align-items: flex-start; gap: 10mm;
+            border-bottom: 3px solid #c8102e; padding-bottom: 5mm; }
+        .hlava h1 { font-size: 24px; letter-spacing: .03em; }
+        .hlava .cislo { font-size: 15px; font-weight: 700; margin-top: 2mm; }
+        .hlava .druh { font-size: 11px; color: #555; margin-top: 1mm; }
+
+        .strany { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+        .strana .stitek { font-size: 10px; font-weight: 700; letter-spacing: .09em;
+            text-transform: uppercase; color: #888; margin-bottom: 2mm; }
+        .strana .jmeno { font-size: 14px; font-weight: 800; }
+        .strana .radek { font-size: 12px; line-height: 1.55; }
+
+        .platba { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm;
+            border: 1px solid #ddd; border-radius: 6px; padding: 4mm; }
+        .platba .stitek { font-size: 9.5px; font-weight: 700; letter-spacing: .07em;
+            text-transform: uppercase; color: #888; }
+        .platba .hodnota { font-size: 12.5px; font-weight: 700; margin-top: 1mm; }
+
+        table.polozky { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .polozky th { text-align: left; font-size: 10px; letter-spacing: .07em;
+            text-transform: uppercase; color: #666; border-bottom: 2px solid #111;
+            padding: 2mm 2mm 1.5mm; }
+        .polozky td { padding: 2mm; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
+        .polozky .num, .polozky th.num { text-align: right; white-space: nowrap; }
+
+        .rekap { margin-left: auto; width: 88mm; font-size: 12px; }
+        .rekap .radek { display: flex; justify-content: space-between; padding: 1.2mm 0; }
+        .rekap .celkem { border-top: 2px solid #111; margin-top: 1.5mm; padding-top: 2mm;
+            font-size: 16px; font-weight: 900; }
+
+        .pata { margin-top: auto; border-top: 1px solid #ddd; padding-top: 3mm;
+            font-size: 10.5px; color: #666; line-height: 1.6; }
+
+        .vodoznak { position: absolute; inset: 0; display: flex; align-items: center;
+            justify-content: center; pointer-events: none; }
+        .vodoznak span { transform: rotate(-28deg); font-size: 42px; font-weight: 900;
+            letter-spacing: .08em; color: rgba(200, 16, 46, .13); text-align: center;
+            text-transform: uppercase; border: 6px solid rgba(200, 16, 46, .13);
+            border-radius: 10px; padding: 8mm 12mm; }
+
+        .listky { text-align: center; padding: 14px; }
+        .listky button { font: inherit; font-weight: 700; padding: 9px 20px; margin: 0 5px;
+            border-radius: 8px; border: 1px solid #bbb; background: #fff; cursor: pointer; }
+        .listky button.hlavni { background: #c8102e; border-color: #c8102e; color: #fff; }
+
+        #zprava { max-width: 420px; margin: 60px auto; background: #fff; border-radius: 10px;
+            padding: 30px 26px; text-align: center; font-size: 14px; line-height: 1.6;
+            box-shadow: 0 2px 14px rgba(0,0,0,.15); }
+
+        @media print {
+            body { background: #fff; }
+            .listok { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+            .listky, #zprava { display: none; }
+        }
+        @page { size: A4 portrait; margin: 14mm; }
+    </style>
+</head>
+<body>
+
+<div class="listky">
+    <button type="button" class="hlavni" onclick="window.print()">Vytisknout / uložit PDF</button>
+    <button type="button" onclick="window.close()">Zavřít</button>
+</div>
+
+<div id="zprava">Načítám fakturu…</div>
+<div id="list" class="listok" hidden></div>
+
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+    const id = new URLSearchParams(location.search).get("id") || "";
+    const na2 = (n) => Math.round(n * 100) / 100;
+
+    let nastaveni = null;
+    let vykresleno = false;
+
+    function radekAdresy(f) {
+        return [f.adresa, f.ico ? "IČO: " + f.ico : "", f.dic ? "DIČ: " + f.dic : ""]
+            .filter(Boolean);
+    }
+
+    /** Položky pro tisk – když žádné nejsou, poslouží částky za fakturu. */
+    function polozkyProTisk(f) {
+        const ulozene = Array.isArray(f.polozky) ? f.polozky.filter(p => p.popis || p.cena) : [];
+        if (ulozene.length) return ulozene;
+        return [{
+            popis: f.poznamka || "Provedené práce a služby" + (f.projekt ? " – " + f.projekt : ""),
+            mnozstvi: 1, mj: "kpl", cena: Number(f.castkaBez) || 0,
+            dph: Number(f.dphSazba) || 0
+        }];
+    }
+
+    function vykresli() {
+        if (vykresleno || nastaveni === null) return;
+        const f = (window.KB.faktury || []).find(x => x.id === id);
+        if (!f) return;      // faktury ještě nedorazily – zkusí se to znovu s další událostí
+        vykresleno = true;
+
+        const n = nastaveni;
+        const polozky = polozkyProTisk(f);
+
+        let bez = 0;
+        const poSazbach = {};
+        const radky = polozky.map(p => {
+            const cena = na2((Number(p.mnozstvi) || 0) * (Number(p.cena) || 0));
+            const sazba = Number(p.dph) || 0;
+            bez = na2(bez + cena);
+            poSazbach[sazba] = na2((poSazbach[sazba] || 0) + na2(cena * sazba / 100));
+            return "<tr><td>" + esc(p.popis || "") + "</td>" +
+                '<td class="num">' + esc(V.cislo(p.mnozstvi, 2)) + "</td>" +
+                "<td>" + esc(p.mj || "") + "</td>" +
+                '<td class="num">' + esc(V.cislo(p.cena, 2)) + "</td>" +
+                '<td class="num">' + sazba + " %</td>" +
+                '<td class="num">' + esc(V.cislo(cena, 2)) + "</td></tr>";
+        }).join("");
+
+        const dphCelkem = na2(Object.keys(poSazbach)
+            .reduce((sum, s) => sum + poSazbach[s], 0));
+        const celkem = na2(bez + dphCelkem);
+
+        const rekapSazby = Object.keys(poSazbach).sort((a, b) => b - a).map(s =>
+            '<div class="radek"><span>DPH ' + s + " %</span><span>" +
+            esc(V.kc(poSazbach[s])) + "</span></div>").join("");
+
+        const platce = !!(n.dic);
+        document.getElementById("list").innerHTML =
+            (n.ostry === true ? "" :
+                '<div class="vodoznak"><span>Zkušební provoz<br>není daňový doklad</span></div>') +
+            '<div class="hlava">' +
+                "<div>" +
+                    "<h1>FAKTURA" + (platce ? " – daňový doklad" : "") + "</h1>" +
+                    '<div class="cislo">číslo ' + esc(f.cislo || "—") + "</div>" +
+                    '<div class="druh">' + (f.projekt ? "projekt: " + esc(f.projekt) : "") + "</div>" +
+                "</div>" +
+                '<img src="Pasport_Kana_black.png" alt="" style="height:17mm">' +
+            "</div>" +
+
+            '<div class="strany">' +
+                '<div class="strana">' +
+                    '<div class="stitek">Dodavatel</div>' +
+                    '<div class="jmeno">' + esc(n.nazev || "— doplň v Naše údaje —") + "</div>" +
+                    radekAdresy(n).map(r => '<div class="radek">' + esc(r) + "</div>").join("") +
+                "</div>" +
+                '<div class="strana">' +
+                    '<div class="stitek">Odběratel</div>' +
+                    '<div class="jmeno">' + esc(f.protistrana || "—") + "</div>" +
+                    radekAdresy(f).map(r => '<div class="radek">' + esc(r) + "</div>").join("") +
+                "</div>" +
+            "</div>" +
+
+            '<div class="platba">' +
+                "<div><div class=\"stitek\">Bankovní účet</div><div class=\"hodnota\">" +
+                    esc(n.ucet || "—") + "</div></div>" +
+                "<div><div class=\"stitek\">Variabilní symbol</div><div class=\"hodnota\">" +
+                    esc(f.vs || (f.cislo || "").replace(/\D/g, "") || "—") + "</div></div>" +
+                "<div><div class=\"stitek\">Vystaveno / DUZP</div><div class=\"hodnota\">" +
+                    esc(V.czDatum(f.vystaveno) || "—") +
+                    (f.duzp && f.duzp !== f.vystaveno ? " / " + esc(V.czDatum(f.duzp)) : "") +
+                "</div></div>" +
+                "<div><div class=\"stitek\">Splatnost</div><div class=\"hodnota\">" +
+                    esc(V.czDatum(f.splatnost) || "—") + "</div></div>" +
+            "</div>" +
+
+            '<table class="polozky"><thead><tr>' +
+                "<th>Popis</th><th class=\"num\">Množství</th><th>MJ</th>" +
+                "<th class=\"num\">Cena/MJ</th><th class=\"num\">DPH</th>" +
+                '<th class="num">Bez DPH (Kč)</th>' +
+            "</tr></thead><tbody>" + radky + "</tbody></table>" +
+
+            '<div class="rekap">' +
+                '<div class="radek"><span>Základ celkem</span><span>' + esc(V.kc(bez)) + "</span></div>" +
+                rekapSazby +
+                '<div class="radek celkem"><span>K úhradě</span><span>' + esc(V.kc(celkem)) + "</span></div>" +
+            "</div>" +
+
+            '<div class="pata">' +
+                (n.registrace ? esc(n.registrace) + "<br>" : "") +
+                (n.banka ? "Banka: " + esc(n.banka) + " · " : "") +
+                "Vystavil(a): " + esc(f.createdBy || f.updatedBy || "") +
+                (platce ? "" : " · Dodavatel není plátcem DPH.") +
+            "</div>";
+
+        document.getElementById("zprava").hidden = true;
+        document.getElementById("list").hidden = false;
+        document.title = "Faktura " + (f.cislo || "") + " – Pasport Kaňa";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!id) {
+            document.getElementById("zprava").textContent = "V adrese chybí id faktury.";
+            return;
+        }
+        // faktury čtou jen manažeři – bez práva zůstane viset zpráva níž
+        setTimeout(() => {
+            if (!vykresleno) document.getElementById("zprava").textContent =
+                "Fakturu se nepodařilo načíst. Otevři ji ze stránky Faktury " +
+                "a zkontroluj, že jsi přihlášený jako manažer.";
+        }, 8000);
+
+        const start = () => {
+            window.KB.watchFaktury();
+            window.KB.loadFakturaNastaveni()
+                .then(n => { nastaveni = n || {}; vykresli(); })
+                .catch(() => { nastaveni = {}; vykresli(); });
+        };
+        window.KB.on("faktury", vykresli);
+        document.addEventListener("kb-role", start);
+        start();
+    });
+})();
+</script>
+</body>
+</html>

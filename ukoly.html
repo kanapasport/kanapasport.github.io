@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#c8102e">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Úkoly – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* podnadpis druhu uvnitř projektu – menší než hlavička projektu */
+        .skupina-druh { font-size: 11px; font-weight: 800; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin: 10px 2px 4px; }
+
+        /* Hlavička stránky je sdílený .spread z app.css: nadpis vlevo,
+           tlačítka vpravo – stejně jako na ostatních stránkách. */
+
+        .ukol { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+        .ukol__hlava { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+        .ukol__hlava:hover { background: var(--bg-soft); }
+        /* název a jména na jednom řádku – kdo na úkolu dělá, musí být vidět
+           hned, ne až v šedé metadatové drobnosti pod tím */
+        .ukol__radek { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .ukol__nazev { font-weight: 900; font-size: 14.5px; }
+        .ukol__meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+        /* zápis výkazu rovnou z řádku úkolu – bez rozbalování;
+           na úzkém okně zůstanou jen hodiny, text by lámal řádek */
+        .ukol__vykaz { flex: none; display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 11px; border-radius: 99px; font-size: 12.5px; font-weight: 800;
+            text-decoration: none; white-space: nowrap;
+            color: var(--accent); background: var(--accent-tint); border: 1px solid var(--accent-lt); }
+        .ukol__vykaz:hover { color: #fff; background: var(--accent); border-color: var(--accent); }
+        /* čtení, ne zápis – proto tlumeně, aby si je nikdo nespletl */
+        .ukol__vykaz--cist { color: var(--text-soft); background: var(--bg); border-color: var(--line); }
+        .ukol__vykaz--cist:hover { color: var(--text); background: var(--surface); border-color: var(--line); }
+        .ukol__vykaz svg { width: 14px; height: 14px; flex: none; }
+        @media (max-width: 720px) { .ukol__vykaz span { display: none; } .ukol__vykaz { padding: 5px 8px; } }
+        .ukol__pct { flex: none; font-weight: 900; font-size: 14px; width: 46px; text-align: right; }
+        .ukol__prubeh { flex: none; width: 130px; height: 8px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+        .ukol__prubeh i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+        .ukol--hotovo .ukol__prubeh i { background: var(--p100-fg); }
+        .ukol__telo { border-top: 1px solid var(--line-soft); }
+        /* štítek se jménem přiřazeného člověka */
+        .osoba { display: inline-block; font-size: 11.5px; font-weight: 800; line-height: 1.55;
+            padding: 1px 9px; border-radius: 99px; white-space: nowrap;
+            background: var(--accent-tint); color: var(--accent); border: 1px solid var(--accent-lt); }
+        /* úkol bez lidí je chyba v zadání, ne stav – proto varovná barva */
+        .osoba--nikdo { background: transparent; color: var(--warn); border-color: var(--warn); }
+        /* TO-DO řádky (.subtask z app.css) si nesou vlastní odsazení i linku,
+           proto jdou přes celou šířku a patička se od nich oddělí sama */
+        .ukol__pata { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+        /* číslo procent je tlačítko, ale nemá vypadat jako tlačítko */
+        .subtask__pct { border: none; background: none; cursor: pointer; }
+        /* kdo úkol nemá přiřazený, na ovládání nesáhne – ať je to i vidět */
+        .subtask__check:disabled, .subtask__pct:disabled, .subtask__slider:disabled { cursor: default; opacity: .6; }
+        .subtask__check:disabled:hover { border-color: var(--line); }
+        .skupina-nadpis { font-size: 13px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+            color: var(--text-soft); margin: 14px 0 2px; display: flex; align-items: center; gap: 10px; }
+        .skupina-nadpis .tag { font-weight: 700; }
+        /* Formulář jede na sdílené mřížce .fmr z app.css (vzor = zápis
+           výkazu): kompaktní buňky se poskládají samy a schovaná technologie
+           nenechá v řádku díru. Vlastní mřížka tu proto žádná není. */
+        .vybervse { border: none; background: none; font: inherit; font-size: 11.5px; font-weight: 700;
+            color: var(--accent); cursor: pointer; padding: 2px 6px; }
+
+        /* zapnutý přepínač (Moje úkoly / Všechny / styl %) – stejná velikost
+           jako Rozbalit vše, jen zvýrazněný */
+        .prepnac.je-zapnuty { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        /* formulář v kabátě výkazového bloku */
+        .ublok { border: 1px solid var(--accent); border-radius: var(--radius-lg);
+            background: var(--accent-tint); overflow: hidden; }
+        .ublok__hlava { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 8px 14px; background: var(--accent); }
+        .ublok__stitek { font-size: 11px; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #fff; }
+        .ublok__telo { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+        .ublok .field { background: var(--surface); }
+        .ublok .lidevyber label { background: var(--surface); }
+
+        /* Stejná výška řádku TO-DO v obou stylech zapisování procent –
+           přepnutí nesmí řádky přeskládat. Výšku diktuje vyšší z ovládání. */
+        .subtask { min-height: 64px; }
+        .lidevyber { display: flex; flex-wrap: wrap; gap: 7px; }
+        .lidevyber label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+            border: 1px solid var(--line); border-radius: 99px; font-size: 12.5px; cursor: pointer; background: var(--surface); }
+        .lidevyber label:has(input:checked) { background: var(--accent-tint); border-color: var(--accent-lt); color: var(--accent); font-weight: 700; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div class="spread">
+        <div>
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Úkoly</h2>
+            <p class="small muted" style="margin-top:3px">
+                Každý úkol má TO-DO rozpad, ve kterém se zapisuje postup.
+            </p>
+        </div>
+        <div class="row row--wrap" style="gap:8px">
+            <button type="button" id="btnNovy" class="btn btn--primary" data-need="ukol.delete" hidden>+ Nový úkol</button>
+            <!-- budovy, patra a technologie se nastavují u každého projektu
+                 zvlášť, a to ve Správě projektů – tady se už jen čtou -->
+            <a href="sprava.html" class="btn btn--ghost" data-need="zakazky.manage" hidden
+                title="Budovy, patra a technologie se nastavují u každého projektu zvlášť">Správa projektů</a>
+        </div>
+    </div>
+
+    <!-- filtry vlevo, přepínače zobrazení vpravo – stejná velikost tlačítek -->
+    <div class="row row--wrap" style="gap:8px">
+        <button type="button" class="btn btn--sm btn--ghost prepnac" data-pohled="moje">Moje úkoly</button>
+        <!-- Všechny vidí každý: kdo pomáhal kolegovi, najde si tu jeho úkol
+             a tlačítkem v hlavičce si na něj zapíše výkaz -->
+        <button type="button" class="btn btn--sm btn--ghost prepnac" data-pohled="vse">Všechny</button>
+        <select id="fProjekt" class="field" style="width:auto;min-width:180px"></select>
+        <label class="row" style="gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="fHotove"> zobrazit hotové
+        </label>
+        <div class="grow"></div>
+        <button type="button" id="prepPodrobne" class="btn btn--sm btn--ghost prepnac"
+            title="Přepne mezi jedním číslem a řadou kroků">styl %</button>
+        <button type="button" id="btnRozbal" class="btn btn--sm btn--ghost"
+            title="Otevře nebo zavře TO-DO u všech vypsaných úkolů naráz">Rozbalit vše</button>
+    </div>
+
+    <!-- oblíbené projekty ze Správy – jeden klik místo roletky (přání 21. 8.) -->
+    <div id="oblibeneChipy" class="row row--wrap" style="gap:6px" hidden></div>
+
+    <!-- ============================================== TVORBA ÚKOLU -->
+    <!-- stejný kabát jako blok nového výkazu: červený pruh, tónované tělo -->
+    <!-- Úprava úkolu jede jako okno přes stránku, ne jako blok nahoře:
+         seznam pod ním zůstane na svém místě a po zavření se člověk vrátí
+         přesně tam, kde byl (přání Michala 24. 8.). -->
+    <div id="tvorba" class="ublokOverlay" hidden>
+      <div class="ublok ublok--okno">
+        <div class="ublok__hlava">
+            <span class="ublok__stitek" id="tvorbaNadpis">Nový úkol</span>
+            <button type="button" class="linkbtn" id="btnZavri">Zavřít</button>
+        </div>
+        <div class="ublok__telo">
+        <div class="fmr">
+            <label><span class="label">Projekt</span><select id="uProjekt" class="field"></select></label>
+            <label><span class="label">Druh práce</span>
+                <select id="uDruh" class="field">
+                    <option value="ArcGIS/Kreslení">ArcGIS/Kreslení</option>
+                    <option value="Focení">Focení</option>
+                    <option value="Skeny">Skeny</option>
+                    <option value="Tabulky">Tabulky</option>
+                </select></label>
+            <label id="uTechBox"><span class="label">Technologie</span><select id="uTech" class="field"></select></label>
+            <label><span class="label">Budova</span><select id="uBudova" class="field"></select></label>
+            <label><span class="label">Patro</span><select id="uPatro" class="field"></select></label>
+            <label><span class="label">Termín</span><input type="date" id="uTermin" class="field"></label>
+            <!-- Název přes celý řádek schválně: skládá se z hodnot nad ním
+                 a bývá nejdelší text formuláře, v úzké buňce by se usekl. -->
+            <label class="fmr__cely"><span class="label">Název (doplní se sám, jde přepsat)</span>
+                <input type="text" id="uNazev" class="field"></label>
+            <div class="fmr__cely">
+                <span class="label">Komu úkol patří
+                    <button type="button" class="vybervse" data-vse="uLide">vybrat vše</button></span>
+                <div id="uLide" class="lidevyber"></div>
+            </div>
+            <div class="fmr__cely">
+                <span class="label">TO-DO rozpad (jeden řádek = jedna položka)</span>
+                <div class="row row--wrap" style="gap:6px;margin-bottom:6px">
+                    <button type="button" id="uSabTech" class="btn btn--sm btn--ghost" hidden></button>
+                    <button type="button" id="uSabMist" class="btn btn--sm btn--ghost" hidden></button>
+                </div>
+                <textarea id="uTodo" rows="3" class="field" placeholder="Zákres půdorysu&#10;Kontrola polohových kódů&#10;Výkres do PDF"></textarea>
+            </div>
+            <label class="fmr__cely"><span class="label">Poznámka</span><textarea id="uPoznamka" rows="2" class="field"></textarea></label>
+        </div>
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button type="button" id="btnSmazat" class="btn btn--ghost" hidden style="margin-right:auto;color:var(--danger)">Smazat úkol</button>
+            <button type="button" id="btnZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="btnUlozit" class="btn btn--primary">Uložit úkol</button>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="vypis" class="col" style="gap:10px"></div>
+
+</main>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script src="assets/js/vykazy.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    /* Vestavěné technologie kreslení – názvy výkresů, ne výkazová čísla.
+       STAVBA je půdorys, zbytek profese. Platí u projektu, který si vlastní
+       seznam ve Správě projektů ještě nenastavil. */
+    /* Záloha pro projekt, který vlastní technologie nastavené nemá.
+       Bere se z firemního číselníku (store.js), aby úkoly, výkaz i matice
+       nabízely TOTÉŽ – dřív tu byl vlastní seznam a rozcházel se. */
+    const TECH_KRESLENI = () => (window.KB.technologie || []).map(t => t.zkratka || t);
+    const PATRA_VYCHOZI = ["3PP", "2PP", "1PP", "1NP", "2NP", "3NP", "4NP", "5NP", "6NP"];
+    const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+
+    /* Jak si člověk přeje zapisovat procenta: výchozí jedno číslo (starý web),
+       nebo celá řada kroků. Osobní volba, drží ji prohlížeč – stejný klíč
+       jako na nástěnce, ať se to chová všude stejně. */
+    const PODROBNE_KLIC = "kb-pct-podrobne";
+    const podrobne = () => {
+        try { return localStorage.getItem(PODROBNE_KLIC) === "1"; } catch (err) { return false; }
+    };
+    const nastavPodrobne = (zap) => {
+        try { localStorage.setItem(PODROBNE_KLIC, zap ? "1" : "0"); } catch (err) {}
+    };
+
+    /* Fajfka do zaškrtávátka – stejná jako na staré stránce postupu práce. */
+    const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M5 13l4 4L19 7"/></svg>';
+
+    /* Hodiny do tlačítka „Zapsat výkaz" v hlavičce úkolu. */
+    const LUPA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
+        '<circle cx="11" cy="11" r="6" stroke-width="2"/>' +
+        '<path stroke-linecap="round" stroke-width="2" d="M20 20l-4.5-4.5"/></svg>';
+
+    const HODINY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9" stroke-width="2"/>' +
+        '<path stroke-linecap="round" stroke-width="2" d="M12 7v5l3.5 2"/></svg>';
+
+    const params = new URLSearchParams(location.search);
+    let pohled = params.get("moje") ? "moje" : (params.get("zak") ? "zak" : "moje");
+    const zakSlug = params.get("zak") || "";
+    let editovanyId = "";
+    const historieOtevrena = new Set();   // u kterých úkolů je rozbalená historie
+    let sledovaniZapnuto = false;
+    const otevrene = new Set();
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        sledovaniZapnuto = true;
+        /* Úkoly smí číst každý člen – budget v nich neleží (je v tajné
+           kolekci budgety) a kdo pomáhal kolegovi, musí jeho úkol najít,
+           aby si na něj zapsal výkaz. */
+        window.KB.watchUkoly();
+        if (window.KBUI.can("vykaz.view")) window.KB.watchProjekty();
+        else window.KB.watchMojeProjekty();
+    }
+
+    /** Manažer (hlavní správce i správce) vidí a zapisuje všude. */
+    const jeManazer = () => window.KBUI.can("vykaz.view");
+
+    const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
+    const pctUkolu = (u) => (u.todo && u.todo.length)
+        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
+        : (u.stav === "hotovo" ? 100 : 0);
+
+    const najdiUkol = (id) => (window.KB.ukoly || []).find(x => x.id === id) || null;
+    const najdiTodo = (ukolId, todoId) => {
+        const u = najdiUkol(ukolId);
+        return u ? (u.todo || []).find(t => t.id === todoId) || null : null;
+    };
+
+    /** Datum a čas zápisu ve tvaru „3. 8. 2026 14:11". */
+    function casRazitko(ms) {
+        if (!ms) return "";
+        const d = new Date(ms);
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() + " " +
+            String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    /* Barevná stupnice rozpracovanosti: 0 % šedá · 25 a 50 % žlutá ·
+       75 % oranžová · 95 % slabší zelená · 100 % zelená. */
+    function pctUroven(pct) {
+        const hodnota = Number(pct) || 0;
+        if (hodnota >= 100) return "p100";
+        if (hodnota >= 95) return "p95";
+        if (hodnota >= 75) return "p75";
+        if (hodnota > 0) return "p50";
+        return "p0";
+    }
+
+    /* --------------------------------------------------- číselník úkolů ---
+       Z čeho se úkol skládá, si drží každý projekt sám: budovy, patra
+       i nabídku technologií. Nastavuje se to ve Správě projektů, tahle
+       stránka číselník už jen čte. Projekt, který nic nastavené nemá,
+       dostane vestavěné výchozí hodnoty – ať jde úkol založit hned. */
+
+    function ciselnik(projektNazev) {
+        const c = (window.KB.budgetCiselnik || {})[projektNazev] || {};
+        const nebo = (seznam, vychozi) =>
+            (Array.isArray(seznam) && seznam.length) ? seznam : vychozi;
+        return {
+            budovy: nebo(c.budovy, ["celá stavba"]),
+            patra: nebo(c.patra, PATRA_VYCHOZI),
+            technologie: nebo(c.technologie, TECH_KRESLENI())
+        };
+    }
+
+    /** Doplní hodnotu, kterou úkol má, ale číselník ji už nenabízí – jinak by
+        se při úpravě tiše přepsala na první položku roletky. */
+    const sHodnotou = (seznam, hodnota) =>
+        (hodnota && seznam.indexOf(hodnota) === -1) ? seznam.concat([hodnota]) : seznam;
+
+    /* ------------------------------------------------------------- výpis */
+
+    /* Oblíbené projekty (značí se hvězdičkou ve Správě, drží je prohlížeč).
+       Kdo žádné označené nemá, vidí chipy všech načtených projektů –
+       zaměstnanci se stejně načítají jen ty jeho. */
+    let oblFiltr = "";
+
+    function oblibeneProjekty() {
+        let ids = [];
+        try { ids = JSON.parse(localStorage.getItem("kb-sprava-oblibene") || "[]"); } catch (err) { }
+        const vse = window.KB.projektyDocs || [];
+        const vybrane = ids.length ? vse.filter(p => ids.indexOf(p.id) !== -1) : vse;
+        return vybrane.slice(0, 8).map(p => p.nazev).filter(Boolean);
+    }
+
+    function vykresliOblibene() {
+        const box = $("oblibeneChipy");
+        const nazvy = oblibeneProjekty();
+        box.hidden = !nazvy.length;
+        box.innerHTML = nazvy.map(n =>
+            '<button type="button" class="chip' + (oblFiltr === n ? " chip--active" : "") +
+                '" data-obl-projekt="' + esc(n) + '">' + esc(n) + "</button>").join("");
+    }
+
+    function vybrane() {
+        const uid = window.KB.currentUid();
+        return (window.KB.ukoly || []).filter(u => {
+            /* Bez zaškrtnutí se schovávají jen hotové POTVRZENÉ manažerem –
+               hotové čekající na potvrzení musí zůstat na očích. */
+            if (!$("fHotove").checked && u.stav === "hotovo" && u.potvrzeno === true
+                && pohled !== "zak") return false;
+            if (pohled === "moje" && (u.prirazeni || []).indexOf(uid) === -1) return false;
+            if (pohled === "zak" && window.KBUI.slug(u.projekt || "") !== zakSlug) return false;
+            if ($("fProjekt").value && (u.projekt || "") !== $("fProjekt").value) return false;
+            if (oblFiltr && (u.projekt || "") !== oblFiltr) return false;
+            return true;
+        });
+    }
+
+    /**
+     * Jedna TO-DO položka. Celý řádek je podbarvený podle procent, aby se
+     * stav dal přečíst z odstupu; zapisovat se dá třemi způsoby, protože
+     * každý sahá po něčem jiném – fajfka (hotovo/nic), číslo (po krocích)
+     * a táhlo (cokoliv po pěti procentech).
+     */
+    /* --------------------------------------------- poznámky u položky ---
+       Verze 1.0 je měla a lidem chyběly: „čekám, až to na stavbě udělají".
+       Bydlí UVNITŘ položky (`t.pozn`), ne vedle úkolu – pravidla databáze
+       pouštějí zaměstnance jen k poli `todo`, takže jinam by je nezapsal. */
+
+    /** Které poznámky jsou zrovna rozepsané (klíč ukolId|todoId). */
+    const poznFormy = new Set();
+
+    function poznamkyHtml(u, t, smiPsat) {
+        const klic = u.id + "|" + t.id;
+        const uid = window.KB.currentUid();
+        const seznam = (t.pozn || []).map(p => {
+            // svoji poznámku spraví každý, cizí jen manažer
+            const smiMenit = jeManazer() || (p.uid && p.uid === uid);
+            return '<div class="note" data-poznradek="' + esc(klic + "|" + p.id) + '">' +
+                '<span class="note__text">' + esc(p.text) + "</span>" +
+                '<span class="note__who">' + esc(p.kdo || "neznámý") +
+                    (p.ms ? " · " + esc(casRazitko(p.ms)) : "") +
+                    (smiMenit
+                        ? ' · <button type="button" class="note__akce" data-pozn-uprav="' +
+                            esc(klic + "|" + p.id) + '">upravit</button>' +
+                          ' · <button type="button" class="note__akce note__akce--smaz" data-pozn-smaz="' +
+                            esc(klic + "|" + p.id) + '">smazat</button>'
+                        : "") +
+                "</span>" +
+            "</div>";
+        }).join("");
+
+        const formular = poznFormy.has(klic)
+            ? '<div class="row" style="gap:8px;margin-top:6px">' +
+                '<input type="text" class="field grow" data-pozn-vstup="' + esc(klic) + '" ' +
+                    'placeholder="např. čekám, až to na stavbě udělají">' +
+                '<button type="button" class="btn btn--sm btn--primary" data-pozn-uloz="' +
+                    esc(klic) + '">Přidat</button>' +
+              "</div>"
+            : "";
+
+        if (!seznam && !formular) return "";
+        return '<div class="subtask__pozn">' + seznam + formular + "</div>";
+    }
+
+    function todoHtml(u, smiPsat) {
+        const zamek = smiPsat ? "" : " disabled";
+        const radky = (u.todo || []).map(t => {
+            const pct = Number(t.pct) || 0;
+            const klic = esc(u.id) + "|" + esc(t.id);
+            const kdo = t.by
+                ? "zapsal " + esc(t.by) + " · " + esc(casRazitko(t.ms))
+                : "zatím nikdo nepotvrdil";
+
+            return '<div class="subtaskblok">' +
+            '<div class="subtask subtask--' + pctUroven(pct) + (pct === 100 ? " subtask--done" : "") + '">' +
+                '<button type="button" class="subtask__check" data-prepni="' + klic + '"' + zamek +
+                    ' title="Přepnout mezi 0 a 100 %">' + CHECK + "</button>" +
+                '<span class="subtask__name">' + esc(t.text) + "</span>" +
+                '<span class="subtask__info">' + kdo + "</span>" +
+                /* Výchozí je jedno číslo a táhlo jako na starém webu.
+                   „% podrobně" místo nich vypíše celou řadu kroků –
+                   volba je osobní a drží ji prohlížeč. */
+                (podrobne()
+                    ? '<span class="subtask__kroky">' + PCT_KROKY.map(p =>
+                        '<button type="button" class="subtask__krok' + (pct === p ? " je-aktivni" : "") +
+                        '" data-pct="' + p + "|" + klic + '"' + zamek + ">" + p + "&nbsp;%</button>").join("") +
+                      "</span>"
+                    : '<button type="button" class="subtask__pct" data-krok="' + klic + '"' + zamek +
+                        ' title="Klikáním po krocích 0 → 25 → 50 → 75 → 95 → 100 %">' + pct + " %</button>" +
+                      '<input type="range" class="subtask__slider" min="0" max="100" step="5" value="' + pct + '" ' +
+                        'data-tahlo="' + klic + '"' + zamek +
+                        ' title="Přetažením nastavíš přesná procenta" aria-label="Postup v procentech">') +
+                (smiPsat
+                    ? '<button type="button" class="btn btn--sm btn--ghost subtask__add" ' +
+                        'data-pozn-nova="' + klic + '" title="Přidat poznámku">+</button>'
+                    : "") +
+            "</div>" +
+            poznamkyHtml(u, t, smiPsat) +
+            "</div>";
+        }).join("");
+
+        return radky ||
+            '<div class="tiny muted" style="padding:10px 14px">Úkol nemá TO-DO rozpad.</div>';
+    }
+
+    /**
+     * Štítky s tím, kdo na úkolu má pracovat. Jsou v hlavičce úkolu a barevné
+     * schválně – tohle je první otázka, na kterou se u úkolu hledá odpověď.
+     * Člověk, který ze seznamu lidí zmizel, se nezahazuje: úkol na někoho
+     * pořád visí a musí to být vidět.
+     */
+    function lideHtml(u) {
+        const jmena = (u.prirazeni || []).map(uid => jmenoUid(uid) || "neznámý člověk");
+        return jmena.length
+            ? jmena.map(j => '<span class="osoba">' + esc(j) + "</span>").join("")
+            : '<span class="osoba osoba--nikdo">nikomu nepřiděleno</span>';
+    }
+
+    function ukolHtml(u) {
+        const uid = window.KB.currentUid();
+        const pct = pctUkolu(u);
+        // zapisovat smí manažer všude, ostatní jen tam, kde jsou přiřazení
+        const smiPsat = jeManazer() || (u.prirazeni || []).indexOf(uid) !== -1;
+        const otevreny = otevrene.has(u.id);
+        const meta = [u.druh, u.technologie, u.budova, u.patro].filter(Boolean).join(" · ");
+
+        return '<div class="ukol' + (u.stav === "hotovo" ? " ukol--hotovo" : "") + '" id="ukol-' + esc(u.id) + '">' +
+            '<div class="ukol__hlava" data-rozbal="' + esc(u.id) + '">' +
+                '<div class="grow">' +
+                    '<div class="ukol__radek">' +
+                        '<span class="ukol__nazev">' + esc(u.nazev) + "</span>" +
+                        (u.stav === "hotovo" && u.potvrzeno !== true
+                            ? '<span class="osoba" title="Hotové od zaměstnance – čeká na potvrzení manažerem" ' +
+                                'style="background:#fff3d6;color:#9a6b00;border-color:#e8c877">čeká na potvrzení</span>'
+                            : "") +
+                        lideHtml(u) +
+                    "</div>" +
+                    '<div class="ukol__meta">' + esc(meta) +
+                        (u.termin ? (meta ? " · " : "") + "termín " + esc(V.czDatum(u.termin)) : "") +
+                    "</div></div>" +
+                /* Zápis výkazu je nejčastější důvod, proč se člověk k úkolu
+                   vrací – proto stojí rovnou v hlavičce, ne až v patě uvnitř.
+                   Do výkazu se předvyplní projekt, úkol i druh. */
+                (window.KBUI.can("vykaz.otevrit") && u.stav !== "hotovo"
+                    ? '<a class="ukol__vykaz" href="vykazy.html?ukol=' + encodeURIComponent(u.id) +
+                        '" title="Zapsat odpracovaný čas na tenhle úkol">' + HODINY +
+                        "<span>Zapsat výkaz</span></a>"
+                    : "") +
+                /* Manažer si vedle zápisu rovnou otevře, co už se na úkol
+                   zapsalo – bez lovení ve filtrech výkazů. */
+                (window.KBUI.can("vykaz.view")
+                    ? '<a class="ukol__vykaz ukol__vykaz--cist" href="vykazy.html?ukolFiltr=' +
+                        encodeURIComponent(u.id) + '" title="Zobrazit výkazy zapsané na tenhle úkol">' +
+                        LUPA + "<span>Zobrazit výkazy</span></a>"
+                    : "") +
+                '<span class="ukol__prubeh"><i style="width:' + pct + '%"></i></span>' +
+                '<span class="ukol__pct">' + pct + " %</span>" +
+            "</div>" +
+            (otevreny
+                ? '<div class="ukol__telo">' +
+                    '<div class="ukol__todo">' + todoHtml(u, smiPsat) + "</div>" +
+                    (historieOtevrena.has(u.id)
+                        ? '<div style="padding:8px 14px;border-top:1px dashed var(--line);font-size:12px;color:var(--text-soft)">' +
+                            ((u.historie || []).length ? "" :
+                                "Zatím žádný záznam – historie se zapisuje od 20. 8. 2026, starší posuny procent v ní nejsou.") +
+                            (u.historie || []).slice().reverse().map(h =>
+                                '<div style="padding:2px 0">' + esc(casRazitko(h.ms)) + " · <b>" +
+                                esc(h.kdo || "?") + "</b> · " + esc(h.text || "") + ": " +
+                                (Number(h.z) || 0) + " % → <b>" + (Number(h.na) || 0) + " %</b></div>").join("") +
+                          "</div>"
+                        : "") +
+                    '<div class="ukol__pata">' +
+                        '<span class="tiny muted">' + (u.poznamka ? esc(u.poznamka) : "") + "</span>" +
+                        '<span class="row" style="gap:8px">' +
+                        // „Zapsat výkaz" je nahoře v hlavičce, ať se kvůli
+                        // němu nemusí úkol rozbalovat – tady už podruhé není
+                        (window.KBUI.isAdmin() && u.stav === "hotovo" && u.potvrzeno !== true
+                            ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
+                                esc(u.id) + '">Potvrdit hotové</button>' : "") +
+                        '<button type="button" class="btn btn--sm btn--ghost" data-historie="' + esc(u.id) + '">' +
+                            (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>" +
+                        (smiPsat && u.stav !== "hotovo"
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
+                        (window.KBUI.can("ukol.delete")
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(u.id) + '">Upravit</button>' : "") +
+                        "</span>" +
+                    "</div>" +
+                  "</div>"
+                : "") +
+        "</div>";
+    }
+
+    function vykresli() {
+        /* Rozepsaná úprava TO-DO by při překreslení zmizela i s textem –
+           dokud je otevřená, seznam se nesahá. */
+        if (document.querySelector("[data-todo-input]")) return;
+        const seznam = vybrane();
+
+        // roletka projektů ve filtru
+        const nazvy = [];
+        (window.KB.ukoly || []).forEach(u => {
+            if (u.projekt && nazvy.indexOf(u.projekt) === -1) nazvy.push(u.projekt);
+        });
+        const drzene = $("fProjekt").value;
+        $("fProjekt").innerHTML = V.options(nazvy, drzene, "— všechny projekty —");
+        // projektů bývají desítky – do filtru se píše, nehledá se očima
+        window.KBUI.naseptavac($("fProjekt"), {
+            nazev: "Hledat projekt",
+            popis: "Piš název projektu…",
+            prazdne: "Zatím žádné projekty"
+        });
+
+        document.querySelectorAll("[data-pohled]").forEach(ch =>
+            ch.classList.toggle("je-zapnuty", ch.dataset.pohled === pohled));
+
+        /* Tlačítko říká, co udělá: dokud je zavřený aspoň jeden vypsaný úkol,
+           rozbaluje; teprve když jsou otevřené všechny, nabízí sbalení. */
+        $("btnRozbal").textContent = vsePlneRozbaleno(seznam) ? "Sbalit vše" : "Rozbalit vše";
+        $("prepPodrobne").classList.toggle("je-zapnuty", podrobne());
+        $("btnRozbal").disabled = !seznam.length;
+
+        vykresliOblibene();
+
+        /* Dvě úrovně (přání Michala 21. 8.): nejdřív PROJEKT, uvnitř
+           projektu podskupiny podle DRUHU práce (ArcGIS, Focení, Skeny…). */
+        const projekty = new Map();
+        seznam.forEach(u => {
+            const klic = u.projekt || "Bez projektu";
+            if (!projekty.has(klic)) projekty.set(klic, []);
+            projekty.get(klic).push(u);
+        });
+
+        $("vypis").innerHTML = Array.from(projekty.entries())
+            .sort((a, b) => a[0].localeCompare(b[0], "cs"))
+            .map(([projekt, ukoly]) => {
+            const prumer = Math.round(ukoly.reduce((s, u) => s + pctUkolu(u), 0) / ukoly.length);
+            const druhy = new Map();
+            ukoly.forEach(u => {
+                const d = u.druh || "Bez druhu";
+                if (!druhy.has(d)) druhy.set(d, []);
+                druhy.get(d).push(u);
+            });
+            return '<div class="skupina-nadpis">' + esc(projekt) +
+                '<span class="tag">' + prumer + " % · " +
+                V.pocet(ukoly.length, ["úkol", "úkoly", "úkolů"]) + "</span></div>" +
+                Array.from(druhy.entries())
+                    .sort((a, b) => a[0].localeCompare(b[0], "cs"))
+                    .map(([druh, du]) =>
+                        '<div class="skupina-druh">' + esc(druh) +
+                            ' <span class="muted">(' + du.length + ")</span></div>" +
+                        du.map(ukolHtml).join("")).join("");
+        }).join("") ||
+            '<div class="card center" style="padding:34px;color:var(--muted);font-size:14px">' +
+            (pohled === "moje" ? "Žádný úkol pro tebe. Až ti manažer nějaký přiřadí, objeví se tady."
+                               : "Žádné úkoly.") + "</div>";
+    }
+
+    const vsePlneRozbaleno = (seznam) =>
+        seznam.length > 0 && seznam.every(u => otevrene.has(u.id));
+
+    /** Rozbalí (nebo sbalí) TO-DO u všech právě vypsaných úkolů naráz. */
+    function prepniRozbaleniVsech() {
+        const seznam = vybrane();
+        const sbalit = vsePlneRozbaleno(seznam);
+        seznam.forEach(u => { sbalit ? otevrene.delete(u.id) : otevrene.add(u.id); });
+        vykresli();
+    }
+
+    /* ------------------------------------------------- zápis postupu ----
+       Přiřazený člověk smí měnit jen `todo` a `stav` – přesně to posílá
+       KB.ulozUkolPostup, aby zápis prošel pravidly databáze. */
+
+    async function zapisPct(ukolId, todoId, pct) {
+        const u = najdiUkol(ukolId);
+        if (!u) return;
+        const puvodni = (u.todo || []).find(t => t.id === todoId);
+        const todo = (u.todo || []).map(t => t.id === todoId
+            ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
+        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        try {
+            await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
+                puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zápis se nepovedl – postup zapisuje jen přiřazený člověk.", "error");
+        }
+    }
+
+    /* ------------------------------------------- zápis poznámek k TO-DO ---
+       Poznámky leží uvnitř položky (`t.pozn`), takže se ukládají tímtéž
+       zápisem jako procenta – přiřazený člověk na to má právo. */
+
+    /** Uloží změněné položky; stav se dopočítá z procent. */
+    async function ulozTodo(ukolId, todo, popis) {
+        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        try {
+            await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
+                null, popis);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Nepovedlo se – k úkolu píše jen přiřazený člověk.", "error");
+        }
+    }
+
+    /** Vymění jednu položku v seznamu za upravenou. */
+    const sPolozkou = (u, todoId, uprav) =>
+        (u.todo || []).map(t => t.id === todoId ? uprav(t) : t);
+
+    async function pridejPoznamku(klic) {
+        const [ukolId, todoId] = klic.split("|");
+        const vstup = document.querySelector('[data-pozn-vstup="' + klic + '"]');
+        const text = vstup ? vstup.value.trim() : "";
+        if (!text) { poznFormy.delete(klic); return void vykresli(); }
+
+        const u = najdiUkol(ukolId);
+        if (!u) return;
+        poznFormy.delete(klic);
+        await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
+            pozn: (t.pozn || []).concat([{
+                id: "pz_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                text: text.slice(0, 300),
+                kdo: window.KB_USER || "",
+                uid: window.KB.currentUid() || "",
+                ms: Date.now()
+            }])
+        })), "přidal poznámku k TO-DO");
+    }
+
+    async function smazPoznamku(klic) {
+        const [ukolId, todoId, poznId] = klic.split("|");
+        const u = najdiUkol(ukolId);
+        if (!u) return;
+        if (!confirm("Smazat poznámku?")) return;
+        await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
+            pozn: (t.pozn || []).filter(p => p.id !== poznId)
+        })), "smazal poznámku u TO-DO");
+    }
+
+    /** Přepne poznámku do psaní. Enter uloží, Escape zruší, odkliknutí uloží. */
+    function upravPoznamku(klic) {
+        const [ukolId, todoId, poznId] = klic.split("|");
+        const u = najdiUkol(ukolId);
+        const polozka = u && (u.todo || []).find(t => t.id === todoId);
+        const pozn = polozka && (polozka.pozn || []).find(p => p.id === poznId);
+        if (!pozn) return;
+
+        const radek = document.querySelector('[data-poznradek="' + klic + '"]');
+        const misto = radek && radek.querySelector(".note__text");
+        if (!misto) return;
+        misto.innerHTML = '<input type="text" class="field note__vstup" data-todo-input>';
+        const vstup = misto.querySelector("input");
+        vstup.value = pozn.text;
+        vstup.focus();
+        vstup.select();
+
+        let hotovo = false;
+        const konec = async (ulozit) => {
+            if (hotovo) return;
+            hotovo = true;
+            /* Značka pryč HNED: dokud tu je, `vykresli` se schválně nespouští
+               (aby nesebrala rozepsaný text) a seznam by zůstal viset. */
+            vstup.removeAttribute("data-todo-input");
+            const text = vstup.value.trim();
+            if (!ulozit || !text || text === pozn.text) return void vykresli();
+            await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
+                pozn: (t.pozn || []).map(x => x.id === poznId
+                    ? Object.assign({}, x, { text: text.slice(0, 300) }) : x)
+            })), "opravil poznámku u TO-DO");
+        };
+        vstup.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); konec(true); }
+            if (e.key === "Escape") { e.preventDefault(); konec(false); }
+        });
+        vstup.addEventListener("blur", () => konec(true));
+    }
+
+    /* ------------------------------------------------------ tvorba ----- */
+
+    /** Zavře okno úpravy a pustí rolování stránky pod ním. */
+    function zavriTvorbu() {
+        $("tvorba").hidden = true;
+        document.body.style.overflow = "";
+    }
+
+    function doplnNazev() {
+        const druh = $("uDruh").value;
+        const tech = $("uTech").value;
+        /* U ArcGIS zastupuje druh sama technologie – tak se úkoly psaly
+           odjakživa („VZT – G61"). U ostatních druhů jde technologie za
+           druh („Focení – CHL"). */
+        const zacatek = druh === "ArcGIS/Kreslení" ? [tech || druh] : [druh, tech];
+        const kusy = zacatek.concat([$("uBudova").value, $("uPatro").value])
+            .filter(x => x && x !== "celá stavba");
+        $("uNazev").value = kusy.join(" – ") || druh;
+    }
+
+    function naplnTvorbu(u) {
+        editovanyId = u ? u.id : "";
+        $("tvorbaNadpis").textContent = u ? "Úprava úkolu" : "Nový úkol";
+        $("btnSmazat").hidden = !u;
+
+        const projekty = (window.KB.projektyDocs || []).filter(p => !p.uzavreno)
+            .map(p => p.nazev);
+        $("uProjekt").innerHTML = V.options(projekty, u ? u.projekt || "" : "", "— vyber projekt —");
+        window.KBUI.naseptavac($("uProjekt"), {
+            nazev: "Hledat projekt",
+            popis: "Piš číslo nebo název projektu…",
+            prazdne: "Zatím žádné projekty"
+        });
+        $("uDruh").value = u ? u.druh || "ArcGIS/Kreslení" : "ArcGIS/Kreslení";
+        prepniProjekt(u);
+        $("uTermin").value = u ? u.termin || "" : "";
+        $("uNazev").value = u ? u.nazev || "" : "";
+        $("uTodo").value = u ? (u.todo || []).map(t => t.text).join("\n") : "";
+        $("uPoznamka").value = u ? u.poznamka || "" : "";
+
+        const vybrani = new Set(u ? u.prirazeni || [] : []);
+        $("uLide").innerHTML = V.lide().map(cl =>
+            "<label><input type=\"checkbox\" value=\"" + esc(cl.id) + "\"" +
+            (vybrani.has(cl.id) ? " checked" : "") + "> " + esc(V.jmeno(cl)) + "</label>").join("");
+
+        $("tvorba").hidden = false;
+        document.body.style.overflow = "hidden";   // pod oknem se neroluje
+        if (!u) doplnNazev();
+        $("uProjekt").focus();
+    }
+
+    /**
+     * Nabídky budov, pater i technologií se řídí vybraným projektem.
+     * `u` je úkol, který se právě otevřel k úpravě – jeho hodnoty se do
+     * roletky doplní, i kdyby je číselník projektu už nenabízel, aby se při
+     * uložení tiše nepřepsaly. Při ručním přepnutí projektu se naopak drží
+     * jen to, co nový projekt zná.
+     */
+    function prepniProjekt(u) {
+        const c = ciselnik($("uProjekt").value);
+        const napln = (id, seznam, klic, prazdne) => {
+            const hodnota = u ? (u[klic] || "") : $(id).value;
+            $(id).innerHTML = V.options(u ? sHodnotou(seznam, hodnota) : seznam, hodnota, prazdne);
+        };
+        napln("uTech", c.technologie, "technologie", "— technologie —");
+        napln("uBudova", c.budovy, "budova", null);
+        napln("uPatro", c.patra, "patro", "— celé —");
+    }
+
+    async function ulozUkol() {
+        const projektNazev = $("uProjekt").value;
+        if (!projektNazev) return void window.KBUI.toast("Vyber projekt.", "warn");
+        const nazev = $("uNazev").value.trim();
+        if (!nazev) return void window.KBUI.toast("Úkol potřebuje název.", "warn");
+
+        const puvodni = najdiUkol(editovanyId);
+        const projektDoc = (window.KB.projektyDocs || []).find(p => p.nazev === projektNazev);
+
+        /* TO-DO řádky. Procenta se drží nejdřív podle textu, a co se
+           nespáruje, podle POŘADÍ – jinak by oprava překlepu v položce
+           vypadala jako nová položka a shodila by zapsaná procenta
+           i s tím, kdo je zapsal. */
+        const puvodniTodo = puvodni ? puvodni.todo || [] : [];
+        const texty = $("uTodo").value.split("\n").map(r => r.trim()).filter(Boolean);
+        const podleTextu = new Map(puvodniTodo.map(t => [t.text, t]));
+        const pouzite = new Set();
+        const todo = texty.map((text, i) => {
+            const shoda = podleTextu.get(text);
+            if (shoda && !pouzite.has(shoda.id)) {
+                pouzite.add(shoda.id);
+                return shoda;
+            }
+            return { text: text, _index: i };
+        }).map((polozka, i) => {
+            if (!polozka._index && polozka._index !== 0) return polozka;   // už spárováno
+            const naPozici = puvodniTodo[i];
+            if (naPozici && !pouzite.has(naPozici.id) && !texty.includes(naPozici.text)) {
+                pouzite.add(naPozici.id);
+                return Object.assign({}, naPozici, { text: polozka.text });
+            }
+            return { id: "td_" + Date.now() + "_" + i, text: polozka.text,
+                     pct: 0, by: "", ms: 0 };
+        });
+
+        const id = editovanyId || window.KB.newUkolId();
+        $("btnUlozit").disabled = true;
+        try {
+            await window.KB.saveUkol(id, {
+                projektId: projektDoc ? projektDoc.id : (puvodni ? puvodni.projektId : ""),
+                projekt: projektNazev,
+                nazev: nazev,
+                druh: $("uDruh").value,
+                /* Technologie se ukládá u KAŽDÉHO druhu. Dřív se mimo ArcGIS
+                   zahazovala, takže úkol založený z matice o ni po první
+                   úpravě přišel a vypadl z matice i ze souhrnů. */
+                technologie: $("uTech").value,
+                budova: $("uBudova").value === "celá stavba" ? "" : $("uBudova").value,
+                patro: $("uPatro").value,
+                prirazeni: Array.from($("uLide").querySelectorAll("input:checked")).map(ch => ch.value),
+                termin: $("uTermin").value,
+                // budget se už nikde nezadává; u starších úkolů se jen přenese dál
+                budgetHodin: puvodni ? puvodni.budgetHodin : 0,
+                stav: puvodni ? puvodni.stav : "otevreny",
+                todo: todo,
+                poznamka: $("uPoznamka").value.trim(),
+                createdMs: puvodni ? puvodni.createdMs : undefined,
+                createdBy: puvodni ? puvodni.createdBy : undefined
+            });
+            zavriTvorbu();
+            window.KBUI.toast("Úkol uložen.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo – úkoly zakládají manažeři.", "error");
+        } finally {
+            $("btnUlozit").disabled = false;
+        }
+    }
+
+    /* -------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "ukoly.html" });
+        if (window.KBUI.can("vykaz.view") && (zakSlug || params.get("vse"))) pohled = zakSlug ? "zak" : "vse";
+
+        $("btnNovy").addEventListener("click", () => naplnTvorbu(null));
+        $("btnZrusit").addEventListener("click", zavriTvorbu);
+        $("btnZavri").addEventListener("click", zavriTvorbu);
+        // klik na tmavé pozadí a Escape zavírají stejně jako Zrušit
+        $("tvorba").addEventListener("click", (event) => {
+            if (event.target === $("tvorba")) zavriTvorbu();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape" || $("tvorba").hidden) return;
+            /* `event.target` nemusí být prvek (klávesa mimo pole míří na
+               document), proto se `closest` volá jen když existuje. */
+            const cil = event.target;
+            if (cil && cil.closest && cil.closest("[data-todo-input]")) return;
+            zavriTvorbu();
+        });
+        $("btnUlozit").addEventListener("click", ulozUkol);
+        $("btnRozbal").addEventListener("click", prepniRozbaleniVsech);
+        $("btnSmazat").addEventListener("click", async () => {
+            if (!editovanyId) return;
+            if (!confirm("Opravdu smazat celý úkol i s postupem?")) return;
+            await window.KB.deleteUkol(editovanyId).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+            zavriTvorbu();
+        });
+        /* Šablony TO-DO projektu (nastavují se ve Správě → Nastavení úkolů).
+           Tlačítka se ukážou, jen když pro vybranou technologii / patro
+           šablona existuje. */
+        const projektDoc = () => (window.KB.projektyDocs || [])
+            .find(x => (x.nazev || "") === $("uProjekt").value);
+        const sabTechText = () => {
+            const p = projektDoc();
+            const t = (p && p.sablony && p.sablony.tech) || {};
+            return String(t[$("uTech").value] || "").trim();
+        };
+        const sabMistText = () => {
+            const p = projektDoc();
+            const m = (p && p.sablony && p.sablony.mistnosti) || {};
+            return String(((m[$("uBudova").value] || {})[$("uPatro").value]) || "").trim();
+        };
+        const obnovSablony = () => {
+            const t = sabTechText(), m = sabMistText();
+            $("uSabTech").hidden = !t;
+            if (t) $("uSabTech").textContent = "TO-DO ze šablony " + $("uTech").value +
+                " (" + t.split("\n").length + ")";
+            $("uSabMist").hidden = !m;
+            if (m) $("uSabMist").textContent = "TO-DO = místnosti " + $("uPatro").value +
+                " (" + m.split("\n").length + ")";
+        };
+        const vlozTodo = (text) => {
+            if (!text) return;
+            const ted = $("uTodo").value.trim();
+            $("uTodo").value = (ted ? ted + "\n" : "") + text;
+        };
+        $("uSabTech").addEventListener("click", () => vlozTodo(sabTechText()));
+        $("uSabMist").addEventListener("click", () => vlozTodo(sabMistText()));
+        ["uProjekt", "uTech", "uBudova", "uPatro"].forEach(id =>
+            $(id).addEventListener("change", obnovSablony));
+
+        $("uDruh").addEventListener("change", doplnNazev);
+        $("uProjekt").addEventListener("change", () => { prepniProjekt(null); doplnNazev(); });
+        ["uTech", "uBudova", "uPatro"].forEach(id => $(id).addEventListener("change", doplnNazev));
+        $("fHotove").addEventListener("change", vykresli);
+        $("fProjekt").addEventListener("change", vykresli);
+
+        /* Táhlo ukládá až po puštění (change), ne během tažení – jinak by
+           každý pohyb myší znamenal zápis do databáze. */
+        document.addEventListener("change", (event) => {
+            const tahlo = event.target.closest("[data-tahlo]");
+            if (!tahlo) return;
+            const [ukolId, todoId] = tahlo.dataset.tahlo.split("|");
+            zapisPct(ukolId, todoId, Number(tahlo.value));
+        });
+
+        // Enter v poli nové poznámky ji rovnou uloží
+        document.addEventListener("keydown", (event) => {
+            const cil = event.target;
+            const vstup = cil && cil.closest && cil.closest("[data-pozn-vstup]");
+            if (!vstup) return;
+            if (event.key === "Enter") { event.preventDefault(); pridejPoznamku(vstup.dataset.poznVstup); }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                poznFormy.delete(vstup.dataset.poznVstup);
+                vykresli();
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            const pohledBtn = event.target.closest("[data-pohled]");
+            if (pohledBtn) { pohled = pohledBtn.dataset.pohled; return void vykresli(); }
+
+            const oblChip = event.target.closest("[data-obl-projekt]");
+            if (oblChip) {
+                // druhý klik na tentýž chip filtr zase zruší
+                oblFiltr = oblFiltr === oblChip.dataset.oblProjekt ? "" : oblChip.dataset.oblProjekt;
+                return void vykresli();
+            }
+
+            const poznNova = event.target.closest("[data-pozn-nova]");
+            if (poznNova) {
+                poznFormy.add(poznNova.dataset.poznNova);
+                vykresli();
+                const vstup = document.querySelector('[data-pozn-vstup="' +
+                    poznNova.dataset.poznNova + '"]');
+                if (vstup) vstup.focus();
+                return;
+            }
+            const poznUloz = event.target.closest("[data-pozn-uloz]");
+            if (poznUloz) return void pridejPoznamku(poznUloz.dataset.poznUloz);
+
+            const poznUprav = event.target.closest("[data-pozn-uprav]");
+            if (poznUprav) return void upravPoznamku(poznUprav.dataset.poznUprav);
+
+            const poznSmaz = event.target.closest("[data-pozn-smaz]");
+            if (poznSmaz) return void smazPoznamku(poznSmaz.dataset.poznSmaz);
+
+            const potvrd = event.target.closest("[data-potvrd]");
+            if (potvrd) {
+                potvrd.disabled = true;
+                window.KB.potvrdUkol(potvrd.dataset.potvrd)
+                    .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
+                    .catch(() => { potvrd.disabled = false;
+                        window.KBUI.toast("Potvrzení selhalo.", "error"); });
+                return;
+            }
+            const hist = event.target.closest("[data-historie]");
+            if (hist) {
+                const id = hist.dataset.historie;
+                historieOtevrena.has(id) ? historieOtevrena.delete(id) : historieOtevrena.add(id);
+                return void vykresli();
+            }
+            const rozbal = event.target.closest("[data-rozbal]");
+            // odkaz „Zapsat výkaz" sedí uvnitř hlavičky – klik na něj vede
+            // do výkazů, ne na rozbalení úkolu
+            if (rozbal && !event.target.closest("button, a")) {
+                const id = rozbal.dataset.rozbal;
+                otevrene.has(id) ? otevrene.delete(id) : otevrene.add(id);
+                return void vykresli();
+            }
+
+            // zaškrtávátko: hotovo ↔ nic
+            const prepni = event.target.closest("[data-prepni]");
+            if (prepni && !prepni.disabled) {
+                const [ukolId, todoId] = prepni.dataset.prepni.split("|");
+                const t = najdiTodo(ukolId, todoId);
+                return void zapisPct(ukolId, todoId, (t && Number(t.pct) === 100) ? 0 : 100);
+            }
+
+            // podrobná řada: rovnou na zvolenou hodnotu
+            const pctBtn = event.target.closest("[data-pct]");
+            if (pctBtn && !pctBtn.disabled) {
+                const [hodnota, ukolId, todoId] = pctBtn.dataset.pct.split("|");
+                return void zapisPct(ukolId, todoId, Number(hodnota));
+            }
+
+            // přepnutí způsobu zapisování procent
+            if (event.target.closest("#prepPodrobne")) {
+                nastavPodrobne(!podrobne());
+                return void vykresli();
+            }
+
+            // číslo procent: posun po krocích dokola
+            const krok = event.target.closest("[data-krok]");
+            if (krok && !krok.disabled) {
+                const [ukolId, todoId] = krok.dataset.krok.split("|");
+                const t = najdiTodo(ukolId, todoId);
+                const ted = t ? Number(t.pct) || 0 : 0;
+                // hodnota mimo stupnici (třeba z táhla) skočí na nejbližší vyšší krok
+                const i = PCT_KROKY.indexOf(ted);
+                const dalsi = i === -1 ? (PCT_KROKY.find(p => p > ted) || 0)
+                                       : PCT_KROKY[(i + 1) % PCT_KROKY.length];
+                return void zapisPct(ukolId, todoId, dalsi);
+            }
+
+            const vse = event.target.closest("[data-vse]");
+            if (vse) {
+                const boxy = document.getElementById(vse.dataset.vse).querySelectorAll("input[type=checkbox]");
+                const zapnout = Array.from(boxy).some(ch => !ch.checked);
+                boxy.forEach(ch => { ch.checked = zapnout; });
+                vse.textContent = zapnout ? "zrušit výběr" : "vybrat vše";
+                return;
+            }
+            const hotovo = event.target.closest("[data-hotovo]");
+            if (hotovo) {
+                const u = najdiUkol(hotovo.dataset.hotovo);
+                if (u) window.KB.ulozUkolPostup(u.id,
+                    (u.todo || []).map(t => Object.assign({}, t, { pct: 100 })), "hotovo");
+                return;
+            }
+            const uprav = event.target.closest("[data-uprav]");
+            if (uprav) naplnTvorbu(najdiUkol(uprav.dataset.uprav));
+        });
+
+        /* ?novy=1 – příchod z „+ Nový úkol" ve Správě: formulář se otevře
+           sám a projekt je předvybraný podle ?zak= (řeší prepniProjekt). */
+        let novyOtevren = false;
+        const otevriNovy = () => {
+            if (novyOtevren || !params.get("novy")) return;
+            if (!window.KBUI.can("ukol.create")) return;
+            novyOtevren = true;
+            naplnTvorbu(null);
+            if (zakSlug) {
+                const shoda = (window.KB.projektyDocs || []).find(x =>
+                    window.KBUI.slug(x.nazev || "") === zakSlug);
+                if (shoda) { $("uProjekt").value = shoda.nazev; prepniProjekt(null); doplnNazev(); }
+            }
+        };
+
+        const start = () => { zapniSledovani(); vykresli(); otevriNovy(); };
+        document.addEventListener("kb-role", otevriNovy);
+        window.KB.on("projekty-docs", otevriNovy);
+        document.addEventListener("kb-role", start);
+        window.KB.on("ukoly", vykresli);
+        window.KB.on("users", vykresli);
+        window.KB.on("projekty-docs", vykresliOblibene);
+        /* Číselník budov, pater a technologií chodí spolu se zakázkami – po
+           jeho příchodu se přesypou roletky i v otevřeném formuláři, aby
+           nabízely to, co má vybraný projekt. U rozepsané úpravy se předá
+           i upravovaný úkol, ať se jeho hodnoty z roletky neztratí. */
+        window.KB.on("zakazky", () => {
+            if (!$("tvorba").hidden) prepniProjekt(najdiUkol(editovanyId));
+        });
+
+        /* Proklik z „HOTOVO?" na nástěnce: ?otevri=ID úkol rovnou rozbalí
+           a sroluje na něj – manažer ho nemá hledat očima. Čeká se, až
+           úkol dorazí z databáze a vykreslí se (posluchač je zapsaný AŽ ZA
+           vykresli, takže běží nad hotovým výpisem). */
+        const otevriId = params.get("otevri");
+        let najeto = false;
+        const najedNaOtevreny = () => {
+            if (najeto) return;
+            const prvek = document.getElementById("ukol-" + otevriId);
+            if (!prvek) return;                    // data nebo výpis ještě nedoběhly
+            najeto = true;
+            prvek.scrollIntoView({ behavior: "smooth", block: "center" });
+        };
+        if (otevriId) {
+            otevrene.add(otevriId);
+            window.KB.on("ukoly", najedNaOtevreny);
+            document.addEventListener("kb-role", najedNaOtevreny);
+        }
+
+        start();
+        if (otevriId) najedNaOtevreny();
+    });
+})();
+</script>
+</body>
+</html>

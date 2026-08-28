@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#c8102e">
+    <title>Barvy webu – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=159">
+    <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Hlavička stránky: nadpis a hned vedle něj tlačítka, všechno doleva.
+           Stránka je široká (--sirka-stranky až 1720 px), takže rozhození na
+           opačné konce (justify-content:space-between) by mezi nadpis
+           a tlačítka udělalo přes půl obrazovky prázdna. */
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__akce { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        /* Popis patří POD nadpis, ne vedle něj: na široké stránce by nadpisový
+           blok roztáhl na celou šířku a tlačítka by spadla na druhý řádek. */
+        .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
+
+        .lab { display: grid; gap: 18px; grid-template-columns: 1fr; align-items: start; }
+        @media (min-width: 1000px) {
+            .lab { grid-template-columns: 380px 1fr; }
+            .lab__panel { position: sticky; top: 74px; }
+        }
+        .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+        .swatch {
+            border: 2px solid transparent;
+            border-radius: var(--radius);
+            padding: 0;
+            background: none;
+            cursor: pointer;
+            text-align: left;
+            font: inherit;
+        }
+        .swatch__color { height: 46px; border-radius: var(--radius); border: 1px solid rgba(0, 0, 0, .12); }
+        .swatch__name { display: block; font-size: 11.5px; font-weight: 700; margin-top: 5px; line-height: 1.25; }
+        .swatch__hex  { display: block; font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+        .swatch.is-active { border-color: var(--text); }
+        .swatch.is-active .swatch__name { color: var(--accent); }
+
+        .slider { display: flex; align-items: center; gap: 10px; }
+        .slider input[type=range] { flex: 1; accent-color: var(--accent); }
+        .slider__val { width: 46px; text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+        .vars { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 12px; }
+        .vars code { font-family: ui-monospace, Consolas, monospace; }
+        .vars i { width: 22px; height: 14px; display: inline-block; border-radius: 3px; border: 1px solid var(--line); vertical-align: -2px; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:18px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
+
+    <!-- vzhled webu ladí jen hlavní správce -->
+    <div id="denied" hidden class="card center" style="padding:56px;color:var(--muted);font-size:14px">
+        Vzhled webu ladí jen <b>hlavní správce</b>.
+        <div style="margin-top:14px"><button id="btnLogin" class="btn btn--primary btn--sm">Přihlásit se</button></div>
+    </div>
+
+    <div id="app" hidden class="col" style="gap:14px">
+
+    <div>
+        <div class="hlavicka">
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Barvy webu</h2>
+            <!-- Zkopírovat CSS a Vrátit původní zůstávají dole u míchání barev.
+                 Zdvojené tlačítko je horší než žádné, takže tady nic není. -->
+        </div>
+        <p class="small muted hlavicka__popis">
+            Posuvníky nebo hotové odstíny mění barvu rovnou v celé stránce – včetně lišty nahoře.
+            Zkoušení platí jen tady; tlačítkem <b>Používat tuhle barvu</b> se volba zapne
+            na celém webu v tomhle prohlížeči. Ostatním lidem zůstává výchozí.
+        </p>
+    </div>
+
+    <div class="lab">
+        <!-- ------------------------------------------------------ ovládání -->
+        <section class="lab__panel card col" style="padding:18px;gap:18px">
+
+            <div>
+                <span class="label">Hotové odstíny</span>
+                <div class="swatches" id="presets"></div>
+            </div>
+
+            <div class="col" style="gap:10px">
+                <span class="label" style="margin:0">Vlastní míchání</span>
+                <div class="slider">
+                    <span class="tiny muted" style="width:56px">Odstín</span>
+                    <input type="range" id="sH" min="0" max="360" step="1">
+                    <span class="slider__val" id="vH"></span>
+                </div>
+                <div class="slider">
+                    <span class="tiny muted" style="width:56px">Sytost</span>
+                    <input type="range" id="sS" min="0" max="100" step="1">
+                    <span class="slider__val" id="vS"></span>
+                </div>
+                <div class="slider">
+                    <span class="tiny muted" style="width:56px">Světlost</span>
+                    <input type="range" id="sL" min="10" max="70" step="1">
+                    <span class="slider__val" id="vL"></span>
+                </div>
+                <div class="row" style="gap:10px">
+                    <input type="color" id="picker" style="width:52px;height:40px;border:1px solid var(--line);border-radius:var(--radius);background:none;padding:2px;cursor:pointer">
+                    <input type="text" id="hex" class="field grow" style="font-family:ui-monospace,Consolas,monospace" spellcheck="false">
+                </div>
+            </div>
+
+            <div>
+                <span class="label">Dopočítané odstíny</span>
+                <div class="vars" id="vars"></div>
+                <div id="contrast" class="tiny" style="margin-top:10px;line-height:1.5"></div>
+            </div>
+
+            <div>
+                <span class="label">Moje uložené barvy</span>
+                <div class="swatches" id="vlastni"></div>
+                <button type="button" id="btnUlozVlastni" class="btn btn--ghost btn--sm"
+                        style="margin-top:6px">+ Uložit současnou barvu</button>
+            </div>
+
+            <div class="col" style="gap:8px">
+                <div class="row" style="gap:8px">
+                    <button id="btnPouzit" class="btn btn--primary btn--sm grow">Používat tuhle barvu</button>
+                    <button id="btnReset" class="btn btn--ghost btn--sm grow">Vrátit výchozí</button>
+                </div>
+                <div class="row" style="gap:8px">
+                    <button id="btnCss" class="btn btn--ghost btn--sm grow">Zkopírovat CSS</button>
+                </div>
+                <div class="tiny muted" style="line-height:1.5">
+                    <b>Používat tuhle barvu</b> ji zapne v tomhle prohlížeči na celém webu
+                    a vydrží i po zavření. Ostatním lidem zůstává výchozí – tu mění jen
+                    zápis do <code>app.css</code>.
+                </div>
+            </div>
+        </section>
+
+        <!-- -------------------------------------------------------- ukázka -->
+        <section class="col" style="gap:16px">
+
+            <div class="card col" style="padding:16px;gap:12px">
+                <span class="label" style="margin:0">Dlaždice rozcestníku</span>
+                <div class="tilegrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">
+                    <div class="tile">
+                        <a class="tile__main" href="#">
+                            <div class="tile__head">
+                                <div class="tile__icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" id="ico1"></svg></div>
+                                <div class="tile__title">PASPORTIZAČNÍ POSTUPY</div>
+                            </div>
+                            <div class="tile__sub">Pracovní postupy u jednotlivých profesí</div>
+                        </a>
+                        <div class="tile__children">
+                            <span class="chip">SLN</span><span class="chip">STĚNY</span><span class="chip">CHLAZENÍ</span>
+                        </div>
+                    </div>
+                    <div class="tile">
+                        <a class="tile__main" href="#">
+                            <div class="tile__head">
+                                <div class="tile__icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" id="ico2"></svg></div>
+                                <div class="tile__title">ZAKÁZKA A</div>
+                            </div>
+                            <div class="tile__sub">2 úkoly · nejbližší termín 14. 8. 2026</div>
+                        </a>
+                        <div class="tile__list">
+                            <div class="tile__listrow"><span class="tile__dot tile__dot--run"></span><b>Odevzdání stavby</b><span class="tile__listpct">43 %</span></div>
+                            <div class="tile__listrow"><span class="tile__dot tile__dot--done"></span><b>Zaměření</b><span class="tile__listpct">100 %</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card col" style="padding:16px;gap:12px">
+                <span class="label" style="margin:0">Lišta, filtry a tlačítka</span>
+                <div class="subbar__in" style="padding:0">
+                    <div class="subbar__left">
+                        <span class="subbar__cat">SKRIPTY</span>
+                        <span class="subbar__sep"></span>
+                        <span class="chip chip--active">VŠE</span>
+                        <span class="chip">OBECNÉ</span>
+                        <span class="chip">STAVBA</span>
+                    </div>
+                </div>
+                <div class="row row--wrap" style="gap:8px">
+                    <button class="btn btn--primary btn--sm">Hlavní tlačítko</button>
+                    <button class="btn btn--ghost btn--sm">Vedlejší</button>
+                    <span class="tag">ŠTÍTEK KATEGORIE</span>
+                    <span class="rolepill rolepill--admin">REŽIM SPRÁVCE</span>
+                </div>
+                <button class="gtile" style="max-width:320px">
+                    <div class="gtile__cat">OBECNÉ</div>
+                    <div class="gtile__title">Jak si nechat od AI napsat funkční skript</div>
+                    <div class="gtile__meta">Michal Kočiš · v1.0</div>
+                </button>
+            </div>
+
+            <div class="card col" style="padding:16px;gap:12px">
+                <span class="label" style="margin:0">Hlavička tištěného návodu (PDF)</span>
+                <div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px">
+                    <div style="border-bottom:3px solid var(--doc-accent);padding-bottom:10px">
+                        <span style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--doc-accent);background:var(--accent-tint);padding:3px 6px;border-radius:3px">SKRIPTY · OBECNÉ</span>
+                        <div style="font-size:22px;font-weight:900;color:#0b0d10;margin-top:8px">Kopie polygonů</div>
+                        <div style="font-size:12px;font-style:italic;color:#4b5563;margin-top:4px">Z podkladů udělá polygony a vloží je do cílové vrstvy.</div>
+                    </div>
+                    <div style="border-left:2px solid var(--accent-lt);padding-left:12px;margin-top:14px">
+                        <div style="font-size:14px;font-weight:800">1. K čemu to je</div>
+                        <div style="font-size:12.5px;color:#333a42;line-height:1.5;margin-top:4px">
+                            Odkaz na obrázek vypadá takto:
+                            <span style="color:var(--doc-accent);font-weight:700;border-bottom:1px dotted var(--doc-accent)">obr. 1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=159"></script>
+<script src="assets/js/doc.js?v=159"></script>
+<script src="assets/js/ui.js?v=159"></script>
+<script type="module" src="assets/js/store.js?v=159"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    /* --------------------------------------------------------- podlišta ---
+       Druhý řádek lišty je na všech třech stránkách nastavení stejný a liší
+       se jen aktivní položkou. Michal na to narazil: z barev webu se nedalo
+       přeskočit jinam, protože tam podlišta chyběla. Nastavení samo v horní
+       liště není (bydlí ve svislém pásu), takže nahoře nic nesvítí. */
+
+    const PODLISTA = [
+        { klic: "sazby",     text: "HODINOVÉ SAZBY",    href: "nastaveni.html",              need: "vykaz.view" },
+        { klic: "uzivatele", text: "UŽIVATELÉ A HESLA", href: "uzivatele.html",              need: "users.manage" },
+        { klic: "barvy",     text: "BARVY WEBU",        href: "barvy.html",                  need: "web.design" },
+        { klic: "import",    text: "IMPORT DAT",        href: "import.html",                 need: "vykaz.view" }
+    ];
+
+    function paintPodlista(aktivni) {
+        const slot = $("appSubbar");
+        if (!slot) return;
+
+        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
+            PODLISTA.map(polozka => {
+                const prava = ' data-need="' + polozka.need + '" hidden';
+                const cil = polozka.href;
+                return polozka.klic === aktivni
+                    ? '<span class="subbar__cat"' + prava + ">" + esc(polozka.text) + "</span>"
+                    : '<a class="subbar__cat subbar__cat--up" href="' + esc(cil) + '"' +
+                      prava + ">" + esc(polozka.text) + "</a>";
+            }).join("") +
+        "</div></div>";
+
+        // odkazy vznikly až teď, práva se na nich musí dorovnat
+        window.KBUI.paintUser();
+    }
+
+    const VYCHOZI = "#1d556d";
+
+    const PRESETS = [
+        { name: "Pasport modrá (výchozí)", hex: VYCHOZI },
+        { name: "Pasport červená",         hex: "#c8102e" },
+        { name: "Petrolejová světlá",      hex: "#2882a9" },
+        { name: "Půlnoční",                hex: "#133949" },
+        { name: "Lesní",                   hex: "#1d6d4a" },
+        { name: "Vínová",                  hex: "#a4161a" },
+        { name: "Bordó",                   hex: "#7d1128" },
+        { name: "Cihlová",                 hex: "#b23a2b" },
+        { name: "Grafitová",               hex: "#37474f" },
+        { name: "Fialová",                 hex: "#5b2a86" }
+    ];
+
+    /* Vlastní barvy, které si člověk uloží – jen jeho a jen v tomhle
+       prohlížeči, stejně jako zvolená barva webu. */
+    const VLASTNI_KLIC = "kb-barvy-vlastni";
+    const nactiVlastni = () => {
+        try {
+            const data = JSON.parse(localStorage.getItem(VLASTNI_KLIC) || "[]");
+            return Array.isArray(data) ? data : [];
+        } catch (err) { return []; }
+    };
+    const ulozVlastni = (seznam) => {
+        try { localStorage.setItem(VLASTNI_KLIC, JSON.stringify(seznam.slice(0, 16))); }
+        catch (err) { /* soukromý režim */ }
+    };
+
+    // hex si držíme přesně, HSL je jen pro posuvníky (jinak by se barva
+    // zaokrouhlením při každém překreslení nepatrně posouvala)
+    let current = window.KBUI.ulozenyAkcent() || VYCHOZI;
+    let hsl = window.KBUI.hexToHsl(current);
+
+    const hex = () => current;
+
+    function setHex(value) {
+        current = value.trim().toLowerCase();
+        if (current[0] !== "#") current = "#" + current;
+        hsl = window.KBUI.hexToHsl(current);
+        paint();
+    }
+
+    function setHsl() {
+        current = window.KBUI.hslToHex(hsl[0], hsl[1], hsl[2]);
+        paint();
+    }
+
+    /* ------------------------------------------------------- kontrast */
+
+    function luminance(color) {
+        const m = /^#(..)(..)(..)$/.exec(color);
+        const parts = [1, 2, 3].map(i => {
+            const v = parseInt(m[i], 16) / 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+    }
+
+    const contrastWithWhite = (color) => Math.round((1.05 / (luminance(color) + 0.05)) * 100) / 100;
+
+    /* ------------------------------------------------------- vykreslení */
+
+    function paint() {
+        const current = hex();
+        window.KBUI.applyAccent(current);
+
+        $("sH").value = hsl[0]; $("vH").textContent = hsl[0] + "°";
+        $("sS").value = hsl[1]; $("vS").textContent = hsl[1] + " %";
+        $("sL").value = hsl[2]; $("vL").textContent = hsl[2] + " %";
+        $("picker").value = current;
+        if (document.activeElement !== $("hex")) $("hex").value = current;
+
+        document.querySelectorAll(".swatch").forEach(el =>
+            el.classList.toggle("is-active", el.dataset.hex === current));
+
+        const vars = window.KBUI.accentVars(current);
+        $("vars").innerHTML = Object.keys(vars).map(name =>
+            "<code>" + name + "</code><span><i style=\"background:" + vars[name] + "\"></i> " +
+            "<code>" + vars[name] + "</code></span>").join("");
+
+        const ratio = contrastWithWhite(current);
+        const ok = ratio >= 4.5;
+        $("contrast").innerHTML = "Bílý text na téhle barvě má kontrast <b>" + ratio.toFixed(2) + ":1</b> – " +
+            (ok ? '<span style="color:var(--ok);font-weight:700">dobře čitelné</span>'
+                : '<span style="color:var(--warn);font-weight:700">málo, zkus tmavší odstín</span>') +
+            " (doporučené minimum je 4,5:1).";
+    }
+
+    /* ------------------------------------------------------------ start */
+
+    /** Míchat barvy smí jen hlavní správce. */
+    function gate() {
+        const allowed = window.KBUI.can("web.design");
+        $("denied").hidden = allowed;
+        $("app").hidden = !allowed;
+        // bez práv se vrací uložená volba, ne rozmíchaná zkouška
+        if (!allowed) {
+            const ulozena = window.KBUI.ulozenyAkcent();
+            if (ulozena) window.KBUI.applyAccent(ulozena);
+            else window.KBUI.resetAccent();
+        }
+    }
+
+    function vykresliVlastni() {
+        const seznam = nactiVlastni();
+        $("vlastni").innerHTML = seznam.map((b, i) =>
+            '<button type="button" class="swatch" data-hex="' + esc(b.hex) + '">' +
+                '<span class="swatch__color" style="background:' + esc(b.hex) + '"></span>' +
+                '<span class="swatch__name">' + esc(b.name) + "</span>" +
+                '<span class="swatch__hex">' + esc(b.hex) + "</span>" +
+            "</button>" +
+            '<button type="button" class="linkbtn" data-smaz-vlastni="' + i +
+                '" title="Smazat uloženou barvu">&times;</button>').join("") ||
+            '<span class="tiny muted">Zatím žádná – namíchej a ulož si ji.</span>';
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        // v horní liště nastavení není (bydlí ve svislém pásu), zato podlišta
+        // je stejná na sazbách, uživatelích i barvách
+        window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
+        paintPodlista("barvy");
+
+        $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
+        document.addEventListener("kb-role", gate);
+        window.KB.on("users", () => { window.KBUI.syncRole(); gate(); });
+        gate();
+        window.KB.whenReady().then(() => { window.KBUI.syncRole(); gate(); });
+
+        $("ico1").innerHTML = window.KB_ICONS.map;
+        $("ico2").innerHTML = window.KB_ICONS.building;
+
+        $("presets").innerHTML = PRESETS.map(preset =>
+            '<button type="button" class="swatch" data-hex="' + preset.hex + '">' +
+                '<span class="swatch__color" style="background:' + preset.hex + '"></span>' +
+                '<span class="swatch__name">' + preset.name + "</span>" +
+                '<span class="swatch__hex">' + preset.hex + "</span>" +
+            "</button>").join("");
+
+        $("presets").addEventListener("click", (event) => {
+            const button = event.target.closest(".swatch");
+            if (button) setHex(button.dataset.hex);
+        });
+
+        [["sH", 0], ["sS", 1], ["sL", 2]].forEach(([id, index]) => {
+            $(id).addEventListener("input", () => { hsl[index] = +$(id).value; setHsl(); });
+        });
+
+        $("picker").addEventListener("input", () => setHex($("picker").value));
+        $("hex").addEventListener("input", () => {
+            if (/^#?[\da-f]{6}$/i.test($("hex").value.trim())) setHex($("hex").value);
+        });
+
+        $("btnPouzit").addEventListener("click", () => {
+            window.KBUI.ulozAkcent(hex());
+            window.KBUI.toast("Barva se teď používá na celém webu (v tomhle prohlížeči).");
+        });
+
+        $("btnReset").addEventListener("click", () => {
+            window.KBUI.ulozAkcent("");
+            window.KBUI.resetAccent();
+            setHex(VYCHOZI);
+            window.KBUI.toast("Zpátky na výchozí barvu webu.");
+        });
+
+        $("btnUlozVlastni").addEventListener("click", () => {
+            const nazev = (prompt("Jak se má barva jmenovat?", "") || "").trim();
+            if (!nazev) return;
+            const seznam = nactiVlastni().filter(b => b.name !== nazev);
+            seznam.unshift({ name: nazev, hex: hex() });
+            ulozVlastni(seznam);
+            vykresliVlastni();
+            window.KBUI.toast("Barva uložena mezi tvoje.");
+        });
+
+        $("vlastni").addEventListener("click", (event) => {
+            const smaz = event.target.closest("[data-smaz-vlastni]");
+            if (smaz) {
+                const seznam = nactiVlastni();
+                seznam.splice(Number(smaz.dataset.smazVlastni), 1);
+                ulozVlastni(seznam);
+                return void vykresliVlastni();
+            }
+            const button = event.target.closest(".swatch");
+            if (button) setHex(button.dataset.hex);
+        });
+        vykresliVlastni();
+
+        $("btnCss").addEventListener("click", async () => {
+            const vars = window.KBUI.accentVars(hex());
+            const css = Object.keys(vars).map(name => "    " + name + ": " + vars[name] + ";").join("\n");
+            try {
+                await navigator.clipboard.writeText(css);
+                window.KBUI.toast("CSS zkopírováno.");
+            } catch (err) {
+                window.KBUI.toast("Kopírování se nezdařilo.", "error");
+            }
+        });
+
+        paint();
+    });
+})();
+</script>
+</body>
+</html>
