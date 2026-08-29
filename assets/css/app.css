@@ -173,6 +173,10 @@ input, select, textarea, button { font-family: inherit; }
     padding-top: env(safe-area-inset-top);
 }
 
+/* Nic nesmí roztáhnout stránku do šířky – useknutá bílá plocha vpravo
+   na iPadu vznikala přetékající lištou. `clip` neruší sticky lištu. */
+body { overflow-x: clip; }
+
 /* ---- červený pruh: uživatel, logo, nástroje ---- */
 .appbar__band { background: var(--accent); color: #fff; }
 .appbar__bandin {
@@ -286,8 +290,10 @@ input, select, textarea, button { font-family: inherit; }
     position: relative;
     max-width: var(--sirka-stranky);
     margin: 0 auto;
-    padding: 0 20px;
-    height: 54px;
+    padding: 8px 20px;
+    /* výška není pevná: když se položky nevejdou, lišta se zalomí na další
+       řádek – nikdy nesmí roztáhnout stránku do šířky (iPad, mobil) */
+    min-height: 54px;
     display: flex;
     align-items: center;
     /* zleva, ať se vejde i delší nabídka a nepřekrývá se s hledáním */
@@ -295,7 +301,7 @@ input, select, textarea, button { font-family: inherit; }
     padding-right: 280px;
 }
 
-.appbar__nav { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.appbar__nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .navbtn {
     display: inline-flex;
@@ -916,6 +922,15 @@ input, select, textarea, button { font-family: inherit; }
 }
 .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 .field::placeholder { color: var(--dim); }
+
+/* iPad a iPhone kreslí datum a čas vlastním vzhledem s jinou výškou,
+   takže pole v řádku „na sebe nesedí" – srovnat na výšku ostatních polí. */
+input.field[type="date"],
+input.field[type="time"] {
+    height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+}
 
 /* textová pole jde tahat jen dolů, ne do šířky – jinak by vylezla z panelu */
 textarea.field { resize: vertical; }
@@ -2121,14 +2136,22 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
    neschovává pod tlačítko. Ustupuje jí hledání, které se sbalí do lupy.
    ------------------------------------------------------------------------ */
 
+@media (max-width: 1120px), (hover: none) {
+    /* Zalomená lišta má víc řádků a přilepená by ukrojila půl obrazovky –
+       na dotyku a v úzkém okně hlavička normálně odroluje; rychlé akce
+       nese hamburger se svislým pásem. */
+    .appbar { position: static; }
+}
+
 @media (max-width: 1120px) {
-    /* v pruhu jde všechno pod sebe, ale drží se u pravého okraje */
+    /* v pruhu jde všechno pod sebe, ale drží se u pravého okraje;
+       zleva zůstává místo na hamburger, ať nepřekrývá první řádek */
     .appbar__bandin {
         flex-wrap: wrap;
         justify-content: flex-end;
         gap: 10px;
         min-height: 0;
-        padding: 10px 16px;
+        padding: 10px 16px 10px 68px;
     }
     .appbar__userbox { position: static; order: 1; width: 100%; }
     .appbar__logo { order: 2; width: 100%; justify-content: center; }
@@ -2137,11 +2160,14 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     .appbar__logo img,
     .appbar--big .appbar__logo img { height: 96px; }
 
-    /* hledání je jen lupa; pole vyjede přes celou lištu až po ťuknutí */
-    .searchbox { right: 16px; width: 40px; padding: 0; justify-content: center; cursor: pointer; }
+    /* hledání je jen lupa; pole vyjede přes celou lištu až po ťuknutí.
+       Kotví se k hornímu řádku – lišta se teď zalamuje a vertikální
+       vystředění by lupu položilo přes chipy druhého řádku. */
+    .searchbox { right: 16px; top: 8px; transform: none; width: 40px; padding: 0;
+        justify-content: center; cursor: pointer; }
     .searchbox input { display: none; }
     .searchbox.is-open {
-        left: 16px; right: 16px;
+        left: 16px; right: 16px; top: 8px;
         width: auto;
         padding: 0 11px;
         justify-content: flex-start;
@@ -2149,6 +2175,8 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
         border-color: var(--accent);
     }
     .searchbox.is-open input { display: block; }
+    /* místo pro lupu stačí malé – pole se rozbaluje přes lištu */
+    .appbar__barin { padding-right: 64px; }
 
     .subbar__in { padding: 8px 16px; }
     .subbar__right { margin-left: auto; }
@@ -2158,8 +2186,8 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 
 @media (max-width: 700px) {
     .wrap { padding-inline: 14px; }
-    .appbar__bandin { padding: 10px 14px; }
-    .appbar__barin { padding: 0 14px; height: 50px; }
+    .appbar__bandin { padding: 10px 14px 10px 64px; }
+    .appbar__barin { padding: 6px 14px; min-height: 50px; }
     .appbar__user { font-size: 13.5px; }
     .appbar__logo img,
     .appbar--big .appbar__logo img { height: 68px; }
@@ -2892,9 +2920,47 @@ input.hledac__vstup.opt--cizi {
 .siderail .searchbox:focus-within svg { color: var(--dim); }
 .siderail .searchbox:focus-within input { color: var(--text); }
 
-/* pás jen na širokém okně s myší; jinde platí horní lišta jako doteď */
+/* Na dotyku a v úzkém okně je pás schovaný za levým okrajem a vysouvá se
+   třemi čárkami v červeném pruhu (hamburger). Zavírá ho záclona, Escape
+   nebo proklik na cokoliv v pásu. */
 @media (max-width: 1120px), (hover: none) {
-    .siderail { display: none; }
+    .siderail {
+        transform: translateX(-105%);
+        transition: transform .22s ease;
+        z-index: 130;
+        box-shadow: 0 0 34px rgba(0, 0, 0, .38);
+        overflow-y: auto;
+    }
+    body.pas-otevren .siderail { transform: translateX(0); }
+}
+
+.pas-zaclona {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background: rgba(11, 13, 16, .45);
+}
+
+/* hamburger je vidět jen tam, kde je pás schovaný */
+.appbar__burger { display: none; }
+@media (max-width: 1120px), (hover: none) {
+    .appbar__burger {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: 44px;
+        height: 44px;
+        border: 1px solid rgba(255, 255, 255, .45);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, .14);
+        color: #fff;
+        cursor: pointer;
+        z-index: 5;
+    }
+    .appbar__burger svg { width: 23px; height: 23px; }
 }
 
 @media (min-width: 1121px) and (hover: hover) {
@@ -2915,6 +2981,10 @@ input.hledac__vstup.opt--cizi {
     .appbar__userbox { position: static; margin-left: auto; }
     .appbar__status { margin-top: 2px; }
     .toolrail { position: static; }
+
+    /* hledání bydlí v pásu, tak lišta nemusí držet 280 px volného místa
+       vpravo – bez toho se zbytečně lámala do dvou řádků */
+    .appbar__barin { padding-right: 20px; }
 
     /* pruh náhledu i brána přihlášení se nesmí schovat pod pás */
     .nahledpruh, .gate { margin-left: 0; }

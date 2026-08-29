@@ -952,6 +952,13 @@
                 // červený pruh: uživatel vpravo nahoře, logo uprostřed,
                 // ikony nástrojů vpravo dole – tedy přímo nad lištou
                 '<div class="appbar__band"><div class="appbar__bandin">' +
+                    /* hamburger: na dotyku a v úzkém okně vysouvá svislý pás,
+                       který je tam jinak schovaný za okrajem obrazovky */
+                    '<button type="button" class="appbar__burger no-print" data-pas-burger ' +
+                        'aria-label="Otevřít panel akcí">' +
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">' +
+                            '<path stroke-linecap="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16"/></svg>' +
+                    "</button>" +
                     // vlevo nahoře přepínač náhledu – vykreslí se jen hlavnímu
                     // správci, ostatním zůstane skrytý (paintUser)
                     '<label class="appbar__nahled" data-nahled-box hidden>' +
@@ -2147,6 +2154,44 @@
         window.matchMedia("(max-width: 1120px), (hover: none)")
             .addEventListener("change", placeSearch);
     } catch (err) { /* starší prohlížeč – stačí resize */ }
+
+    /* ------------------------------------------------- hamburger pásu ---
+       Na dotyku a v úzkém okně je svislý pás schovaný za krajem obrazovky;
+       třemi čárkami v pruhu se vysune, záclonou, Escape nebo proklikem
+       v pásu se zase zavře. */
+
+    function zavriPas() {
+        document.body.classList.remove("pas-otevren");
+        const zaclona = document.querySelector(".pas-zaclona");
+        if (zaclona) zaclona.hidden = true;
+    }
+
+    document.addEventListener("click", (e) => {
+        if (e.target.closest && e.target.closest("[data-pas-burger]")) {
+            let zaclona = document.querySelector(".pas-zaclona");
+            if (!zaclona) {
+                zaclona = document.createElement("div");
+                zaclona.className = "pas-zaclona no-print";
+                document.body.appendChild(zaclona);
+            }
+            const otevrit = !document.body.classList.contains("pas-otevren");
+            document.body.classList.toggle("pas-otevren", otevrit);
+            zaclona.hidden = !otevrit;
+            return;
+        }
+        if (e.target.classList && e.target.classList.contains("pas-zaclona")) {
+            zavriPas();
+            return;
+        }
+        // ťuknutí na akci v pásu pás rovnou zavře, ať nezůstane přes obsah
+        if (document.body.classList.contains("pas-otevren") &&
+            e.target.closest && e.target.closest(".siderail a, .siderail button")) {
+            zavriPas();
+        }
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") zavriPas();
+    });
 
     /** Tlačítko „nahoru" – ukáže se, až je stránka o dost delší než okno. */
     function mountToTop() {
