@@ -25,7 +25,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
-    getAuth, onAuthStateChanged,
+    getAuth, initializeAuth, browserLocalPersistence, onAuthStateChanged,
     signInWithEmailAndPassword, signOut, sendPasswordResetEmail, updatePassword
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { initializeApp as initializeSecondaryApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -290,7 +290,20 @@ const zrusProjektyUkoly = () => {
 
 try {
     const app = initializeApp(FIREBASE_CONFIG);
-    auth = getAuth(app);
+
+    /* iPad a iPhone (WebKit): IndexedDB tam umí potichu VISET a je na ní
+       postavená jak mezipaměť dat, tak ukládání přihlášení. Bez tohohle
+       obcházení na iPadu 29. 8. napřed nechodila data, a po odhlášení
+       nešlo ani přihlásit (session se neměla kam zapsat). iPad se hlásí
+       jako „MacIntel", pozná se podle dotykových bodů. */
+    const appleDotyk = navigator.maxTouchPoints > 1 &&
+        /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
+
+    /* na jablečném dotyku se přihlášení ukládá do localStorage (spolehlivé),
+       jinde zůstává výchozí IndexedDB */
+    auth = appleDotyk
+        ? initializeAuth(app, { persistence: browserLocalPersistence })
+        : getAuth(app);
     /* Trvalá mezipaměť v prohlížeči (IndexedDB). Web je několik
        samostatných stránek, ne jedna aplikace – bez ní si každé otevření
        stránky přečte všechny kolekce znovu a Firestore počítá čtení za
@@ -301,14 +314,9 @@ try {
        `persistentMultipleTabManager` hlídá víc otevřených záložek naráz;
        kde IndexedDB není (anonymní okno, starý prohlížeč), se tiše
        spadne zpátky na paměťovou mezipaměť. */
-    /* iPad a iPhone (WebKit): trvalá mezipaměť v IndexedDB tam umí potichu
-       VISET – přihlášení projde, ale žádná data nikdy nedorazí (přesně to
-       se stalo 29. 8. na iPadu). Na dotykových jablkách se proto jede bez
-       ní a spojení se drží long-pollingem, se kterým má WebKit menší
-       potíže než se streamováním. iPad se hlásí jako „MacIntel", pozná se
-       podle dotykových bodů – opravdový Mac jich má nula. */
-    const appleDotyk = navigator.maxTouchPoints > 1 &&
-        /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
+    /* Data na jablečném dotyku (viz `appleDotyk` výš): bez trvalé
+       mezipaměti a přes long-polling, se kterým má WebKit menší potíže
+       než se streamováním. */
     try {
         db = appleDotyk
             ? initializeFirestore(app, { experimentalForceLongPolling: true })
