@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=163">
+    <link rel="stylesheet" href="assets/css/app.css?v=164">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -274,10 +274,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=163"></script>
-<script src="assets/js/ui.js?v=163"></script>
-<script src="assets/js/vykazy.js?v=163"></script>
-<script type="module" src="assets/js/store.js?v=163"></script>
+<script src="assets/js/taxonomy.js?v=164"></script>
+<script src="assets/js/ui.js?v=164"></script>
+<script src="assets/js/vykazy.js?v=164"></script>
+<script type="module" src="assets/js/store.js?v=164"></script>
 
 <script>
 (function () {
@@ -724,10 +724,17 @@
         if (!obal.querySelector("select[hidden]")) tlacitko.hidden = true;
     });
 
+    /* iPad a iPhone kreslí k rozbalovací nabídce časů prázdné bílé okno –
+       na dotykových jablkách se nabídka vynechává. Psaní s dorovnáním na
+       čtvrthodiny („830" → 08:30) zůstává všude. */
+    const APPLE_DOTYK = navigator.maxTouchPoints > 1 &&
+        /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
+
     /** Pole pro čas: psaní i rozbalovací nabídka po čtvrthodinách. */
     function casPole(klic, hodnota) {
         return '<input type="text" class="field cas" data-f="' + klic + '" data-cas ' +
-            'list="' + V.CAS_LIST_ID + '" inputmode="numeric" autocomplete="off" ' +
+            (APPLE_DOTYK ? "" : 'list="' + V.CAS_LIST_ID + '" ') +
+            'inputmode="numeric" autocomplete="off" ' +
             'placeholder="--:--" value="' + esc(hodnota || "") + '">';
     }
 
@@ -2103,6 +2110,8 @@
        stihne doběhnout `focusin`. Proto se to při prvním kliknutí ukazovalo
        zúžené a teprve napodruhé celé. */
     const uvolniNabidku = (el) => {
+        // bez datalistu (jablečný dotyk) by vymazání hodnoty jen otravovalo
+        if (APPLE_DOTYK) return;
         if (el.dataset.puvodni === undefined) el.dataset.puvodni = el.value;
         el.value = "";
     };

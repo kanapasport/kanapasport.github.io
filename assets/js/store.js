@@ -301,10 +301,20 @@ try {
        `persistentMultipleTabManager` hlídá víc otevřených záložek naráz;
        kde IndexedDB není (anonymní okno, starý prohlížeč), se tiše
        spadne zpátky na paměťovou mezipaměť. */
+    /* iPad a iPhone (WebKit): trvalá mezipaměť v IndexedDB tam umí potichu
+       VISET – přihlášení projde, ale žádná data nikdy nedorazí (přesně to
+       se stalo 29. 8. na iPadu). Na dotykových jablkách se proto jede bez
+       ní a spojení se drží long-pollingem, se kterým má WebKit menší
+       potíže než se streamováním. iPad se hlásí jako „MacIntel", pozná se
+       podle dotykových bodů – opravdový Mac jich má nula. */
+    const appleDotyk = navigator.maxTouchPoints > 1 &&
+        /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
     try {
-        db = initializeFirestore(app, {
-            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-        });
+        db = appleDotyk
+            ? initializeFirestore(app, { experimentalForceLongPolling: true })
+            : initializeFirestore(app, {
+                localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+            });
     } catch (err) {
         console.warn("Mezipaměť databáze se nezapnula, jede se bez ní:", err);
         db = getFirestore(app);

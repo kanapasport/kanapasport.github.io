@@ -2145,7 +2145,9 @@
         if (rail) rail.classList.toggle("siderail--bezhledani", !box);
 
         if (!box || !doRailu || !doListy) return;
-        const cil = isCompact() ? doListy : doRailu;
+        /* Hledání bydlí VŽDY v pásu – na dotyku je pás vysouvací hamburgerem
+           a lupa v liště se tam pletla přes položky (přání Michala 29. 8.). */
+        const cil = doRailu;
         if (box.parentElement !== cil) cil.appendChild(box);
     }
     window.addEventListener("resize", placeSearch);
