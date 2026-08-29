@@ -2712,6 +2712,20 @@ KB.nactiPlanObrazek = async (id) => {
     return kousky.join("");
 };
 
+/* Paleta barev značek – patří k PLÁNU (značky jsou společné, takže i
+   jejich barvy a popisky musí všichni vidět stejně). Prázdné pole
+   znamená výchozí trojici chybí / vyfoceno / hotovo. */
+KB.ulozPlanPaletu = async (planId, paleta) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(planDoc(planId), {
+        paleta: Array.isArray(paleta) ? paleta.slice(0, 10).map(x => ({
+            b: String(x.b || "#888888").slice(0, 12),
+            p: String(x.p || "").slice(0, 30)
+        })) : []
+    }, { merge: true });
+};
+
 KB.smazPlan = async (id) => {
     if (authReady) await authReady;
     requireDb();
