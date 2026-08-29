@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=166">
+    <link rel="stylesheet" href="assets/css/app.css?v=167">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -61,8 +61,10 @@
             cursor: grab; }
         .prohl__plocha--znacka { cursor: crosshair; }
         .prohl__plocha--vyber { cursor: crosshair; }
+        .prohl__plocha--stav { cursor: pointer; }
         .prohl__vrstva { position: absolute; transform-origin: 0 0; }
-        .prohl__vrstva img { display: block; user-select: none; pointer-events: none; }
+        .prohl__vrstva img { display: block; user-select: none; pointer-events: none;
+            -webkit-user-drag: none; }
 
         .rezim { display: flex; gap: 4px; background: rgba(255, 255, 255, .12);
             border-radius: 999px; padding: 3px; }
@@ -123,21 +125,26 @@
            na dotyku podržení prstu. */
         .zovl {
             position: absolute;
-            width: 20px; height: 20px;
+            width: calc(22px * var(--pz, 1));
+            height: calc(22px * var(--pz, 1));
             border-radius: 50%;
             background: #1d2530;
             color: #fff;
-            border: 1.5px solid #fff;
+            border: calc(1.5px * var(--pz, 1)) solid #fff;
             display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: 900; line-height: 1;
+            font-size: calc(14px * var(--pz, 1));
+            font-weight: 900; line-height: 1;
             cursor: pointer;
             box-shadow: 0 1px 5px rgba(0, 0, 0, .45);
             user-select: none;
         }
-        .zovl--smaz  { top: -13px; right: -13px; background: #c8102e; }
-        .zovl--posun { bottom: -13px; right: -13px; cursor: grab; touch-action: none; }
-        .zovl--plus  { top: -13px; left: -13px; }
-        .zovl--minus { bottom: -13px; left: -13px; }
+        .zovl--smaz  { top: calc(-15px * var(--pz, 1)); right: calc(-15px * var(--pz, 1)); background: #c8102e; }
+        .zovl--posun { bottom: calc(-15px * var(--pz, 1)); right: calc(-15px * var(--pz, 1)); cursor: grab; touch-action: none; }
+        .zovl--plus  { top: calc(-15px * var(--pz, 1)); left: calc(-15px * var(--pz, 1)); }
+        .zovl--minus { bottom: calc(-15px * var(--pz, 1)); left: calc(-15px * var(--pz, 1)); }
+        .zovl--barva { top: 50%; right: calc(-26px * var(--pz, 1));
+            transform: translateY(-50%); }
+        .znacka--aktivni { outline-width: calc(2px * var(--pz, 1)); }
         .vyberobd { position: absolute; border: 1.5px dashed #fff;
             background: rgba(64,160,255,.18); pointer-events: none; z-index: 5; }
 
@@ -192,6 +199,7 @@
         <div class="rezim" id="rezimy">
             <button type="button" data-rezim="posun" class="je-aktivni">Posun</button>
             <button type="button" data-rezim="znacka">Značka</button>
+            <button type="button" data-rezim="stav" title="Ťuknutím na značku měníš barvu">Stav</button>
             <button type="button" data-rezim="vyber">Výběr / mazání</button>
         </div>
         <!-- co bude nová značka: barva (stav), velikost a text do kolečka -->
@@ -241,10 +249,10 @@
     <div class="prohl__pocty" id="pocty"></div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=166"></script>
-<script src="assets/js/ui.js?v=166"></script>
-<script src="assets/js/vykazy.js?v=166"></script>
-<script type="module" src="assets/js/store.js?v=166"></script>
+<script src="assets/js/taxonomy.js?v=167"></script>
+<script src="assets/js/ui.js?v=167"></script>
+<script src="assets/js/vykazy.js?v=167"></script>
+<script type="module" src="assets/js/store.js?v=167"></script>
 
 <script>
 (function () {
@@ -476,6 +484,9 @@
     function poloz() {
         $("vrstva").style.transform =
             "translate(" + posX + "px," + posY + "px) scale(" + zoom + ")";
+        /* ovládání na značce drží velikost na OBRAZOVCE – bez tohohle by
+           při přiblížení narostlo se značkou do obřích rozměrů */
+        $("vrstva").style.setProperty("--pz", String(1 / zoom));
         naplanujDlazdice();
     }
 
@@ -576,6 +587,9 @@
             posX = (plocha.width - $("obrazek").naturalWidth * zoom) / 2;
             posY = (plocha.height - $("obrazek").naturalHeight * zoom) / 2;
             poloz();
+            /* značky mohly dorazit dřív než obrázek – bez rozměrů se
+               nakreslily do levého horního rohu a nebyly vidět */
+            vykresliZnacky();
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Plán se nepodařilo načíst.", "error");
@@ -590,6 +604,7 @@
     }
 
     const STAVY = ["chybí", "vyfoceno", "hotovo"];
+    const BARVY = ["#c8102e", "#e08700", "#169c53"];   // stejné jako .znacka--N
 
     function vykresliZnacky() {
         if (!otevreny) return;
@@ -613,7 +628,9 @@
                     ? '<span class="zovl zovl--smaz" data-zn-akce="smaz" title="Smazat">×</span>' +
                       '<span class="zovl zovl--posun" data-zn-akce="posun" title="Přetáhnout jinam">✥</span>' +
                       '<span class="zovl zovl--plus" data-zn-akce="plus" title="Zvětšit">+</span>' +
-                      '<span class="zovl zovl--minus" data-zn-akce="minus" title="Zmenšit">−</span>'
+                      '<span class="zovl zovl--minus" data-zn-akce="minus" title="Zmenšit">−</span>' +
+                      '<span class="zovl zovl--barva" data-zn-akce="barva" title="Další barva" ' +
+                          'style="background:' + BARVY[((Number(z.stav) || 0) + 1) % 3] + '"></span>'
                     : "") +
                 "</div>";
         }).join("");
@@ -626,9 +643,9 @@
             '<span><i style="background:#e08700"></i>vyfoceno: <b>' + pocty[1] + "</b></span>" +
             '<span><i style="background:#169c53"></i>hotovo: <b>' + pocty[2] + "</b></span>" +
             '<span style="margin-left:auto;opacity:.75">Značka: ťukni do plánu ·' +
-                " ťuknutím měníš stav · poznámka dvojklikem ·" +
-                " pravý klik / podržení prstu = smazat, posunout, velikost ·" +
-                " výběr: táhni obdélník jako v CADu</span>";
+                " barva se mění v režimu Stav · poznámka dvojklikem ·" +
+                " pravý klik / podržení prstu = upravit značku ·" +
+                " výběr: obdélníkem, Shift přidává</span>";
     }
 
     /* posun + zoom: myš i dotyk přes pointer events */
@@ -679,7 +696,8 @@
         if (rezim === "vyber" && !e.target.closest("[data-znacka]")) {
             // začátek obdélníkového výběru (v souřadnicích náhledu)
             const r = $("obrazek").getBoundingClientRect();
-            obdelnik = { x0: (e.clientX - r.left) / zoom, y0: (e.clientY - r.top) / zoom, el: null };
+            obdelnik = { x0: (e.clientX - r.left) / zoom, y0: (e.clientY - r.top) / zoom,
+                el: null, pridat: e.shiftKey };
             try { $("plocha").setPointerCapture(e.pointerId); } catch (err) { /* rychlý dotyk */ }
             return;
         }
@@ -788,6 +806,10 @@
     $("plocha").addEventListener("pointercancel", konecTahu);
     $("plocha").addEventListener("lostpointercapture", (e) => { ukazatele.delete(e.pointerId); });
 
+    /* Prohlížeč umí obrázek „zvednout" a táhnout jeho průsvitnou kopii –
+       posun plánu pak vypadá rozbitě. Tady se to zatrhne úplně. */
+    $("plocha").addEventListener("dragstart", (e) => e.preventDefault());
+
     $("plocha").addEventListener("wheel", (e) => {
         e.preventDefault();
         const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
@@ -829,6 +851,9 @@
                 }
                 aktivniZnacka = "";
                 await window.KB.smazZnacku(otevreny, z.id);
+            } else if (akce === "barva") {
+                await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z,
+                    { stav: ((Number(z.stav) || 0) + 1) % 3 }));
             } else if (akce === "plus" || akce === "minus") {
                 const vel = Number(z.vel) || 26;
                 const ted = VELIKOSTI.reduce((n, v, i) =>
@@ -850,18 +875,30 @@
         }
 
         if (znacka && rezim === "vyber") {
-            // klik ve výběru značku přibírá / pouští
+            /* jako v editorech: klik vybere JEN tohle, se Shiftem se
+               přibírá/pouští k tomu, co už vybrané je */
             const id = znacka.dataset.znacka;
-            if (vybrane.has(id)) vybrane.delete(id); else vybrane.add(id);
+            if (e.shiftKey) {
+                if (vybrane.has(id)) vybrane.delete(id); else vybrane.add(id);
+            } else {
+                vybrane.clear();
+                vybrane.add(id);
+            }
             vykresliZnacky();
             return;
         }
-        if (znacka) {
-            // ťuknutí přepíná stav dokola: chybí → vyfoceno → hotovo
+        if (znacka && rezim === "stav") {
+            // barvu mění jen režim Stav – jinde se nedá změnit omylem
             const z = (window.KB.znackyPlanu || []).find(x => x.id === znacka.dataset.znacka);
             if (!z) return;
             await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z,
                 { stav: ((Number(z.stav) || 0) + 1) % 3 }));
+            return;
+        }
+        if (znacka) return;      // v posunu a značce ťuknutí na značku nic nedělá
+        if (rezim === "vyber") {
+            // klik do prázdna ruší výběr (se Shiftem ho nechává)
+            if (!e.shiftKey && vybrane.size) { vybrane.clear(); vykresliZnacky(); }
             return;
         }
         if (rezim !== "znacka") return;
@@ -878,6 +915,8 @@
     /* ------------------------------------------------ hromadný výběr ---- */
 
     function dokonciVyber(o) {
+        // bez Shiftu obdélník výběr NAHRAZUJE, se Shiftem přidává (jako v CADu)
+        if (!o.pridat) vybrane.clear();
         const w = $("obrazek").naturalWidth || 1;
         const h = $("obrazek").naturalHeight || 1;
         const x0 = Math.min(o.x0, o.x1) / w, x1 = Math.max(o.x0, o.x1) / w;
@@ -996,6 +1035,7 @@
                 x.classList.toggle("je-aktivni", x === b));
             $("plocha").className = "prohl__plocha" +
                 (rezim === "znacka" ? " prohl__plocha--znacka" :
+                 rezim === "stav" ? " prohl__plocha--stav" :
                  rezim === "vyber" ? " prohl__plocha--vyber" : "");
             $("nastrojeZnacky").hidden = rezim !== "znacka";
             if (rezim !== "vyber") { vybrane.clear(); }
