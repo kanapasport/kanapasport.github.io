@@ -782,6 +782,8 @@ KB.ulozPoznamku = async (id, patch) => {
     if ("text" in patch) p.text = String(patch.text || "").slice(0, 2000);
     if ("stav" in patch) p.stav = Number(patch.stav) || 0;   // 0 = řeší se, 1 = splněno
     if ("sdileni" in patch) p.sdileni = Array.isArray(patch.sdileni) ? patch.sdileni : [];
+    // malý náhled prvního screenshotu – ať je fotka vidět rovnou na dlaždici
+    if ("nahled" in patch) p.nahled = String(patch.nahled || "").slice(0, 90000);
     if (!id) {
         p.uid = KB.currentUid();
         p.jmeno = window.KB_USER || "";
