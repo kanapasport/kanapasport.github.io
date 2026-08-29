@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=168">
+    <link rel="stylesheet" href="assets/css/app.css?v=169">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -111,6 +111,11 @@
             font: inherit; font-size: 12.5px; font-weight: 900; text-transform: uppercase;
             text-align: center; }
 
+        /* „ghost" tlačítka jsou bílá na bílém – v tmavé liště prohlížeče
+           dostávají průsvitnou podobu (Barvy, dřív i Zrušit výběr) */
+        .prohl__horni .btn--ghost { background: rgba(255,255,255,.14);
+            border-color: rgba(255,255,255,.45); }
+
         .prohl__zoom { display: flex; gap: 4px; margin-left: auto; }
         .zoombtn { width: 34px; height: 30px; border: 0; border-radius: 6px;
             background: rgba(255,255,255,.16); color: #fff; font-size: 17px;
@@ -118,7 +123,8 @@
         .zoombtn:hover { background: rgba(255,255,255,.3); }
 
         .znacka--vybrana { outline: 3px dashed #fff; outline-offset: 2px; }
-        .znacka--aktivni { outline: 2px dashed #fff; outline-offset: 4px; }
+        .znacka--aktivni { outline: 2px dashed #fff; outline-offset: 4px;
+            z-index: 30; }     /* editace je přednější – nic ji nepřekrývá */
 
         /* Ovládání na značce: × smazat (vpravo nahoře), ✥ přetáhnout
            (vpravo dole), + a − velikost (vlevo). Otevírá pravý klik,
@@ -161,11 +167,22 @@
         .palrow input[type="color"] { width: 42px; height: 34px; border: 1px solid var(--line);
             border-radius: 6px; background: none; padding: 2px; cursor: pointer; }
         .palrow input[type="text"] { flex: 1; }
-        .palrow button { border: 0; background: none; color: var(--danger, #c8102e);
-            font-size: 16px; font-weight: 900; cursor: pointer; padding: 4px; }
+        .palrow button { border: 0; background: none; color: var(--text-soft);
+            font-size: 15px; font-weight: 900; cursor: pointer; padding: 4px; }
+        .palrow [data-pal-smaz] { color: var(--danger, #c8102e); font-size: 16px; }
+        /* linkbtn je kreslený pro červený pruh (bílé písmo) – ve světlém
+           okně palety by „+ přidat barvu" nebylo vidět */
+        .palokno .linkbtn { color: var(--accent); background: var(--accent-tint);
+            border: 1px solid var(--accent-lt); }
 
-        .vyberlista { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        .vyberlista { display: flex; flex-direction: column; gap: 7px;
             padding: 8px 14px; background: #2b1d46; color: #fff; font-size: 13px; }
+        .vyberlista__radek { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .vyberlista__akce { display: flex; align-items: center; gap: 7px; }
+        .vybersmaz { background: #c8102e; border-color: #c8102e; color: #fff;
+            font-weight: 800; margin-left: auto; }
+        .vybersmaz:hover { filter: brightness(.9); }
+        .vyberghost { color: #fff; }
         /* obecná „ghost" tlačítka jsou bílá na bílém – na tmavé liště
            dostávají průsvitnou podobu jako zbytek ovládání */
         .vyberlista .btn--ghost { background: rgba(255,255,255,.14);
@@ -271,27 +288,31 @@
     </div>
 
     <div class="vyberlista" id="vyberLista" hidden>
-        <span id="vyberPopis"></span>
-        <span class="rezim rezim--maly" id="vyberFiltr">
-            <button type="button" data-vf="" class="je-aktivni">Vše</button>
-        </span>
-        <input type="text" id="vyberText" class="nastroje__text" maxlength="3"
-               placeholder="text" title="Text, který se zapíše do všech vybraných">
-        <button type="button" class="btn btn--sm btn--ghost" id="vyberTextZapis"
-            style="color:#fff">Zapsat text</button>
-        <button type="button" class="zoombtn" id="vyberMensi" title="Zmenšit vybrané">−</button>
-        <button type="button" class="zoombtn" id="vyberVetsi" title="Zvětšit vybrané">+</button>
-        <button type="button" class="btn btn--sm" id="vyberSmazat"
-            style="background:#c8102e;border-color:#c8102e;color:#fff">Smazat</button>
-        <button type="button" class="btn btn--sm btn--ghost" id="vyberZrusit" style="color:#fff">Zrušit výběr</button>
+        <div class="vyberlista__radek" id="vyberPopis"></div>
+        <div class="vyberlista__radek">
+            <span class="vyberlista__akce">Změna barvy:
+                <span class="nastroje__skupina" id="vyberBarva"></span></span>
+            <span class="vyberlista__akce">
+                <input type="text" id="vyberText" class="nastroje__text" maxlength="3"
+                       placeholder="text" title="Text, který se zapíše do všech vybraných">
+                <button type="button" class="btn btn--sm btn--ghost" id="vyberTextZapis"
+                    style="color:#fff">Zapsat text</button>
+            </span>
+            <span class="vyberlista__akce">Velikost:
+                <button type="button" class="zoombtn" id="vyberMensi" title="Zmenšit vybrané">−</button>
+                <button type="button" class="zoombtn" id="vyberVetsi" title="Zvětšit vybrané">+</button>
+            </span>
+            <button type="button" class="btn btn--sm vybersmaz" id="vyberSmazat">🗑 Smazat vybrané</button>
+            <button type="button" class="btn btn--sm btn--ghost vyberghost" id="vyberZrusit">Zrušit výběr</button>
+        </div>
     </div>
     <div class="prohl__pocty" id="pocty"></div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=168"></script>
-<script src="assets/js/ui.js?v=168"></script>
-<script src="assets/js/vykazy.js?v=168"></script>
-<script type="module" src="assets/js/store.js?v=168"></script>
+<script src="assets/js/taxonomy.js?v=169"></script>
+<script src="assets/js/ui.js?v=169"></script>
+<script src="assets/js/vykazy.js?v=169"></script>
+<script type="module" src="assets/js/store.js?v=169"></script>
 
 <script>
 (function () {
@@ -516,9 +537,9 @@
     /* Jaká bude NOVÁ značka – barva (stav), velikost a text do kolečka. */
     const nova = { stav: 0, vel: 16, text: "" };
 
-    /* Výběr jako v AutoCADu: tažením obdélník, akce dole na vybrané. */
+    /* Výběr jako v editorech: obdélník nebo klik nahrazuje, Shift/Ctrl
+       přidává. Akce dole platí na všechno vybrané. */
     const vybrane = new Set();
-    let vyberFiltr = "";        // "" | "0" | "1" | "2"
     let obdelnik = null;        // {x0,y0,el} počátek tažení v souř. náhledu
 
     function poloz() {
@@ -601,14 +622,9 @@
             '<button type="button" class="stavbtn' + (i === nova.stav ? " je-aktivni" : "") +
             '" data-stav="' + i + '" title="' + esc(b.p || "") +
             '" style="background:' + b.b + '"></button>').join("");
-        if (vyberFiltr !== "" && Number(vyberFiltr) >= pal.length) vyberFiltr = "";
-        $("vyberFiltr").innerHTML =
-            '<button type="button" data-vf=""' + (vyberFiltr === "" ? ' class="je-aktivni"' : "") +
-                ">Vše</button>" +
-            pal.map((b, i) => '<button type="button" data-vf="' + i + '"' +
-                (vyberFiltr === String(i) ? ' class="je-aktivni"' : "") +
-                ' title="' + esc(b.p || "") + '"><i style="display:inline-block;width:10px;height:10px;' +
-                'border-radius:50%;background:' + b.b + ';vertical-align:-1px"></i></button>').join("");
+        $("vyberBarva").innerHTML = pal.map((b, i) =>
+            '<button type="button" class="stavbtn" data-vyber-barva="' + i + '" title="' +
+            esc(b.p || "") + '" style="background:' + b.b + '"></button>').join("");
     }
 
     async function otevri(id) {
@@ -755,6 +771,12 @@
             return;
         }
 
+        /* Ostatní knoflíky ovládání (×, +, −, barva) se obsluhují klikem.
+           Kdyby z nich odstartoval posun, capture by přesměroval klik na
+           plochu a knoflík by nikdy nedoklikl – přesně to se dělo
+           v režimu Posun. */
+        if (e.target.closest("[data-zn-akce]")) return;
+
         // podržení prstu na značce otevře její ovládání (na dotyku není pravý klik)
         const zn = e.target.closest("[data-znacka]");
         if (zn && e.pointerType !== "mouse" && rezim !== "vyber" &&
@@ -773,7 +795,7 @@
             // začátek obdélníkového výběru (v souřadnicích náhledu)
             const r = $("obrazek").getBoundingClientRect();
             obdelnik = { x0: (e.clientX - r.left) / zoom, y0: (e.clientY - r.top) / zoom,
-                el: null, pridat: e.shiftKey };
+                el: null, pridat: e.shiftKey || e.ctrlKey || e.metaKey };
             try { $("plocha").setPointerCapture(e.pointerId); } catch (err) { /* rychlý dotyk */ }
             return;
         }
@@ -954,7 +976,7 @@
             /* jako v editorech: klik vybere JEN tohle, se Shiftem se
                přibírá/pouští k tomu, co už vybrané je */
             const id = znacka.dataset.znacka;
-            if (e.shiftKey) {
+            if (e.shiftKey || e.ctrlKey || e.metaKey) {
                 if (vybrane.has(id)) vybrane.delete(id); else vybrane.add(id);
             } else {
                 vybrane.clear();
@@ -974,7 +996,9 @@
         if (znacka) return;      // v posunu a značce ťuknutí na značku nic nedělá
         if (rezim === "vyber") {
             // klik do prázdna ruší výběr (se Shiftem ho nechává)
-            if (!e.shiftKey && vybrane.size) { vybrane.clear(); vykresliZnacky(); }
+            if (!e.shiftKey && !e.ctrlKey && !e.metaKey && vybrane.size) {
+                vybrane.clear(); vykresliZnacky();
+            }
             return;
         }
         if (rezim !== "znacka") return;
@@ -1003,10 +1027,8 @@
         vykresliZnacky();
     }
 
-    /** Vybrané po uplatnění filtru barvy (Vše / Chybí / Vyfoceno / Hotovo). */
     function vybraneAktivni() {
-        return (window.KB.znackyPlanu || []).filter(z => vybrane.has(z.id) &&
-            (vyberFiltr === "" || String(Number(z.stav) || 0) === vyberFiltr));
+        return (window.KB.znackyPlanu || []).filter(z => vybrane.has(z.id));
     }
 
     function vykresliVyberListu() {
@@ -1018,8 +1040,7 @@
         vse.forEach(z => { pocty[Math.min(Number(z.stav) || 0, pal.length - 1)]++; });
         $("vyberPopis").innerHTML = "Vybráno <b>" + vse.length + "</b>" +
             " <span style='opacity:.75'>(" + pal.map((b, i) =>
-                esc(b.p || "barva " + (i + 1)) + " " + pocty[i]).join(" · ") +
-            ")</span> — akce na: ";
+                esc(b.p || "barva " + (i + 1)) + " " + pocty[i]).join(" · ") + ")</span>";
         lista.hidden = false;
     }
 
@@ -1027,7 +1048,7 @@
 
     async function zmenVelikost(smer) {
         const cile = vybraneAktivni();
-        if (!cile.length) return window.KBUI.toast("Filtru neodpovídá žádná vybraná značka.", "warn");
+        if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
         for (const z of cile) {
             const ted = VELIKOSTI.reduce((n, v, i) =>
                 Math.abs(v - (Number(z.vel) || 26)) < Math.abs(VELIKOSTI[n] - (Number(z.vel) || 26)) ? i : n, 0);
@@ -1038,7 +1059,7 @@
 
     async function smazVybrane() {
         const cile = vybraneAktivni();
-        if (!cile.length) return window.KBUI.toast("Filtru neodpovídá žádná vybraná značka.", "warn");
+        if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
         const manazer = window.KBUI.can("vykaz.view");
         const moje = cile.filter(z => manazer || z.uid === window.KB.currentUid());
         if (!confirm("Smazat " + moje.length + " značek?" +
@@ -1139,17 +1160,20 @@
             nova.text = $("volbaText").value.trim().toUpperCase().slice(0, 3);
         });
 
-        // akce nad výběrem
-        $("vyberFiltr").addEventListener("click", (e) => {
-            const b = e.target.closest("[data-vf]");
+        // akce nad výběrem: hromadná změna barvy kliknutím na kolečko
+        $("vyberBarva").addEventListener("click", async (e) => {
+            const b = e.target.closest("[data-vyber-barva]");
             if (!b) return;
-            vyberFiltr = b.dataset.vf;
-            document.querySelectorAll("#vyberFiltr button").forEach(x =>
-                x.classList.toggle("je-aktivni", x === b));
+            const cile = vybraneAktivni();
+            if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
+            for (const z of cile) {
+                await window.KB.ulozZnacku(otevreny, z.id,
+                    Object.assign({}, z, { stav: Number(b.dataset.vyberBarva) }));
+            }
         });
         $("vyberTextZapis").addEventListener("click", async () => {
             const cile = vybraneAktivni();
-            if (!cile.length) return window.KBUI.toast("Filtru neodpovídá žádná vybraná značka.", "warn");
+            if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
             const text = $("vyberText").value.trim().toUpperCase().slice(0, 3);
             for (const z of cile) {
                 await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { text: text }));
@@ -1182,6 +1206,8 @@
             '<div class="palrow"><input type="color" value="' + esc(b || "#c8102e") + '">' +
             '<input type="text" class="field" maxlength="30" placeholder="popisek" value="' +
                 esc(p || "") + '">' +
+            '<button type="button" data-pal-nahoru title="Posunout výš">↑</button>' +
+            '<button type="button" data-pal-dolu title="Posunout níž">↓</button>' +
             '<button type="button" data-pal-smaz title="Odebrat">×</button></div>';
 
         function prepniPalTyp() {
@@ -1211,8 +1237,27 @@
             $("palRady").insertAdjacentHTML("beforeend", palRadek("#23486e", ""));
         });
         $("palRady").addEventListener("click", (e) => {
-            const b = e.target.closest("[data-pal-smaz]");
-            if (b && $("palRady").children.length > 1) b.closest(".palrow").remove();
+            const smaz = e.target.closest("[data-pal-smaz]");
+            if (smaz && $("palRady").children.length > 1) {
+                smaz.closest(".palrow").remove();
+                return;
+            }
+            // posun pořadí – posloupnost barev je zároveň pořadí cyklení
+            const nahoru = e.target.closest("[data-pal-nahoru]");
+            if (nahoru) {
+                const row = nahoru.closest(".palrow");
+                if (row.previousElementSibling) {
+                    row.parentElement.insertBefore(row, row.previousElementSibling);
+                }
+                return;
+            }
+            const dolu = e.target.closest("[data-pal-dolu]");
+            if (dolu) {
+                const row = dolu.closest(".palrow");
+                if (row.nextElementSibling) {
+                    row.parentElement.insertBefore(row.nextElementSibling, row);
+                }
+            }
         });
         $("palZrusit").addEventListener("click", () => { $("oknoPaleta").hidden = true; });
         $("oknoPaleta").addEventListener("click", (e) => {
