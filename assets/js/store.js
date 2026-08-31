@@ -358,6 +358,7 @@ try {
             KB.poznListy = []; KB.poznamky = [];
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
+            KB.vykazyPrisly = false;
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
             KB.ready = true;
             setStatus("odhlasen");
@@ -683,6 +684,8 @@ KB.saveQuickTodo = async (id, data) => {
         hotovoMs:  data.hotovoMs || 0,
         // nepovinná vazba na poznámku – vzkaz pak nese odkaz „Otevřít"
         poznamka: data.poznamka || "",
+        // vzkaz hlídky výkazů: "tyden" (oranžově) | "minuly" (červeně)
+        hlidka: data.hlidka || "",
         ms:      data.ms || Date.now()
     }, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
@@ -1563,6 +1566,11 @@ function sledujVykazy(jenSve) {
     vykazyOdbery.push(onSnapshot(zdroj, (snapshot) => {
         syroveZaznamy = [];
         snapshot.forEach(d => syroveZaznamy.push({ id: d.id, ...d.data() }));
+        /* U manažerů emituje „vykazy" i odběr částek – ten ale umí doběhnout
+           DŘÍV než samotné záznamy a hlídka výkazů by pak rozhodovala nad
+           prázdnem a rozdávala falešné vzkazy. Tenhle příznak říká, že už
+           dorazily skutečné záznamy. */
+        KB.vykazyPrisly = true;
         spojVykazy();
     }, (err) => {
         console.error("Chyba čtení výkazů:", err);

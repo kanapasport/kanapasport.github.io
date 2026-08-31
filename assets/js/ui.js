@@ -1014,7 +1014,9 @@
             window.KB.on("projekty-docs", refreshNav);
             window.KB.on("milniky", refreshNav);
             window.KB.on("vykazy", () => { renderMujDen();
-                hlidkaPrislo.vykazy = true; hlidkaVykazu(); });
+                /* hlídka smí rozhodnout až nad skutečnými záznamy – emit
+                   umí vyvolat i odběr částek dřív, než záznamy dorazí */
+                if (window.KB.vykazyPrisly) { hlidkaPrislo.vykazy = true; hlidkaVykazu(); } });
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
@@ -1117,41 +1119,75 @@
     const hlidkaPrislo = { vykazy: false, quick: false };
     let hlidkaBezela = false;
 
+    /* Výkazy se na webu píšou až od týdne 31. 8. 2026 – starší týdny hlídka
+       ignoruje a svoje staré vzkazy z doby před spuštěním každému uklidí. */
+    const HLIDKA_START = "2026-08-31";
+
     function hlidkaVykazu() {
         if (hlidkaBezela || !hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
         const uid = window.KB.currentUid && window.KB.currentUid();
         if (!uid || !UI.can("vykaz.otevrit")) return;
 
-        const dnes = new Date();
-        if ([5, 6, 0].indexOf(dnes.getDay()) === -1) return;   // hlídá se od pátku
+        hlidkaBezela = true;    // rozhodnuto – druhé kolo by zapsalo duplicitu
 
+        /* úklid vzkazů o týdnech před spuštěním (id končí pondělím týdne) */
+        (window.KB.quicktodo || []).forEach(q => {
+            if (q.id && q.id.indexOf("qt_hlidka_" + uid + "_") === 0 &&
+                    q.id.slice(-10) < HLIDKA_START) {
+                window.KB.deleteQuickTodo(q.id).catch(() => {});
+            }
+        });
+
+        const dnes = new Date();
         const den = (d) => d.getFullYear() + "-" +
             String(d.getMonth() + 1).padStart(2, "0") + "-" +
             String(d.getDate()).padStart(2, "0");
         const po = new Date(dnes);
         po.setDate(po.getDate() - (po.getDay() + 6) % 7);      // pondělí týdne
+
+        /* Pá/So/Ne se hlídá AKTUÁLNÍ týden (oranžově). V pondělí je poslední
+           šance doplnit MINULÝ týden před uzávěrkou – hlídá se ten (červeně).
+           Út–Čt hlídka mlčí. */
+        const denVTydnu = dnes.getDay();
+        let minuly;
+        if ([5, 6, 0].indexOf(denVTydnu) !== -1) {
+            minuly = false;
+        } else if (denVTydnu === 1) {
+            minuly = true;
+            po.setDate(po.getDate() - 7);
+        } else {
+            return;
+        }
         const ne = new Date(po);
         ne.setDate(ne.getDate() + 6);
         const pondeli = den(po), nedele = den(ne);
-
-        hlidkaBezela = true;    // rozhodnuto – druhé kolo by zapsalo duplicitu
+        if (pondeli < HLIDKA_START) return;
 
         const maZapis = (window.KB.vykazy || []).some(z =>
             z.uid === uid && (z.datum || "") >= pondeli && (z.datum || "") <= nedele);
         if (maZapis) return;
 
         const id = "qt_hlidka_" + uid + "_" + pondeli;
-        if ((window.KB.quicktodo || []).some(q => q.id === id)) return;
-        /* pojistka pro tenhle prohlížeč: smazaný (ne odškrtnutý) vzkaz by se
-           jinak založil znovu, protože v databázi po něm nic nezbylo */
-        try { if (localStorage.getItem("kb-hlidka") === id) return; } catch (err) { }
+        const stavajici = (window.KB.quicktodo || []).find(q => q.id === id);
+        /* Odškrtnutý vzkaz se znovu neotvírá. Víkendový oranžový se ale
+           v pondělí přepíše na červený „minulý týden" – zpřísnění platí
+           i tomu, kdo si vzkaz o víkendu smazal křížkem. */
+        if (stavajici && (stavajici.hotovo || !minuly || stavajici.hlidka === "minuly")) return;
+        if (!stavajici && !minuly) {
+            /* pojistka pro tenhle prohlížeč: smazaný (ne odškrtnutý) vzkaz by
+               se jinak založil znovu, protože v databázi po něm nic nezbylo */
+            try { if (localStorage.getItem("kb-hlidka") === id) return; } catch (err) { }
+        }
 
         window.KB.saveQuickTodo(id, {
-            text: "Nemáš zapsaný výkaz v tomhle týdnu, naprav to",
+            text: minuly
+                ? "Nemáš zapsaný výkaz v minulém týdnu, naprav to"
+                : "Nemáš zapsaný výkaz v tomhle týdnu, naprav to",
             proUids: [uid],
             odKoho: uid,
             odKohoJmeno: "Hlídka výkazů",
-            asap: true
+            asap: true,
+            hlidka: minuly ? "minuly" : "tyden"
         }).then(() => {
             try { localStorage.setItem("kb-hlidka", id); } catch (err) { }
         }).catch(err => console.warn("Hlídka výkazů nezapsala vzkaz:", err));
@@ -1405,9 +1441,18 @@
                sebe v tom seznamu vidět nepotřebuje. */
             const ostatni = adresati(q).filter(x => x !== uid).map(jmeno).filter(Boolean);
 
+            /* hlídka výkazů: oranžově dokud jde o běžící týden, červeně
+               v pondělí, kdy je poslední šance doplnit ten minulý */
+            const hlidkaBarva = q.hotovo ? "" :
+                q.hlidka === "minuly" ? "#c8102e" :
+                q.hlidka === "tyden" ? "#b06000" : "";
+
             return '<div class="quickrad' +
                 (q.hotovo ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) + '">' +
-                '<span class="quickrad__text">' + esc(q.text) +
+                '<span class="quickrad__text">' +
+                (hlidkaBarva
+                    ? '<b style="color:' + hlidkaBarva + '">' + esc(q.text) + "</b>"
+                    : esc(q.text)) +
                     '<span class="quickrad__kdo">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
                            zopakování toho, co už tam stojí – vynechává se. */
