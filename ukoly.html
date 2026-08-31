@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=174">
+    <link rel="stylesheet" href="assets/css/app.css?v=175">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -190,10 +190,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=174"></script>
-<script src="assets/js/ui.js?v=174"></script>
-<script src="assets/js/vykazy.js?v=174"></script>
-<script type="module" src="assets/js/store.js?v=174"></script>
+<script src="assets/js/taxonomy.js?v=175"></script>
+<script src="assets/js/ui.js?v=175"></script>
+<script src="assets/js/vykazy.js?v=175"></script>
+<script type="module" src="assets/js/store.js?v=175"></script>
 
 <script>
 (function () {
@@ -746,6 +746,9 @@
     function naplnTvorbu(u) {
         editovanyId = u ? u.id : "";
         tvorbaSpinava = false;
+        // čistý start termínové automatiky – značky nesmí přežít minulé okno
+        delete $("uTermin").dataset.auto;
+        delete $("uTermin").dataset.rucni;
         $("tvorbaNadpis").textContent = u ? "Úprava úkolu" : "Nový úkol";
         $("btnSmazat").hidden = !u;
 
@@ -807,7 +810,28 @@
         $("uTechBox").hidden = !c.technologie.length;
         $("uBudova").closest("label").hidden = !c.budovy.length;
         $("uPatro").closest("label").hidden = !c.patra.length;
+
+        /* Termín NOVÉHO úkolu se předvyplní koncem projektu – ať se
+           nemusí dohledávat (přání Michala 31. 8. 2026). Automatické
+           vyplnění se značí, ať se při přepnutí projektu přepočítá;
+           editovaného úkolu (editovanyId) ani ručně nastaveného či
+           ručně smazaného termínu (dataset.rucni) se automatika
+           nedotýká. */
+        const t = $("uTermin");
+        if (!editovanyId && !t.dataset.rucni && (!t.value || t.dataset.auto)) {
+            const proj = (window.KB.projektyDocs || []).find(x =>
+                (x.nazev || "") === $("uProjekt").value);
+            t.value = (proj && proj.konec) || "";
+            if (t.value) t.dataset.auto = "1"; else delete t.dataset.auto;
+        }
     }
+
+    // ruční zásah do termínu automatiku vypne až do dalšího otevření okna
+    $("uTermin").addEventListener("input", () => {
+        const t = $("uTermin");
+        t.dataset.rucni = "1";
+        delete t.dataset.auto;
+    });
 
     async function ulozUkol() {
         const projektNazev = $("uProjekt").value;

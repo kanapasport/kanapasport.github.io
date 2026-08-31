@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=174">
+    <link rel="stylesheet" href="assets/css/app.css?v=175">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -308,9 +308,10 @@
                              matice by u nich byla prázdná tabulka. -->
                         <label class="row" style="gap:8px;cursor:pointer;margin-bottom:10px">
                             <input type="checkbox" id="pJednoduchy">
-                            <span><b>Jednoduchý projekt</b> — jeden celek bez úkolů,
-                            dělí se nanejvýš na patra (rodinné domy a drobné zakázky).
-                            V Plnění je místo matice souhrn odvedené práce.</span>
+                            <span><b>Jednoduchý projekt</b> — bez matice budgetu
+                            (v Plnění je souhrn odvedené práce). Dělit se může na
+                            patra nebo technologie a úkoly mít může – vyplň jen osy,
+                            které dávají smysl.</span>
                         </label>
 
                         <p class="small muted" style="margin:0;line-height:1.6">
@@ -349,9 +350,13 @@
                             </div>
                         </div>
                         <p class="tiny muted" style="margin:0;line-height:1.6">
-                            Prázdné pole znamená, že platí vestavěná nabídka.
-                            Roletka pod polem převezme hodnoty z jiného projektu, ať se to
-                            nemusí ťukat pořád dokola.
+                            Co je vypsané, to platí. Druhy vypracování se projektu bez
+                            vlastního seznamu vypíšou firemní nabídkou. Prázdná patra či
+                            technologie znamenají: u projektu, který už má něco
+                            vyplněného, „tuhle osu nepoužívám" – u projektu bez vlastního
+                            nastavení platí v úkolech firemní nabídka (ukazuje ji našedlý
+                            text v poli). Roletka pod polem převezme hodnoty z jiného
+                            projektu, ať se to nemusí ťukat pořád dokola.
                         </p>
                         </div>
                     </section>
@@ -477,10 +482,16 @@
                                    href="ukoly.html#novy">+ Nový úkol</a></div>
                             <div class="sblok__telo">
                             <div class="row row--wrap" style="gap:8px" id="ukolyFiltr"></div>
-                            <div class="row" style="gap:8px;margin-top:6px">
+                            <div class="row row--wrap" style="gap:8px;margin-top:6px">
                                 <button type="button" class="btn btn--sm btn--ghost" id="btnUkolyZTech"
-                                    title="Založí jeden úkol na každou technologii projektu – bez budgetu, doplníš později">
+                                    title="Založí jeden úkol na každou technologii projektu – bez budgetu. Lidé podle rozdělení technologií, druh i termín podle projektu.">
                                     + Úkol pro každou technologii</button>
+                                <button type="button" class="btn btn--sm btn--ghost" id="btnUkolyZPater"
+                                    title="Založí jeden úkol na každé patro (a budovu) projektu – bez budgetu. Lidé, druh i termín podle projektu.">
+                                    + Úkol pro každé patro</button>
+                                <button type="button" class="btn btn--sm btn--ghost" id="btnUkolSouhrn"
+                                    title="Jeden souhrnný úkol pro celý projekt – pro jednoduché zakázky bez dělení.">
+                                    + Souhrnný úkol</button>
                             </div>
                             <div id="budgetUkoly"></div>
                             </div>
@@ -627,10 +638,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=174"></script>
-<script src="assets/js/ui.js?v=174"></script>
-<script src="assets/js/vykazy.js?v=174"></script>
-<script type="module" src="assets/js/store.js?v=174"></script>
+<script src="assets/js/taxonomy.js?v=175"></script>
+<script src="assets/js/ui.js?v=175"></script>
+<script src="assets/js/vykazy.js?v=175"></script>
+<script type="module" src="assets/js/store.js?v=175"></script>
 
 <script>
 (function () {
@@ -941,25 +952,18 @@
     function prepniJednoduchy() {
         const jednoduchy = $("pJednoduchy").checked;
 
-        /* Jednoduchá zakázka je jeden celek bez rozpadu na úkoly. Dělí se
-           nanejvýš na PATRA – budovy a technologie se schovají, patra
-           zůstávají (přání Michala 26. 8. 2026). */
-        const budovy = $("fBudovy").closest(".pole");
-        const tech = $("fTech").closest(".pole");
-        if (budovy) budovy.hidden = jednoduchy;
-        if (tech) tech.hidden = jednoduchy;
-
-        /* „Kdo dělá kterou technologii" sedí v jiné záložce (Spolupracovníci),
-           proto se hledá zvlášť – u jednoduché zakázky nemá co dělit. */
+        /* Jednoduchá zakázka se od 31. 8. 2026 smí dělit na patra NEBO
+           technologie a úkoly mít může (přání Michala) – pole os i záložka
+           Úkoly zůstávají vidět. Jednoduchost znamená jen: bez matice
+           budgetu, bez šablon a bez rozdělení „kdo dělá kterou
+           technologii". */
         const blokTech = document.getElementById("techLide");
         const sekceTech = blokTech && blokTech.closest("section");
         if (sekceTech) sekceTech.hidden = jednoduchy;
 
-        /* Úkoly ani jejich šablony u jednoduchého projektu nejsou – celé
-           záložky zmizí. Kdo na nich zrovna stál, skočí na Údaje. */
-        document.querySelectorAll('[data-zalozka="ukoly"], [data-zalozka="sablony"]')
+        document.querySelectorAll('[data-zalozka="sablony"]')
             .forEach(b => { b.hidden = jednoduchy; });
-        if (jednoduchy && ["ukoly", "sablony"].indexOf(aktivniZalozka()) !== -1) {
+        if (jednoduchy && aktivniZalozka() === "sablony") {
             prepniZalozku("udaje");
         }
     }
@@ -1033,10 +1037,26 @@
 
 
         const b = (window.KB.budgetCiselnik || {})[nazev] || {};
+        /* Druhy vypracování se vypíšou firemní nabídkou, ať je vidět, co
+           platí (uložením se stane vlastní seznam projektu). Patra
+           a technologie se do HODNOTY nevypisují – pole čte osyProjektu
+           i ukládání a nabídka by se tak nechtěně stala skutečnými osami
+           (nález revize 31. 8. 2026); co platí u projektu bez vlastního
+           nastavení, ukazuje našedlý text v poli. */
         $("fBudovy").value = (b.budovy || []).join(", ");
         $("fPatra").value = (b.patra || []).join(", ");
         $("fTech").value = (b.technologie || []).join(", ");
-        $("fDruhy").value = (b.cinnosti || []).join(", ");
+        $("fDruhy").value = ((b.cinnosti && b.cinnosti.length) ? b.cinnosti
+            : V.cinnosti()).join(", ");
+        const maVlastniOsy = ["budovy", "patra", "technologie"].some(k =>
+            Array.isArray(b[k]) && b[k].length);
+        const napovedaOs = !maVlastniOsy && p.jednoduchy !== true;
+        $("fPatra").placeholder = napovedaOs
+            ? "nezadáno – v úkolech platí: 3PP, 2PP, 1PP, 1NP, 2NP, 3NP, 4NP, 5NP, 6NP"
+            : "";
+        $("fTech").placeholder = napovedaOs
+            ? "nezadáno – v úkolech platí firemní nabídka technologií"
+            : "";
         naplnZdroje(nazev);
 
         naplnSazby(p);
@@ -1077,7 +1097,16 @@
             const pk = klicPatra(u);
             if (pk && patraKlice.indexOf(pk) === -1) patraKlice.push(pk);
         });
-        if (!techy.length || !patraKlice.length) return "";
+        /* Technologie s rozpočtem nebo v číselníku, ale zatím bez úkolu
+           (HRM, ZAR…), patří do tabulky i do celkového součtu – jinak
+           „rozpočty technologií celkem" nesedí s krajícem. */
+        const cisTech = ((window.KB.budgetCiselnik || {})[p.nazev || ""] || {}).technologie || [];
+        cisTech.concat(Object.keys(techRozpocty)).forEach(t => {
+            if (t && techy.indexOf(t) === -1) techy.push(t);
+        });
+        /* Bez pater se tabulka nevzdává – součtové řádky Vyčleněno /
+           Rozpočet / Rozdíl mají cenu i pro projekt jen s tech-úkoly. */
+        if (!techy.length) return "";
 
         let soucetVse = 0, rozpocetVse = 0;
         const paticky = techy.map(t => {
@@ -1447,6 +1476,15 @@
 
     function vykresliMatici(p, ukoly, budgety) {
         const osy = osyProjektu(p);
+        /* Patra, budovy i technologie nesené jen úkoly (Střechy, Venek…)
+           patří do matice, i když v číselníku nejsou. */
+        ukoly.forEach(u => {
+            if (u.patro && osy.patra.indexOf(u.patro) === -1) osy.patra.push(u.patro);
+            if (u.budova && osy.budovy.indexOf(u.budova) === -1) osy.budovy.push(u.budova);
+            if (u.technologie && osy.technologie.indexOf(u.technologie) === -1) {
+                osy.technologie.push(u.technologie);
+            }
+        });
         /* Budgety technologií: uložené v rozpočtu projektu (tajný číselník),
            přes ně rozepsané, ale ještě neuložené hodnoty z polí – jinak by
            je každý příchod dat z databáze smazal zpod rukou. */
@@ -1782,31 +1820,112 @@
         $("patroOverlay").hidden = false;
     }
 
-    /* Rychlé založení kostry úkolů: jeden úkol na každou technologii
-       projektu, bez budgetu a bez pater – pro projekty, kde se plánuje
-       jen po technologiích. Existující tech-úkol se nezakládá podruhé. */
+    /* Rychlé založení kostry úkolů: podle technologií, podle pater, nebo
+       jeden souhrnný. Nový úkol dostane rovnou lidi (u technologie podle
+       rozdělení „kdo dělá kterou technologii", jinak spolupracovníky
+       projektu), primární druh vypracování projektu a termín = konec
+       projektu (přání Michala 31. 8. 2026). Nejdřív se sestaví plán,
+       hromadné založení se potvrzuje; zámek drží dvojklik. Existující
+       úkol se nezakládá podruhé; tech-úkolu bez lidí se lidi doplní
+       (ručně zvolený druh se mu nechává). */
+    let kostraUkoluBezi = false;
     document.addEventListener("click", async (e) => {
-        if (!e.target.closest || !e.target.closest("#btnUkolyZTech")) return;
+        if (!e.target.closest) return;
+        const cil = e.target.closest("#btnUkolyZTech")
+            || e.target.closest("#btnUkolyZPater")
+            || e.target.closest("#btnUkolSouhrn");
+        if (!cil || kostraUkoluBezi) return;
         const p = vybranyProjekt();
         if (!p) return;
         const osy = osyProjektu(p);
-        if (!osy.technologie.length) {
-            return window.KBUI.toast("Projekt nemá v Údajích zadané technologie.", "warn");
-        }
+        const cis = (window.KB.budgetCiselnik || {})[p.nazev || ""] || {};
+        const druh = (Array.isArray(cis.cinnosti) && cis.cinnosti[0]) || "ArcGIS/Kreslení";
+        const termin = p.konec || "";
+        const lidiTech = (tech) => Object.keys(p.lideTech || {})
+            .filter(uid => (p.lideTech[uid] || []).indexOf(tech) !== -1);
         const stavajici = ukolyProjektu(p);
-        let zalozeno = 0;
-        for (const tech of osy.technologie) {
-            if (stavajici.some(u => u.technologie === tech && !u.budova && !u.patro)) continue;
-            await window.KB.saveUkol(window.KB.newUkolId(), {
-                projektId: p.id, projekt: p.nazev || "",
-                nazev: tech, druh: "ArcGIS/Kreslení", technologie: tech,
-                budova: "", patro: "", prirazeni: [], todo: [], stav: "otevreny"
-            });
-            zalozeno++;
+        const spolecne = { projektId: p.id, projekt: p.nazev || "",
+            druh: druh, termin: termin, todo: [], stav: "otevreny" };
+
+        const nove = [];        // úkoly k založení
+        const doplnky = [];     // existující tech-úkoly, kterým se doplní lidé
+        if (cil.id === "btnUkolyZTech") {
+            if (!osy.technologie.length) {
+                return window.KBUI.toast("Projekt nemá v Údajích zadané technologie.", "warn");
+            }
+            for (const tech of osy.technologie) {
+                const uz = stavajici.find(u =>
+                    u.technologie === tech && !u.budova && !u.patro);
+                if (uz) {
+                    if (!(uz.prirazeni || []).length && lidiTech(tech).length) {
+                        doplnky.push({ id: uz.id, data: Object.assign({}, uz, {
+                            prirazeni: lidiTech(tech),
+                            druh: (uz.druh && uz.druh !== "ArcGIS/Kreslení") ? uz.druh : druh,
+                            termin: uz.termin || termin
+                        }) });
+                    }
+                    continue;
+                }
+                nove.push(Object.assign({}, spolecne, { nazev: tech,
+                    technologie: tech, budova: "", patro: "",
+                    prirazeni: lidiTech(tech) }));
+            }
+        } else if (cil.id === "btnUkolyZPater") {
+            if (!osy.patra.length) {
+                return window.KBUI.toast("Projekt nemá v Údajích zadaná patra.", "warn");
+            }
+            const budovy = osy.budovy.length ? osy.budovy : [""];
+            for (const budova of budovy) {
+                for (const patro of osy.patra) {
+                    if (stavajici.some(u => !u.technologie && u.patro === patro
+                            && (u.budova || "") === budova)) continue;
+                    nove.push(Object.assign({}, spolecne,
+                        { nazev: (budova ? budova + " – " : "") + patro,
+                          technologie: "", budova: budova, patro: patro,
+                          prirazeni: p.lide || [] }));
+                }
+            }
+        } else {
+            if (stavajici.length) {
+                return window.KBUI.toast("Projekt už úkoly má – souhrnný by se s nimi pletl.", "warn");
+            }
+            nove.push(Object.assign({}, spolecne, { nazev: "Zpracování zakázky",
+                technologie: "", budova: "", patro: "", prirazeni: p.lide || [] }));
         }
-        window.KBUI.toast(zalozeno
-            ? "Založeno úkolů: " + zalozeno
-            : "Úkol pro každou technologii už existuje.");
+
+        if (!nove.length && !doplnky.length) {
+            return window.KBUI.toast("Všechny úkoly už existují.");
+        }
+        /* hromadná akce se potvrzuje – ať jeden klik nezaloží omylem
+           čtrnáct úkolů všem lidem projektu */
+        if (nove.length > 1) {
+            const sLidmi = nove.filter(n => (n.prirazeni || []).length).length;
+            if (!window.confirm("Založí se " + nove.length + " úkolů"
+                    + (sLidmi ? " (z toho " + sLidmi + " s přiřazenými lidmi)" : "")
+                    + ". Pokračovat?")) return;
+        }
+
+        kostraUkoluBezi = true;
+        cil.disabled = true;
+        let zalozeno = 0, doplneno = 0;
+        try {
+            for (const d of doplnky) {
+                await window.KB.saveUkol(d.id, d.data);
+                doplneno++;
+            }
+            for (const data of nove) {
+                await window.KB.saveUkol(window.KB.newUkolId(), data);
+                zalozeno++;
+            }
+            window.KBUI.toast("Založeno úkolů: " + zalozeno
+                + (doplneno ? " · doplněni lidé u existujících: " + doplneno : ""));
+        } catch (err) {
+            window.KBUI.toast("Zakládání úkolů selhalo (založeno " + zalozeno
+                + "): " + ((err && err.message) || err), "warn");
+        } finally {
+            kostraUkoluBezi = false;
+            cil.disabled = false;
+        }
     });
 
     /* Klik na ztmavené pozadí zavírá okno patra i okno buňky matice –

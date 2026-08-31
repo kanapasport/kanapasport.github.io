@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=174">
+    <link rel="stylesheet" href="assets/css/app.css?v=175">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -274,10 +274,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=174"></script>
-<script src="assets/js/ui.js?v=174"></script>
-<script src="assets/js/vykazy.js?v=174"></script>
-<script type="module" src="assets/js/store.js?v=174"></script>
+<script src="assets/js/taxonomy.js?v=175"></script>
+<script src="assets/js/ui.js?v=175"></script>
+<script src="assets/js/vykazy.js?v=175"></script>
+<script type="module" src="assets/js/store.js?v=175"></script>
 
 <script>
 (function () {
@@ -610,7 +610,8 @@
 
     /* Budovy a patra projektu – z nastavení ve Správě projektů (číselník
        `budget`). Kde projekt nic nemá, roletky se vůbec nekreslí. */
-    /** Jednoduchá zakázka (RD): jeden celek bez úkolů, dělí se jen na patra. */
+    /** Jednoduchá zakázka (RD): osy jen z číselníku, jedna technologie
+        na zápis. Úkoly od 31. 8. 2026 mít může (souhrnný). */
     function jeJednoduchy(zakazka) {
         const p = (window.KB.projektyDocs || []).find(x => (x.nazev || "") === zakazka);
         return !!(p && p.jednoduchy === true);
@@ -724,6 +725,9 @@
                 '<button type="button" class="linkbtn techvic__pridej" data-tech-pridej' +
                     (casti.length >= TECH_POLE.length ? " hidden" : "") +
                     ' title="Práce na víc technologiích naráz">+ další technologie</button>' +
+                '<span class="tiny muted" data-tech-pozn' +
+                    (casti.length >= 2 ? "" : " hidden") +
+                    ">Hodiny se při vyhodnocení budgetu dělí rovnoměrně mezi vybrané technologie.</span>" +
             "</div></div>";
     }
 
@@ -749,6 +753,8 @@
         }
         // víc než tři technologie na jeden zápis už nedávají smysl
         if (!obal.querySelector("select[hidden]")) tlacitko.hidden = true;
+        const pozn = obal.querySelector("[data-tech-pozn]");
+        if (pozn) pozn.hidden = false;
     });
 
     /* iPad a iPhone kreslí k rozbalovací nabídce časů prázdné bílé okno –
@@ -859,9 +865,9 @@
                 /* Úkolů bývá na projektu i dvacet, tak se nevybírají
                    z roletky, ale píše se do pole – našeptávač (KBUI) ji
                    po vykreslení zabalí, viz ozivVybery(). */
-                '<div class="polozka__ukolvyber" style="grid-column:1/-1"' +
-                    (jeJednoduchy(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""))
-                        ? " hidden" : "") + ">" +
+                /* Od 31. 8. 2026 mají úkoly i jednoduché projekty
+                   (souhrnný „Zpracování zakázky") – výběr se už neschovává. */
+                '<div class="polozka__ukolvyber" style="grid-column:1/-1">' +
                     '<label class="label">Úkol</label>' +
                     '<select class="field" data-f="ukolId">' +
                         ukolOptions(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d.ukolId || "", d) +
@@ -2073,11 +2079,6 @@
                 select.innerHTML = V.options(
                     cinnostiProjektu(event.target.value, drzena), drzena, "— vyber —");
             });
-            // jednoduchý projekt úkoly nemá – pole se schová úplně
-            const jednoduchyBlok = jeJednoduchy(event.target.value);
-            blok.querySelectorAll(".polozka__ukolvyber").forEach(el => {
-                el.hidden = jednoduchyBlok;
-            });
             // ...a jiné budovy a patra – vybrané hodnoty stejně jinde neplatí
             blok.querySelectorAll("[data-misto]").forEach(el => {
                 el.outerHTML = mistoHtml(event.target.value, null);
@@ -2115,8 +2116,6 @@
                 ukolSelect.innerHTML = ukolOptions(event.target.value, "");
                 obnovUkolVyber(ukolSelect);
             }
-            const obalUkolu = box.querySelector(".polozka__ukolvyber");
-            if (obalUkolu) obalUkolu.hidden = jeJednoduchy(event.target.value);
             const misto = box.querySelector("[data-misto]");
             if (misto) misto.outerHTML = mistoHtml(event.target.value, null);
         }

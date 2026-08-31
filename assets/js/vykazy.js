@@ -171,9 +171,10 @@
      */
     /**
      * @param {Object} [techBudgety] – { TER: 250000, … }: budget technologie
-     *   v PENĚZÍCH (Kč). Vpravo přibude blok Budget Kč / Hodin / Ukrojeno /
+     *   v PENĚZÍCH (Kč). Vpravo přibude blok Budget Kč / Hodin / Vyfakturováno /
      *   Zbývá – hodiny se dopočítají průměrnou hodinovkou lidí přiřazených
-     *   k technologii (volby.sazbaTech), ukrojeno je součet budgetů úkolů.
+     *   k technologii (volby.sazbaTech), vyfakturováno jsou skutečné peníze
+     *   z výkazů přes vazbu na úkoly technologie (volby.cerpani).
      *   `klikaci` z Budgetu udělá editovatelné pole (data-techbud="TER").
      * @param {Object} [volby] – { rezim: "pct"|"zbyva", odpracovano: fn(id)→h }.
      *   „zbyva" místo % TO-DO ukáže v buňce zbývající hodiny (budget úkolů
@@ -229,10 +230,14 @@
                     obsah + "</span></td>";
         };
 
-        /* pravý blok: hodiny technologie, z nich ukrajují budgety úkolů */
-        const ukrojeno = (tech) => ukoly
-            .filter(u => u.technologie === tech)
-            .reduce((sum, u) => sum + (Number(((budgety || {})[u.id] || {}).budgetKc) || 0), 0);
+        /* pravý blok: vyfakturováno = skutečné peníze z výkazů (vazba
+           záznamů na úkoly technologie) – stejná veličina jako v buňkách
+           režimu „Zbývá peněz". Rozdělené budgety úkolů (dřívější
+           „ukrojeno") ukazuje tabulka Vyčleněno níž. */
+        const vyfakturovano = (tech) => (volby && volby.cerpani)
+            ? ukoly.filter(u => u.technologie === tech)
+                .reduce((sum, u) => sum + (Number(volby.cerpani(u.id)) || 0), 0)
+            : 0;
 
         const cislo = (n) => (Math.round(n * 10) / 10).toLocaleString("cs-CZ");
 
@@ -242,10 +247,10 @@
             const sazba = (volby && volby.sazbaTech) ? volby.sazbaTech(tech) : 0;
             /* peníze → hodiny přes průměrnou hodinovku lidí té technologie;
                bez přiřazených lidí není čím dělit a hodiny se nedopočítají.
-               Ukrojeno i Zbývá jsou v Kč – budgety úkolů jsou v penězích. */
+               Vyfakturováno i Zbývá jsou v Kč. */
             const hodinCelkem = (kc && sazba) ? kc / sazba : 0;
-            const ukr = ukrojeno(tech);
-            const zbyva = kc - ukr;
+            const vyf = vyfakturovano(tech);
+            const zbyva = kc - vyf;
             return '<td class="mx__budget">' +
                 (klikaci
                     ? '<input type="number" class="field" min="0" step="1000" data-techbud="' + esc(tech) +
@@ -255,7 +260,7 @@
                     ? ' title="při průměrné sazbě ' + cislo(sazba) + ' Kč/h"'
                     : (kc ? ' title="přiřaď lidi k technologii (Spolupracovníci), jinak není čím dělit"' : "")) + ">" +
                     (hodinCelkem ? cislo(Math.round(hodinCelkem)) : (kc ? "?" : "–")) + "</td>" +
-                '<td class="mx__budget">' + (ukr ? cislo(ukr) : "–") + "</td>" +
+                '<td class="mx__budget">' + (vyf ? cislo(vyf) : "–") + "</td>" +
                 '<td class="mx__budget' + (zbyva < 0 && kc ? " mx__budget--minus" : "") + '">' +
                     (kc ? cislo(Math.round(zbyva)) : "–") + "</td>";
         };
@@ -266,7 +271,7 @@
             (sBudgety ? '<th colspan="4">Budget technologie</th>' : "") + "</tr>" +
             "<tr><th></th>" + budovy.map(() =>
                 patra.map(pt => "<th>" + esc(pt) + "</th>").join("")).join("") +
-            (sBudgety ? "<th>Kč</th><th>Hodin</th><th>Ukrojeno Kč</th><th>Zbývá Kč</th>" : "") + "</tr>" +
+            (sBudgety ? "<th>Kč</th><th>Hodin</th><th>Vyfakturováno Kč</th><th>Zbývá Kč</th>" : "") + "</tr>" +
             "</thead><tbody>" +
             technologie.map(tech =>
                 '<tr><th style="text-align:left">' + esc(tech) + "</th>" +
