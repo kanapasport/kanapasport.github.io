@@ -1209,8 +1209,8 @@
         panel.innerHTML =
             '<div class="hookno__deska card">' +
                 '<div class="hookno__hlava">Quick TO-DO' +
-                    '<button type="button" class="linkbtn" data-quick-zavri' +
-                        ' style="color:#fff">Zavřít</button></div>' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy"' +
+                        " data-quick-zavri>Zavřít</button></div>" +
                 '<div class="hookno__telo quickpanel__telo">' +
                     '<div class="quickpanel__form">' +
                         '<input type="text" class="field" data-quick-text maxlength="300" ' +
@@ -1571,8 +1571,8 @@
         panel.innerHTML =
             '<div class="hookno__deska card">' +
                 '<div class="hookno__hlava">Správa aut' +
-                    '<button type="button" class="linkbtn" data-auta-zavri' +
-                        ' style="color:#fff">Zavřít</button></div>' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy"' +
+                        " data-auta-zavri>Zavřít</button></div>" +
                 '<div class="hookno__telo quickpanel__telo" data-auta-telo></div>' +
             "</div>";
         document.body.appendChild(panel);
@@ -1613,8 +1613,8 @@
         panel.innerHTML =
             '<div class="hookno__deska card hookno__deska--siroka">' +
                 '<div class="hookno__hlava">Rychlý zápis' +
-                    '<button type="button" class="linkbtn" data-ho-zavri' +
-                        ' style="color:#fff">Zavřít</button></div>' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy"' +
+                        " data-ho-zavri>Zavřít</button></div>" +
                 '<div class="hookno__telo" data-ho-telo></div>' +
             "</div>";
         document.body.appendChild(panel);
