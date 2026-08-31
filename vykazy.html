@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=172">
+    <link rel="stylesheet" href="assets/css/app.css?v=173">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -274,10 +274,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=172"></script>
-<script src="assets/js/ui.js?v=172"></script>
-<script src="assets/js/vykazy.js?v=172"></script>
-<script type="module" src="assets/js/store.js?v=172"></script>
+<script src="assets/js/taxonomy.js?v=173"></script>
+<script src="assets/js/ui.js?v=173"></script>
+<script src="assets/js/vykazy.js?v=173"></script>
+<script type="module" src="assets/js/store.js?v=173"></script>
 
 <script>
 (function () {
@@ -648,6 +648,19 @@
         return seznam;
     }
 
+    /* Druhy vypracování do roletky – stejná písnička jako technologie:
+       projekt si může ve Správě nadefinovat vlastní seznam (budgetCiselnik
+       […].cinnosti), firemní číselník slouží jen projektům bez vlastního. */
+    function cinnostiProjektu(zakazka, vybrana) {
+        const c = (window.KB.budgetCiselnik || {})[zakazka] || {};
+        let seznam = (Array.isArray(c.cinnosti) && c.cinnosti.length)
+            ? c.cinnosti.slice()
+            : V.cinnosti().slice();
+        // co zápis nese, musí v nabídce zůstat, i když to číselník už nezná
+        if (vybrana && seznam.indexOf(vybrana) === -1) seznam = seznam.concat([vybrana]);
+        return seznam;
+    }
+
     /* Roletky Budova + Patro: ať se dá sečíst, kolik hodin stálo jedno patro.
        Obal [data-misto] s display:contents drží místo v mřížce a překresluje
        se při změně projektu – jiný projekt má jiné budovy. */
@@ -851,7 +864,9 @@
                     mistoHtml(o.sZakazkou ? (d.zakazka || "") : (d._zakazkaBloku || ""), d) +
                     '<div><label class="label">Druh vypracování</label>' +
                         '<select class="field" data-f="cinnost">' +
-                            V.options(V.cinnosti(), d.cinnost || "", "— vyber —") + "</select></div>" +
+                            V.options(cinnostiProjektu(o.sZakazkou ? (d.zakazka || "")
+                                : (d._zakazkaBloku || ""), d.cinnost || ""),
+                                d.cinnost || "", "— vyber —") + "</select></div>" +
                 "</div>" +
 
                 /* Popis má vlastní řádek pod výběry – bývá to nejdelší text
@@ -2037,6 +2052,12 @@
             blok.querySelectorAll('[data-f="ukolId"]').forEach(select => {
                 select.innerHTML = ukolOptions(event.target.value, "");
                 obnovUkolVyber(select);
+            });
+            // …a jiná nabídka druhů vypracování (projekt může mít vlastní)
+            blok.querySelectorAll('[data-f="cinnost"]').forEach(select => {
+                const drzena = select.value;
+                select.innerHTML = V.options(
+                    cinnostiProjektu(event.target.value, drzena), drzena, "— vyber —");
             });
             // jednoduchý projekt úkoly nemá – pole se schová úplně
             const jednoduchyBlok = jeJednoduchy(event.target.value);

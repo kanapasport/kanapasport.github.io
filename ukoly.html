@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=172">
+    <link rel="stylesheet" href="assets/css/app.css?v=173">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -190,10 +190,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=172"></script>
-<script src="assets/js/ui.js?v=172"></script>
-<script src="assets/js/vykazy.js?v=172"></script>
-<script type="module" src="assets/js/store.js?v=172"></script>
+<script src="assets/js/taxonomy.js?v=173"></script>
+<script src="assets/js/ui.js?v=173"></script>
+<script src="assets/js/vykazy.js?v=173"></script>
+<script type="module" src="assets/js/store.js?v=173"></script>
 
 <script>
 (function () {
@@ -711,8 +711,14 @@
 
     /* ------------------------------------------------------ tvorba ----- */
 
+    let tvorbaSpinava = false;   // v okně tvorby je rozepsaná neuložená změna
+
     /** Zavře okno úpravy a pustí rolování stránky pod ním. */
     function zavriTvorbu() {
+        /* Rozepsaný úkol se nesmí zahodit potichu – Escape, křížek i klik
+           na pozadí se napřed zeptají (přání Michala 31. 8. 2026). */
+        if (tvorbaSpinava && !confirm("Zahodit rozepsané změny úkolu?")) return;
+        tvorbaSpinava = false;
         $("tvorba").hidden = true;
         document.body.style.overflow = "";
     }
@@ -731,6 +737,7 @@
 
     function naplnTvorbu(u) {
         editovanyId = u ? u.id : "";
+        tvorbaSpinava = false;
         $("tvorbaNadpis").textContent = u ? "Úprava úkolu" : "Nový úkol";
         $("btnSmazat").hidden = !u;
 
@@ -868,7 +875,21 @@
             if (cil && cil.closest && cil.closest("[data-todo-input]")) return;
             zavriTvorbu();
         });
-        $("btnUlozit").addEventListener("click", ulozUkol);
+        $("btnUlozit").addEventListener("click", () => {
+            tvorbaSpinava = false;      // ukládá se – hlídka už nemá co chránit
+            ulozUkol();
+        });
+        // cokoliv v okně člověk přepíše, zvedne vlajku rozepsané změny
+        $("tvorba").addEventListener("input", () => { tvorbaSpinava = true; });
+        /* Odchod ze stránky s rozepsaným oknem tvorby nebo rozepsanou
+           poznámkou u TO-DO zastaví prohlížeč dotazem. */
+        window.addEventListener("beforeunload", (e) => {
+            if ((!$("tvorba").hidden && tvorbaSpinava) ||
+                    document.querySelector("[data-todo-input]")) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        });
         $("btnRozbal").addEventListener("click", prepniRozbaleniVsech);
         $("btnSmazat").addEventListener("click", async () => {
             if (!editovanyId) return;

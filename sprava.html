@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=172">
+    <link rel="stylesheet" href="assets/css/app.css?v=173">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -345,6 +345,11 @@
                                     <button type="button" class="btn btn--ghost btn--sm" data-prevzit="technologie">Převzít</button>
                                 </div>
                             </div>
+                            <div class="pole">
+                                <span class="popisek">Druhy vypracování (oddělené čárkou)</span>
+                                <input type="text" id="fDruhy" class="field"
+                                       placeholder="prázdné = firemní nabídka">
+                            </div>
                         </div>
                         <p class="tiny muted" style="margin:0;line-height:1.6">
                             Prázdné pole znamená, že platí vestavěná nabídka.
@@ -418,6 +423,8 @@
                             ve výkazech je nikdo jiný neuvidí.
                         </p>
                         <div id="krajic" class="row row--wrap" style="gap:10px"></div>
+                        <!-- budget technologií: vyčleněno z úkolů vs. rozpočet -->
+                        <div id="techPrehled"></div>
                         <!-- jednoduché zakázky (RD) se po patrech nedělí –
                              místo matice se jim ukáže souhrn odvedené práce -->
                         <div id="souhrnPrace"></div>
@@ -620,10 +627,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=172"></script>
-<script src="assets/js/ui.js?v=172"></script>
-<script src="assets/js/vykazy.js?v=172"></script>
-<script type="module" src="assets/js/store.js?v=172"></script>
+<script src="assets/js/taxonomy.js?v=173"></script>
+<script src="assets/js/ui.js?v=173"></script>
+<script src="assets/js/vykazy.js?v=173"></script>
+<script type="module" src="assets/js/store.js?v=173"></script>
 
 <script>
 (function () {
@@ -1030,6 +1037,7 @@
         $("fBudovy").value = (b.budovy || []).join(", ");
         $("fPatra").value = (b.patra || []).join(", ");
         $("fTech").value = (b.technologie || []).join(", ");
+        $("fDruhy").value = (b.cinnosti || []).join(", ");
         naplnZdroje(nazev);
 
         naplnSazby(p);
@@ -1054,6 +1062,63 @@
        a hledat mezi nimi očima nejde. */
     const ukolFiltr = { budova: "", patro: "", tech: "", stav: "", text: "" };
     const jeFiltrZapnuty = () => Object.keys(ukolFiltr).some(k => ukolFiltr[k]);
+
+    /* ---------------------------------------------- budget technologií ----
+       Tabulka „vyčleněno vs. rozpočet": řádky patra (i Střechy/Venek –
+       bere se z reálných úkolů), sloupce technologie, v buňce budget
+       úkolu v Kč. Rozpočty technologií žijí v rozpocty[…].techBudgetyKc. */
+    function techPrehledHtml(p, ukoly, budgety) {
+        const techRozpocty = ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgetyKc || {};
+        const kcUkolu = (u) => Number((budgety[u.id] || {}).budgetKc) || 0;
+        const techy = [];
+        const patraKlice = [];
+        const klicPatra = (u) => ((u.budova ? u.budova + " " : "") + (u.patro || "")).trim();
+        ukoly.forEach(u => {
+            if (u.technologie && techy.indexOf(u.technologie) === -1) techy.push(u.technologie);
+            const pk = klicPatra(u);
+            if (pk && patraKlice.indexOf(pk) === -1) patraKlice.push(pk);
+        });
+        if (!techy.length || !patraKlice.length) return "";
+
+        let soucetVse = 0, rozpocetVse = 0;
+        const paticky = techy.map(t => {
+            const vycleneno = ukoly.filter(u => u.technologie === t)
+                .reduce((x, u) => x + kcUkolu(u), 0);
+            const rozpocet = Number(techRozpocty[t]) || 0;
+            soucetVse += vycleneno;
+            rozpocetVse += rozpocet;
+            return { vycleneno: vycleneno, rozpocet: rozpocet };
+        });
+
+        const bunka = (t, pk) => {
+            const kc = ukoly.filter(u => u.technologie === t && klicPatra(u) === pk)
+                .reduce((x, u) => x + kcUkolu(u), 0);
+            return kc ? V.kc(kc) : '<span style="color:var(--dim)">·</span>';
+        };
+
+        return '<div style="overflow-x:auto;margin-top:12px"><table class="vyk" style="font-size:12px">' +
+            "<thead><tr><th>Patro</th>" +
+                techy.map(t => '<th style="text-align:right">' + esc(t) + "</th>").join("") +
+            "</tr></thead><tbody>" +
+            patraKlice.map(pk => "<tr><td><b>" + esc(pk) + "</b></td>" +
+                techy.map(t => '<td style="text-align:right">' + bunka(t, pk) + "</td>").join("") +
+                "</tr>").join("") +
+            '<tr style="background:var(--bg-soft)"><td><b>Vyčleněno</b></td>' +
+                paticky.map(x => '<td style="text-align:right"><b>' + V.kc(x.vycleneno) +
+                    "</b></td>").join("") + "</tr>" +
+            "<tr><td>Rozpočet technologie</td>" +
+                paticky.map(x => '<td style="text-align:right">' +
+                    (x.rozpocet ? V.kc(x.rozpocet) : '<span style="color:var(--dim)">·</span>') +
+                    "</td>").join("") + "</tr>" +
+            "<tr><td>Rozdíl</td>" +
+                paticky.map(x => '<td style="text-align:right;font-weight:800;color:' +
+                    (x.rozpocet - x.vycleneno < 0 ? "var(--danger)" : "var(--ok)") + '">' +
+                    (x.rozpocet ? V.kc(x.rozpocet - x.vycleneno) : "") + "</td>").join("") + "</tr>" +
+            "</tbody></table>" +
+            '<p class="tiny muted" style="margin:8px 0 0">Vyčleněno celkem <b>' + V.kc(soucetVse) +
+            "</b> · rozpočty technologií celkem <b>" + V.kc(rozpocetVse) +
+            "</b> · rozdíl <b>" + V.kc(rozpocetVse - soucetVse) + "</b></p></div>";
+    }
 
     /** Budovy, patra a technologie projektu – z polí, nebo z číselníku. */
     function osyProjektu(p) {
@@ -1205,6 +1270,7 @@
            technologie – matice i přehled pater by u něj byly prázdné
            tabulky. Místo nich souhrn toho, co se na zakázce odvedlo. */
         const jednoduchy = p.jednoduchy === true;
+        $("techPrehled").innerHTML = jednoduchy ? "" : techPrehledHtml(p, ukoly, budgety);
         $("souhrnPrace").innerHTML = jednoduchy ? souhrnPraceHtml(p) : "";
         document.querySelector('[data-list="plneni"] .sblok__stitek').textContent =
             jednoduchy ? "Odvedená práce" : "Plnění po budovách a patrech";
@@ -1855,7 +1921,7 @@
 
         $("nuNadpis").textContent = "Nový úkol";
         $("nuNazev").value = budova + " – " + tech + " – " + patro;
-        $("nuDruh").innerHTML = V.options(V.cinnosti(), "ArcGIS/Kreslení", "— vyber —");
+        $("nuDruh").innerHTML = V.options(seznamZTextu($("fDruhy").value).length ? seznamZTextu($("fDruhy").value) : V.cinnosti(), "ArcGIS/Kreslení", "— vyber —");
         $("nuTermin").value = "";
         $("nuBudget").value = "";
         $("nuRezerva").value = "";
@@ -2312,7 +2378,8 @@
            pole je jediný způsob, jak seznam opravdu vyprázdnit (Michal
            26. 8.: nešla smazat patra u 2026-027). */
         budget[nazev] = Object.assign({}, budget[nazev],
-            { budovy: budovy, patra: patra, technologie: technologie });
+            { budovy: budovy, patra: patra, technologie: technologie,
+              cinnosti: seznamZTextu($("fDruhy").value) });
 
         /* Údaje projektu se ukládají spolu s nastavením – je to jeden projekt
            a jedno tlačítko. Název se posílá takový, jaký je v poli; při
