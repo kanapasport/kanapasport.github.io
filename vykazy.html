@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=173">
+    <link rel="stylesheet" href="assets/css/app.css?v=174">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -274,10 +274,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=173"></script>
-<script src="assets/js/ui.js?v=173"></script>
-<script src="assets/js/vykazy.js?v=173"></script>
-<script type="module" src="assets/js/store.js?v=173"></script>
+<script src="assets/js/taxonomy.js?v=174"></script>
+<script src="assets/js/ui.js?v=174"></script>
+<script src="assets/js/vykazy.js?v=174"></script>
+<script type="module" src="assets/js/store.js?v=174"></script>
 
 <script>
 (function () {
@@ -671,10 +671,24 @@
                 '<select class="field" data-f="patro">' +
                 V.options(misto.patra, (d && d.patro) || "", "— nezadáno —") + "</select></div>"
             : "";
-        /* Jednoduchý projekt: jen patro (a druh vedle) – budovu ani
-           technologie nemá, zapisuje se na projekt jako celek. */
+        /* Jednoduchý projekt ukazuje jen osy, které má v číselníku
+           vyplněné – budovu (třeba CEITEC), patra i JEDNU technologii.
+           Prázdná osa se vůbec nekreslí, zapisuje se na celek. */
         if (jeJednoduchy(zakazka)) {
-            return '<span data-misto style="display:contents">' + patroDiv + "</span>";
+            const tech = ((window.KB.budgetCiselnik || {})[zakazka] || {}).technologie || [];
+            return '<span data-misto style="display:contents">' +
+                (misto.budovy.length
+                    ? '<div><label class="label">Budova</label>' +
+                        '<select class="field" data-f="budova">' +
+                        V.options(misto.budovy, (d && d.budova) || "", "— nezadáno —") + "</select></div>"
+                    : "") +
+                patroDiv +
+                (tech.length
+                    ? '<div><label class="label">Technologie</label>' +
+                        '<select class="field" data-f="technologie">' +
+                        V.options(tech, (d && d.technologie) || "", "— nezadáno —") + "</select></div>"
+                    : "") +
+            "</span>";
         }
         return '<span data-misto style="display:contents">' +
             (misto.budovy.length

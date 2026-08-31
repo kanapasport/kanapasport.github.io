@@ -1246,8 +1246,15 @@
                 "</div>" +
             "</div>";
         document.body.appendChild(panel);
+        /* Zavření klikem na pozadí jen když na pozadí i ZAČALO – výběr
+           textu tažením, který skončí mimo desku, okno zavíral a rozepsaný
+           vzkaz zahodil (přání Michala 31. 8. 2026). */
+        let stiskNaPozadi = false;
+        panel.addEventListener("pointerdown", (event) => {
+            stiskNaPozadi = event.target === panel;
+        });
         panel.addEventListener("click", (event) => {
-            if (event.target === panel) prepniQuick(false);
+            if (event.target === panel && stiskNaPozadi) prepniQuick(false);
         });
     }
 

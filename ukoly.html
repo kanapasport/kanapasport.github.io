@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=173">
+    <link rel="stylesheet" href="assets/css/app.css?v=174">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -190,10 +190,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=173"></script>
-<script src="assets/js/ui.js?v=173"></script>
-<script src="assets/js/vykazy.js?v=173"></script>
-<script type="module" src="assets/js/store.js?v=173"></script>
+<script src="assets/js/taxonomy.js?v=174"></script>
+<script src="assets/js/ui.js?v=174"></script>
+<script src="assets/js/vykazy.js?v=174"></script>
+<script type="module" src="assets/js/store.js?v=174"></script>
 
 <script>
 (function () {
@@ -297,12 +297,20 @@
 
     function ciselnik(projektNazev) {
         const c = (window.KB.budgetCiselnik || {})[projektNazev] || {};
+        /* Projekt s vlastním číselníkem dostane PŘESNĚ to, co si nastavil –
+           prázdná osa znamená „tohle nepoužívám", žádný firemní fallback
+           (přání Michala 31. 8. 2026: nabízela se patra, která projekt
+           nemá). Firemní nabídka zbývá projektům bez vlastního nastavení. */
+        const maVlastni = ["budovy", "patra", "technologie"].some(k =>
+            Array.isArray(c[k]) && c[k].length);
         const nebo = (seznam, vychozi) =>
-            (Array.isArray(seznam) && seznam.length) ? seznam : vychozi;
+            (Array.isArray(seznam) && seznam.length) ? seznam : (maVlastni ? [] : vychozi);
         return {
             budovy: nebo(c.budovy, ["celá stavba"]),
             patra: nebo(c.patra, PATRA_VYCHOZI),
-            technologie: nebo(c.technologie, TECH_KRESLENI())
+            technologie: nebo(c.technologie, TECH_KRESLENI()),
+            cinnosti: (Array.isArray(c.cinnosti) && c.cinnosti.length)
+                ? c.cinnosti : V.cinnosti()
         };
     }
 
@@ -783,6 +791,22 @@
         napln("uTech", c.technologie, "technologie", "— technologie —");
         napln("uBudova", c.budovy, "budova", null);
         napln("uPatro", c.patra, "patro", "— celé —");
+
+        /* Druhy vypracování podle projektu (vlastní seznam ze Správy má
+           přednost před firemním) – dřív byly natvrdo v HTML a projektové
+           druhy tu nebyly vidět. */
+        /* U nového úkolu na projektu s vlastními druhy je výchozí PRVNÍ
+           z nich – firemní ArcGIS by se jinak cpal do nabídky navíc. */
+        let drzenyDruh = u ? (u.druh || "") : ($("uDruh").value || "ArcGIS/Kreslení");
+        if (!u && c.cinnosti.indexOf(drzenyDruh) === -1) drzenyDruh = c.cinnosti[0] || "";
+        const druhy = (drzenyDruh && c.cinnosti.indexOf(drzenyDruh) === -1)
+            ? c.cinnosti.concat([drzenyDruh]) : c.cinnosti;
+        $("uDruh").innerHTML = V.options(druhy, drzenyDruh, null);
+
+        // prázdná osa se vůbec nenabízí – projekt ji nepoužívá
+        $("uTechBox").hidden = !c.technologie.length;
+        $("uBudova").closest("label").hidden = !c.budovy.length;
+        $("uPatro").closest("label").hidden = !c.patra.length;
     }
 
     async function ulozUkol() {
@@ -880,7 +904,11 @@
             ulozUkol();
         });
         // cokoliv v okně člověk přepíše, zvedne vlajku rozepsané změny
-        $("tvorba").addEventListener("input", () => { tvorbaSpinava = true; });
+        // (samotný výběr projektu ještě rozepsaný úkol není)
+        $("tvorba").addEventListener("input", (e) => {
+            if (e.target && e.target.id === "uProjekt") return;
+            tvorbaSpinava = true;
+        });
         /* Odchod ze stránky s rozepsaným oknem tvorby nebo rozepsanou
            poznámkou u TO-DO zastaví prohlížeč dotazem. */
         window.addEventListener("beforeunload", (e) => {
