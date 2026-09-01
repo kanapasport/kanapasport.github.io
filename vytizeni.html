@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Vytížení týmu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=187">
+    <link rel="stylesheet" href="assets/css/app.css?v=188">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -130,10 +130,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=187"></script>
-<script src="assets/js/ui.js?v=187"></script>
-<script src="assets/js/vykazy.js?v=187"></script>
-<script type="module" src="assets/js/store.js?v=187"></script>
+<script src="assets/js/taxonomy.js?v=188"></script>
+<script src="assets/js/ui.js?v=188"></script>
+<script src="assets/js/vykazy.js?v=188"></script>
+<script type="module" src="assets/js/store.js?v=188"></script>
 
 <script>
 (function () {
@@ -239,7 +239,12 @@
            z vyfiltrovaného projektu – jinak by přesčas lhal, jakmile si
            manažer vybere jednu zakázku (přání Michala 1. 9. 2026). */
         const mesicOd = iso(new Date(kotva.getFullYear(), kotva.getMonth(), 1));
-        const mesicDo = iso(new Date(kotva.getFullYear(), kotva.getMonth() + 1, 0));
+        /* Konec okna sedí s fondem: u probíhajícího měsíce se sčítá jen
+           do dneška. Jinak by dovolená naklikaná dopředu v Rychlém zápisu
+           dělala přesčas za dny, které ještě nebyly (Michal 1. 9. 2026). */
+        const konec = iso(new Date(kotva.getFullYear(), kotva.getMonth() + 1, 0));
+        const dnesIso = V.dnesISO();
+        const mesicDo = konec > dnesIso && mesicOd <= dnesIso ? dnesIso : konec;
         const soucty = new Map();          // uid → { prace, absenceDnu }
         (window.KB.vykazy || []).forEach(z => {
             const k = z.uid + "|" + z.datum;
@@ -287,20 +292,22 @@
         const s = data.soucty.get(u.id) || { prace: 0, absenceDnu: 0 };
         const celkem = s.prace;
         const naFond = s.prace + s.absenceDnu * 8;
-        const jeZamestnanec = window.KBUI.typUvazku(u) === "zamestnanec";
         const rozdil = naFond - data.fond.hodin;
 
-        const titulek = (data.fond.doDneska ? "Fond k dnešku: " : "Fond měsíce: ") +
+        const titulek = "Přesčas = odpracováno + absence po 8 h − fond. " +
+            (data.fond.doDneska ? "Fond k dnešku: " : "Fond měsíce: ") +
             data.fond.dnu + " prac. dní × 8 h = " +
             data.fond.hodin + " h · odpracováno " + hodinyTxt(s.prace) + " h" +
             (s.absenceDnu ? " · absence " + s.absenceDnu + " dní (" + (s.absenceDnu * 8) + " h)" : "");
 
+        /* Přesčas se ukazuje všem – u OSVČ a studentů to není nárok na
+           proplacení, ale je z toho vidět, kdo kolik odpracoval
+           (přání Michala 1. 9. 2026). */
         return '<td class="vt__soucet" title="' + esc(titulek) + '">' +
                 esc(hodinyTxt(celkem)) + "</td>" +
-            '<td class="vt__soucet' + (jeZamestnanec && rozdil < 0 ? " vt__soucet--minus" : "") +
+            '<td class="vt__soucet' + (rozdil < 0 ? " vt__soucet--minus" : "") +
                 '" title="' + esc(titulek) + '">' +
-                (!jeZamestnanec ? '<span class="tiny muted">–</span>'
-                    : (rozdil ? esc((rozdil > 0 ? "+" : "") + hodinyTxt(rozdil)) : "0")) +
+                (rozdil ? esc((rozdil > 0 ? "+" : "") + hodinyTxt(rozdil)) : "0") +
             "</td>";
     }
 
