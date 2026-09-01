@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=186">
+    <link rel="stylesheet" href="assets/css/app.css?v=187">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -72,6 +72,14 @@
         .polozka--absence .priplatky,
         .polozka--absence .polozka__ukolvyber,
         .polozka--absence .polozka__cas > div:has([data-f="sazba"]) { display: none; }
+
+        /* Režie: bez úkolu, technologie a druhu vypracování – zůstává jen
+           popis práce, čas a sazba. */
+        .zblok--rezie .polozka__grid > div:not(.polozka__nazev),
+        .zblok--rezie .polozka__ukolvyber,
+        .polozka--rezie .polozka__grid > div:has([data-f="cinnost"]),
+        .polozka--rezie .polozka__grid > div:has([data-f="technologie"]),
+        .polozka--rezie .polozka__ukolvyber { display: none; }
     </style>
 </head>
 <body>
@@ -286,10 +294,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=186"></script>
-<script src="assets/js/ui.js?v=186"></script>
-<script src="assets/js/vykazy.js?v=186"></script>
-<script type="module" src="assets/js/store.js?v=186"></script>
+<script src="assets/js/taxonomy.js?v=187"></script>
+<script src="assets/js/ui.js?v=187"></script>
+<script src="assets/js/vykazy.js?v=187"></script>
+<script type="module" src="assets/js/store.js?v=187"></script>
 
 <script>
 (function () {
@@ -335,6 +343,12 @@
     /* Práce na tomhle webu – placený čas bez zakázky, vidí ji všichni. */
     const WEB_PRACE = "Web";
     const jeAbsence = (nazev) => ABSENCE.indexOf(nazev) !== -1;
+    /* Režie (Web, Administrativa, Porada) se fakturuje vlastní firmě a nemá
+       úkol, technologii ani druh vypracování – je to odpracovaný čas bez
+       zakázky (přání Michala 1. 9. 2026). */
+    const REZIE = [ADMINISTRATIVA, PORADA, WEB_PRACE];
+    const REZIE_FIRMA = "Pasport Kaňa s.r.o.";
+    const jeRezie = (nazev) => REZIE.indexOf(nazev) !== -1;
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
 
@@ -873,7 +887,9 @@
 
         // absence poznáme u okna úpravy rovnou z dat – blok dne řeší třídu sám
         const absentni = o.sZakazkou && jeAbsence(d.zakazka || "");
-        return '<div class="polozka' + (absentni ? " polozka--absence" : "") + '" data-polozka>' +
+        const rezijni = o.sZakazkou && jeRezie(d.zakazka || "");
+        return '<div class="polozka' + (absentni ? " polozka--absence" : "") +
+            (rezijni ? " polozka--rezie" : "") + '" data-polozka>' +
             '<div class="polozka__head">' +
                 '<span class="polozka__poradi">Záznam</span>' +
                 (o.odebrat ? '<button type="button" class="linkbtn" data-odeber>Odebrat</button>' : "") +
@@ -986,7 +1002,8 @@
      */
     function zblokHtml(data) {
         const d = data || {};
-        return '<div class="zblok' + (jeAbsence(d.zakazka || "") ? " zblok--absence" : "") + '" data-zblok>' +
+        return '<div class="zblok' + (jeAbsence(d.zakazka || "") ? " zblok--absence" : "") +
+            (jeRezie(d.zakazka || "") ? " zblok--rezie" : "") + '" data-zblok>' +
             '<div class="zblok__hlava">' +
                 '<div class="zblok__stitek">Výkaz</div>' +
                 '<button type="button" class="linkbtn" data-zodeber hidden>Odebrat výkaz</button>' +
@@ -2093,10 +2110,14 @@
            takže ji zaměstnanec nemá. Firmu si vezme z vlastního projektu –
            ten čte, protože je na něm přiřazený. */
         const doc = (window.KB.projektyDocs || []).find(x => (x.nazev || "") === projekt);
-        const firma = (window.KB.firmaMap || {})[projekt] || (doc && doc.firma) || "";
+        // režie se fakturuje vždycky nám samotným
+        const firma = jeRezie(projekt) ? REZIE_FIRMA
+            : ((window.KB.firmaMap || {})[projekt] || (doc && doc.firma) || "");
         const select = kontejner.querySelector('[' + atribut + '="firma"]');
         if (!select) return;
-        if (firma) select.value = firma;
+        /* Bez firmy se roletka vyprázdní – dřív v ní visela firma
+           z předchozího projektu a vypadalo to jako vyplněné. */
+        select.value = firma;
         /* Když má projekt firmu nastavenou ve Správě, roletka se zamkne –
            fakturuje se vždycky té, přepsáním vznikaly jen omyly. */
         select.disabled = !!firma;
@@ -2137,6 +2158,7 @@
         if (blok && event.target.dataset.z === "zakazka") {
             doplnFirmu(blok, "data-z", event.target.value);
             blok.classList.toggle("zblok--absence", jeAbsence(event.target.value));
+            blok.classList.toggle("zblok--rezie", jeRezie(event.target.value));
             // jiný projekt = jiná nabídka úkolů ve všech záznamech výkazu
             blok.querySelectorAll('[data-f="ukolId"]').forEach(select => {
                 select.innerHTML = ukolOptions(event.target.value, "");
@@ -2179,6 +2201,7 @@
         if (event.target.dataset.f === "zakazka") {
             doplnFirmu(box, "data-f", event.target.value);
             box.classList.toggle("polozka--absence", jeAbsence(event.target.value));
+            box.classList.toggle("polozka--rezie", jeRezie(event.target.value));
             predvyplnAbsenci(box, event.target.value, $("eOsoba").value);
             const ukolSelect = box.querySelector('[data-f="ukolId"]');
             if (ukolSelect) {

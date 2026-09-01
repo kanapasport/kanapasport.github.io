@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Vytížení týmu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=186">
+    <link rel="stylesheet" href="assets/css/app.css?v=187">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -42,6 +42,12 @@
         }
         .vt td:first-child { font-weight: 700; }
         .vt .vt--vik { background: var(--bg-soft); }
+        /* Součet měsíce a přesčas – oddělené od mřížky dnů silnější čarou. */
+        .vt .vt__soucet { border-left: 2px solid var(--line); font-weight: 900;
+            background: var(--surface); white-space: nowrap; padding-left: 10px;
+            padding-right: 10px; }
+        .vt th.vt__soucet { font-size: 10px; }
+        .vt .vt__soucet--minus { color: var(--danger); }
         /* Pastelové podklady s černým textem – čitelné i pro barvoslepé,
            protože nesou i číslo (barva není jediné vodítko). */
         .vt--malo   { background: #f5e6b8; color: #111; }
@@ -124,10 +130,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=186"></script>
-<script src="assets/js/ui.js?v=186"></script>
-<script src="assets/js/vykazy.js?v=186"></script>
-<script type="module" src="assets/js/store.js?v=186"></script>
+<script src="assets/js/taxonomy.js?v=187"></script>
+<script src="assets/js/ui.js?v=187"></script>
+<script src="assets/js/vykazy.js?v=187"></script>
+<script type="module" src="assets/js/store.js?v=187"></script>
 
 <script>
 (function () {
@@ -229,13 +235,73 @@
         const filtr = $("fProjekt").value;
         const hodiny = new Map();
         const absence = new Set();
+        /* Součet a přesčas vpravo se počítají ze VŠECH hodin měsíce, ne
+           z vyfiltrovaného projektu – jinak by přesčas lhal, jakmile si
+           manažer vybere jednu zakázku (přání Michala 1. 9. 2026). */
+        const mesicOd = iso(new Date(kotva.getFullYear(), kotva.getMonth(), 1));
+        const mesicDo = iso(new Date(kotva.getFullYear(), kotva.getMonth() + 1, 0));
+        const soucty = new Map();          // uid → { prace, absenceDnu }
         (window.KB.vykazy || []).forEach(z => {
             const k = z.uid + "|" + z.datum;
+            const vMesici = (z.datum || "") >= mesicOd && (z.datum || "") <= mesicDo;
+            if (vMesici) {
+                const s = soucty.get(z.uid) || { prace: 0, absenceDnu: 0 };
+                if (z.absence === true) s.absenceDnu++;
+                else s.prace += Number(z.hodiny) || 0;
+                soucty.set(z.uid, s);
+            }
             if (z.absence === true) { absence.add(k); return; }
             if (filtr && z.zakazka !== filtr) return;
             hodiny.set(k, (hodiny.get(k) || 0) + (Number(z.hodiny) || 0));
         });
-        return { hodiny: hodiny, absence: absence };
+        return { hodiny: hodiny, absence: absence, soucty: soucty, fond: fondMesice() };
+    }
+
+    /**
+     * Fond v hodinách: pracovní dny bez státních svátků × 8. U probíhajícího
+     * měsíce se počítá jen DO DNEŠKA – jinak by hned prvního svítilo všem
+     * −168 za dny, které teprve přijdou (přání Michala 1. 9. 2026).
+     */
+    function fondMesice() {
+        const y = kotva.getFullYear(), m = kotva.getMonth();
+        const konecMesice = new Date(y, m + 1, 0).getDate();
+        const dnes = new Date();
+        const bezici = dnes.getFullYear() === y && dnes.getMonth() === m;
+        const posledni = bezici ? Math.min(dnes.getDate(), konecMesice) : konecMesice;
+
+        let dnu = 0;
+        for (let c = 1; c <= posledni; c++) {
+            const d = new Date(y, m, c);
+            if (d.getDay() === 0 || d.getDay() === 6) continue;
+            if (window.KBUI.svatek && window.KBUI.svatek(iso(d))) continue;
+            dnu++;
+        }
+        return { dnu: dnu, hodin: dnu * 8, doDneska: bezici };
+    }
+
+    /* Dvě čísla vpravo za mřížkou: kolik má člověk za měsíc dohromady
+       a o kolik je nad fondem. Dovolená a volno se počítají jako
+       odpracovaná směna, aby přesčas kvůli nim nespadl do mínusu.
+       Přesčas dává smysl jen u zaměstnance – OSVČ a studenti fond nemají. */
+    function souhrnCloveka(u, data) {
+        const s = data.soucty.get(u.id) || { prace: 0, absenceDnu: 0 };
+        const celkem = s.prace;
+        const naFond = s.prace + s.absenceDnu * 8;
+        const jeZamestnanec = window.KBUI.typUvazku(u) === "zamestnanec";
+        const rozdil = naFond - data.fond.hodin;
+
+        const titulek = (data.fond.doDneska ? "Fond k dnešku: " : "Fond měsíce: ") +
+            data.fond.dnu + " prac. dní × 8 h = " +
+            data.fond.hodin + " h · odpracováno " + hodinyTxt(s.prace) + " h" +
+            (s.absenceDnu ? " · absence " + s.absenceDnu + " dní (" + (s.absenceDnu * 8) + " h)" : "");
+
+        return '<td class="vt__soucet" title="' + esc(titulek) + '">' +
+                esc(hodinyTxt(celkem)) + "</td>" +
+            '<td class="vt__soucet' + (jeZamestnanec && rozdil < 0 ? " vt__soucet--minus" : "") +
+                '" title="' + esc(titulek) + '">' +
+                (!jeZamestnanec ? '<span class="tiny muted">–</span>'
+                    : (rozdil ? esc((rozdil > 0 ? "+" : "") + hodinyTxt(rozdil)) : "0")) +
+            "</td>";
     }
 
     /* Nabídka filtru z toho, co je skutečně vykázané – prázdný projekt
@@ -261,9 +327,10 @@
 
         $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + dny.map(x =>
             '<th class="' + (x.vikend ? "vt--vik " : "") +
-            (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") + "</tr>";
+            (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") +
+            '<th class="vt__soucet">Celkem</th><th class="vt__soucet">Přesčas</th></tr>';
 
-        return radkyPodleSkupin(skupiny, dny.length, (u) =>
+        return radkyPodleSkupin(skupiny, dny.length + 2, (u) =>
             "<tr><td>" + esc(V.jmeno(u)) + "</td>" + dny.map(x => {
             const k = u.id + "|" + x.iso;
             const h = data.hodiny.get(k) || 0;
@@ -274,7 +341,7 @@
             else if (h >= 7) { cls = "vt--akorat"; text = hodinyTxt(h); }
             else if (h > 0)  { cls = "vt--malo";   text = hodinyTxt(h); }
             return '<td class="' + cls + '">' + esc(text) + "</td>";
-        }).join("") + "</tr>");
+        }).join("") + souhrnCloveka(u, data) + "</tr>");
     }
 
     function vykresliTydny(skupiny, data) {
@@ -296,9 +363,10 @@
             const aktualni = iso(t.od) <= dnesIso && dnesIso <= iso(t.do);
             return '<th class="' + (aktualni ? "vt--dnes" : "") + '">' +
                 esc(dm(t.od) + "–" + dm(t.do)) + "</th>";
-        }).join("") + "</tr>";
+        }).join("") +
+            '<th class="vt__soucet">Celkem</th><th class="vt__soucet">Přesčas</th></tr>';
 
-        return radkyPodleSkupin(skupiny, tydny.length, (u) =>
+        return radkyPodleSkupin(skupiny, tydny.length + 2, (u) =>
             "<tr><td>" + esc(V.jmeno(u)) + "</td>" + tydny.map(t => {
             let h = 0, abs = false;
             for (let c = 0; c < 7; c++) {
@@ -311,7 +379,7 @@
             const cls = h > 40 ? "vt--hodne" : h >= 35 ? "vt--akorat" : h > 0 ? "vt--malo" : "";
             return '<td class="' + cls + '">' + (h > 0 ? esc(hodinyTxt(h)) : "") +
                 (abs ? '<span class="vt-a">A</span>' : "") + "</td>";
-        }).join("") + "</tr>");
+        }).join("") + souhrnCloveka(u, data) + "</tr>");
     }
 
     function vykresli() {
