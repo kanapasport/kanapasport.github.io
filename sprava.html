@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=188">
+    <link rel="stylesheet" href="assets/css/app.css?v=189">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -638,10 +638,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=188"></script>
-<script src="assets/js/ui.js?v=188"></script>
-<script src="assets/js/vykazy.js?v=188"></script>
-<script type="module" src="assets/js/store.js?v=188"></script>
+<script src="assets/js/taxonomy.js?v=189"></script>
+<script src="assets/js/ui.js?v=189"></script>
+<script src="assets/js/vykazy.js?v=189"></script>
+<script type="module" src="assets/js/store.js?v=189"></script>
 
 <script>
 (function () {
@@ -2084,16 +2084,7 @@
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
         $("nuTodo").value = "";
 
-        /* Šablony: rozpad se nevypisuje ručně. Tlačítko se ukáže, jen když
-           pro tuhle technologii / tohle patro šablona opravdu existuje. */
-        const sabT = sablonaTech(p, tech);
-        const sabM = sablonaMistnosti(p, budova, patro);
-        $("nuSabTech").hidden = !sabT;
-        $("nuSabTech").textContent = "TO-DO ze šablony " + tech +
-            " (" + (sabT ? sabT.split("\n").length : 0) + ")";
-        $("nuSabMist").hidden = !sabM;
-        $("nuSabMist").textContent = "TO-DO = místnosti " + patro +
-            " (" + (sabM ? sabM.split("\n").length : 0) + ")";
+        nabidniSablony(p, budova, tech, patro);
         /* Lidé té technologie (Spolupracovníci → Kdo dělá kterou technologii)
            jsou zaškrtnutí rovnou – to jsou ti, kdo úkol nejspíš dostanou.
            Další se přidají normálně. */
@@ -2105,6 +2096,25 @@
         $("ukolOverlay").hidden = false;
         $("nuNazev").focus();
     }
+
+    /* Šablony: rozpad se nevypisuje ručně. Tlačítko se ukáže, jen když pro
+       tuhle technologii / tohle patro šablona opravdu existuje — a platí to
+       i pro ÚPRAVU hotového úkolu, ne jen pro zakládání (Michal 1. 9. 2026). */
+    function nabidniSablony(p, budova, tech, patro) {
+        const sabT = sablonaTech(p, tech);
+        const sabM = sablonaMistnosti(p, budova, patro);
+        $("nuSabTech").hidden = !sabT;
+        if (sabT) {
+            $("nuSabTech").textContent = "TO-DO ze šablony " + tech +
+                " (" + sabT.split("\n").length + ")";
+        }
+        $("nuSabMist").hidden = !sabM;
+        if (sabM) {
+            $("nuSabMist").textContent = "TO-DO = místnosti " + patro +
+                " (" + sabM.split("\n").length + ")";
+        }
+    }
+
 
     /** Stejný dialog, ale předvyplněný stávajícím úkolem. */
     /* (volá se i z okna patra – to se proto zavírá taky) */
@@ -2124,6 +2134,7 @@
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") +
             [u.budova, u.technologie, u.patro].filter(Boolean).map(x => " · " + x).join("");
         $("nuTodo").value = (u.todo || []).map(t => t.text || "").join("\n");
+        nabidniSablony(p, u.budova || "", u.technologie || "", u.patro || "");
         naplnDialogLidi(p, u.prirazeni || []);
 
         $("bunkaOverlay").hidden = true;

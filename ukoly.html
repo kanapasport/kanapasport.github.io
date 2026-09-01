@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=188">
+    <link rel="stylesheet" href="assets/css/app.css?v=189">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -190,10 +190,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=188"></script>
-<script src="assets/js/ui.js?v=188"></script>
-<script src="assets/js/vykazy.js?v=188"></script>
-<script type="module" src="assets/js/store.js?v=188"></script>
+<script src="assets/js/taxonomy.js?v=189"></script>
+<script src="assets/js/ui.js?v=189"></script>
+<script src="assets/js/vykazy.js?v=189"></script>
+<script type="module" src="assets/js/store.js?v=189"></script>
 
 <script>
 (function () {
@@ -502,7 +502,7 @@
             (otevreny
                 ? '<div class="ukol__telo">' +
                     '<div class="ukol__todo">' + todoHtml(u, smiPsat) + "</div>" +
-                    (historieOtevrena.has(u.id)
+                    (historieOtevrena.has(u.id) && window.KBUI.can("vykaz.view")
                         ? '<div style="padding:8px 14px;border-top:1px dashed var(--line);font-size:12px;color:var(--text-soft)">' +
                             ((u.historie || []).length ? "" :
                                 "Zatím žádný záznam – historie se zapisuje od 20. 8. 2026, starší posuny procent v ní nejsou.") +
@@ -520,8 +520,14 @@
                         (window.KBUI.isAdmin() && u.stav === "hotovo" && u.potvrzeno !== true
                             ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
                                 esc(u.id) + '">Potvrdit hotové</button>' : "") +
-                        '<button type="button" class="btn btn--sm btn--ghost" data-historie="' + esc(u.id) + '">' +
-                            (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>" +
+                        /* Historie posunů procent je manažerská věc – kdo kdy
+                           co posunul, zaměstnanci do toho nic není
+                           (přání Michala 1. 9. 2026). */
+                        (window.KBUI.can("vykaz.view")
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-historie="' +
+                                esc(u.id) + '">' +
+                                (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>"
+                            : "") +
                         (smiPsat && u.stav !== "hotovo"
                             ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
                         (window.KBUI.can("ukol.delete")

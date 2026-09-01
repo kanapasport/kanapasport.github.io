@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#c8102e">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=188">
+    <link rel="stylesheet" href="assets/css/app.css?v=189">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -268,6 +268,8 @@
                     <span class="nastenka__prep">
                         <button type="button" class="chip" data-qrozsah="moje">Moje</button>
                         <button type="button" class="chip" data-qrozsah="zadane">Zadané</button>
+                        <!-- upozornění od kolegů svázaná s poznámkou -->
+                        <button type="button" class="chip" data-qrozsah="poznamky">Poznámky</button>
                         <!-- otevře stejný panel jako tlačítko ve svislém pásu -->
                         <button type="button" class="chip chip--nove" data-quick-otevri
                                 data-jen-prihlaseny hidden
@@ -349,11 +351,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=188"></script>
-<script src="assets/js/doc.js?v=188"></script>
-<script src="assets/js/ui.js?v=188"></script>
-<script src="assets/js/vykazy.js?v=188"></script>
-<script type="module" src="assets/js/store.js?v=188"></script>
+<script src="assets/js/taxonomy.js?v=189"></script>
+<script src="assets/js/doc.js?v=189"></script>
+<script src="assets/js/ui.js?v=189"></script>
+<script src="assets/js/vykazy.js?v=189"></script>
+<script type="module" src="assets/js/store.js?v=189"></script>
 
 <script>
 (function () {
@@ -706,10 +708,16 @@
            jako u zadaných úkolů. Splněné drží jen poslední týden; starší
            žijí v týdenních lozích reportů. */
         const mojeRezim = quickRozsah !== "zadane";
+        /* Třetí přepínač jako v panelu na pásu: jen vzkazy svázané
+           s poznámkou (upozornění kolegů) – na nástěnce chyběl
+           (přání Michala 1. 9. 2026). */
+        const jenPozn = quickRozsah === "poznamky";
         const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
-        const aktivni = (mojeRezim ? proMe : odeMe).filter(q => !q.hotovo).sort(naporadi);
+        const aktivni = (mojeRezim ? proMe : odeMe)
+            .filter(q => !q.hotovo && (!jenPozn || q.poznamka)).sort(naporadi);
         const splnene = (mojeRezim ? proMe : odeMe)
-            .filter(q => q.hotovo && (q.hotovoMs || q.ms || 0) >= tydenZpet);
+            .filter(q => q.hotovo && (!jenPozn || q.poznamka)
+                && (q.hotovoMs || q.ms || 0) >= tydenZpet);
 
         document.querySelectorAll("[data-qrozsah]").forEach(ch => {
             const zapnuto = ch.dataset.qrozsah === quickRozsah;
@@ -720,7 +728,8 @@
         document.getElementById("quickSeznam").innerHTML =
             (aktivni.map(q => radek(q, !mojeRezim)).join("")
                 || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-                   (mojeRezim ? "Žiješ šťastný život, nikdo po tobě nic nechce."
+                   (jenPozn ? "Žádné upozornění k poznámce."
+                    : mojeRezim ? "Žiješ šťastný život, nikdo po tobě nic nechce."
                               : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
             (splnene.length
                 ? '<button type="button" class="linkbtn" data-quick-splnene-tile style="margin-top:12px">' +
