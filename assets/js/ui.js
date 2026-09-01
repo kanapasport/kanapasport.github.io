@@ -504,31 +504,9 @@
     const fromHex = (hex) => new Uint8Array(
         (String(hex || "").match(/.{1,2}/g) || []).map(byte => parseInt(byte, 16)));
 
-    UI.deriveVaultKey = async (passphrase, saltHex) => {
-        const base = await crypto.subtle.importKey(
-            "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-        return crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt: fromHex(saltHex), iterations: 150000, hash: "SHA-256" },
-            base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-    };
-
-    UI.vaultEncrypt = async (key, text) => {
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const data = await crypto.subtle.encrypt(
-            { name: "AES-GCM", iv: iv }, key, new TextEncoder().encode(String(text)));
-        return { iv: toHex(iv), data: toHex(data) };
-    };
-
-    UI.vaultDecrypt = async (key, blob) => {
-        if (!blob || !blob.iv || !blob.data) return "";
-        const plain = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: fromHex(blob.iv) }, key, fromHex(blob.data));
-        return new TextDecoder().decode(plain);
-    };
-
-    /** Kontrolní věta – ověří, že zadané heslo k trezoru je to správné. */
-    UI.VAULT_CHECK = "PASPORT-KANA-TREZOR";
-
+    
+    
+    
     /* Záznam přihlášeného se hledá podle UID účtu – dokument v `users` se tak
        jmenuje, protože jen podle cesty si ho umí přečíst i pravidla databáze. */
     UI.me = () => {

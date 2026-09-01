@@ -26,14 +26,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
     getAuth, initializeAuth, browserLocalPersistence, onAuthStateChanged,
-    signInWithEmailAndPassword, signOut, sendPasswordResetEmail, updatePassword
+    signInWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { initializeApp as initializeSecondaryApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as signOutSecondary }
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, increment, arrayUnion,
+    collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, increment, arrayUnion,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -181,6 +181,11 @@ const stareBoardImage = (id, imgId) => doc(db, "artifacts", APP_ID, "public", "d
 const autaCol = () => collection(db, "artifacts", APP_ID, "public", "data", "auta");
 const autoDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "auta", id);
 
+/* Zákaznická databáze: kdo platí který projekt a kontakty na firmy.
+   Leží v `private`, kam vidí jen manažeři – názvy firem samotné zůstávají
+   veřejné (`meta/zakazky.firmy`), ty potřebuje zaměstnanec do výkazu. */
+const firmyDetailDoc = () => doc(db, "artifacts", APP_ID, "private", "ciselniky", "firmy", "detail");
+
 const usersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "users");
 const userDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "users", id);
 const imagesCol = (guideId) => collection(db, "artifacts", APP_ID, "public", "data", "guides", guideId, "images");
@@ -265,6 +270,8 @@ const zrusVykazy = () => {
     vykazyOdbery.forEach(stop => { try { stop(); } catch (e) {} });
     vykazyOdbery = [];
     vykazyRezim = "";
+    starsiZaznamy = [];
+    starsiCastky = {};
 };
 
 /* Projekty a úkoly jedou na stejném principu: manažer poslouchá všechno,
@@ -456,14 +463,12 @@ try {
                umět vybrat. Tajné jsou sazby a rozpočty, ne názvy. */
             KB.projekty = (data.projekty && typeof data.projekty === "object") ? data.projekty : {};
             KB.firmy = Array.isArray(data.firmy) ? data.firmy : [];
-            // propojení projekt → firma; výběr projektu pak doplní firmu sám
-            KB.firmaMap = (data.firmaMap && typeof data.firmaMap === "object") ? data.firmaMap : {};
-            /* Podrobnosti k firmám leží vedle jejich seznamu, ne místo něj:
-               `firmy` zůstává prostým polem názvů, které čtou roletky všude
-               po webu, a `firmyDetail` je k nim mapa údajů. Až se bude
-               zapisovat víc, přibývá to sem a jinde se nic měnit nemusí. */
-            KB.firmyDetail = (data.firmyDetail && typeof data.firmyDetail === "object")
-                ? data.firmyDetail : {};
+            /* `firmaMap` (kdo platí který projekt) a `firmyDetail` (IČO,
+               kontakt, telefon, adresa) se 1. 9. 2026 odstěhovaly do
+               `private/ciselniky/firmy` – tady je četl každý člen, takže
+               si odcházející zaměstnanec mohl jedním dotazem stáhnout
+               celou zákaznickou databázi (bezpečnostní audit).
+               Čte je KB.watchFirmyDetail(), a jen manažerské stránky. */
             /* budget číselník: projekt → { budovy: ["G61"], patra: ["1NP"] } –
                z něj se skládají úkoly (technologie × budova × patro) */
             KB.budgetCiselnik = (data.budget && typeof data.budget === "object") ? data.budget : {};
@@ -1129,6 +1134,33 @@ KB.potvrdMilnik = async (id) => {
 
 KB.userId = (email) => String(email || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
+/**
+ * Jednorázový úklid po bezpečnostním auditu (1. 9. 2026): smaže z každého
+ * člověka otisk hesla (`hash`, `salt`) i jeho šifrovanou podobu (`enc`)
+ * a zahodí dokument trezoru. Ta pole ležela v `public/data`, kam vidí
+ * každý člen – kdokoliv si je mohl stáhnout a doma zkoušet lámat.
+ * Heslo od té doby zná jen Firebase Auth; zapomenuté se řeší odkazem.
+ * Pouští se ručně z konzole, spustit jde opakovaně.
+ */
+KB.uklidHesla = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(usersCol());
+    let lidi = 0;
+    for (const d of snap.docs) {
+        const data = d.data() || {};
+        if (!data.hash && !data.salt && !data.enc) continue;
+        await setDoc(userDoc(d.id), {
+            hash: deleteField(), salt: deleteField(), enc: deleteField()
+        }, { merge: true });
+        lidi++;
+    }
+    let trezor = false;
+    try { await deleteDoc(metaDoc("vault")); trezor = true; } catch (err) { /* nebyl */ }
+    KB.zapisAktivitu("navod", "smazal uložená hesla lidí i dokument trezoru (bezpečnostní úklid)");
+    return { lidi: lidi, trezorSmazan: trezor };
+};
+
 KB.saveUser = async (data) => {
     if (authReady) await authReady;
     requireDb();
@@ -1148,11 +1180,11 @@ KB.saveUser = async (data) => {
     };
     // typ spolupráce (zaměstnanec | osvc | student) – jen když ho volající předá
     if (data.typ !== undefined) payload.typ = data.typ || "";
-    // otisk hesla se přepisuje jen tehdy, když se heslo opravdu mění
-    if (data.salt) payload.salt = data.salt;
-    if (data.hash) payload.hash = data.hash;
-    // zašifrovaná podoba hesla pro trezor hlavního správce (viz ui.js)
-    if (data.enc) payload.enc = data.enc;
+    /* HESLA SE NEUKLÁDAJÍ. Otisk (`hash`+`salt`) i šifrovaná podoba (`enc`)
+       tu dřív ležely v `public/data/users`, kam vidí každý člen – kdokoliv
+       si je mohl stáhnout a doma lámat. Heslo ověřuje Firebase Auth,
+       zapomenuté se řeší odkazem (`KB.sendPasswordReset`).
+       (Bezpečnostní audit, Michal 1. 9. 2026.) */
     if (data.createdMs) payload.createdMs = data.createdMs;
 
     await setDoc(userDoc(id), payload, { merge: true });
@@ -1175,27 +1207,7 @@ KB.currentUid = () => (auth && auth.currentUser) ? auth.currentUser.uid : "";
 /** Záložní cesta – pošle člověku odkaz, kterým si heslo nastaví sám. */
 KB.sendPasswordReset = (email) => sendPasswordResetEmail(auth, String(email).trim());
 
-/**
- * Přepíše člověku heslo za správce.
- *
- * Firebase nedovolí měnit cizí heslo „shora" – umí to jen vlastník účtu.
- * Jde to ale obejít poctivě: trezor zná stávající heslo, takže se v druhé
- * instanci Firebase pod tím účtem přihlásíme a heslo změníme jeho vlastním
- * jménem. Hlavní přihlášení správce zůstane nedotčené.
- *
- * Podmínka je tedy odemčený trezor se známým starým heslem; když ho nemáme,
- * zbývá odkaz na e-mail.
- */
-KB.changeUserPassword = async (email, stareHeslo, noveHeslo) => {
-    const app2 = initializeSecondaryApp(FIREBASE_CONFIG, "zmena-" + Date.now());
-    const auth2 = getSecondaryAuth(app2);
-    try {
-        const cred = await signInWithEmailAndPassword(auth2, String(email).trim(), stareHeslo);
-        await updatePassword(cred.user, noveHeslo);
-    } finally {
-        await signOutSecondary(auth2).catch(() => {});
-    }
-};
+
 
 /**
  * Založí účet novému člověku. Dělá se to přes DRUHOU instanci Firebase –
@@ -1268,27 +1280,9 @@ KB.exportAll = async (onProgress) => {
     };
 };
 
-/**
- * Nastavení trezoru na hesla – sůl pro odvození klíče a kontrolní blok,
- * podle kterého se pozná, že zadané heslo k trezoru je správné.
- * Samotné heslo k trezoru se nikam neukládá.
- */
-KB.loadVault = async () => {
-    if (authReady) await authReady;
-    requireDb();
-    const snap = await getDoc(metaDoc("vault"));
-    return snap.exists() ? snap.data() : null;
-};
 
-KB.saveVault = async (salt, check) => {
-    if (authReady) await authReady;
-    requireDb();
-    await setDoc(metaDoc("vault"), {
-        salt: salt, check: check,
-        updatedMs: Date.now(),
-        updatedBy: window.KB_USER || ""
-    });
-};
+
+
 
 /* ---------------------------------------------------------------- tabule --
    Hlavička tabule (název, kdo a kdy naposledy kreslil) je samostatný malý
@@ -1562,23 +1556,81 @@ KB.loadBoardImages = async (boardId) => {
 let syroveZaznamy = [];
 let syroveCastky = {};
 
+/* Starší období dotažená na vyžádání (mimo živé okno). Drží se zvlášť,
+   aby je příští snímek živého odběru nesmazal. */
+let starsiZaznamy = [];
+let starsiCastky = {};
+
 function spojVykazy() {
-    KB.vykazy = syroveZaznamy.map(z => Object.assign(
-        { sazba: 0, castka: 0 }, z, syroveCastky[z.id] || {}));
+    const zive = new Set(syroveZaznamy.map(z => z.id));
+    const vsechny = syroveZaznamy.concat(starsiZaznamy.filter(z => !zive.has(z.id)));
+    const castky = Object.assign({}, starsiCastky, syroveCastky);
+    KB.vykazy = vsechny.map(z => Object.assign(
+        { sazba: 0, castka: 0 }, z, castky[z.id] || {}));
     // nejnovější nahoře; ve stejném dni se řadí podle začátku práce
     KB.vykazy.sort((a, b) => (b.datum || "").localeCompare(a.datum || "")
         || (a.od || "").localeCompare(b.od || ""));
     emit("vykazy", KB.vykazy);
 }
 
+/**
+ * Dotáhne výkazy staršího období, které živé okno nepokrývá. Volá se ze
+ * stránek, kde si člověk vybere delší rozsah (přehled, vytížení, filtr
+ * výkazů). Jednorázový dotaz, ne odběr – historie se stejně nemění.
+ * @returns {Promise<number>} kolik záznamů přibylo
+ */
+KB.nactiVykazyRozsah = async (od, doKdy) => {
+    if (authReady) await authReady;
+    requireDb();
+    const zacatek = String(od || "").slice(0, 10);
+    const konec = String(doKdy || "9999-12-31").slice(0, 10);
+    if (!zacatek || (KB.vykazyOknoOd && zacatek >= KB.vykazyOknoOd)) return 0;
+
+    const jenSve = vykazyRezim === "moje";
+    const meze = [where("datum", ">=", zacatek), where("datum", "<=", konec)];
+    const dotazZ = jenSve
+        ? query(vykazyCol(), where("uid", "==", auth.currentUser.uid), ...meze)
+        : query(vykazyCol(), ...meze);
+    const snapZ = await getDocs(dotazZ);
+    const nove = [];
+    snapZ.forEach(d => nove.push({ id: d.id, ...d.data() }));
+
+    const znam = new Set(starsiZaznamy.map(z => z.id));
+    nove.forEach(z => { if (!znam.has(z.id)) starsiZaznamy.push(z); });
+
+    if (!jenSve) {
+        const snapC = await getDocs(query(castkyCol(), ...meze));
+        snapC.forEach(d => { starsiCastky[d.id] = d.data(); });
+    }
+    spojVykazy();
+    return nove.length;
+};
+
+/* POSUVNÉ OKNO. Manažer poslouchal úplně všechny výkazy od začátku –
+   dneska pár desítek, po roce provozu ale desítky tisíc dokumentů na
+   KAŽDÉ otevření stránky (a stejně tolik částek). Živě se proto drží jen
+   posledních pár měsíců; starší období si stránka vyžádá dotazem
+   `KB.nactiVykazyRozsah`, když si ho člověk vybere.
+   Zaměstnanec má svoje záznamy bez omezení – je jich řádově míň. */
+const OKNO_MESICU = 4;
+
+function oknoOd() {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - (OKNO_MESICU - 1));
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+}
+
 function sledujVykazy(jenSve) {
     if (!db || !auth || !auth.currentUser) return;
+
+    KB.vykazyOknoOd = jenSve ? "" : oknoOd();
 
     /* Pravidla nejsou filtr: kdo nesmí číst cizí zápisy, musí si o svoje říct
        dotazem, jinak Firestore odmítne celý přenos. */
     const zdroj = jenSve
         ? query(vykazyCol(), where("uid", "==", auth.currentUser.uid))
-        : vykazyCol();
+        : query(vykazyCol(), where("datum", ">=", KB.vykazyOknoOd));
 
     vykazyOdbery.push(onSnapshot(zdroj, (snapshot) => {
         syroveZaznamy = [];
@@ -1596,7 +1648,8 @@ function sledujVykazy(jenSve) {
 
     if (jenSve) return;      // částky ani sazby zaměstnanci nepatří
 
-    vykazyOdbery.push(onSnapshot(castkyCol(), (snapshot) => {
+    vykazyOdbery.push(onSnapshot(
+        query(castkyCol(), where("datum", ">=", KB.vykazyOknoOd)), (snapshot) => {
         syroveCastky = {};
         snapshot.forEach(d => { syroveCastky[d.id] = d.data(); });
         spojVykazy();
@@ -1867,16 +1920,81 @@ KB.saveVykazNastaveni = async (patch) => {
  * Leží v `meta/zakazky` vedle skupin úkolů, aby si je u svého výkazu mohl
  * vybrat i zaměstnanec. Zapisuje se přírůstkově ze stejného důvodu jako výše.
  */
+/**
+ * Jednorázový přesun zákaznické databáze z veřejného číselníku do `private`
+ * (bezpečnostní audit 1. 9. 2026). Nejdřív zkopíruje, ověří a teprve pak
+ * maže – kdyby se to rozbilo v půlce, data pořád leží na původním místě.
+ * Pouští se ručně z konzole, spustit jde opakovaně.
+ */
+KB.presunFirmyDoPrivate = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const verejne = await getDoc(metaDoc("zakazky"));
+    const data = verejne.exists() ? verejne.data() : {};
+    const mapa = (data.firmaMap && typeof data.firmaMap === "object") ? data.firmaMap : null;
+    const detail = (data.firmyDetail && typeof data.firmyDetail === "object") ? data.firmyDetail : null;
+    if (!mapa && !detail) return { presunuto: false, duvod: "ve veřejném číselníku už nic není" };
+
+    await KB.ulozFirmyDetail({
+        firmaMap: mapa || {}, firmyDetail: detail || {}
+    });
+    // ověření, že to na novém místě opravdu je
+    const nove = await getDoc(firmyDetailDoc());
+    const n = nove.exists() ? nove.data() : {};
+    if (Object.keys(n.firmaMap || {}).length !== Object.keys(mapa || {}).length ||
+        Object.keys(n.firmyDetail || {}).length !== Object.keys(detail || {}).length) {
+        return { presunuto: false, duvod: "kopie nesedí, veřejné se nemaže" };
+    }
+    await setDoc(metaDoc("zakazky"), {
+        firmaMap: deleteField(), firmyDetail: deleteField()
+    }, { merge: true });
+    KB.zapisAktivitu("navod", "přesunul zákaznické údaje (firmy a jejich projekty) do neveřejné části");
+    return { presunuto: true, firem: Object.keys(detail || {}).length,
+             projektu: Object.keys(mapa || {}).length };
+};
+
+let firmyOdber = null;
+
+/** Zákaznická databáze – jen pro manažerské stránky (faktury, firmy, správa). */
+KB.watchFirmyDetail = async () => {
+    if (firmyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || firmyOdber) return;
+    firmyOdber = onSnapshot(firmyDetailDoc(), (snap) => {
+        const data = snap.exists() ? snap.data() : {};
+        KB.firmaMap = (data.firmaMap && typeof data.firmaMap === "object") ? data.firmaMap : {};
+        KB.firmyDetail = (data.firmyDetail && typeof data.firmyDetail === "object")
+            ? data.firmyDetail : {};
+        emit("firmy-detail", KB.firmyDetail);
+    }, (err) => console.error("Chyba čtení zákaznických údajů:", err));
+};
+
+/** Zápis zákaznických údajů – míří do `private`, ne do veřejného číselníku. */
+KB.ulozFirmyDetail = async (patch) => {
+    if (authReady) await authReady;
+    requireDb();
+    const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    ["firmaMap", "firmyDetail"].forEach(klic => {
+        if (patch[klic] !== undefined) payload[klic] = patch[klic];
+    });
+    await setDoc(firmyDetailDoc(), payload, { merge: true });
+};
+
 KB.saveCiselnikZakazek = async (patch) => {
     if (authReady) await authReady;
     requireDb();
 
     const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
-    ["names", "closed", "groups", "projekty", "firmy", "firmaMap", "firmyDetail",
+    ["names", "closed", "groups", "projekty", "firmy",
      "budget", "oblibeneIds"].forEach(klic => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
     await setDoc(metaDoc("zakazky"), payload, { merge: true });
+    /* Zákaznické údaje jdou do `private` – volající je pořád posílá spolu
+       se zbytkem číselníku, přesměruje se to tady na jednom místě. */
+    if (patch.firmaMap !== undefined || patch.firmyDetail !== undefined) {
+        await KB.ulozFirmyDetail(patch);
+    }
 };
 
 /* ----------------------------------------------------------- projekty ----

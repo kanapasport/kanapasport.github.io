@@ -75,20 +75,41 @@ service cloud.firestore {
     // uvidí své hodiny, ale ne to, za kolik se jeho hodina fakturuje.
     // Obojí má stejné `{id}`, takže se to spáruje jedním pohledem.
 
+    /* UZÁVĚRKA. Lhůtu „do úterý příštího týdne" hlídá prohlížeč – spočítat
+       ji v pravidlech nejde. Databáze drží TVRDOU čáru: den uzávěrky, který
+       nastaví manažer (`public/data/meta/uzaverka.odIso`). Starší dny už
+       zaměstnanec nezaloží, nepřepíše ani nesmaže, ani z konzole. Chybějící
+       dokument = žádná čára, takže se nic nezamkne omylem.
+       (Michal 1. 9. 2026.) */
+    function uzaverkaOd() {
+      return exists(/databases/$(database)/documents/artifacts/firemni-kb-app/public/data/meta/uzaverka)
+        ? get(/databases/$(database)/documents/artifacts/firemni-kb-app/public/data/meta/uzaverka)
+            .data.get('odIso', '0000-00-00')
+        : '0000-00-00';
+    }
+
     match /artifacts/firemni-kb-app/private/vykazy/zaznamy/{id} {
       // svoje vidí každý, cizí jen správce
       allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
-      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
-      // vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho jiného
+      allow create: if spravce() || (clen()
+                       && request.resource.data.uid == request.auth.uid
+                       && request.resource.data.datum >= uzaverkaOd());
+      /* Vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho
+         jiného, přesunout do uzavřeného období ani si dodatečně dopsat
+         `zdroj: "panel"`, kterým se odemyká mazání. */
       allow update: if spravce() || (clen()
                        && resource.data.uid == request.auth.uid
-                       && request.resource.data.uid == request.auth.uid);
+                       && request.resource.data.uid == request.auth.uid
+                       && resource.data.datum >= uzaverkaOd()
+                       && request.resource.data.datum >= uzaverkaOd()
+                       && request.resource.data.get('zdroj', '') == resource.data.get('zdroj', ''));
       /* Vlastní záznam z rychlého zápisu (volno/dovolená naklikaná
          dopředu) si člověk smí zase odkliknout – jiné záznamy maže jen
          správce. */
       allow delete: if spravce() || (clen()
                        && resource.data.uid == request.auth.uid
-                       && resource.data.zdroj == "panel");
+                       && resource.data.zdroj == "panel"
+                       && resource.data.datum >= uzaverkaOd());
     }
 
     // částky nikdy nikomu jinému než správci
@@ -171,11 +192,13 @@ service cloud.firestore {
       }
     }
 
-    // --- úkoly: zakládat a mazat správce a zaměstnanci, zapisovat všichni ---
+    /* --- staré úkoly z webu 1.0 -------------------------------------
+       Web 2.0 je jen ČTE (stránka Historie); zakládají se úkoly v
+       `private/ukoly/seznam`. Zápis sem proto patří jen manažerovi –
+       dřív směl kdokoliv přepsat cizí úkol, takže zákaz zakládání
+       studentům byl jen kosmetický (Michal 1. 9. 2026). */
     match /artifacts/firemni-kb-app/public/data/tasks/{taskId} {
-      allow update: if clen();
-      allow create: if clen() && role() != 'student';
-      allow delete: if spravce();
+      allow create, update, delete: if spravce();
     }
 
     // --- číselníky (zakázky, skupiny) jen správci ---
@@ -201,7 +224,11 @@ service cloud.firestore {
     //
     // Vidí a upravují všichni členové – parta na patře si značí společně.
     match /artifacts/firemni-kb-app/private/plany/{dokument=**} {
-      allow read, write: if clen();
+      allow read:           if clen();
+      allow create, update: if clen();
+      // `write` zahrnuje i mazání – jedno kliknutí by smazalo odznačkovanou
+      // práci celé party, proto mazání jen manažer (Michal 1. 9. 2026)
+      allow delete:         if spravce();
     }
 
     // --- postup dne (denní screenshoty práce) -----------------------------
@@ -267,16 +294,6 @@ service cloud.firestore {
       // sáhnout rovnou na `content/data` a zámek by nebyl k ničemu
       match /{sub=**} {
         allow read, write: if spravce() || vidiTabuli(tabuleData(id));
-      }
-    }
-
-    // --- staré umístění tabulí --------------------------------------------
-    // Zůstává jen kvůli přesunu dat (Import dat → Přesun tabulí). Až bude
-    // staré místo prázdné, tenhle blok se může smazat.
-    match /artifacts/firemni-kb-app/public/data/boards/{boardId} {
-      allow write: if clen();
-      match /{sub=**} {
-        allow write: if clen();
       }
     }
 

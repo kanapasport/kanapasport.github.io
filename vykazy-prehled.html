@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=181">
+    <link rel="stylesheet" href="assets/css/app.css?v=182">
     <style>
         /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
            a u stejné síly pravidla musí vyhrát to pozdější. */
@@ -116,10 +116,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=181"></script>
-<script src="assets/js/ui.js?v=181"></script>
-<script src="assets/js/vykazy.js?v=181"></script>
-<script type="module" src="assets/js/store.js?v=181"></script>
+<script src="assets/js/taxonomy.js?v=182"></script>
+<script src="assets/js/ui.js?v=182"></script>
+<script src="assets/js/vykazy.js?v=182"></script>
+<script type="module" src="assets/js/store.js?v=182"></script>
 
 <script>
 (function () {
@@ -151,12 +151,29 @@
 
     /* ------------------------------------------------------------ filtry */
 
+    /* Živě se drží jen posledních pár měsíců výkazů (viz store.js) – když si
+       člověk vybere starší období, dotáhne se jednorázovým dotazem.
+       (Michal 1. 9. 2026.) */
+    let dotahuji = false;
+    async function dotahniStarsi(od, doKdy) {
+        const okno = window.KB.vykazyOknoOd || "";
+        if (dotahuji || !od || !okno || od >= okno) return;
+        dotahuji = true;
+        try {
+            const kolik = await window.KB.nactiVykazyRozsah(od, doKdy || "9999-12-31");
+            if (kolik) window.KBUI.toast("Dotaženo starších záznamů: " + kolik + ".");
+        } catch (err) {
+            window.KBUI.toast("Starší období se nepodařilo načíst.", "warn");
+        } finally { dotahuji = false; }
+    }
+
     function nastavObdobi(druh) {
         const meze = V.obdobi(druh);
         filtr.od = meze.od;
         filtr.do = meze.do;
         $("fOd").value = filtr.od;
         $("fDo").value = filtr.do;
+        dotahniStarsi(filtr.od, filtr.do);
         render();
     }
 
@@ -438,6 +455,7 @@
                 filtr[klic] = $(id).value;
                 // jiná zakázka = jiné projekty, ten starý by nic nenašel
                 if (klic === "zakazka") filtr.projekt = "";
+                if (klic === "od" || klic === "do") dotahniStarsi(filtr.od, filtr.do);
                 render();
             });
         });

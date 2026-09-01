@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=181">
+    <link rel="stylesheet" href="assets/css/app.css?v=182">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -286,10 +286,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=181"></script>
-<script src="assets/js/ui.js?v=181"></script>
-<script src="assets/js/vykazy.js?v=181"></script>
-<script type="module" src="assets/js/store.js?v=181"></script>
+<script src="assets/js/taxonomy.js?v=182"></script>
+<script src="assets/js/ui.js?v=182"></script>
+<script src="assets/js/vykazy.js?v=182"></script>
+<script type="module" src="assets/js/store.js?v=182"></script>
 
 <script>
 (function () {
@@ -1644,6 +1644,7 @@
         filtr.do = meze.do;
         $("fOd").value = filtr.od;
         $("fDo").value = filtr.do;
+        dotahniStarsi(filtr.od, filtr.do);
         render();
     }
 
@@ -1711,6 +1712,21 @@
         // až TADY: výchozí zvýraznění výš by jinak přebilo rozsah z adresy
         nastavFiltrZAdresy();
         nastavObdobi("vse");       // render si zavolá samo
+    }
+
+    /* Živě se drží jen posledních pár měsíců (viz store.js); starší období
+       si stránka dotáhne, až si ho člověk vyfiltruje. */
+    let dotahuji = false;
+    async function dotahniStarsi(od, doKdy) {
+        const okno = window.KB.vykazyOknoOd || "";
+        if (dotahuji || !od || !okno || od >= okno) return;
+        dotahuji = true;
+        try {
+            const kolik = await window.KB.nactiVykazyRozsah(od, doKdy || "9999-12-31");
+            if (kolik) window.KBUI.toast("Dotaženo starších záznamů: " + kolik + ".");
+        } catch (err) {
+            window.KBUI.toast("Starší období se nepodařilo načíst.", "warn");
+        } finally { dotahuji = false; }
     }
 
     function naplnFiltry() {
@@ -1788,9 +1804,14 @@
            „prohlížím web jako zaměstnanec". Náhled totiž mění jen vykreslení;
            data pořád chodí podle skutečného účtu, takže hlavnímu správci
            zůstávaly v paměti výkazy všech a stránka je ukazovala. */
-        const zaklad = spravce
+        const ja = window.KB.currentUid();
+        /* Cizí dovolené, volna a nemoci sem nepatří – výkaz je o práci
+           a v seznamu se to jen pletlo. Kdo je kdy pryč, ukazuje kalendář
+           a nástěnka (přání Michala 1. 9. 2026). */
+        const zaklad = (spravce
             ? (window.KB.vykazy || [])
-            : (window.KB.vykazy || []).filter(z => z.uid === window.KB.currentUid());
+            : (window.KB.vykazy || []).filter(z => z.uid === ja))
+            .filter(z => z.uid === ja || !(z.absence === true || jeAbsence(z.zakazka)));
 
         const zaznamy = V.vyber(zaklad, filtr).slice().sort((a, b) =>
             (b.datum || "").localeCompare(a.datum || "") || (a.od || "").localeCompare(b.od || ""));
@@ -2050,7 +2071,11 @@
     // na každé nově vzniklé pole zvlášť
     /** Doplní firmu podle propojení projekt → firma z nastavení. */
     function doplnFirmu(kontejner, atribut, projekt) {
-        const firma = (window.KB.firmaMap || {})[projekt] || "";
+        /* Mapa projekt → firma je od 1. 9. 2026 tajná (zákaznická databáze),
+           takže ji zaměstnanec nemá. Firmu si vezme z vlastního projektu –
+           ten čte, protože je na něm přiřazený. */
+        const doc = (window.KB.projektyDocs || []).find(x => (x.nazev || "") === projekt);
+        const firma = (window.KB.firmaMap || {})[projekt] || (doc && doc.firma) || "";
         const select = kontejner.querySelector('[' + atribut + '="firma"]');
         if (!select) return;
         if (firma) select.value = firma;
@@ -2362,6 +2387,7 @@
         .forEach(([id, klic]) => {
             $(id).addEventListener("change", () => {
                 filtr[klic] = $(id).value;
+                if (klic === "od" || klic === "do") dotahniStarsi(filtr.od, filtr.do);
                 render();
             });
         });
