@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=180">
+    <link rel="stylesheet" href="assets/css/app.css?v=181">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -286,10 +286,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=180"></script>
-<script src="assets/js/ui.js?v=180"></script>
-<script src="assets/js/vykazy.js?v=180"></script>
-<script type="module" src="assets/js/store.js?v=180"></script>
+<script src="assets/js/taxonomy.js?v=181"></script>
+<script src="assets/js/ui.js?v=181"></script>
+<script src="assets/js/vykazy.js?v=181"></script>
+<script type="module" src="assets/js/store.js?v=181"></script>
 
 <script>
 (function () {
@@ -508,7 +508,6 @@
      */
     function obnovHoHlasku(box) {
         const hobox = box.querySelector("[data-hobox]");
-        if (!hobox || hobox.hidden) return;
         const datum = (box.querySelector('[data-f="datum"]') || {}).value ||
             V.dnesISO();
         const uid = $("dOsoba") && $("dOsoba").value
@@ -518,8 +517,12 @@
 
         const nahlaseno = (window.KB.kalendar || []).some(k =>
             k.typ === "homeoffice" && pokryva(k));
-        hobox.querySelector("[data-ho-hlaska]").hidden = !nahlaseno;
-        const pole = box.querySelector('[data-f="ho"]');   // sedí u sazby, ne v hobox
+        /* Značka „nahlášeno" i zaškrtávátko sedí u sazby, ne v hoboxu –
+           hledat je uvnitř hoboxu znamenalo `null` a pád celé hlídky
+           (Michal 1. 9. 2026). */
+        const hlaska = box.querySelector("[data-ho-hlaska]");
+        if (hlaska) hlaska.hidden = !nahlaseno;
+        const pole = box.querySelector('[data-f="ho"]');
         if (pole && nahlaseno && pole.dataset.rucne !== "1") pole.checked = true;
 
         /* Na den s nahlášenou dovolenou nebo volnem se běžně pracovat
@@ -527,7 +530,8 @@
            než den vykáže. */
         const abs = (window.KB.kalendar || []).find(k =>
             (k.typ === "dovolena" || k.typ === "volno") && pokryva(k));
-        const absHlaska = hobox.querySelector("[data-abs-hlaska]");
+        const absHlaska = hobox && hobox.querySelector("[data-abs-hlaska]");
+        if (!absHlaska) return;
         absHlaska.hidden = !abs;
         if (abs) {
             absHlaska.textContent = abs.typ === "volno"
