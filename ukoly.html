@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=179">
+    <link rel="stylesheet" href="assets/css/app.css?v=180">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -190,10 +190,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=179"></script>
-<script src="assets/js/ui.js?v=179"></script>
-<script src="assets/js/vykazy.js?v=179"></script>
-<script type="module" src="assets/js/store.js?v=179"></script>
+<script src="assets/js/taxonomy.js?v=180"></script>
+<script src="assets/js/ui.js?v=180"></script>
+<script src="assets/js/vykazy.js?v=180"></script>
+<script type="module" src="assets/js/store.js?v=180"></script>
 
 <script>
 (function () {
@@ -810,6 +810,8 @@
         $("uTechBox").hidden = !c.technologie.length;
         $("uBudova").closest("label").hidden = !c.budovy.length;
         $("uPatro").closest("label").hidden = !c.patra.length;
+        obnovSablony();
+
 
         /* Termín NOVÉHO úkolu se předvyplní koncem projektu – ať se
            nemusí dohledávat (přání Michala 31. 8. 2026). Automatické
@@ -832,6 +834,37 @@
         t.dataset.rucni = "1";
         delete t.dataset.auto;
     });
+
+    /* Šablony TO-DO projektu (nastavují se ve Správě → Nastavení úkolů).
+       Tlačítka se ukážou, jen když pro vybranou technologii / patro šablona
+       existuje – a od 1. 9. 2026 i u ÚKOLU, KTERÝ UŽ EXISTUJE: dřív se
+       počítala jen při ruční změně roletky, takže při otevření úpravy
+       zůstala schovaná a rozpad se nedal doplnit. */
+    const projektDocSab = () => (window.KB.projektyDocs || [])
+        .find(x => (x.nazev || "") === $("uProjekt").value);
+
+    const sabTechText = () => {
+        const p = projektDocSab();
+        const t = (p && p.sablony && p.sablony.tech) || {};
+        return String(t[$("uTech").value] || "").trim();
+    };
+
+    const sabMistText = () => {
+        const p = projektDocSab();
+        const m = (p && p.sablony && p.sablony.mistnosti) || {};
+        return String(((m[$("uBudova").value] || {})[$("uPatro").value]) || "").trim();
+    };
+
+    function obnovSablony() {
+        const t = sabTechText(), m = sabMistText();
+        $("uSabTech").hidden = !t;
+        if (t) $("uSabTech").textContent = "TO-DO ze šablony " + $("uTech").value +
+            " (" + t.split("\n").length + ")";
+        $("uSabMist").hidden = !m;
+        if (m) $("uSabMist").textContent = "TO-DO = místnosti " + $("uPatro").value +
+            " (" + m.split("\n").length + ")";
+    }
+
 
     async function ulozUkol() {
         const projektNazev = $("uProjekt").value;
@@ -949,30 +982,6 @@
             await window.KB.deleteUkol(editovanyId).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
             zavriTvorbu();
         });
-        /* Šablony TO-DO projektu (nastavují se ve Správě → Nastavení úkolů).
-           Tlačítka se ukážou, jen když pro vybranou technologii / patro
-           šablona existuje. */
-        const projektDoc = () => (window.KB.projektyDocs || [])
-            .find(x => (x.nazev || "") === $("uProjekt").value);
-        const sabTechText = () => {
-            const p = projektDoc();
-            const t = (p && p.sablony && p.sablony.tech) || {};
-            return String(t[$("uTech").value] || "").trim();
-        };
-        const sabMistText = () => {
-            const p = projektDoc();
-            const m = (p && p.sablony && p.sablony.mistnosti) || {};
-            return String(((m[$("uBudova").value] || {})[$("uPatro").value]) || "").trim();
-        };
-        const obnovSablony = () => {
-            const t = sabTechText(), m = sabMistText();
-            $("uSabTech").hidden = !t;
-            if (t) $("uSabTech").textContent = "TO-DO ze šablony " + $("uTech").value +
-                " (" + t.split("\n").length + ")";
-            $("uSabMist").hidden = !m;
-            if (m) $("uSabMist").textContent = "TO-DO = místnosti " + $("uPatro").value +
-                " (" + m.split("\n").length + ")";
-        };
         const vlozTodo = (text) => {
             if (!text) return;
             const ted = $("uTodo").value.trim();

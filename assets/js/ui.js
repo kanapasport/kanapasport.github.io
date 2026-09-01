@@ -1253,6 +1253,8 @@
        práce na zakázce. Běží jen manažerovi – jen ten vidí cizí výkazy.
        (Přání Michala 1. 9. 2026.) */
 
+    let dopreduNaposled = null;   // co se už zapsalo, se nepíše znovu
+
     function hlidkaDopredu() {
         if (!hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
         const uid = window.KB.currentUid && window.KB.currentUid();
@@ -1271,6 +1273,7 @@
 
         if (!dopredu.length) {
             // uklidilo se samo: zápis se smazal nebo ten den už proběhl
+            dopreduNaposled = null;
             if (stavajici) window.KB.deleteQuickTodo(id).catch(() => {});
             return;
         }
@@ -1289,8 +1292,14 @@
             (dopredu.length > 4 ? " a další " + (dopredu.length - 4) : "") +
             ". Do Tabulek to půjde až po tom dni.";
 
-        // stejný text se nepřepisuje – vzkaz by naskakoval při každém načtení
+        /* Stejný text se nepřepisuje – vzkaz by naskakoval při každém
+           načtení. Vlastní zápis se pamatuje i mimo databázi: tři události
+           za sebou (výkazy, vzkazy, lidé) doběhnou dřív, než se uložený
+           vzkaz stihne vrátit odběrem, a vznikly by tři stejné řádky
+           v historii (Michal 1. 9. 2026). */
         if (stavajici && stavajici.text === text) return;
+        if (dopreduNaposled === text) return;
+        dopreduNaposled = text;
 
         window.KB.saveQuickTodo(id, {
             text: text,

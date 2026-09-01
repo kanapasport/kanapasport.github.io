@@ -601,14 +601,16 @@ KB.watchPritomnost = async () => {
    manažeři (Reporty). Nikdy nesmí shodit vlastní uložení, proto se chyby
    polykají: bez nasazených pravidel se prostě nic nezapíše. */
 
-KB.zapisAktivitu = (druh, text) => {
+KB.zapisAktivitu = (druh, text, jmeno) => {
     try {
         if (!db || !auth || !auth.currentUser) return;
         addDoc(aktivityCol(), {
-            druh: druh,                 // projekt | ukol | postup | vykaz | kalendar
+            druh: druh,                 // projekt | ukol | postup | vykaz | kalendar | auto
             text: String(text || "").slice(0, 200),
             uid: auth.currentUser.uid,
-            jmeno: window.KB_USER || "",
+            /* Vzkazy hlídek nepíše člověk, ale web – v Reportu se proto
+               podepisují jako „Systém" (přání Michala 1. 9. 2026). */
+            jmeno: jmeno || window.KB_USER || "",
             ms: Date.now()
         }).catch(() => {});
     } catch (err) { /* nikdy neshodit uložení kvůli logu */ }
@@ -697,7 +699,8 @@ KB.saveQuickTodo = async (id, data) => {
     KB.zapisAktivitu("quicktodo", (data.hotovo === true
         ? "splnil quick to-do: "
         : "zadal quick to-do (" + komu.length + " lidem): ") +
-        String(data.text || "").slice(0, 80));
+        String(data.text || "").slice(0, 150),
+        data.hlidka ? "Systém" : null);
     return id;
 };
 
