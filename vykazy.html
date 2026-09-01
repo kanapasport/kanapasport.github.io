@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=177">
+    <link rel="stylesheet" href="assets/css/app.css?v=178">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -47,6 +47,15 @@
         .celyden { display: none; align-items: center; gap: 7px; font-size: 13px;
             cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
         .zblok--absence .celyden, .polozka--absence .celyden { display: flex; }
+        /* Home office: stejný vzhled jako „Celý den", ale opačně – u běžného
+           záznamu se ukazuje VŽDY (kdo si HO nenahlásil v Rychlém zápisu, ať
+           si ho zaklikne tady) a u absence nedává smysl.
+           Dřív sdílel třídu `celyden`, a ta je schovaná mimo absenci –
+           políčko tak nebylo vidět nikdy (Michal 1. 9. 2026). */
+        .hovolba { display: flex; align-items: center; gap: 7px; font-size: 13px;
+            cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
+        .zblok--absence .hovolba, .polozka--absence .hovolba { display: none; }
+
         /* Rozsah dnů dává smysl jen u absence – běžný záznam je vždycky jeden den. */
         .datumdo { display: none; }
         .zblok--absence .datumdo, .polozka--absence .datumdo { display: block; }
@@ -274,10 +283,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=177"></script>
-<script src="assets/js/ui.js?v=177"></script>
-<script src="assets/js/vykazy.js?v=177"></script>
-<script type="module" src="assets/js/store.js?v=177"></script>
+<script src="assets/js/taxonomy.js?v=178"></script>
+<script src="assets/js/ui.js?v=178"></script>
+<script src="assets/js/vykazy.js?v=178"></script>
+<script type="module" src="assets/js/store.js?v=178"></script>
 
 <script>
 (function () {
@@ -501,8 +510,8 @@
         const nahlaseno = (window.KB.kalendar || []).some(k =>
             k.typ === "homeoffice" && pokryva(k));
         hobox.querySelector("[data-ho-hlaska]").hidden = !nahlaseno;
-        const pole = hobox.querySelector('[data-f="ho"]');
-        if (nahlaseno && pole.dataset.rucne !== "1") pole.checked = true;
+        const pole = box.querySelector('[data-f="ho"]');   // sedí u sazby, ne v hobox
+        if (pole && nahlaseno && pole.dataset.rucne !== "1") pole.checked = true;
 
         /* Na den s nahlášenou dovolenou nebo volnem se běžně pracovat
            nemá – červené upozornění, ať si toho člověk všimne dřív,
@@ -512,8 +521,9 @@
         const absHlaska = hobox.querySelector("[data-abs-hlaska]");
         absHlaska.hidden = !abs;
         if (abs) {
-            absHlaska.textContent = "Pozor: na tento den máš nahlášenou " +
-                (abs.typ === "volno" ? "volno" : "dovolenou") + ".";
+            absHlaska.textContent = abs.typ === "volno"
+                ? "Pozor: na tento den máš nahlášené volno."
+                : "Pozor: na tento den máš nahlášenou dovolenou.";
         }
     }
 
@@ -924,6 +934,10 @@
                                   'style="margin-left:auto">zobrazit</button>' +
                           "</span></div>"
                     : "") +
+                /* Home office vedle sazby, ať je po ruce u každého záznamu
+                   (přání Michala 1. 9. 2026). */
+                '<label class="hovolba"><input type="checkbox" data-f="ho"' +
+                    (d.ho ? " checked" : "") + "> <b>Home office</b></label>" +
             "</div>" +
 
             /* Home office: hodiny odvedené z domu. Když je na ten den
@@ -933,8 +947,6 @@
             '<div class="hobox" data-hobox' + (absentni ? " hidden" : "") + ">" +
                 '<span class="hobox__pozor" data-ho-hlaska hidden>' +
                     "Na tento den byl nahlášen HO — potvrď zde:</span>" +
-                '<label class="celyden"><input type="checkbox" data-f="ho"' +
-                    (d.ho ? " checked" : "") + "> <b>Home office</b></label>" +
                 '<span class="hobox__pozor" data-abs-hlaska hidden></span>' +
             "</div>" +
 

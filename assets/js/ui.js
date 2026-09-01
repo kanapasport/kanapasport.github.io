@@ -1016,12 +1016,14 @@
             window.KB.on("vykazy", () => { renderMujDen();
                 /* hlídka smí rozhodnout až nad skutečnými záznamy – emit
                    umí vyvolat i odběr částek dřív, než záznamy dorazí */
-                if (window.KB.vykazyPrisly) { hlidkaPrislo.vykazy = true; hlidkaVykazu(); } });
+                if (window.KB.vykazyPrisly) {
+                    hlidkaPrislo.vykazy = true; hlidkaVykazu(); hlidkaDopredu();
+                } });
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
             window.KB.on("quicktodo", () => { renderMujDen(); renderQuick();
-                hlidkaPrislo.quick = true; hlidkaVykazu(); });
+                hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu(); });
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
             window.KB.on("auta", renderAuta);
         }
@@ -1191,6 +1193,63 @@
         }).then(() => {
             try { localStorage.setItem("kb-hlidka", id); } catch (err) { }
         }).catch(err => console.warn("Hlídka výkazů nezapsala vzkaz:", err));
+    }
+
+    /* -------------------------------------- výkaz zapsaný dopředu ------
+       Práce se vykazuje pozpátku, ne dopředu. Zápis s budoucím datem se
+       do Tabulek propíše až po tom dni (skript ho odloží), takže by mohl
+       tiše proklouznout – manažer o něm má vědět hned. Dovolená a volno
+       dopředu jsou v pořádku (tak je Rychlý zápis dělá), hlídá se jen
+       práce na zakázce. Běží jen manažerovi – jen ten vidí cizí výkazy.
+       (Přání Michala 1. 9. 2026.) */
+
+    function hlidkaDopredu() {
+        if (!hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
+        const uid = window.KB.currentUid && window.KB.currentUid();
+        if (!uid || !UI.can("vykaz.view")) return;
+
+        const dnes = new Date();
+        const dnesIso = dnes.getFullYear() + "-" +
+            String(dnes.getMonth() + 1).padStart(2, "0") + "-" +
+            String(dnes.getDate()).padStart(2, "0");
+
+        const dopredu = (window.KB.vykazy || []).filter(z =>
+            !z.absence && (z.datum || "") > dnesIso);
+
+        const id = "qt_dopredu_" + uid;
+        const stavajici = (window.KB.quicktodo || []).find(q => q.id === id);
+
+        if (!dopredu.length) {
+            // uklidilo se samo: zápis se smazal nebo ten den už proběhl
+            if (stavajici) window.KB.deleteQuickTodo(id).catch(() => {});
+            return;
+        }
+
+        const cesky = (iso) => {
+            const c = String(iso).split("-");
+            return c.length === 3 ? Number(c[2]) + ". " + Number(c[1]) + "." : iso;
+        };
+        const jmeno = (z) => {
+            const u = (window.KB.users || []).find(x => x.id === z.uid);
+            return u ? ((u.first || "") + " " + (u.last || "")).trim() : (z.osoba || "někdo");
+        };
+        const popis = dopredu.slice(0, 4).map(z =>
+            jmeno(z) + " " + cesky(z.datum) + " (" + (z.zakazka || "bez projektu") + ")").join(", ");
+        const text = "Výkaz dopředu: " + popis +
+            (dopredu.length > 4 ? " a další " + (dopredu.length - 4) : "") +
+            ". Do Tabulek to půjde až po tom dni.";
+
+        // stejný text se nepřepisuje – vzkaz by naskakoval při každém načtení
+        if (stavajici && stavajici.text === text) return;
+
+        window.KB.saveQuickTodo(id, {
+            text: text,
+            proUids: [uid],
+            odKoho: uid,
+            odKohoJmeno: "Hlídka výkazů",
+            asap: true,
+            hlidka: "dopredu"
+        }).catch(err => console.warn("Hlídka dopředu nezapsala vzkaz:", err));
     }
 
     /* ------------------------------------------------------ Quick TO-DO ---
