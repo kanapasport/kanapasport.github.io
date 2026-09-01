@@ -2493,6 +2493,7 @@ KB.saveUdalost = async (id, data) => {
         /* "" | "den" | "tyden" | "mesic" – kdy se má ozvat připomenutí
            do Quick TO-DO. Vzkaz zakládá hlídka v prohlížeči, ne server. */
         pripomenout: data.pripomenout || "",
+        pripomenout2: data.pripomenout2 || "",
         /* Dovolenou musí potvrdit manažer. Nová (i přeuložená – změněné
            datum znamená schvalovat znovu) začíná nepotvrzená; potvrzuje
            KB.potvrdDovolenou z dlaždice na nástěnce. */

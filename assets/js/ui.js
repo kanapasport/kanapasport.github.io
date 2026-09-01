@@ -1315,18 +1315,25 @@
         const dnes = den(new Date());
 
         (window.KB.kalendar || []).forEach(u => {
-            const kolik = PREDSTIH[u.pripomenout];
-            if (!kolik || !u.od) return;
+            if (!u.od) return;
             // akce jen pro vybrané: připomíná se jen jim a autorovi
             if (Array.isArray(u.proUids) && u.proUids.length &&
                     u.uid !== uid && u.proUids.indexOf(uid) === -1) return;
             if (u.od < dnes) return;                       // už proběhlo
 
+            /* Připomenutí můžou být dvě (třeba měsíc a den předem). Každé má
+               vlastní vzkaz, ať se to druhé neztratí v prvním. */
+            [["", u.pripomenout], ["2", u.pripomenout2]].forEach(([poradi, volba]) =>
+                zaloz(u, poradi, PREDSTIH[volba]));
+        });
+
+        function zaloz(u, poradi, kolik) {
+            if (!kolik) return;
             const kdy = new Date(u.od + "T00:00:00");
             kdy.setDate(kdy.getDate() - kolik);
             if (dnes < den(kdy)) return;                   // ještě není čas
 
-            const id = "qt_akce_" + u.id + "_" + uid;
+            const id = "qt_akce_" + u.id + poradi + "_" + uid;
             if ((window.KB.quicktodo || []).some(q => q.id === id)) return;
             try { if (localStorage.getItem("kb-" + id)) return; } catch (err) { }
 
@@ -1345,7 +1352,7 @@
             }).then(() => {
                 try { localStorage.setItem("kb-" + id, "1"); } catch (err) { }
             }).catch(err => console.warn("Připomenutí se nezapsalo:", err));
-        });
+        }
     }
 
     /* ------------------------------------------------------ Quick TO-DO ---
@@ -1750,6 +1757,10 @@
 
     const HO_DNU = 20;          // čtyři týdny dopředu
 
+    /* Druhy, které se u dne hlásí jako „kdo další chybí". Klíč sedí na
+       `typ` v kalendáři. */
+    const POPIS_TYPU = { homeoffice: 1, volno: 1, dovolena: 1, doktor: 1 };
+
     const HO_TYPY = [
         { id: "homeoffice", popis: "HO",       cely: "Home office" },
         { id: "volno",      popis: "Volno",    cely: "Volno" },
@@ -1821,20 +1832,29 @@
                     '" data-ho-den="' + den.iso + '" data-ho-typ="' + t.id + '"' +
                     ' title="' + t.cely + '">' + t.popis + "</button>";
             }).join("");
-            // kdo další ten den je doma – ať se parta domluví
-            const ostatni = (window.KB.kalendar || [])
-                .filter(k => k.typ === "homeoffice" && k.uid !== uid &&
-                    (k.od || "") <= den.iso && den.iso <= (k.do || k.od || ""))
-                .map(k => (k.osoba || "").split(" ")[0]).filter(Boolean);
+            /* Kdo další ten den chybí – NEJEN home office. Dovolená, volno
+               i doktor patří k plánování stejně (přání Michala 1. 9. 2026).
+               Řadí se podle druhu, jména jen křestní, ať se to vejde. */
+            const kdoJinde = {};
+            (window.KB.kalendar || []).forEach(k => {
+                if (k.uid === uid || !POPIS_TYPU[k.typ]) return;
+                if ((k.od || "") > den.iso || den.iso > (k.do || k.od || "")) return;
+                const jmeno = (k.osoba || "").split(" ")[0];
+                if (!jmeno) return;
+                (kdoJinde[k.typ] = kdoJinde[k.typ] || []).push(jmeno);
+            });
+            const poznamka = HO_TYPY.map(t => kdoJinde[t.id]
+                ? t.popis + ": " + kdoJinde[t.id].join(", ") : "").filter(Boolean).join(" · ");
+
             return '<div class="hoden">' +
                 '<span class="hoden__den"><b>' + esc(den.nazev) + "</b> " +
                     esc(den.popis) + "</span>" +
                 (den.svatek ? '<span class="hoden__svatek" title="' + esc(den.svatek) +
                     '">svátek</span>' : "") +
                 '<span class="hoden__tlacitka">' + tlacitka + "</span>" +
-                (ostatni.length
-                    ? '<span class="hoden__ostatni" title="Kdo další je ten den na HO">HO: ' +
-                        esc(ostatni.join(", ")) + "</span>" : "") +
+                (poznamka
+                    ? '<span class="hoden__ostatni" title="Kdo další ten den chybí">' +
+                        esc(poznamka) + "</span>" : "") +
             "</div>";
         };
 
