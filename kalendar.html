@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=183">
+    <link rel="stylesheet" href="assets/css/app.css?v=184">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -232,6 +232,13 @@
             </div>
             <label class="pole"><span class="popisek">Popis (nepovinné)</span>
                 <input type="text" id="uText" class="field"></label>
+            <label class="pole"><span class="popisek">Připomenutí</span>
+                <select id="uPripomenout" class="field">
+                    <option value="">Bez připomenutí</option>
+                    <option value="den">Den předem</option>
+                    <option value="tyden">Týden předem</option>
+                    <option value="mesic">Měsíc předem</option>
+                </select></label>
         </div>
 
         <div class="row" style="gap:10px;padding:14px 18px;border-top:1px solid var(--line)">
@@ -258,12 +265,17 @@
             <label class="pole"><span class="popisek">Co se koná</span>
                 <input type="text" id="akText" class="field" maxlength="120"
                        placeholder="grilovačka, porada, teambuilding…"></label>
+            <!-- Akce bývá jednodenní. Rozsah se odemyká tlačítkem, ať se
+                 v obvyklém případě nevyplňují dvě data (přání Michala
+                 1. 9. 2026). -->
             <div class="fmr">
-                <label class="pole"><span class="popisek">Od dne</span>
+                <label class="pole"><span class="popisek">Kdy</span>
                     <input type="date" id="akOd" class="field"></label>
-                <label class="pole"><span class="popisek">Do dne</span>
+                <label class="pole" id="akDoBox" hidden><span class="popisek">Do dne</span>
                     <input type="date" id="akDo" class="field"></label>
             </div>
+            <button type="button" id="akVicDni" class="linkbtn" style="align-self:flex-start">
+                + trvá víc dní</button>
             <label class="row" style="gap:7px;font-size:13px;cursor:pointer">
                 <input type="checkbox" id="akCely" checked> <b>Celý den</b></label>
             <div class="fmr" id="akCasyBox" hidden>
@@ -272,6 +284,40 @@
                 <label class="pole"><span class="popisek">Do</span>
                     <input type="text" id="akDoCas" class="field" placeholder="20:00"></label>
             </div>
+
+            <!-- Pro koho. Prázdný výběr = celá firma, jinak jen zaškrtnutí
+                 lidé (a ten, kdo akci založil). -->
+            <div class="col" style="gap:8px">
+                <span class="popisek">Pro koho</span>
+                <div class="row row--wrap" style="gap:6px">
+                    <button type="button" class="chip chip--active" data-akkomu="vsichni">Všichni</button>
+                    <button type="button" class="chip" data-akkomu="vybrani">Jen vybraní lidé</button>
+                </div>
+                <div id="akLideBox" hidden class="col" style="gap:6px">
+                    <div class="row row--wrap" style="gap:6px">
+                        <button type="button" class="linkbtn" data-akrychle="manazeri">Manažeři</button>
+                        <button type="button" class="linkbtn" data-akrychle="zadny">Nikdo</button>
+                    </div>
+                    <div id="akLide" class="chipbox"></div>
+                    <p class="tiny muted" style="margin:0;line-height:1.5">
+                        Akci uvidí jen zaškrtnutí lidé a ty. Není to zámek —
+                        kalendář čte celá firma, tohle jen uklízí, komu se
+                        akce ukazuje.
+                    </p>
+                </div>
+            </div>
+
+            <label class="pole"><span class="popisek">Připomenutí</span>
+                <select id="akPripomenout" class="field">
+                    <option value="">Bez připomenutí</option>
+                    <option value="den">Den předem</option>
+                    <option value="tyden">Týden předem</option>
+                    <option value="mesic">Měsíc předem</option>
+                </select></label>
+            <p class="tiny muted" style="margin:-4px 0 0;line-height:1.5">
+                Připomenutí přijde jako vzkaz do Quick TO-DO — tomu, pro koho
+                akce je.
+            </p>
         </div>
         <div class="row" style="gap:10px;padding:13px 18px;border-top:1px solid var(--line)">
             <button type="button" id="akUloz" class="btn btn--primary btn--sm">Uložit akci</button>
@@ -281,10 +327,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=183"></script>
-<script src="assets/js/ui.js?v=183"></script>
-<script src="assets/js/vykazy.js?v=183"></script>
-<script type="module" src="assets/js/store.js?v=183"></script>
+<script src="assets/js/taxonomy.js?v=184"></script>
+<script src="assets/js/ui.js?v=184"></script>
+<script src="assets/js/vykazy.js?v=184"></script>
+<script type="module" src="assets/js/store.js?v=184"></script>
 
 <script>
 (function () {
@@ -502,10 +548,16 @@
             out.push({ typ: "svatek", kdo: "", co: "státní svátek", text: svatek });
         }
 
+        const ja = window.KB.currentUid();
         (window.KB.kalendar || []).forEach(u => {
             const typ = u.typ || "udalost";
             if (!druhZapnut(typ)) return;
             if (filtr.kdo && u.uid !== filtr.kdo) return;
+            /* Akce jen pro vybrané lidi vidí jen oni a ten, kdo ji založil.
+               Není to zámek (kalendář čte každý člen), jen úklid – ať se
+               porada manažerů neplete zbytku firmy (Michal 1. 9. 2026). */
+            if (Array.isArray(u.proUids) && u.proUids.length &&
+                    u.uid !== ja && u.proUids.indexOf(ja) === -1) return;
             if ((u.od || "") <= den && den <= (u.do || u.od || "")) {
                 const cas = (!u.celyDen && u.odCas) ? u.odCas + " " : "";
                 const p = popisUdalosti(u);
@@ -823,6 +875,7 @@
         $("uOdCas").value = cely ? "" : (u.odCas || "");
         $("uDoCas").value = cely ? "" : (u.doCas || "");
         $("uCasyBox").hidden = cely;
+        $("uPripomenout").value = u.pripomenout || "";
 
         $("detailUprava").hidden = false;
         $("btnUprav").hidden = true;
@@ -845,7 +898,8 @@
                 celyDen: cely,
                 odCas: cely ? "00:00" : $("uOdCas").value.trim(),
                 doCas: cely ? "23:59" : $("uDoCas").value.trim(),
-                text: $("uText").value.trim()
+                text: $("uText").value.trim(),
+                pripomenout: $("uPripomenout").value
             }));
             $("detailOverlay").hidden = true;
             window.KBUI.toast("Záznam upraven.");
@@ -963,11 +1017,56 @@
             const dnesIso = new Date().toISOString().slice(0, 10);
             $("akOd").value = dnesIso;
             $("akDo").value = "";
+            $("akDoBox").hidden = true;          // rozsah až na vyžádání
+            $("akVicDni").hidden = false;
             $("akCely").checked = true;
             $("akCasyBox").hidden = true;
             $("akOdCas").value = ""; $("akDoCas").value = "";
+            $("akPripomenout").value = "";
+            nastavKomu("vsichni");
+            naplnLidi();
             $("akceOverlay").hidden = false;
             $("akText").focus();
+        });
+
+        // rozsah dnů se odemyká, jednodenní akce je běžnější
+        $("akVicDni").addEventListener("click", () => {
+            $("akDoBox").hidden = false;
+            $("akVicDni").hidden = true;
+            $("akDo").focus();
+        });
+
+        /* Pro koho: „Všichni" nechá `proUids` prázdné, „Jen vybraní"
+           zaškrtávátka lidí. */
+        function nastavKomu(volba) {
+            document.querySelectorAll("[data-akkomu]").forEach(ch =>
+                ch.classList.toggle("chip--active", ch.dataset.akkomu === volba));
+            $("akLideBox").hidden = volba !== "vybrani";
+        }
+        function komuVolba() {
+            const akt = document.querySelector("[data-akkomu].chip--active");
+            return akt ? akt.dataset.akkomu : "vsichni";
+        }
+        function naplnLidi() {
+            $("akLide").innerHTML = V.lide().map(u =>
+                '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
+                esc(V.jmeno(u)) + "</label>").join("");
+        }
+        function vybraniLide() {
+            return Array.from($("akLide").querySelectorAll("input:checked")).map(ch => ch.value);
+        }
+        document.addEventListener("click", (event) => {
+            const volba = event.target.closest && event.target.closest("[data-akkomu]");
+            if (volba) return void nastavKomu(volba.dataset.akkomu);
+
+            const rychle = event.target.closest && event.target.closest("[data-akrychle]");
+            if (!rychle) return;
+            const manazeri = new Set((window.KB.users || [])
+                .filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1)
+                .map(u => u.id));
+            $("akLide").querySelectorAll("input").forEach(ch => {
+                ch.checked = rychle.dataset.akrychle === "manazeri" && manazeri.has(ch.value);
+            });
         });
         $("akCely").addEventListener("change", () => {
             $("akCasyBox").hidden = $("akCely").checked;
@@ -983,6 +1082,10 @@
             if (!od) return void window.KBUI.toast("Doplň datum.", "warn");
             const cely = $("akCely").checked;
             try {
+                const proUids = komuVolba() === "vybrani" ? vybraniLide() : [];
+                if (komuVolba() === "vybrani" && !proUids.length) {
+                    return void window.KBUI.toast("Vyber, komu akce patří.", "warn");
+                }
                 await window.KB.saveUdalost(window.KB.newUdalostId(), {
                     typ: "udalost",
                     text: text,
@@ -991,6 +1094,8 @@
                     celyDen: cely,
                     odCas: cely ? "00:00" : $("akOdCas").value.trim(),
                     doCas: cely ? "23:59" : $("akDoCas").value.trim(),
+                    proUids: proUids,
+                    pripomenout: $("akPripomenout").value,
                     zdroj: "kalendar"
                 });
                 $("akceOverlay").hidden = true;

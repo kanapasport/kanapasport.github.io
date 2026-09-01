@@ -2486,6 +2486,13 @@ KB.saveUdalost = async (id, data) => {
            se pak dá skočit rovnou na jeho opravu. Mazat se smí jen tam, aby
            nezůstal výkaz bez události nebo naopak. */
         vykazId: data.vykazId || "",
+        /* Komu akce patří. Prázdné pole = celé firmě; jinak jen vypsaným
+           lidem (a tomu, kdo ji založil). Není to zámek – kalendář čte
+           každý člen, je to jen úklid v zobrazení (Michal 1. 9. 2026). */
+        proUids: Array.isArray(data.proUids) ? data.proUids : [],
+        /* "" | "den" | "tyden" | "mesic" – kdy se má ozvat připomenutí
+           do Quick TO-DO. Vzkaz zakládá hlídka v prohlížeči, ne server. */
+        pripomenout: data.pripomenout || "",
         /* Dovolenou musí potvrdit manažer. Nová (i přeuložená – změněné
            datum znamená schvalovat znovu) začíná nepotvrzená; potvrzuje
            KB.potvrdDovolenou z dlaždice na nástěnce. */

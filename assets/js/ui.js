@@ -1053,7 +1053,10 @@
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
             window.KB.on("quicktodo", () => { renderMujDen(); renderQuick();
-                hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu(); });
+                hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu();
+                hlidkaAkci(); });
+            // připomenutí akcí se přepočítá i s příchodem kalendáře
+            window.KB.on("kalendar", hlidkaAkci);
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
             window.KB.on("auta", renderAuta);
         }
@@ -1289,6 +1292,60 @@
             asap: true,
             hlidka: "dopredu"
         }).catch(err => console.warn("Hlídka dopředu nezapsala vzkaz:", err));
+    }
+
+    /* ------------------------------------- připomenutí z kalendáře -----
+       U události se dá zvolit „den / týden / měsíc předem". Vzkaz nezakládá
+       server, ale prohlížeč toho, komu akce patří – jakmile den připomenutí
+       nastane, objeví se v Quick TO-DO s termínem v den akce. Id je pevné
+       (`qt_akce_<udalost>_<uid>`), takže vznikne jen jednou; kdo si vzkaz
+       smaže, nedostane ho znovu (pojistka v prohlížeči).
+       (Přání Michala 1. 9. 2026.) */
+
+    const PREDSTIH = { den: 1, tyden: 7, mesic: 30 };
+
+    function hlidkaAkci() {
+        if (!hlidkaPrislo.quick) return;
+        const uid = window.KB.currentUid && window.KB.currentUid();
+        if (!uid) return;
+
+        const den = (d) => d.getFullYear() + "-" +
+            String(d.getMonth() + 1).padStart(2, "0") + "-" +
+            String(d.getDate()).padStart(2, "0");
+        const dnes = den(new Date());
+
+        (window.KB.kalendar || []).forEach(u => {
+            const kolik = PREDSTIH[u.pripomenout];
+            if (!kolik || !u.od) return;
+            // akce jen pro vybrané: připomíná se jen jim a autorovi
+            if (Array.isArray(u.proUids) && u.proUids.length &&
+                    u.uid !== uid && u.proUids.indexOf(uid) === -1) return;
+            if (u.od < dnes) return;                       // už proběhlo
+
+            const kdy = new Date(u.od + "T00:00:00");
+            kdy.setDate(kdy.getDate() - kolik);
+            if (dnes < den(kdy)) return;                   // ještě není čas
+
+            const id = "qt_akce_" + u.id + "_" + uid;
+            if ((window.KB.quicktodo || []).some(q => q.id === id)) return;
+            try { if (localStorage.getItem("kb-" + id)) return; } catch (err) { }
+
+            const co = String(u.text || "").trim() || "akce v kalendáři";
+            const kdyText = (() => {
+                const c = String(u.od).split("-");
+                return c.length === 3 ? Number(c[2]) + ". " + Number(c[1]) + "." : u.od;
+            })();
+            window.KB.saveQuickTodo(id, {
+                text: "Připomenutí: " + co + " – " + kdyText,
+                proUids: [uid],
+                odKoho: uid,
+                odKohoJmeno: "Kalendář",
+                doKdy: u.od,          // termín vzkazu = den akce
+                hlidka: "akce"
+            }).then(() => {
+                try { localStorage.setItem("kb-" + id, "1"); } catch (err) { }
+            }).catch(err => console.warn("Připomenutí se nezapsalo:", err));
+        });
     }
 
     /* ------------------------------------------------------ Quick TO-DO ---
