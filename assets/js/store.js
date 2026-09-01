@@ -444,6 +444,10 @@ try {
                v databázi, ne ve zdrojáku – repozitář je veřejný a názvy
                zakázek do něj nepatří. */
             KB.oblibeneVzory = Array.isArray(data.oblibeneVzory) ? data.oblibeneVzory : [];
+            /* Oblíbené projekty (hvězdička ve Správě) drží celá firma
+               společné – dřív si je každý manažer sbíral ve svém
+               prohlížeči a nikdo neviděl totéž (přání Michala 1. 9. 2026). */
+            KB.oblibeneProjekty = Array.isArray(data.oblibeneIds) ? data.oblibeneIds : null;
             // dokud si skupiny nikdo neupravil, platí výchozí trojice
             KB.skupiny = (Array.isArray(data.groups) && data.groups.length)
                 ? data.groups : KB.DEFAULT_SKUPINY.slice();
@@ -1402,13 +1406,23 @@ KB.saveAuto = async (id, data) => {
         zapsalUid: data.zapsalUid || KB.currentUid(),
         ms:     data.ms || Date.now()
     }, { merge: true });
+    /* Do historie aktivit, ať je v Reportu vidět i domluva o autech
+       (přání Michala 1. 9. 2026). */
+    KB.zapisAktivitu("auto", (data.druh === "rezervace"
+        ? "zapsal rezervaci auta " + (data.auto || "")
+        : "zapsal cestu do Brna") +
+        (data.datum || data.od ? " na " + (data.datum || data.od) : "") +
+        (data.jmeno && data.jmeno !== window.KB_USER ? " – " + data.jmeno : ""));
     return id;
 };
 
 KB.deleteAuto = async (id) => {
     if (authReady) await authReady;
     requireDb();
+    const a = (KB.auta || []).find(x => x.id === id);
     await deleteDoc(autoDoc(id));
+    KB.zapisAktivitu("auto", "smazal zápis auta" +
+        (a && (a.datum || a.od) ? " na " + (a.datum || a.od) : ""));
 };
 
 /* ------------------------------------------ odbavená upozornění -----------
@@ -1855,7 +1869,8 @@ KB.saveCiselnikZakazek = async (patch) => {
     requireDb();
 
     const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
-    ["names", "closed", "groups", "projekty", "firmy", "firmaMap", "firmyDetail", "budget"].forEach(klic => {
+    ["names", "closed", "groups", "projekty", "firmy", "firmaMap", "firmyDetail",
+     "budget", "oblibeneIds"].forEach(klic => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
     await setDoc(metaDoc("zakazky"), payload, { merge: true });
@@ -2358,8 +2373,18 @@ KB.saveUdalost = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
-    KB.zapisAktivitu("kalendar", "uložil událost " + (data.typ || "udalost") +
-        " " + (data.od || "") + (data.osoba ? " – " + data.osoba : ""));
+    /* Rychlý zápis (HO, volno, dovolená z pásu) se v Reportu má poznat
+       na první pohled – „uložil událost homeoffice" nikomu nic neřekne
+       (přání Michala 1. 9. 2026). */
+    const NAZEV_TYPU = { homeoffice: "home office", volno: "volno",
+                         dovolena: "dovolenou", doktor: "doktora",
+                         nemoc: "nemoc", skoleni: "školení" };
+    const nazev = NAZEV_TYPU[data.typ] || (data.typ || "událost");
+    const rozsah = (data.od || "") + (data.do && data.do !== data.od ? "–" + data.do : "");
+    KB.zapisAktivitu("kalendar", (data.zdroj === "panel"
+            ? "nahlásil v Rychlém zápisu " + nazev
+            : "uložil do kalendáře " + nazev) +
+        (rozsah ? " na " + rozsah : "") + (data.osoba ? " – " + data.osoba : ""));
     return id;
 };
 

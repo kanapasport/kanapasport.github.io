@@ -740,7 +740,57 @@
 
     /** Roletka PROJEKTŮ – otevřené projekty z databáze, nejdřív ty naléhavé. */
     /** Oblíbené projekty (hvězdička ve Správě) – sdílený klíč s ní. */
+    /* ------------------------------------------------- peněžní pole ----
+       Do rozpočtů se píšou statisíce a miliony a bez mezer se v nich nedá
+       číst („6000000"). `type=number` mezery neumí, proto obyčejné textové
+       pole, které se při psaní samo dělí po tisících. Čte se z něj přes
+       `KBUI.penize(el)` – hodnota v poli je text s mezerami.
+       (Přání Michala 1. 9. 2026.) */
+
+    /** Číslo z peněžního pole – mezery i nedělitelné mezery pryč. */
+    UI.penize = (el) => {
+        if (!el) return 0;
+        return Number(String(el.value || "").replace(/[\s\u00a0]/g, "")
+            .replace(",", ".")) || 0;
+    };
+
+    /** Zapíše číslo do peněžního pole už rozdělené po tisících. */
+    UI.nastavPenize = (el, hodnota) => {
+        if (!el) return;
+        const n = Number(hodnota) || 0;
+        el.value = n ? UI.penizeText(n) : "";
+    };
+
+    UI.penizeText = (n) => String(Math.round(Number(n) || 0))
+        .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+    /* Formátuje se při psaní a kurzor zůstává za stejnou číslicí, jinak by
+       po každé mezeře uskočil na konec. */
+    UI.formatujPenize = (el) => {
+        const pred = String(el.value || "").slice(0, el.selectionStart || 0)
+            .replace(/\D/g, "").length;
+        const cifry = String(el.value || "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+        const text = cifry ? UI.penizeText(cifry) : "";
+        el.value = text;
+        let i = 0, videno = 0;
+        while (i < text.length && videno < pred) {
+            if (text.charAt(i) >= "0" && text.charAt(i) <= "9") videno++;
+            i++;
+        }
+        try { el.setSelectionRange(i, i); } catch (err) { }
+    };
+
+    document.addEventListener("input", (event) => {
+        const el = event.target;
+        if (el && el.matches && el.matches("[data-penize]")) UI.formatujPenize(el);
+    });
+
+    /* Oblíbené projekty jsou společné pro celou firmu – leží v číselníku
+       zakázek. Starý seznam z prohlížeče slouží jen tomu, kdo si ještě
+       nestihl načíst data (přání Michala 1. 9. 2026). */
     UI.oblibeneProjekty = () => {
+        const z = window.KB && window.KB.oblibeneProjekty;
+        if (Array.isArray(z)) return z;
         try { return JSON.parse(localStorage.getItem("kb-sprava-oblibene")) || []; }
         catch (err) { return []; }
     };

@@ -253,8 +253,9 @@
             const zbyva = kc - vyf;
             return '<td class="mx__budget">' +
                 (klikaci
-                    ? '<input type="number" class="field" min="0" step="1000" data-techbud="' + esc(tech) +
-                        '" value="' + (kc || "") + '">'
+                    ? '<input type="text" class="field" inputmode="numeric" data-penize' +
+                        ' data-techbud="' + esc(tech) + '" value="' +
+                        (kc ? window.KBUI.penizeText(kc) : "") + '">'
                     : (kc ? cislo(kc) : "–")) + "</td>" +
                 '<td class="mx__budget"' + (sazba
                     ? ' title="při průměrné sazbě ' + cislo(sazba) + ' Kč/h"'

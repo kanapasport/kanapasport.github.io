@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=178">
+    <link rel="stylesheet" href="assets/css/app.css?v=179">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -283,10 +283,9 @@
                         </p>
                         <div class="fmr">
                             <label class="pole"><span class="popisek">Rozpočet (Kč bez DPH)</span>
-                                <input type="number" id="fKc" class="field" min="0" placeholder="0"
+                                <input type="text" id="fKc" class="field" inputmode="numeric"
+                                    data-penize placeholder="0"
                                     title="Všechny částky na webu se vedou bez DPH"></label>
-                            <label class="pole"><span class="popisek">Rozpočet (hodin)</span>
-                                <input type="number" id="fHodiny" class="field" min="0" placeholder="0"></label>
                             <label class="pole"><span class="popisek">Fakturovat firmě</span>
                                 <select id="fFirma" class="field"></select></label>
                             <label class="pole"><span class="popisek">Objednatel</span>
@@ -586,7 +585,8 @@
                 <label class="pole"><span class="popisek">Termín</span>
                     <input type="date" id="nuTermin" class="field"></label>
                 <label class="pole"><span class="popisek">Budget (Kč)</span>
-                    <input type="number" id="nuBudget" class="field" min="0" step="1000" placeholder="0"></label>
+                    <input type="text" id="nuBudget" class="field" inputmode="numeric"
+                           data-penize placeholder="0"></label>
             </div>
             <div>
                 <span class="popisek">Kdo na úkolu dělá</span>
@@ -638,10 +638,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=178"></script>
-<script src="assets/js/ui.js?v=178"></script>
-<script src="assets/js/vykazy.js?v=178"></script>
-<script type="module" src="assets/js/store.js?v=178"></script>
+<script src="assets/js/taxonomy.js?v=179"></script>
+<script src="assets/js/ui.js?v=179"></script>
+<script src="assets/js/vykazy.js?v=179"></script>
+<script type="module" src="assets/js/store.js?v=179"></script>
 
 <script>
 (function () {
@@ -681,10 +681,6 @@
     const FAV_KLIC = "kb-sprava-oblibene";
     let ukazVsechny = false;   // seznam ukazuje jen oblíbené, dokud se nepřiklopí
 
-    /* `FAV_VERZE` dovolí výchozí seznam později doplnit, aniž by se
-       přepsalo, co si kdo mezitím nahvězdičkoval sám. */
-    const FAV_VERZE = 2;
-
     function vychoziOblibene() {
         const vzory = (window.KB.oblibeneVzory || []).map(v => String(v).toLowerCase());
         if (!vzory.length) return [];
@@ -695,34 +691,35 @@
             .map(p => p.id);
     }
 
+    /* Seznam je SPOLEČNÝ pro celou firmu – leží v číselníku zakázek
+       (`meta/zakazky.oblibeneIds`), zapisují ho manažeři. Dřív si ho
+       každý sbíral ve svém prohlížeči, takže dva manažeři viděli jiné
+       pořadí projektů (přání Michala 1. 9. 2026). Starý seznam
+       z prohlížeče se použije jen do chvíle, než data dorazí, a při
+       prvním přepnutí hvězdičky se přenese do databáze. */
     function oblibeneIds() {
-        let ulozene = null, verze = 0;
+        if (Array.isArray(window.KB.oblibeneProjekty)) return window.KB.oblibeneProjekty.slice();
+
+        let ulozene = null;
         try {
             const raw = localStorage.getItem(FAV_KLIC);
             if (raw !== null) ulozene = JSON.parse(raw) || [];
-            verze = Number(localStorage.getItem(FAV_KLIC + "-v")) || 0;
         } catch (err) { return []; }
-
         if (!(window.KB.projektyDocs || []).length) return ulozene || [];
-
-        // nové výchozí projekty se jen přidají, nic se neodebírá
-        const vychozi = vychoziOblibene();
-        const seznam = ulozene === null ? vychozi
-            : (verze >= FAV_VERZE ? ulozene
-               : ulozene.concat(vychozi.filter(id => ulozene.indexOf(id) === -1)));
-        try {
-            localStorage.setItem(FAV_KLIC, JSON.stringify(seznam));
-            localStorage.setItem(FAV_KLIC + "-v", String(FAV_VERZE));
-        } catch (err) {}
-        return seznam;
+        // v databázi ještě nic není – výchozí podle vzorů, ať seznam není prázdný
+        return ulozene === null ? vychoziOblibene()
+            : ulozene.concat(vychoziOblibene().filter(id => ulozene.indexOf(id) === -1));
     }
 
     function prepniOblibeny(id) {
         const ids = oblibeneIds();
         const kde = ids.indexOf(id);
         if (kde === -1) ids.push(id); else ids.splice(kde, 1);
-        try { localStorage.setItem(FAV_KLIC, JSON.stringify(ids)); } catch (err) {}
+        window.KB.oblibeneProjekty = ids;          // ať se seznam překreslí hned
         vykresliSeznam();
+        window.KB.saveCiselnikZakazek({ oblibeneIds: ids })
+            .catch(err => window.KBUI.toast("Oblíbené se neuložily: " +
+                ((err && err.message) || err), "warn"));
     }
 
     function stavSkupin() {
@@ -1022,8 +1019,7 @@
         naplnUdaje(p);
 
         const rozpocet = V.rozpocet(nazev);
-        $("fKc").value = rozpocet.kc || "";
-        $("fHodiny").value = rozpocet.hodiny || "";
+        window.KBUI.nastavPenize($("fKc"), rozpocet.kc);
 
         const firma = (window.KB.firmaMap || {})[nazev] || p.firma || "";
         $("fFirma").innerHTML = V.options(sHodnotou(V.firmy(), firma), firma, "— nevyplněno —");
@@ -1288,7 +1284,7 @@
         });
 
         // ---- krajíc – všechno v penězích (hodiny se u úkolů nevedou) ----
-        const strop = Number($("fKc").value) || (V.rozpocet(p.nazev || "").kc || 0);
+        const strop = window.KBUI.penize($("fKc")) || (V.rozpocet(p.nazev || "").kc || 0);
         const prideleno = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).budgetKc) || 0), 0);
         // rezervy zrušené 31. 8. 2026 – jedna kolonka budgetu stačí
         const zbyva = strop - prideleno;
@@ -1494,7 +1490,9 @@
         const techBudgety = Object.assign({},
             ((window.KB.rozpocty || {})[p.nazev || ""] || {}).techBudgetyKc);
         document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
-            if (pole.value !== "") techBudgety[pole.dataset.techbud] = Number(pole.value) || 0;
+            if (pole.value !== "") {
+                techBudgety[pole.dataset.techbud] = window.KBUI.penize(pole);
+            }
         });
         const prepinac = '<div class="row" style="gap:6px;margin-bottom:8px">' +
             '<button type="button" class="chip' + (mxRezim === "pct" ? " chip--active" : "") +
@@ -2122,7 +2120,7 @@
         $("nuNazev").value = u.nazev || "";
         $("nuDruh").innerHTML = V.options(V.cinnosti(), u.druh || "", "— vyber —");
         $("nuTermin").value = u.termin || "";
-        $("nuBudget").value = Number(b.budgetKc) || "";
+        window.KBUI.nastavPenize($("nuBudget"), b.budgetKc);
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") +
             [u.budova, u.technologie, u.patro].filter(Boolean).map(x => " · " + x).join("");
         $("nuTodo").value = (u.todo || []).map(t => t.text || "").join("\n");
@@ -2234,7 +2232,7 @@
                 createdBy: stavajici ? stavajici.createdBy : undefined
             });
             await window.KB.ulozUkolBudget(id, {
-                budgetKc: Number($("nuBudget").value) || 0,
+                budgetKc: window.KBUI.penize($("nuBudget")),
                 rezervaKc: 0
             });
             $("ukolOverlay").hidden = true;
@@ -2507,13 +2505,14 @@
         // budget technologií v Kč (pravý blok matice)
         const techBudgetyKc = {};
         document.querySelectorAll("#matice [data-techbud]").forEach(pole => {
-            const hodnota = Number(pole.value) || 0;
+            const hodnota = window.KBUI.penize(pole);
             if (hodnota > 0) techBudgetyKc[pole.dataset.techbud] = hodnota;
         });
 
         rozpocty[nazev] = Object.assign({}, rozpocty[nazev], {
-            kc: Number($("fKc").value) || 0,
-            hodiny: Number($("fHodiny").value) || 0,
+            kc: window.KBUI.penize($("fKc")),
+            // hodiny se od 1. 9. 2026 nezadávají; uloženou hodnotu držíme
+            hodiny: Number(V.rozpocet(nazev).hodiny) || 0,
             techBudgetyKc: techBudgetyKc,
             sazby: sazby
         });

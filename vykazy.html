@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=178">
+    <link rel="stylesheet" href="assets/css/app.css?v=179">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -55,6 +55,9 @@
         .hovolba { display: flex; align-items: center; gap: 7px; font-size: 13px;
             cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
         .zblok--absence .hovolba, .polozka--absence .hovolba { display: none; }
+        /* zeleně u zaškrtávátka: ten den je HO nahlášený z Rychlého zápisu */
+        .hovolba__znacka { color: var(--ok); font-size: 10.5px; font-weight: 900;
+            letter-spacing: .06em; text-transform: uppercase; }
 
         /* Rozsah dnů dává smysl jen u absence – běžný záznam je vždycky jeden den. */
         .datumdo { display: none; }
@@ -283,10 +286,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=178"></script>
-<script src="assets/js/ui.js?v=178"></script>
-<script src="assets/js/vykazy.js?v=178"></script>
-<script type="module" src="assets/js/store.js?v=178"></script>
+<script src="assets/js/taxonomy.js?v=179"></script>
+<script src="assets/js/ui.js?v=179"></script>
+<script src="assets/js/vykazy.js?v=179"></script>
+<script type="module" src="assets/js/store.js?v=179"></script>
 
 <script>
 (function () {
@@ -486,10 +489,16 @@
 
     /** Po vložení položky do stránky oživí její roletku úkolů. */
     function ozivVybery(koren) {
-        (koren || document).querySelectorAll('[data-f="ukolId"]')
+        const k = koren || document;
+        k.querySelectorAll('[data-f="ukolId"]')
             .forEach(select => obnovUkolVyber(select));
-        (koren || document).querySelectorAll("[data-polozka]")
-            .forEach(box => { obnovHoHlasku(box); obnovLhutu(box); });
+        /* `querySelectorAll` sám kořen nevrací – a kořenem tu bývá právě
+           ta jedna čerstvě vložená položka, takže se hlídka HO ani lhůty
+           při vykreslení vůbec nespustily a hláška naskočila až po ruční
+           změně data (Michal 1. 9. 2026). */
+        const boxy = Array.prototype.slice.call(k.querySelectorAll("[data-polozka]"));
+        if (k.matches && k.matches("[data-polozka]")) boxy.unshift(k);
+        boxy.forEach(box => { obnovHoHlasku(box); obnovLhutu(box); });
     }
 
     /**
@@ -937,7 +946,10 @@
                 /* Home office vedle sazby, ať je po ruce u každého záznamu
                    (přání Michala 1. 9. 2026). */
                 '<label class="hovolba"><input type="checkbox" data-f="ho"' +
-                    (d.ho ? " checked" : "") + "> <b>Home office</b></label>" +
+                    (d.ho ? " checked" : "") + "> <b>Home office</b>" +
+                    '<span class="hovolba__znacka" data-ho-hlaska hidden' +
+                        ' title="Na tento den sis nahlásil home office v Rychlém zápisu">' +
+                        "nahlášeno</span></label>" +
             "</div>" +
 
             /* Home office: hodiny odvedené z domu. Když je na ten den
@@ -945,8 +957,6 @@
                jde i bez nahlášení. Jde do Tabulek (sloupec HO) a časem do
                přehledů, kdo kolik dělá z domu. */
             '<div class="hobox" data-hobox' + (absentni ? " hidden" : "") + ">" +
-                '<span class="hobox__pozor" data-ho-hlaska hidden>' +
-                    "Na tento den byl nahlášen HO — potvrď zde:</span>" +
                 '<span class="hobox__pozor" data-abs-hlaska hidden></span>' +
             "</div>" +
 
