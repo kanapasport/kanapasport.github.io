@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#c8102e">
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=189">
+    <link rel="stylesheet" href="assets/css/app.css?v=190">
     <link rel="apple-touch-icon" href="Pasport_Kana_white.png">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
@@ -110,7 +110,9 @@
             <p class="small muted" style="margin-top:3px;line-height:1.6;max-width:720px">
                 Narazíš na problém → screenshot → pár vět k tomu. Poznámky máš jen ty;
                 list můžeš nasdílet kolegům a u poznámky někoho upozornit — přistane mu
-                to v Quick TO-DO. Vyřešená poznámka se zaklikne jako splněná a zezelená.
+                to v Quick TO-DO. <b>Nová poznámka ve sdíleném listu se ozve sama</b>
+                všem, s kým je list nasdílený. Vyřešená poznámka se zaklikne jako
+                splněná a zezelená.
             </p>
         </div>
         <div class="row" style="gap:8px;margin-left:auto">
@@ -187,11 +189,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=189"></script>
-<script src="assets/js/doc.js?v=189"></script>
-<script src="assets/js/ui.js?v=189"></script>
-<script src="assets/js/vykazy.js?v=189"></script>
-<script type="module" src="assets/js/store.js?v=189"></script>
+<script src="assets/js/taxonomy.js?v=190"></script>
+<script src="assets/js/doc.js?v=190"></script>
+<script src="assets/js/ui.js?v=190"></script>
+<script src="assets/js/vykazy.js?v=190"></script>
+<script type="module" src="assets/js/store.js?v=190"></script>
 
 <script>
 (function () {
@@ -562,6 +564,30 @@
             vykresliNahledy();
         });
 
+        /* Nová poznámka ve sdíleném listu se sama ozve všem, s kým je list
+           nasdílený – vzkaz jim přistane v Quick TO-DO pod filtrem
+           Poznámky a proklikem skočí rovnou na ni. Autor sám sobě vzkaz
+           neposílá. (Přání Michala 1. 9. 2026.) */
+        async function ozviSeSdilenym(list, poznId, text) {
+            if (!list) return 0;
+            const kruh = (list.uid === me() ? (list.sdileni || [])
+                : [list.uid].concat((list.sdileni || []).filter(u => u !== me())))
+                .filter(uid => uid && uid !== me());
+            if (!kruh.length) return 0;
+            try {
+                await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+                    text: "Nová poznámka v listu „" + (list.nazev || "bez názvu") + "“: " +
+                          String(text || "(jen screenshot)").slice(0, 70),
+                    proUids: kruh,
+                    poznamka: poznId
+                });
+                return kruh.length;
+            } catch (err) {
+                console.warn("Upozornění na novou poznámku se nezapsalo:", err);
+                return 0;
+            }
+        }
+
         $("btnUlozNovou").addEventListener("click", async () => {
             const text = $("novaText").value.trim();
             if (!text && !noveObrazky.length)
@@ -585,8 +611,11 @@
                     const nahled = await udelejNahled(noveObrazky[0]);
                     if (nahled) await window.KB.ulozPoznamku(id, { nahled: nahled });
                 }
+                const komu = await ozviSeSdilenym(list, id, text);
                 $("oknoNova").hidden = true;
-                window.KBUI.toast("Poznámka uložena.");
+                window.KBUI.toast(komu
+                    ? "Poznámka uložena · upozornění pro " + komu + " lidí"
+                    : "Poznámka uložena.");
             } catch (err) {
                 console.error(err);
                 window.KBUI.toast("Uložení poznámky selhalo.", "error");
