@@ -600,6 +600,11 @@
             box.className = "loginbox no-print";
             box.innerHTML =
                 '<form class="loginbox__card card col" style="gap:14px">' +
+                    /* Zavírá se JEN křížkem. Klik bokem okno zavíral i tomu,
+                       kdo jen táhl myší přes heslo, a rozepsané přihlášení
+                       zmizelo (přání Michala 1. 9. 2026). */
+                    '<button type="button" class="loginbox__zavri" data-login-close' +
+                        ' title="Zavřít" aria-label="Zavřít">&times;</button>' +
                     '<img src="Pasport_Kana_black.png" alt="Pasport Kaňa" style="height:52px;object-fit:contain;margin:0 auto">' +
                     '<b style="font-size:17px;text-align:center">Přihlášení</b>' +
                     '<div><label class="label" for="kbLoginEmail">E-mail</label>' +
@@ -608,16 +613,13 @@
                         '<input id="kbLoginPass" type="password" class="field" autocomplete="current-password"></div>' +
                     '<div id="kbLoginErr" class="tiny" style="color:var(--danger);min-height:16px"></div>' +
                     '<button type="submit" class="btn btn--primary" style="width:100%">Přihlásit se</button>' +
-                    '<button type="button" class="linkbtn" style="margin:0 auto" data-login-close>Zavřít</button>' +
                     '<div class="tiny muted" style="text-align:center;line-height:1.5">' +
                         "Heslo ti přidělí hlavní správce.</div>" +
                 "</form>";
             document.body.appendChild(box);
 
-            box.querySelector("[data-login-close]").addEventListener("click", () => box.classList.remove("is-open"));
-            box.addEventListener("click", (event) => {
-                if (event.target === box) box.classList.remove("is-open");
-            });
+            box.querySelector("[data-login-close]").addEventListener("click",
+                () => box.classList.remove("is-open"));
 
             box.querySelector("form").addEventListener("submit", async (event) => {
                 event.preventDefault();
