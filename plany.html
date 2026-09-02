@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=197">
+    <link rel="stylesheet" href="assets/css/app.css?v=198">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -78,7 +78,10 @@
             width: 26px; height: 26px;
             margin: -13px 0 0 -13px;
             border-radius: 50%;
-            border: 2.5px solid #fff;
+            /* Bílý lem byl 2.5px – u husté sítě značek z něj byla souvislá
+               bílá plocha a plán pod ní nebyl vidět. Michal 2. 9. 2026:
+               třetinu. */
+            border: 0.8px solid #fff;
             box-shadow: 0 1px 5px rgba(0, 0, 0, .5);
             cursor: pointer;
             display: flex;
@@ -111,6 +114,14 @@
         .nastroje__text { width: 64px; border: 0; border-radius: 6px; padding: 5px 8px;
             font: inherit; font-size: 12.5px; font-weight: 900; text-transform: uppercase;
             text-align: center; }
+        /* text obdélníku je název místnosti, ne zkratka do kolečka */
+        .nastroje__text--dlouhy { width: 150px; text-transform: none; text-align: left; }
+        .nastroje__cislo { width: 58px; border: 0; border-radius: 6px; padding: 5px 6px;
+            font: inherit; font-size: 12.5px; font-weight: 900; text-align: center; }
+        .nastroje__vyber { border: 0; border-radius: 6px; padding: 5px 6px;
+            font: inherit; font-size: 12.5px; font-weight: 700; max-width: 150px; }
+        .nastroje__popis { font-size: 11px; font-weight: 800; letter-spacing: .05em;
+            text-transform: uppercase; opacity: .8; }
 
         /* „ghost" tlačítka jsou bílá na bílém – v tmavé liště prohlížeče
            dostávají průsvitnou podobu (Barvy, dřív i Zrušit výběr) */
@@ -160,6 +171,61 @@
         .znacka--aktivni { outline-width: calc(2px * var(--pz, 1)); }
         .vyberobd { position: absolute; border: 1.5px dashed #fff;
             background: rgba(64,160,255,.18); pointer-events: none; z-index: 5; }
+        /* rozkreslený obdélník má jinou barvu než výběr – ať je poznat,
+           že se kreslí značka, a ne že se vybírá */
+        .novyobd { position: absolute; border: 1.5px dashed #fff;
+            background: rgba(255,255,255,.22); pointer-events: none; z-index: 5; }
+
+        /* ------------------------------------------------ obdélník ------
+           Značka, která neoznačuje bod, ale plochu – obtáhne se jí místnost.
+           Kreslí se do stejné vrstvy jako kolečka a nese stejná data
+           (barva, text, poznámka, kdo), takže výběr, mazání i změna stavu
+           fungují na obojí. Navíc má rozměry a otočení. */
+        .tvar {
+            position: absolute;
+            border: 0.8px solid #fff;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .35);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 900; line-height: 1.15;
+            text-align: center; overflow-wrap: anywhere;
+            user-select: none;
+            transform-origin: 50% 50%;
+        }
+        .tvar--vybrana { outline: 3px dashed #fff; outline-offset: 2px; }
+        .tvar--aktivni { outline: calc(2px * var(--pz, 1)) dashed #fff;
+            outline-offset: calc(4px * var(--pz, 1)); z-index: 30; }
+        .tvar--pozn::after { content: ""; position: absolute; right: -3px; top: -3px;
+            width: 9px; height: 9px; border-radius: 50%; background: #fff;
+            border: 2px solid var(--accent-dark); }
+
+        /* Úchyty obdélníku. Sedí v jeho rozích a otáčejí se s ním, ale
+           velikost drží na OBRAZOVCE (--pz), ať se při přiblížení
+           nenafouknou přes celý plán. */
+        .tovl {
+            position: absolute;
+            width: calc(44px * var(--pz, 1));
+            height: calc(44px * var(--pz, 1));
+            border-radius: 50%;
+            background: #1d2530; color: #fff;
+            border: calc(2px * var(--pz, 1)) solid #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(21px * var(--pz, 1));
+            font-weight: 900; line-height: 1;
+            cursor: pointer;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, .45);
+            user-select: none;
+        }
+        .tovl--smaz  { top: calc(-30px * var(--pz,1)); left: calc(-30px * var(--pz,1));
+            background: #c8102e; }
+        .tovl--otoc  { top: calc(-30px * var(--pz,1)); right: calc(-30px * var(--pz,1));
+            cursor: grab; touch-action: none; }
+        .tovl--vel   { bottom: calc(-30px * var(--pz,1)); right: calc(-30px * var(--pz,1));
+            cursor: nwse-resize; touch-action: none; }
+        .tovl--kopie { bottom: calc(-30px * var(--pz,1)); left: calc(-30px * var(--pz,1)); }
+        .tovl--posun { top: 50%; left: 50%;
+            margin: calc(-22px * var(--pz,1)) 0 0 calc(-22px * var(--pz,1));
+            cursor: grab; touch-action: none; }
 
         .palokno { position: fixed; inset: 0; z-index: 170; background: rgba(11, 13, 16, .55);
             display: flex; align-items: flex-start; justify-content: center;
@@ -241,6 +307,7 @@
         <div class="rezim" id="rezimy">
             <button type="button" data-rezim="posun" class="je-aktivni">Posun</button>
             <button type="button" data-rezim="znacka">Značka</button>
+            <button type="button" data-rezim="obdelnik" title="Obtáhni místnost obdélníkem">Obdélník</button>
             <button type="button" data-rezim="stav" title="Ťuknutím na značku měníš barvu">Změna stavu</button>
             <button type="button" data-rezim="vyber">Výběr / mazání</button>
         </div>
@@ -255,9 +322,28 @@
                 <button type="button" class="velbtn" data-vel="10" title="malá">S</button>
                 <button type="button" class="velbtn je-aktivni" data-vel="16" title="střední">M</button>
                 <button type="button" class="velbtn" data-vel="24" title="velká">L</button>
+                <input type="number" id="volbaVelC" class="nastroje__cislo" min="4" max="200"
+                       step="1" value="16" title="Průměr značky v bodech plánu">
             </span>
+            <select id="volbaPruh" class="nastroje__vyber" title="Průhlednost barvy">
+                <option value="1">plná barva</option>
+                <option value="0.8">80 %</option>
+                <option value="0.6">60 %</option>
+                <option value="0.4">40 %</option>
+                <option value="0.25">25 %</option>
+            </select>
             <input type="text" id="volbaText" class="nastroje__text" maxlength="3"
                    placeholder="text" title="Až 3 znaky do kolečka (např. ZS, 12)">
+        </div>
+        <!-- co je vidět: nastavení POHLEDU, drží se v prohlížeči -->
+        <div class="nastroje" id="zobrazeni">
+            <span class="nastroje__skupina">
+                <button type="button" class="velbtn je-aktivni" data-zobr="text"
+                        title="Ukazovat texty ve značkách">T</button>
+                <button type="button" class="velbtn je-aktivni" data-zobr="pruh"
+                        title="Ukazovat značky průhledné (vypnuto = plná barva)">◍</button>
+            </span>
+            <select id="filtrKdo" class="nastroje__vyber" title="Čí značky ukazovat"></select>
         </div>
         <button type="button" class="btn btn--sm btn--ghost" id="btnPaleta"
             title="Barvy a popisky značek tohohle plánu">Barvy</button>
@@ -302,13 +388,27 @@
             <span class="vyberlista__akce">Změna barvy:
                 <span class="nastroje__skupina" id="vyberBarva"></span></span>
             <span class="vyberlista__akce">
-                <input type="text" id="vyberText" class="nastroje__text" maxlength="3"
-                       placeholder="text" title="Text, který se zapíše do všech vybraných">
+                <input type="text" id="vyberText" class="nastroje__text" maxlength="40"
+                       placeholder="text" title="Zapíše se do všech vybraných – do koleček tři znaky, do obdélníků celý popisek">
                 <button type="button" class="btn btn--sm btn--ghost" id="vyberTextZapis">Zapsat text</button>
             </span>
             <span class="vyberlista__akce">Velikost:
                 <button type="button" class="zoombtn" id="vyberMensi" title="Zmenšit vybrané">−</button>
                 <button type="button" class="zoombtn" id="vyberVetsi" title="Zvětšit vybrané">+</button>
+                <input type="number" id="vyberVel" class="nastroje__cislo" min="4" max="200"
+                       step="1" placeholder="př. 18"
+                       title="Průměr koleček v bodech plánu; obdélníky mění jen − a +">
+                <button type="button" class="btn btn--sm btn--ghost" id="vyberVelZapis">Nastavit</button>
+            </span>
+            <span class="vyberlista__akce">Průhlednost:
+                <select id="vyberPruh" class="nastroje__vyber">
+                    <option value="">— beze změny —</option>
+                    <option value="1">plná barva</option>
+                    <option value="0.8">80 %</option>
+                    <option value="0.6">60 %</option>
+                    <option value="0.4">40 %</option>
+                    <option value="0.25">25 %</option>
+                </select>
             </span>
             <button type="button" class="btn btn--sm vybersmaz" id="vyberSmazat">🗑 Smazat vybrané</button>
             <button type="button" class="btn btn--sm btn--ghost vyberghost" id="vyberZrusit">Zrušit výběr</button>
@@ -317,10 +417,10 @@
     <div class="prohl__pocty" id="pocty"></div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=197"></script>
-<script src="assets/js/ui.js?v=197"></script>
-<script src="assets/js/vykazy.js?v=197"></script>
-<script type="module" src="assets/js/store.js?v=197"></script>
+<script src="assets/js/taxonomy.js?v=198"></script>
+<script src="assets/js/ui.js?v=198"></script>
+<script src="assets/js/vykazy.js?v=198"></script>
+<script type="module" src="assets/js/store.js?v=198"></script>
 
 <script>
 (function () {
@@ -542,8 +642,77 @@
     let zoom = 1, posX = 0, posY = 0;
     let minZoom = 0.1;          // víc oddálit nejde – plán vyplní stránku
 
-    /* Jaká bude NOVÁ značka – barva (stav), velikost a text do kolečka. */
-    const nova = { stav: 0, vel: 16, text: "" };
+    /* Jaká bude NOVÁ značka – barva (stav), velikost, průhlednost a text. */
+    const nova = { stav: 0, vel: 16, text: "", pruh: 1 };
+
+    /* Obdélník nakreslený ťuknutím (bez tažení) – podíl z rozměru plánu. */
+    const VYCHOZI_TVAR = { w: 0.08, h: 0.05 };
+
+    /* Značek se v jedné dávce zakládá i pár desítek (kopie výběru), a to
+       během jediné milisekundy – samotné Date.now() by je pojmenovalo
+       stejně a přepsaly by se navzájem. */
+    let poradiId = 0;
+    const novyId = () => "zn_" + Date.now() + "_" +
+        (poradiId = (poradiId + 1) % 1000) + "_" + Math.floor(Math.random() * 1000);
+
+    /* CO JE VIDĚT. Je to nastavení POHLEDU, ne dat: drží se v prohlížeči
+       toho, kdo se dívá, a nikomu jinému se nepropíše. Na hustě označkovaném
+       patře se tím dá odkrýt plán pod značkami nebo si nechat jen svoje. */
+    let zobrazText = true;      // texty ve značkách
+    let zobrazPruh = true;      // ctít nastavenou průhlednost
+    let filtrKdo = "";          // "" = všichni, jinak uid člověka
+
+    const ZOBRAZENI_KLIC = "kb-plany-zobrazeni";
+    function nactiZobrazeni() {
+        try {
+            const u = JSON.parse(localStorage.getItem(ZOBRAZENI_KLIC)) || {};
+            zobrazText = u.text !== false;
+            zobrazPruh = u.pruh !== false;
+        } catch (err) { /* soukromý režim */ }
+    }
+    function ulozZobrazeni() {
+        try {
+            localStorage.setItem(ZOBRAZENI_KLIC,
+                JSON.stringify({ text: zobrazText, pruh: zobrazPruh }));
+        } catch (err) { /* soukromý režim */ }
+    }
+
+    /* Barva značky i s průhledností. `pruh` je 0–1 (1 = plná barva);
+       vypínátko „◍" ji dočasně vyřadí, ať jde porovnat, co je pod čím. */
+    function barvaZnacky(z) {
+        const hex = palBarva(z.stav);
+        const a = zobrazPruh ? Number(z.pruh === undefined ? 1 : z.pruh) : 1;
+        const m = /^#([0-9a-f]{6})$/i.exec(String(hex).trim());
+        if (!(a >= 0) || a >= 1 || !m) return hex;
+        const n = parseInt(m[1], 16);
+        return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," +
+            (n & 255) + "," + a + ")";
+    }
+
+    /* Značky po filtru „čí". Sčítá se i kreslí jen to, co je vidět –
+       jinak by počítadla dole tvrdila něco jiného než plán. */
+    function znackyKZobrazeni() {
+        const vse = window.KB.znackyPlanu || [];
+        return filtrKdo ? vse.filter(z => (z.uid || "") === filtrKdo) : vse;
+    }
+
+    /** Lidé, kteří na tomhle plánu mají značky – nabídka filtru. */
+    function naplnFiltrKdo() {
+        const lide = new Map();
+        (window.KB.znackyPlanu || []).forEach(z => {
+            if (z.uid) lide.set(z.uid, z.kdo || "(bez jména)");
+        });
+        const ja = window.KB.currentUid();
+        const puvodni = filtrKdo;
+        const radky = Array.from(lide.entries())
+            .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "cs"))
+            .map(([uid, jmeno]) => '<option value="' + esc(uid) + '">' +
+                esc(jmeno + (uid === ja ? " (já)" : "")) + "</option>").join("");
+        $("filtrKdo").innerHTML = '<option value="">Značky všech</option>' + radky;
+        // člověk mohl mezitím poslední značku smazat – filtr pak nemá co ukazovat
+        $("filtrKdo").value = lide.has(puvodni) ? puvodni : "";
+        filtrKdo = $("filtrKdo").value;
+    }
 
     /* Výběr jako v editorech: obdélník nebo klik nahrazuje, Shift/Ctrl
        přidává. Akce dole platí na všechno vybrané. */
@@ -660,6 +829,15 @@
             : null;
         window.KB.watchZnacky(id);
         naplnPaletovePrvky();
+        /* Filtr „čí značky" patří k plánu – u dalšího by ukazoval na
+           někoho, kdo v něm nic nemá. Vypínátka textu a průhlednosti
+           naopak drží napříč plány, je to zvyk toho, kdo se dívá. */
+        filtrKdo = "";
+        naplnFiltrKdo();
+        nactiZobrazeni();
+        document.querySelectorAll("#zobrazeni [data-zobr]").forEach(b =>
+            b.classList.toggle("je-aktivni",
+                b.dataset.zobr === "text" ? zobrazText : zobrazPruh));
         try {
             const dataUrl = await window.KB.nactiPlanObrazek(id);
             $("obrazek").src = dataUrl;
@@ -703,49 +881,99 @@
     const palBarva = (i) => (paleta()[Math.min(Number(i) || 0, paleta().length - 1)] || {}).b || "#888";
     const palPopis = (i) => (paleta()[Math.min(Number(i) || 0, paleta().length - 1)] || {}).p || "";
 
+    /** Popisek pod myší – u obdélníku i rozměr, ať se dá srovnat s plánem. */
+    function titulekZnacky(z) {
+        return palPopis(z.stav) + " – " + (z.kdo || "") + (z.pozn ? "\n" + z.pozn : "");
+    }
+
+    /** Kolečko: bod v plánu. */
+    function koleckoHtml(z, w, h) {
+        const vel = Number(z.vel) || 26;
+        return '<div class="znacka' +
+            (z.pozn ? " znacka--pozn" : "") +
+            (vybrane.has(z.id) ? " znacka--vybrana" : "") +
+            (z.id === aktivniZnacka ? " znacka--aktivni" : "") +
+            '" data-znacka="' + esc(z.id) + '" ' +
+            'style="left:' + (z.x * w) + 'px;top:' + (z.y * h) + 'px;' +
+                'background:' + barvaZnacky(z) + ";" +
+                'width:' + vel + 'px;height:' + vel + 'px;' +
+                'margin:-' + (vel / 2) + 'px 0 0 -' + (vel / 2) + 'px;' +
+                'font-size:' + Math.round(vel * 0.42) + 'px" ' +
+            'title="' + esc(titulekZnacky(z)) + '">' +
+            (zobrazText ? esc(z.text || "") : "") +
+            (z.id === aktivniZnacka
+                ? '<span class="zovl zovl--smaz" data-zn-akce="smaz" title="Smazat">×</span>' +
+                  '<span class="zovl zovl--posun" data-zn-akce="posun" title="Přetáhnout jinam">✥</span>' +
+                  '<span class="zovl zovl--plus" data-zn-akce="plus" title="Zvětšit">+</span>' +
+                  '<span class="zovl zovl--minus" data-zn-akce="minus" title="Zmenšit">−</span>' +
+                  '<span class="zovl zovl--barva" data-zn-akce="barva" title="Další barva" ' +
+                      'style="background:' + palBarva(((Number(z.stav) || 0) + 1) % paleta().length) + '"></span>'
+                : "") +
+            "</div>";
+    }
+
+    /** Obdélník: plocha v plánu (místnost). Otáčí se kolem svého středu. */
+    function obdelnikHtml(z, w, h) {
+        const sirka = Math.max(2, (Number(z.w) || VYCHOZI_TVAR.w) * w);
+        const vyska = Math.max(2, (Number(z.h) || VYCHOZI_TVAR.h) * h);
+        const pismo = Math.max(5, Math.min(sirka / 4, vyska * 0.42));
+        return '<div class="tvar' +
+            (z.pozn ? " tvar--pozn" : "") +
+            (vybrane.has(z.id) ? " tvar--vybrana" : "") +
+            (z.id === aktivniZnacka ? " tvar--aktivni" : "") +
+            '" data-znacka="' + esc(z.id) + '" ' +
+            'style="left:' + (z.x * w) + 'px;top:' + (z.y * h) + 'px;' +
+                'width:' + sirka + 'px;height:' + vyska + 'px;' +
+                'margin:-' + (vyska / 2) + 'px 0 0 -' + (sirka / 2) + 'px;' +
+                'transform:rotate(' + (Number(z.uhel) || 0) + 'deg);' +
+                'background:' + barvaZnacky(z) + ";" +
+                'font-size:' + pismo + 'px" ' +
+            'title="' + esc(titulekZnacky(z)) + '">' +
+            (zobrazText ? esc(z.text || "") : "") +
+            (z.id === aktivniZnacka
+                ? '<span class="tovl tovl--smaz" data-zn-akce="smaz" title="Smazat">×</span>' +
+                  '<span class="tovl tovl--posun" data-zn-akce="posun" title="Přetáhnout jinam">✥</span>' +
+                  '<span class="tovl tovl--otoc" data-zn-akce="otoc" ' +
+                      'title="Otočit (se Shiftem po 15°)">⟳</span>' +
+                  '<span class="tovl tovl--vel" data-zn-akce="rozmer" title="Změnit rozměr">⤡</span>' +
+                  '<span class="tovl tovl--kopie" data-zn-akce="kopie" ' +
+                      'title="Kopie (jde i klávesou C)">⧉</span>'
+                : "") +
+            "</div>";
+    }
+
     function vykresliZnacky() {
         if (!otevreny) return;
         const w = $("obrazek").naturalWidth || 1;
         const h = $("obrazek").naturalHeight || 1;
-        $("znackyVrstva").innerHTML = (window.KB.znackyPlanu || []).map(z => {
-            const vel = Number(z.vel) || 26;
-            return '<div class="znacka' +
-                (z.pozn ? " znacka--pozn" : "") +
-                (vybrane.has(z.id) ? " znacka--vybrana" : "") +
-                (z.id === aktivniZnacka ? " znacka--aktivni" : "") +
-                '" data-znacka="' + esc(z.id) + '" ' +
-                'style="left:' + (z.x * w) + 'px;top:' + (z.y * h) + 'px;' +
-                    'background:' + palBarva(z.stav) + ";" +
-                    'width:' + vel + 'px;height:' + vel + 'px;' +
-                    'margin:-' + (vel / 2) + 'px 0 0 -' + (vel / 2) + 'px;' +
-                    'font-size:' + Math.round(vel * 0.42) + 'px" ' +
-                'title="' + esc(palPopis(z.stav) + " – " + (z.kdo || "") +
-                    (z.pozn ? "\n" + z.pozn : "")) + '">' +
-                esc(z.text || "") +
-                (z.id === aktivniZnacka
-                    ? '<span class="zovl zovl--smaz" data-zn-akce="smaz" title="Smazat">×</span>' +
-                      '<span class="zovl zovl--posun" data-zn-akce="posun" title="Přetáhnout jinam">✥</span>' +
-                      '<span class="zovl zovl--plus" data-zn-akce="plus" title="Zvětšit">+</span>' +
-                      '<span class="zovl zovl--minus" data-zn-akce="minus" title="Zmenšit">−</span>' +
-                      '<span class="zovl zovl--barva" data-zn-akce="barva" title="Další barva" ' +
-                          'style="background:' + palBarva(((Number(z.stav) || 0) + 1) % paleta().length) + '"></span>'
-                    : "") +
-                "</div>";
-        }).join("");
+        const videt = znackyKZobrazeni();
+
+        /* Co filtr schoval, nesmí zůstat vybrané – akce dole by pak sáhly
+           na značky, které člověk nevidí. */
+        const jsou = new Set(videt.map(z => z.id));
+        Array.from(vybrane).forEach(id => { if (!jsou.has(id)) vybrane.delete(id); });
+        if (aktivniZnacka && !jsou.has(aktivniZnacka)) aktivniZnacka = "";
+
+        /* Obdélníky se kreslí PRVNÍ, tedy pod kolečka. Obtahují plochu
+           místnosti a jako plný obdélník by jinak zakryly kolečka uvnitř
+           a nešlo by na ně ťuknout. */
+        const poradi = videt.slice().sort((a, b) =>
+            (a.tvar === "obdelnik" ? 0 : 1) - (b.tvar === "obdelnik" ? 0 : 1));
+        $("znackyVrstva").innerHTML = poradi.map(z =>
+            (z.tvar === "obdelnik" ? obdelnikHtml : koleckoHtml)(z, w, h)).join("");
         vykresliVyberListu();
 
         const pal = paleta();
         const pocty = pal.map(() => 0);
-        (window.KB.znackyPlanu || []).forEach(z => {
-            pocty[Math.min(Number(z.stav) || 0, pal.length - 1)]++;
-        });
+        videt.forEach(z => { pocty[Math.min(Number(z.stav) || 0, pal.length - 1)]++; });
         $("pocty").innerHTML =
             pal.map((b, i) => '<span><i style="background:' + b.b + '"></i>' +
                 esc(b.p || "barva " + (i + 1)) + ": <b>" + pocty[i] + "</b></span>").join("") +
+            (filtrKdo ? '<span style="opacity:.75">(jen značky jednoho člověka)</span>' : "") +
             '<span style="margin-left:auto;opacity:.75">Značka: ťukni do plánu ·' +
-                " barva se mění v režimu Stav · poznámka dvojklikem ·" +
-                " pravý klik / podržení prstu = upravit značku ·" +
-                " výběr: obdélníkem, Shift přidává</span>";
+                " obdélník: táhni přes místnost · poznámka dvojklikem ·" +
+                " pravý klik / podržení prstu = upravit ·" +
+                " kopie klávesou C · výběr obdélníkem, Shift přidává</span>";
     }
 
     /* posun + zoom: myš i dotyk přes pointer events */
@@ -756,6 +984,8 @@
        ✥ přetáhnout jinam, + a − velikost. */
     let aktivniZnacka = "";
     let tahZnacky = null;        // { id, el, x, y } při přetahování pacičkou
+    let tahTvaru = null;         // { id, el, druh } při otáčení / změně rozměru
+    let kresba = null;           // { x0, y0, x1, y1, el } rozkreslený obdélník
     let dlouhyStisk = null;      // časovač podržení prstu
     let dlouhyStiskStart = null;
 
@@ -779,6 +1009,23 @@
             return;
         }
 
+        // úchyty obdélníku: otočení a rozměr (obojí se táhne)
+        const uchyt = e.target.closest('[data-zn-akce="otoc"], [data-zn-akce="rozmer"]');
+        if (uchyt) {
+            const el = uchyt.closest("[data-znacka]");
+            const z = (window.KB.znackyPlanu || []).find(x => x.id === el.dataset.znacka);
+            if (z) {
+                tahTvaru = { id: z.id, el: el, druh: uchyt.dataset.znAkce,
+                    x: Number(z.x) || 0, y: Number(z.y) || 0,
+                    uhel: Number(z.uhel) || 0,
+                    w: Number(z.w) || VYCHOZI_TVAR.w,
+                    h: Number(z.h) || VYCHOZI_TVAR.h };
+                try { $("plocha").setPointerCapture(e.pointerId); } catch (err) { /* rychlý dotyk */ }
+                e.preventDefault();
+            }
+            return;
+        }
+
         /* Ostatní knoflíky ovládání (×, +, −, barva) se obsluhují klikem.
            Kdyby z nich odstartoval posun, capture by přesměroval klik na
            plochu a knoflík by nikdy nedoklikl – přesně to se dělo
@@ -799,6 +1046,13 @@
             }, 500);
         }
 
+        if (rezim === "obdelnik" && !e.target.closest("[data-znacka]")) {
+            // kreslení nového obdélníku – stejné tažení jako u výběru
+            const r = $("obrazek").getBoundingClientRect();
+            kresba = { x0: (e.clientX - r.left) / zoom, y0: (e.clientY - r.top) / zoom, el: null };
+            try { $("plocha").setPointerCapture(e.pointerId); } catch (err) { /* rychlý dotyk */ }
+            return;
+        }
         if (rezim === "vyber" && !e.target.closest("[data-znacka]")) {
             // začátek obdélníkového výběru (v souřadnicích náhledu)
             const r = $("obrazek").getBoundingClientRect();
@@ -837,6 +1091,36 @@
             tahZnacky.el.style.top = (tahZnacky.y * ($("obrazek").naturalHeight || 1)) + "px";
             return;
         }
+        if (tahTvaru) {
+            const w = $("obrazek").naturalWidth || 1;
+            const h = $("obrazek").naturalHeight || 1;
+            const r = $("obrazek").getBoundingClientRect();
+            // poloha ukazatele vůči STŘEDU obdélníku, v bodech plánu
+            const px = ((e.clientX - r.left) / r.width - tahTvaru.x) * w;
+            const py = ((e.clientY - r.top) / r.height - tahTvaru.y) * h;
+            if (tahTvaru.druh === "otoc") {
+                /* Úchyt sedí v pravém horním rohu, takže se od úhlu odečítá
+                   směr k tomu rohu – jinak by obdélník při chycení poskočil
+                   o půl úhlopříčky. */
+                const roh = Math.atan2(-(tahTvaru.h * h) / 2, (tahTvaru.w * w) / 2);
+                let uhel = (Math.atan2(py, px) - roh) * 180 / Math.PI;
+                if (e.shiftKey) uhel = Math.round(uhel / 15) * 15;
+                tahTvaru.uhel = Math.round(uhel * 10) / 10;
+                tahTvaru.el.style.transform = "rotate(" + tahTvaru.uhel + "deg)";
+            } else {
+                // rozměr se měří v soustavě otočeného obdélníku, ne obrazovky
+                const a = -(tahTvaru.uhel * Math.PI) / 180;
+                const lx = px * Math.cos(a) - py * Math.sin(a);
+                const ly = px * Math.sin(a) + py * Math.cos(a);
+                tahTvaru.w = Math.min(1, Math.max(4 / w, Math.abs(lx) * 2 / w));
+                tahTvaru.h = Math.min(1, Math.max(4 / h, Math.abs(ly) * 2 / h));
+                const sirka = tahTvaru.w * w, vyska = tahTvaru.h * h;
+                tahTvaru.el.style.width = sirka + "px";
+                tahTvaru.el.style.height = vyska + "px";
+                tahTvaru.el.style.margin = (-vyska / 2) + "px 0 0 " + (-sirka / 2) + "px";
+            }
+            return;
+        }
         if (ukazatele.size === 2) {
             /* pinch: zoom ke STŘEDU prstů (dřív k levému hornímu rohu plánu)
                a zároveň posun, když prsty jedou spolu */
@@ -856,6 +1140,21 @@
             } else {
                 tahnu = { pinch: ted, zoom: zoom, sx: sx, sy: sy };
             }
+            return;
+        }
+        if (kresba) {
+            const r = $("obrazek").getBoundingClientRect();
+            const x1 = (e.clientX - r.left) / zoom, y1 = (e.clientY - r.top) / zoom;
+            if (!kresba.el) {
+                kresba.el = document.createElement("div");
+                kresba.el.className = "novyobd";
+                $("vrstva").appendChild(kresba.el);
+            }
+            kresba.x1 = x1; kresba.y1 = y1;
+            kresba.el.style.left = Math.min(kresba.x0, x1) + "px";
+            kresba.el.style.top = Math.min(kresba.y0, y1) + "px";
+            kresba.el.style.width = Math.abs(x1 - kresba.x0) + "px";
+            kresba.el.style.height = Math.abs(y1 - kresba.y0) + "px";
             return;
         }
         if (obdelnik) {
@@ -883,6 +1182,20 @@
     const konecTahu = (e) => {
         ukazatele.delete(e.pointerId);
         if (dlouhyStisk) { clearTimeout(dlouhyStisk); dlouhyStisk = null; }
+        if (tahTvaru) {
+            const t = tahTvaru;
+            tahTvaru = null;
+            tahnu = null;
+            poTahu = true;
+            setTimeout(() => { poTahu = false; }, 250);
+            const z = (window.KB.znackyPlanu || []).find(x => x.id === t.id);
+            if (z) {
+                window.KB.ulozZnacku(otevreny, t.id, Object.assign({}, z,
+                    { uhel: t.uhel, w: t.w, h: t.h }))
+                    .catch(() => window.KBUI.toast("Změna obdélníku se neuložila.", "error"));
+            }
+            return;
+        }
         if (tahZnacky) {
             const t = tahZnacky;
             tahZnacky = null;
@@ -898,6 +1211,17 @@
             return;
         }
         tahnu = null;
+        if (kresba) {
+            const k = kresba;
+            kresba = null;
+            if (k.el) {
+                k.el.remove();
+                poTahu = true;
+                setTimeout(() => { poTahu = false; }, 250);
+            }
+            zalozObdelnik(k);
+            return;
+        }
         if (obdelnik) {
             if (obdelnik.el) {
                 obdelnik.el.remove();
@@ -957,6 +1281,8 @@
                 }
                 aktivniZnacka = "";
                 await window.KB.smazZnacku(otevreny, z.id);
+            } else if (akce === "kopie") {
+                kopirujVybrane([z]);
             } else if (akce === "barva") {
                 await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z,
                     { stav: ((Number(z.stav) || 0) + 1) % paleta().length }));
@@ -1015,10 +1341,67 @@
         const x = (e.clientX - r.left) / r.width;
         const y = (e.clientY - r.top) / r.height;
         if (x < 0 || x > 1 || y < 0 || y > 1) return;
-        await window.KB.ulozZnacku(otevreny,
-            "zn_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-            { x: x, y: y, stav: nova.stav, vel: nova.vel, text: nova.text });
+        await window.KB.ulozZnacku(otevreny, novyId(),
+            { x: x, y: y, stav: nova.stav, vel: nova.vel, text: nova.text, pruh: nova.pruh });
     });
+
+    /* ------------------------------------------------------ obdélník ----
+       Nakreslí se tažením přes místnost. Kdo jen ťukne (nebo na dotyku
+       nestihne táhnout), dostane obdélník výchozí velikosti kolem toho
+       místa – zvětší si ho pak úchytem. */
+    async function zalozObdelnik(k) {
+        if (!otevreny) return;
+        const w = $("obrazek").naturalWidth || 1;
+        const h = $("obrazek").naturalHeight || 1;
+        const male = k.x1 === undefined ||
+            Math.abs(k.x1 - k.x0) < 6 || Math.abs(k.y1 - k.y0) < 6;
+        const x = (male ? k.x0 : (k.x0 + k.x1) / 2) / w;
+        const y = (male ? k.y0 : (k.y0 + k.y1) / 2) / h;
+        if (x < 0 || x > 1 || y < 0 || y > 1) return;
+        const id = novyId();
+        await window.KB.ulozZnacku(otevreny, id, {
+            tvar: "obdelnik", x: x, y: y,
+            w: male ? VYCHOZI_TVAR.w : Math.abs(k.x1 - k.x0) / w,
+            h: male ? VYCHOZI_TVAR.h : Math.abs(k.y1 - k.y0) / h,
+            uhel: 0, stav: nova.stav, pruh: nova.pruh, text: nova.text
+        });
+        // rovnou aktivní, ať jsou po ruce úchyty na otočení a rozměr
+        aktivniZnacka = id;
+        vykresliZnacky();
+    }
+
+    /* KOPIE – ⧉ na obdélníku, klávesa C nebo Ctrl+C. Kopie sedne kousek
+       vedle originálu (jinak by se schovala přesně pod ním) a rovnou se
+       vybere, takže se dá hned odtáhnout na místo. Autorem kopie je ten,
+       kdo kopíruje, ne autor originálu. */
+    async function kopirujVybrane(rovnou) {
+        if (!otevreny) return;
+        const vse = rovnou || (vybraneAktivni().length
+            ? vybraneAktivni()
+            : (window.KB.znackyPlanu || []).filter(z => z.id === aktivniZnacka));
+        if (!vse.length) {
+            return window.KBUI.toast("Není co kopírovat – nejdřív značku vyber.", "warn");
+        }
+        const nove = [];
+        for (const z of vse) {
+            const kopie = Object.assign({}, z, {
+                x: Math.min(1, (Number(z.x) || 0) + (Number(z.w) ? Number(z.w) / 3 : 0.015)),
+                y: Math.min(1, (Number(z.y) || 0) + (Number(z.h) ? Number(z.h) / 3 : 0.015))
+            });
+            // id, autor a čas si kopie pořídí vlastní
+            delete kopie.id; delete kopie.uid; delete kopie.kdo; delete kopie.ms;
+            const id = novyId();
+            await window.KB.ulozZnacku(otevreny, id, kopie);
+            nove.push(id);
+        }
+        vybrane.clear();
+        nove.forEach(id => vybrane.add(id));
+        aktivniZnacka = nove.length === 1 ? nove[0] : "";
+        vykresliZnacky();
+        window.KBUI.toast(nove.length === 1
+            ? "Kopie hotová – přetáhni ji na místo."
+            : "Zkopírováno " + nove.length + " značek.");
+    }
 
     /* ------------------------------------------------ hromadný výběr ---- */
 
@@ -1058,10 +1441,45 @@
         const cile = vybraneAktivni();
         if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
         for (const z of cile) {
+            if (z.tvar === "obdelnik") {
+                // obdélník nemá řadu velikostí – roste a klesá o pětinu
+                const k = smer > 0 ? 1.2 : 1 / 1.2;
+                await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, {
+                    w: Math.min(1, Math.max(0.004, (Number(z.w) || VYCHOZI_TVAR.w) * k)),
+                    h: Math.min(1, Math.max(0.004, (Number(z.h) || VYCHOZI_TVAR.h) * k))
+                }));
+                continue;
+            }
             const ted = VELIKOSTI.reduce((n, v, i) =>
                 Math.abs(v - (Number(z.vel) || 26)) < Math.abs(VELIKOSTI[n] - (Number(z.vel) || 26)) ? i : n, 0);
             const nove = VELIKOSTI[Math.min(VELIKOSTI.length - 1, Math.max(0, ted + smer))];
             await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { vel: nove }));
+        }
+    }
+
+    /* Velikost číslem – dřív šla měnit jen o krok nahoru a dolů po pevné
+       řadě, takže se nedala trefit konkrétní hodnota (Michal 2. 9. 2026).
+       Průměr je v bodech plánu, ne na obrazovce: se značkou se přibližuje. */
+    async function nastavVelikost(px) {
+        const cile = vybraneAktivni();
+        if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
+        const kolecka = cile.filter(z => z.tvar !== "obdelnik");
+        if (!kolecka.length) {
+            return window.KBUI.toast("Číslo platí pro kolečka – obdélník" +
+                " změníš úchytem ⤡ nebo tlačítky − a +.", "warn");
+        }
+        for (const z of kolecka) {
+            await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { vel: px }));
+        }
+        window.KBUI.toast("Velikost " + px + " nastavena u " +
+            kolecka.length + (kolecka.length < cile.length ? " koleček (obdélníky beze změny)." : " značek."));
+    }
+
+    async function nastavPruhlednost(a) {
+        const cile = vybraneAktivni();
+        if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
+        for (const z of cile) {
+            await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { pruh: a }));
         }
     }
 
@@ -1085,6 +1503,15 @@
         if (!znacka || !otevreny) return;
         const z = (window.KB.znackyPlanu || []).find(x => x.id === znacka.dataset.znacka);
         if (!z) return;
+        /* U obdélníku je popisek to hlavní – kreslí se přes místnost právě
+           proto, aby se dala pojmenovat. Do kolečka se vejdou tři znaky,
+           tam dvojklik dál píše poznámku. */
+        if (z.tvar === "obdelnik") {
+            const text = prompt("Popisek obdélníku (např. 3S01 – Injekce zebrafish):", z.text || "");
+            if (text === null) return;
+            await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { text: text }));
+            return;
+        }
         const pozn = prompt("Poznámka ke značce (prázdná poznámku smaže):", z.pozn || "");
         if (pozn === null) return;
         await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { pozn: pozn }));
@@ -1141,10 +1568,25 @@
             document.querySelectorAll("#rezimy button").forEach(x =>
                 x.classList.toggle("je-aktivni", x === b));
             $("plocha").className = "prohl__plocha" +
-                (rezim === "znacka" ? " prohl__plocha--znacka" :
+                (rezim === "znacka" || rezim === "obdelnik" ? " prohl__plocha--znacka" :
                  rezim === "stav" ? " prohl__plocha--stav" :
                  rezim === "vyber" ? " prohl__plocha--vyber" : "");
-            $("nastrojeZnacky").hidden = rezim !== "znacka";
+            $("nastrojeZnacky").hidden = rezim !== "znacka" && rezim !== "obdelnik";
+            // velikost kolečka u obdélníku nedává smysl – ten se táhne
+            $("volbaVel").hidden = rezim !== "znacka";
+            /* Text znamená v každém režimu něco jiného: do kolečka se
+               vejdou tři znaky, do obdélníku patří název místnosti.
+               Rozepsaný text se proto při přepnutí zahodí, ať se z „ZS"
+               nestane popisek místnosti. */
+            const dlouhy = rezim === "obdelnik";
+            $("volbaText").maxLength = dlouhy ? 40 : 3;
+            $("volbaText").classList.toggle("nastroje__text--dlouhy", dlouhy);
+            $("volbaText").placeholder = dlouhy ? "popisek místnosti" : "text";
+            $("volbaText").title = dlouhy
+                ? "Popisek do obdélníku (např. 3S01 – Injekce zebrafish)"
+                : "Až 3 znaky do kolečka (např. ZS, 12)";
+            $("volbaText").value = "";
+            nova.text = "";
             if (rezim !== "vyber") { vybrane.clear(); }
             vykresliZnacky();
         });
@@ -1161,11 +1603,41 @@
             const b = e.target.closest("[data-vel]");
             if (!b) return;
             nova.vel = Number(b.dataset.vel);
+            $("volbaVelC").value = nova.vel;
             document.querySelectorAll("#volbaVel button").forEach(x =>
                 x.classList.toggle("je-aktivni", x === b));
         });
+        // velikost číslem: S/M/L jsou jen zkratky k témuž číslu
+        $("volbaVelC").addEventListener("input", () => {
+            const v = Math.min(200, Math.max(4, Number($("volbaVelC").value) || 0));
+            if (!v) return;
+            nova.vel = v;
+            document.querySelectorAll("#volbaVel button").forEach(x =>
+                x.classList.toggle("je-aktivni", Number(x.dataset.vel) === v));
+        });
+        $("volbaPruh").addEventListener("change", () => {
+            nova.pruh = Number($("volbaPruh").value);
+        });
         $("volbaText").addEventListener("input", () => {
-            nova.text = $("volbaText").value.trim().toUpperCase().slice(0, 3);
+            nova.text = rezim === "obdelnik"
+                ? $("volbaText").value.slice(0, 40)
+                : $("volbaText").value.trim().toUpperCase().slice(0, 3);
+        });
+
+        /* ----------------------------------------------- co je vidět --- */
+        $("zobrazeni").addEventListener("click", (e) => {
+            const b = e.target.closest("[data-zobr]");
+            if (!b) return;
+            if (b.dataset.zobr === "text") zobrazText = !zobrazText;
+            else zobrazPruh = !zobrazPruh;
+            b.classList.toggle("je-aktivni",
+                b.dataset.zobr === "text" ? zobrazText : zobrazPruh);
+            ulozZobrazeni();
+            vykresliZnacky();
+        });
+        $("filtrKdo").addEventListener("change", () => {
+            filtrKdo = $("filtrKdo").value;
+            vykresliZnacky();
         });
 
         // akce nad výběrem: hromadná změna barvy kliknutím na kolečko
@@ -1182,20 +1654,45 @@
         $("vyberTextZapis").addEventListener("click", async () => {
             const cile = vybraneAktivni();
             if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
-            const text = $("vyberText").value.trim().toUpperCase().slice(0, 3);
+            const psane = $("vyberText").value.trim();
             for (const z of cile) {
+                // do kolečka se vejdou tři znaky, obdélník unese celý popisek
+                const text = z.tvar === "obdelnik"
+                    ? psane.slice(0, 40) : psane.toUpperCase().slice(0, 3);
                 await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { text: text }));
             }
-            window.KBUI.toast(text ? "Text zapsán do " + cile.length + " značek."
-                                   : "Text smazán z " + cile.length + " značek.");
+            window.KBUI.toast(psane ? "Text zapsán do " + cile.length + " značek."
+                                    : "Text smazán z " + cile.length + " značek.");
         });
         $("vyberMensi").addEventListener("click", () => zmenVelikost(-1));
         $("vyberVetsi").addEventListener("click", () => zmenVelikost(1));
+        $("vyberVelZapis").addEventListener("click", () => {
+            const v = Math.min(200, Math.max(4, Number($("vyberVel").value) || 0));
+            if (!v) return window.KBUI.toast("Napiš velikost, třeba 18.", "warn");
+            nastavVelikost(v);
+        });
+        $("vyberPruh").addEventListener("change", () => {
+            const a = $("vyberPruh").value;
+            if (a === "") return;
+            nastavPruhlednost(Number(a));
+            $("vyberPruh").value = "";     // zpátky na „beze změny"
+        });
         $("vyberSmazat").addEventListener("click", smazVybrane);
         $("vyberZrusit").addEventListener("click", () => { vybrane.clear(); vykresliZnacky(); });
         $("btnZavritProhl").addEventListener("click", zavri);
         document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && otevreny) zavri();
+            if (e.key === "Escape" && otevreny) return void zavri();
+            if (!otevreny) return;
+            // psaní do políčka nesmí zakládat kopie
+            if (e.target && e.target.closest && e.target.closest("input, textarea, select")) return;
+            if (e.key === "c" || e.key === "C") {
+                /* Kopie na „C" i na Ctrl+C (Michal 2. 9. 2026). Když není
+                   co kopírovat, klávesa zůstane prohlížeči – ať Ctrl+C dál
+                   kopíruje označený text. */
+                if (!vybrane.size && !aktivniZnacka) return;
+                e.preventDefault();
+                kopirujVybrane();
+            }
         });
         $("btnZoomPlus").addEventListener("click", () => { zoom = Math.min(6, zoom * 1.25); poloz(); });
         $("btnZoomMin").addEventListener("click", () => { zoom = Math.max(minZoom, zoom / 1.25); poloz(); });
@@ -1294,7 +1791,7 @@
             // změna palety se musí propsat do otevřeného prohlížeče
             if (otevreny) { naplnPaletovePrvky(); vykresliZnacky(); }
         });
-        window.KB.on("znacky", vykresliZnacky);
+        window.KB.on("znacky", () => { naplnFiltrKdo(); vykresliZnacky(); });
         document.addEventListener("kb-role", () => { window.KB.watchPlany(); vykresliSeznam(); });
         window.KB.watchPlany();
         vykresliSeznam();

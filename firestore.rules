@@ -252,6 +252,15 @@ service cloud.firestore {
       allow delete:         if spravce();
     }
 
+    /* Vlastní značku ale smaže i ten, kdo ji nakreslil. Tlačítko × mu ji
+       nabízí („cizí značku smaže jen manažer"), jenže pravidlo výš mazání
+       zakazovalo úplně všem kromě manažerů – vlastní omyl si tak nikdo
+       uklidit nemohl (našlo se 2. 9. 2026, když k značkám přibyly
+       obdélníky). Pravidla se sčítají, takže tenhle match jen přidává. */
+    match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/znacky/{zid} {
+      allow delete: if clen() && resource.data.get('uid', '') == request.auth.uid;
+    }
+
     // --- postup dne (denní screenshoty práce) -----------------------------
     //
     //   private/postup/zaznamy/{uid_datum}            { uid, osoba, datum, text }

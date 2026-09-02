@@ -2888,7 +2888,8 @@ KB.smazPostupObrazek = async (zaznamId, imgId) => {
      private/plany/soubory/{id}              { nazev, slozka, sirka, vyska,
                                                kousku, ms, kdo }
      private/plany/soubory/{id}/kousky/{n}   { data }   (base64, ~0,7 MB)
-     private/plany/soubory/{id}/znacky/{zid} { x, y, stav, pozn, kdo, ms } */
+     private/plany/soubory/{id}/znacky/{zid}
+       { x, y, tvar, w, h, uhel, stav, vel, pruh, text, pozn, kdo, uid, ms } */
 
 const planySlozkyCol = () => collection(db, "artifacts", APP_ID, "private", "plany", "slozky");
 const planySlozkaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "plany", "slozky", id);
@@ -3053,12 +3054,27 @@ KB.watchZnacky = async (planId) => {
 KB.ulozZnacku = async (planId, zid, data) => {
     if (authReady) await authReady;
     requireDb();
+    /* Dva tvary: kolečko (bod) a obdélník (plocha přes místnost). Obdélník
+       má navíc rozměry v poměru k plánu a otočení ve stupních; ostatní pole
+       jsou společná, takže výběr, barvy i mazání fungují na obojí. */
+    const tvar = data.tvar === "obdelnik" ? "obdelnik" : "";
     await setDoc(planZnacka(planId, zid), {
         x: Number(data.x) || 0,
         y: Number(data.y) || 0,
+        tvar: tvar,
+        w: tvar ? Math.min(1, Math.max(0.002, Number(data.w) || 0.08)) : 0,
+        h: tvar ? Math.min(1, Math.max(0.002, Number(data.h) || 0.05)) : 0,
+        uhel: tvar ? (Number(data.uhel) || 0) : 0,
         stav: Number(data.stav) || 0,
         vel: Number(data.vel) || 26,
-        text: String(data.text || "").slice(0, 3).toUpperCase(),
+        /* Průhlednost barvy 0–1. Chybějící pole = plná barva, ať se starým
+           značkám nic nezmění. */
+        pruh: data.pruh === undefined ? 1 : Math.min(1, Math.max(0.05, Number(data.pruh) || 1)),
+        /* Do kolečka se vejdou tři znaky. Obdélník označuje místnost a
+           „3S01 – Injekce zebrafish" je potřeba přečíst celé. */
+        text: tvar
+            ? String(data.text || "").slice(0, 40)
+            : String(data.text || "").slice(0, 3).toUpperCase(),
         pozn: String(data.pozn || "").slice(0, 200),
         kdo: data.kdo || window.KB_USER || "",
         uid: data.uid || KB.currentUid(),
