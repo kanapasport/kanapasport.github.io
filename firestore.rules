@@ -53,6 +53,22 @@ service cloud.firestore {
       return clen() && role() == 'hlavni-spravce';
     }
 
+    /* TYP SPOLUPRÁCE. Stejné odvození jako na webu (UI.typUvazku): kdo ho
+       nemá vyplněný, je student podle role, jinak zaměstnanec. */
+    function typSpoluprace() {
+      return get(zaznam()).data.get('typ', '') != ''
+        ? get(zaznam()).data.get('typ', '')
+        : (role() == 'student' ? 'student' : 'zamestnanec');
+    }
+
+    /* Kdo si práci fakturuje sám. Zaměstnanec má domluvenou měsíční
+       výplatu a hodinovka mu nic neříká; OSVČ a student na dohodu si
+       podle odpracovaných hodin píšou fakturu, takže musí vidět, kolik
+       jim za ně vychází (Michal 2. 9. 2026). */
+    function fakturujeSi() {
+      return clen() && typSpoluprace() in ['osvc', 'student'];
+    }
+
     match /artifacts/firemni-kb-app/public/data/{document=**} {
       // číst smí každý, kdo je v seznamu lidí
       allow read: if clen();
@@ -112,9 +128,14 @@ service cloud.firestore {
                        && resource.data.datum >= uzaverkaOd());
     }
 
-    // částky nikdy nikomu jinému než správci
+    /* Částky vidí manažer u všech. OSVČ a student navíc SVOJE – bez toho
+       nemají z čeho vystavit fakturu (Michal 2. 9. 2026). Zapisovat je smí
+       pořád jen manažer: sazba je jeho rozhodnutí, ne přání toho, komu se
+       platí. Zaměstnanci zůstávají částky zavřené jako dřív. */
     match /artifacts/firemni-kb-app/private/vykazy/castky/{id} {
-      allow read, write: if spravce();
+      allow read:  if spravce() || (fakturujeSi()
+                      && resource.data.uid == request.auth.uid);
+      allow write: if spravce();
     }
 
     // --- projekty (dřív „zakázky") --------------------------------------

@@ -270,6 +270,7 @@ const zrusVykazy = () => {
     vykazyOdbery.forEach(stop => { try { stop(); } catch (e) {} });
     vykazyOdbery = [];
     vykazyRezim = "";
+    mojeCastkyOdber = null;
     starsiZaznamy = [];
     starsiCastky = {};
 };
@@ -416,6 +417,9 @@ try {
                 tabuleVse = true;
                 sledujTabuli("vse", tabuleCol());
             }
+            /* Teprve teď je jasné, jestli si člověk fakturuje sám – když
+               ano a výkazy už poslouchá, přidají se k nim i jeho částky. */
+            sledujMojeCastky();
         }, (err) => console.error("Chyba čtení uživatelů:", err)));
 
         /* Milníky leží v jednom dokumentu jako pole. Je jich pár desítek
@@ -1668,8 +1672,14 @@ KB.nactiVykazyRozsah = async (od, doKdy) => {
     const znam = new Set(starsiZaznamy.map(z => z.id));
     nove.forEach(z => { if (!znam.has(z.id)) starsiZaznamy.push(z); });
 
+    /* Peníze k dotaženému období: manažerovi všechny, tomu, kdo si
+       fakturuje sám, jeho vlastní. Zaměstnanci žádné. */
     if (!jenSve) {
         const snapC = await getDocs(query(castkyCol(), ...meze));
+        snapC.forEach(d => { starsiCastky[d.id] = d.data(); });
+    } else if (KB.fakturujeSi()) {
+        const snapC = await getDocs(query(castkyCol(),
+            where("uid", "==", auth.currentUser.uid), ...meze));
         snapC.forEach(d => { starsiCastky[d.id] = d.data(); });
     }
     spojVykazy();
@@ -1689,6 +1699,42 @@ function oknoOd() {
     d.setDate(1);
     d.setMonth(d.getMonth() - (OKNO_MESICU - 1));
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+}
+
+/* ------------------------------------- vlastní částky OSVČ a studentů ----
+   Zaměstnanec má domluvenou měsíční výplatu a hodinovka mu nic neříká.
+   OSVČ a student na dohodu si podle odpracovaných hodin píšou fakturu –
+   bez částek by ji neměli z čeho vystavit (Michal 2. 9. 2026). Dostanou
+   proto SVOJI část kolekce `castky`; cizí jim pravidla nepustí.
+
+   Typ spolupráce se pozná až ze seznamu lidí, a ten chodí vlastním
+   odběrem. Nasazení se proto zkouší z obou stran – odsud i z odběru lidí –
+   a `mojeCastkyOdber` hlídá, že se nasadí nejvýš jednou. */
+let mojeCastkyOdber = null;
+
+/** Typ spolupráce přihlášeného. Stejné odvození jako UI.typUvazku. */
+KB.mujTyp = () => {
+    const uid = (auth && auth.currentUser) ? auth.currentUser.uid : "";
+    const ja = uid ? (KB.users || []).find(u => u.id === uid) : null;
+    if (!ja) return "";
+    return ja.typ || (ja.role === "student" ? "student" : "zamestnanec");
+};
+
+/** Fakturuje si člověk práci sám? Pak u svého výkazu vidí i peníze. */
+KB.fakturujeSi = () => ["osvc", "student"].indexOf(KB.mujTyp()) !== -1;
+
+function sledujMojeCastky() {
+    if (mojeCastkyOdber || vykazyRezim !== "moje") return;
+    if (!db || !auth || !auth.currentUser) return;
+    if (!(KB.users || []).length || !KB.fakturujeSi()) return;
+
+    mojeCastkyOdber = onSnapshot(
+        query(castkyCol(), where("uid", "==", auth.currentUser.uid)), (snapshot) => {
+            syroveCastky = {};
+            snapshot.forEach(d => { syroveCastky[d.id] = d.data(); });
+            spojVykazy();
+        }, (err) => console.error("Chyba čtení vlastních částek:", err));
+    vykazyOdbery.push(mojeCastkyOdber);
 }
 
 function sledujVykazy(jenSve) {
@@ -1716,7 +1762,12 @@ function sledujVykazy(jenSve) {
         emit("vykazy-chyba", err);
     }));
 
-    if (jenSve) return;      // částky ani sazby zaměstnanci nepatří
+    if (jenSve) {
+        /* Zaměstnanci částky ani sazby nepatří. OSVČ a student si ale práci
+           fakturují sami, takže svoje peníze vidět musí – viz níž. */
+        sledujMojeCastky();
+        return;
+    }
 
     vykazyOdbery.push(onSnapshot(
         query(castkyCol(), where("datum", ">=", KB.vykazyOknoOd)), (snapshot) => {

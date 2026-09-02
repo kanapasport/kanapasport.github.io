@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=195">
+    <link rel="stylesheet" href="assets/css/app.css?v=196">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=195"></script>
-<script src="assets/js/ui.js?v=195"></script>
-<script src="assets/js/vykazy.js?v=195"></script>
-<script type="module" src="assets/js/store.js?v=195"></script>
+<script src="assets/js/taxonomy.js?v=196"></script>
+<script src="assets/js/ui.js?v=196"></script>
+<script src="assets/js/vykazy.js?v=196"></script>
+<script type="module" src="assets/js/store.js?v=196"></script>
 
 <script>
 (function () {
@@ -355,6 +355,17 @@
     const REZIE = [ADMINISTRATIVA, PORADA, WEB_PRACE];
     const REZIE_FIRMA = "Pasport Kaňa s.r.o.";
     const jeRezie = (nazev) => REZIE.indexOf(nazev) !== -1;
+
+    /* KDO VIDÍ PENÍZE. Manažer (`vykaz.view`) u všech. Kdo si práci
+       fakturuje sám – OSVČ a student na dohodu – u SVÉHO výkazu taky:
+       podle odpracovaných hodin píše fakturu a musí vědět, kolik mu za ně
+       vychází (Michal 2. 9. 2026). Zaměstnanec má domluvenou měsíční
+       výplatu, hodinovka mu nic neříká a nikde se mu neukazuje.
+       Skutečnou hranicí jsou pravidla databáze: částky se čtou z vedlejší
+       kolekce a ta pustí cizí jen manažerovi. */
+    const menimSazbu = () => window.KBUI.can("vykaz.view");
+    const vidimPenize = () => menimSazbu() ||
+        !!(window.KB.fakturujeSi && window.KB.fakturujeSi());
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
 
@@ -894,6 +905,13 @@
         // absence poznáme u okna úpravy rovnou z dat – blok dne řeší třídu sám
         const absentni = o.sZakazkou && jeAbsence(d.zakazka || "");
         const rezijni = o.sZakazkou && jeRezie(d.zakazka || "");
+
+        /* Sazba a částka v ZÁPISU DNE dávají smysl jen manažerovi – jen on
+           sazbu zná a nastavuje. OSVČ a studentovi se ukážou až v OKNĚ
+           ÚPRAVY (`o.sZakazkou`), kde je částka spočítaná a uložená; při
+           psaní nového dne by jim formulář sliboval 0 Kč. */
+        const sazbuMenim = menimSazbu();
+        const sazbuVidim = sazbuMenim || (vidimPenize() && !!o.sZakazkou);
         return '<div class="polozka' + (absentni ? " polozka--absence" : "") +
             (rezijni ? " polozka--rezie" : "") + '" data-polozka>' +
             '<div class="polozka__head">' +
@@ -958,16 +976,23 @@
                 /* Sazba je i manažerovi schovaná za „⋯ zobrazit" – na obrazovce
                    při zapisování často někdo stojí za zády. Hodnota jede ve
                    skrytém poli, ať ji ctiPolozku přečte jako dřív. */
-                (window.KBUI.can("vykaz.view")
+                (sazbuVidim
                     ? '<div><label class="label">Sazba (Kč/h)</label>' +
                           '<span class="field tajne" style="display:flex;align-items:center;gap:8px">' +
                               /* Po odkrytí jde přepsat – u cizího zápisu nešla
                                  sazba opravit vůbec, pole bylo skryté
                                  (Michal 2. 9. 2026). Prázdné = platí sazba
-                                 podle nastavení a projektu. */
+                                 podle nastavení a projektu.
+                                 OSVČ a student ji vidí, ale nepřepíšou:
+                                 kolik se za hodinu platí, je rozhodnutí
+                                 manažera. Hodnota přitom musí v poli být,
+                                 ať se z ní dopočítá částka pod záznamem. */
                               '<input type="number" class="sazbapole" data-f="sazba" min="0"' +
-                                  ' step="10" hidden title="Prázdné = sazba podle Nastavení' +
-                                  ' a projektu" value="' + (d.sazba ? Number(d.sazba) : "") + '">' +
+                                  ' step="10" hidden' + (sazbuMenim ? "" : ' readonly tabindex="-1"') +
+                                  ' title="' + (sazbuMenim
+                                      ? "Prázdné = sazba podle Nastavení a projektu"
+                                      : "Sazbu nastavuje manažer") + '"' +
+                                  ' value="' + (d.sazba ? Number(d.sazba) : "") + '">' +
                               '<span data-sazba-tecky>⋯</span>' +
                               '<button type="button" class="linkbtn" data-sazba-ukaz ' +
                                   'style="margin-left:auto">zobrazit</button>' +
@@ -998,7 +1023,8 @@
 
             '<div class="polozka__vysledek">' +
                 '<span class="polozka__hod" data-vysledek-hod>0 h</span>' +
-                '<span class="polozka__kc" data-vysledek-kc>0 Kč</span>' +
+                '<span class="polozka__kc" data-vysledek-kc' +
+                    (sazbuVidim ? "" : " hidden") + ">0 Kč</span>" +
                 '<span class="polozka__rozpis" data-vysledek-rozpis hidden></span>' +
                 '<span class="polozka__varovani" data-vysledek-pozn hidden></span>' +
             "</div>" +
@@ -1277,7 +1303,8 @@
             castka += h * (jeAbsence(p.zakazka) ? 0 : p.sazba);
         });
         $("denSoucet").innerHTML = hodiny
-            ? "Celkem: <b>" + V.hod(hodiny) + "</b> · <b>" + V.kc(castka) + "</b>"
+            ? "Celkem: <b>" + V.hod(hodiny) + "</b>" +
+                (menimSazbu() ? " · <b>" + V.kc(castka) + "</b>" : "")
             : "";
     }
 
@@ -1455,6 +1482,27 @@
         return p;
     }
 
+    /**
+     * Režie (Administrativa, Porada, Web) se nevykazuje na zakázku, takže
+     * u ní nedává smysl úkol, budova, patro, technologie ani druh
+     * vypracování – formulář je schovává. Schované pole si ale drží
+     * hodnotu z dřívějšího výběru: uložila by se do zápisu a druh
+     * vypracování navíc BLOKOVAL uložení hláškou „vyber druh vypracování",
+     * kterou nešlo splnit, protože roletka není vidět (Michal 2. 9. 2026).
+     */
+    function srovnejRezii(p) {
+        p.rezie = jeRezie(p.zakazka);
+        if (!p.rezie) return p;
+        p.cinnost = ""; p.technologie = ""; p.ukolId = "";
+        p.budova = ""; p.patro = "";
+        p.firma = p.firma || REZIE_FIRMA;
+        p.nazev = p.nazev || p.zakazka;
+        return p;
+    }
+
+    /** Srovná zápis do podoby, ve které se ukládá – absence i režie. */
+    const srovnejZapis = (p) => srovnejRezii(srovnejAbsenci(p));
+
     /** Dny od–do včetně, ale jen pracovní: týden dovolené je pět dnů, ne sedm. */
     function pracovniDny(odIso, doIso) {
         const dny = [];
@@ -1618,7 +1666,7 @@
         const uid = $("dOsoba").value;
         if (!uid) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
 
-        const polozky = prectiRadky().map(srovnejAbsenci);
+        const polozky = prectiRadky().map(srovnejZapis);
         /* Popis práce je NEPOVINNÝ (19. 8.) – povinný je druh vypracování
            a tam, kde projekt úkoly má, i úkol: zápis se váže k úkolu. */
         const chybny = polozky.find(p =>
@@ -1631,12 +1679,12 @@
         const pozdni = !window.KBUI.can("vykaz.view") && !mamZpetnePovoleni() &&
             polozky.find(p => poLhute(p.datum) && !bezUzaverky(p.zakazka));
         if (pozdni) return otevriLhutu(pozdni.datum);
-        const bezDruhu = polozky.find(p => !p.absence && !p.cinnost);
+        const bezDruhu = polozky.find(p => !p.absence && !p.rezie && !p.cinnost);
         if (bezDruhu) {
             return window.KBUI.toast(bezDruhu._popis +
                 ": vyber druh vypracování.", "warn");
         }
-        const bezUkolu = polozky.find(p => !p.absence && !p.ukolId &&
+        const bezUkolu = polozky.find(p => !p.absence && !p.rezie && !p.ukolId &&
             mojeUkolyProjektu(p.zakazka).length);
         if (bezUkolu) {
             return window.KBUI.toast(bezUkolu._popis +
@@ -1840,6 +1888,8 @@
            Není to jen schované tlačítko – databáze mu cizí zápisy ani sazby
            nevydá (firestore.rules). */
         const spravce = window.KBUI.can("vykaz.view");
+        // manažer vidí peníze u všech, OSVČ a student u svého výkazu
+        const penize = vidimPenize();
         $("fOsoba").hidden = !spravce;
         $("btnCsv").hidden = !spravce;
         $("dOsobaBox").hidden = !spravce;
@@ -1883,10 +1933,13 @@
            smysl jen u výběru přes víc lidí – u vlastního výkazu je to matoucí. */
         const vicLidi = spravce && !filtr.uid;
 
+        /* Průměrná sazba a fakturováno místo najetých kilometrů: kdo si píše
+           fakturu, potřebuje vidět peníze, ne kilometry (Michal 2. 9. 2026).
+           Zaměstnanci zůstávají kilometry – peníze mu neříkají nic. */
         $("souhrn").innerHTML =
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
             V.dlazdice("Odpracovaných dní", V.cislo(s.dny), vicLidi ? "napříč lidmi" : "") +
-            (spravce
+            (penize
                 ? penizeDlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
                   penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
                 : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady"));
@@ -1909,8 +1962,10 @@
             dny.get(z.datum).push(z);
         });
 
-        // sloupce s penězi vidí jen správce – zaměstnanci se úplně vynechají
-        const sloupcu = spravce ? 11 : 8;
+        /* Sloupce s penězi se tomu, kdo je nemá vidět, úplně vynechají –
+           neschovávají se, aby v HTML vůbec nebyly. Kdo je vidí, má o dva
+           sloupce víc; manažer navíc sloupec „Kdo". */
+        const sloupcu = 8 + (spravce ? 1 : 0) + (penize ? 2 : 0);
 
         $("tabulka").innerHTML =
             "<thead><tr>" +
@@ -1918,7 +1973,7 @@
                 "<th>Úkol</th><th>Projekt</th><th>Firma</th>" +
                 "<th>Druh</th><th>Tech.</th><th>Čas</th>" +
                 '<th class="vyk__num">Hodin</th>' +
-                (spravce ? '<th class="vyk__num">Sazba</th><th class="vyk__num">Částka</th>' : "") +
+                (penize ? '<th class="vyk__num">Sazba</th><th class="vyk__num">Částka</th>' : "") +
                 "<th></th>" +
             "</tr></thead><tbody>" +
             Array.from(dny.entries()).map(([datum, radky]) => {
@@ -1926,7 +1981,7 @@
                 return '<tr class="vyk__den"><td colspan="' + sloupcu + '">' +
                         "<b>" + esc(V.czDatum(datum)) + "</b>" +
                         "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
-                            (spravce ? " · <span class=\"tajne\">" + V.kc(den.castka) + "</span><span class=\"tajne__zastup\">•••</span>" : "") + "</span>" +
+                            (penize ? " · <span class=\"tajne\">" + V.kc(den.castka) + "</span><span class=\"tajne__zastup\">•••</span>" : "") + "</span>" +
                     "</td></tr>" + radky.map(radek).join("");
             }).join("") +
             "</tbody>";
@@ -1955,7 +2010,7 @@
                 "<td>" + esc((z.od || "") + "–" + (z.do || "")) +
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
                 '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
-                (spravce
+                (penize
                     ? '<td class="vyk__num">' + "<span class=\"tajne\">" + V.cislo(z.sazba) + "</span><span class=\"tajne__zastup\">•••</span>" + "</td>" +
                       '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
                     : "") +
@@ -2000,13 +2055,13 @@
     }
 
     async function ulozUpravu() {
-        const p = srovnejAbsenci(ctiPolozku($("editRadek").querySelector("[data-polozka]")));
+        const p = srovnejZapis(ctiPolozku($("editRadek").querySelector("[data-polozka]")));
         const puvodni = (window.KB.vykazy || []).find(v => v.id === editId) || {};
 
         if (!p.od || !p.do || !p.zakazka) {
             return window.KBUI.toast("Doplň projekt a časy.", "warn");
         }
-        if (!p.absence && !p.cinnost) {
+        if (!p.absence && !p.rezie && !p.cinnost) {
             return window.KBUI.toast("Vyber druh vypracování.", "warn");
         }
         if (!p.nazev && p.ukolId) {
@@ -2033,7 +2088,13 @@
         }
 
         try {
-            await window.KB.saveVykaz(editId, Object.assign({}, p, {
+            /* Kdo nesmí zapisovat peníze, ukládá jen čas. `saveVykaz` sahá
+               i na vedlejší dokument s částkou a ten mu pravidla odmítnou –
+               hodiny se uložily, ale hláška tvrdila „Uložení selhalo" a okno
+               zůstalo otevřené (našlo se 2. 9. 2026). Sazbu k jeho zápisu
+               dopočítá manažerův prohlížeč, jako u nového zápisu. */
+            const uloz = menimSazbu() ? window.KB.saveVykaz : window.KB.saveMujVykaz;
+            await uloz(editId, Object.assign({}, p, {
                 uid: uid,
                 osoba: jmeno,
                 datum: datum,
