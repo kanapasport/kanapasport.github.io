@@ -271,6 +271,7 @@ const zrusVykazy = () => {
     vykazyOdbery = [];
     vykazyRezim = "";
     mojeCastkyOdber = null;
+    KB.mojeCastkyPrisly = false;
     starsiZaznamy = [];
     starsiCastky = {};
 };
@@ -1712,6 +1713,11 @@ function oknoOd() {
    a `mojeCastkyOdber` hlídá, že se nasadí nejvýš jednou. */
 let mojeCastkyOdber = null;
 
+/* Dokud databáze částky opravdu nevydá, tváří se stránka jako dřív. Bez
+   toho by se po nasazení webu, ale PŘED nasazením pravidel, ukázaly OSVČ
+   sloupce s penězi a v nich samé nuly. */
+KB.mojeCastkyPrisly = false;
+
 /** Typ spolupráce přihlášeného. Stejné odvození jako UI.typUvazku. */
 KB.mujTyp = () => {
     const uid = (auth && auth.currentUser) ? auth.currentUser.uid : "";
@@ -1732,6 +1738,7 @@ function sledujMojeCastky() {
         query(castkyCol(), where("uid", "==", auth.currentUser.uid)), (snapshot) => {
             syroveCastky = {};
             snapshot.forEach(d => { syroveCastky[d.id] = d.data(); });
+            KB.mojeCastkyPrisly = true;
             spojVykazy();
         }, (err) => console.error("Chyba čtení vlastních částek:", err));
     vykazyOdbery.push(mojeCastkyOdber);
