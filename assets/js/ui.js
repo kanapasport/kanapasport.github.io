@@ -1116,6 +1116,11 @@
             '<div class="siderail__oddel"></div>' +
             '<a class="siderail__btn" href="prirucka.html" data-jen-prihlaseny hidden>' +
                 icon("library") + "<span>Jak web používat</span></a>" +
+            /* Zápisy z porad – čte je celý tým, píše manažer. Sedí pod
+               příručkou, protože je to taky „co si přečíst", ne práce
+               (přání Michala 2. 9. 2026). */
+            '<a class="siderail__btn" href="porady.html" data-jen-prihlaseny hidden>' +
+                icon("board") + "<span>Porady</span></a>" +
             '<div class="siderail__spodek">' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
@@ -1132,6 +1137,98 @@
             "</div>";
         document.body.insertBefore(rail, document.body.firstChild);
     }
+
+    /* ------------------------------------------- náhled poznámky ---------
+       Vzkaz svázaný s poznámkou dřív vedl odkazem na poznamky.html. Kdo si
+       ho přečetl na nástěnce, přišel o rozdělanou práci a musel se klikat
+       zpátky. Poznámka se proto otevře PŘES stránku, na které člověk je
+       (přání Michala 2. 9. 2026); tlačítko na plnou stránku v okně zůstává,
+       tam se dá poznámka i upravit. */
+
+    let poznOknoId = "";
+
+    function poznOkno() {
+        let okno = document.getElementById("kbPoznOkno");
+        if (okno) return okno;
+        okno = document.createElement("div");
+        okno.id = "kbPoznOkno";
+        okno.className = "hookno no-print";
+        okno.hidden = true;
+        okno.innerHTML =
+            '<div class="hookno__deska card">' +
+                '<div class="hookno__hlava"><span data-pozn-nadpis>Poznámka</span>' +
+                    '<a class="linkbtn linkbtn--tmavy" data-pozn-cela' +
+                        ' href="poznamky.html">Otevřít v Poznámkách</a>' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy"' +
+                        " data-pozn-zavri>Zavřít</button></div>" +
+                '<div class="hookno__telo" data-pozn-telo></div>' +
+            "</div>";
+        document.body.appendChild(okno);
+        okno.addEventListener("click", (e) => {
+            if (e.target === okno || e.target.closest("[data-pozn-zavri]")) zavriPoznamku();
+        });
+        return okno;
+    }
+
+    function zavriPoznamku() {
+        poznOknoId = "";
+        const okno = document.getElementById("kbPoznOkno");
+        if (okno) okno.hidden = true;
+    }
+
+    /**
+     * Otevře poznámku v okně přes stránku.
+     * Poznámky chodí vlastním odběrem (KB.watchPoznamky) – stránka, která
+     * si o ně neřekla, je nemá. Proto se to pozná a řekne, místo aby okno
+     * zůstalo prázdné.
+     */
+    UI.otevriPoznamku = async (id) => {
+        if (!id) return;
+        const okno = poznOkno();
+        const telo = okno.querySelector("[data-pozn-telo]");
+        poznOknoId = id;
+        okno.querySelector("[data-pozn-cela]").href = "poznamky.html?pozn=" + encodeURIComponent(id);
+        okno.hidden = false;
+
+        const z = (window.KB.poznamky || []).find(p => p.id === id);
+        if (!z) {
+            telo.innerHTML = '<p class="small muted" style="line-height:1.6">' +
+                "Tuhle poznámku ti nikdo nesdílel, nebo už neexistuje." +
+                " Zkus ji otevřít v Poznámkách.</p>";
+            return;
+        }
+        const kdy = z.ms ? new Date(z.ms).toLocaleDateString("cs-CZ") : "";
+        telo.innerHTML =
+            '<div class="small muted" style="margin-bottom:8px">' +
+                [esc(z.listNazev || ""), esc(z.jmeno || ""), esc(kdy)]
+                    .filter(Boolean).join(" · ") +
+                (z.stav === 1 ? ' · <b style="color:var(--ok)">splněno</b>' : "") +
+            "</div>" +
+            '<div style="font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere">' +
+                esc(z.text || "") + "</div>" +
+            (z.nahled
+                ? '<img src="' + esc(z.nahled) + '" alt="" style="margin-top:12px;max-width:100%;' +
+                  'border-radius:8px;border:1px solid var(--line)">' : "") +
+            (Number(z.obrazku) > 1
+                ? '<p class="tiny muted" style="margin-top:6px">Poznámka má ' +
+                  esc(String(z.obrazku)) + " obrázků – zbytek je v Poznámkách.</p>" : "") +
+            ((z.komentare || []).length
+                ? '<div style="margin-top:14px;border-top:1px solid var(--line-soft);padding-top:10px">' +
+                    '<div class="tiny muted" style="font-weight:900;letter-spacing:.06em;' +
+                        'text-transform:uppercase;margin-bottom:6px">Komentáře</div>' +
+                    (z.komentare || []).map(k =>
+                        '<div style="font-size:13.5px;line-height:1.55;margin-bottom:8px">' +
+                            '<b>' + esc(k.jmeno || "") + "</b> " +
+                            '<span class="muted">' + esc(k.ms
+                                ? new Date(k.ms).toLocaleDateString("cs-CZ") : "") + "</span><br>" +
+                            esc(k.text || "") + "</div>").join("") +
+                  "</div>"
+                : "");
+    };
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && poznOknoId) zavriPoznamku();
+    });
 
     /* ------------------------------------------------------- „Můj den" ---
 
@@ -1688,8 +1785,8 @@
                 "</span>" +
                 /* vzkaz svázaný s poznámkou nese odkaz – proklik přistane
                    rovnou na té poznámce (poznamky.html si ji samo otevře) */
-                (q.poznamka ? '<a class="btn btn--ghost btn--sm" href="poznamky.html?pozn=' +
-                    esc(q.poznamka) + '">Otevřít</a>' : "") +
+                (q.poznamka ? '<button type="button" class="btn btn--ghost btn--sm"' +
+                    ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
                 (q.hotovo
                     ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
@@ -1767,6 +1864,13 @@
     const PRACOVNICH_DNU = 10;      // dva týdny dopředu; dál se stejně neplánuje
 
     let autoVybrane = "";           // u kterého vozu je rozevřený formulář
+    /* Otevření poznámky funguje odkudkoliv – z panelu v pásu i z dlaždice
+       na nástěnce. Jedna obsluha pro celý web. */
+    document.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-pozn-nahled]");
+        if (b) { e.preventDefault(); UI.otevriPoznamku(b.dataset.poznNahled); }
+    });
+
     let autoPridavam = "";          // u kterého dne je rozevřený výběr člověka
 
     function mountAutaPanel() {

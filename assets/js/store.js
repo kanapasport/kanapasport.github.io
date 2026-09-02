@@ -368,7 +368,7 @@ try {
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.vykazyPrisly = false;
-            KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = [];
+            KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = []; KB.porady = [];
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -3020,6 +3020,71 @@ KB.ulozPlanPaletu = async (planId, paleta) => {
             p: String(x.p || "").slice(0, 30)
         })) : []
     }, { merge: true });
+};
+
+/* --------------------------------------------------------- PORADY -------
+   Zápisy z porad. Čte je celý tým – je to shrnutí toho, co se domluvilo –
+   ale píše je manažer; hlídají to pravidla (`private/**` je pro zápis
+   manažerský a nad zápisy stojí vlastní pravidlo na čtení).
+
+     private/porady/zapisy/{id}
+       { datum:"2026-08-12", nazev, sekce:[{nadpis, body:[...]}], kdo, ms }
+
+   Sekce se schválně nedělí do podkolekcí: zápis je jeden dokument, čte se
+   i vytiskne vcelku a i ta nejdelší porada se do limitu vejde. */
+
+const poradyCol = () => collection(db, "artifacts", APP_ID, "private", "porady", "zapisy");
+const poradaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "porady", "zapisy", id);
+
+KB.porady = [];
+let poradyOdber = null;
+
+KB.watchPorady = async () => {
+    if (poradyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || poradyOdber) return;
+    poradyOdber = onSnapshot(poradyCol(), (snap) => {
+        KB.porady = [];
+        snap.forEach(d => KB.porady.push({ id: d.id, ...d.data() }));
+        // nejnovější porada nahoře – tu člověk hledá
+        KB.porady.sort((a, b) => String(b.datum || "").localeCompare(String(a.datum || "")));
+        emit("porady", KB.porady);
+    }, (err) => console.error("Chyba čtení porad:", err));
+};
+
+KB.ulozPoradu = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const pid = id || "por_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const sekce = (Array.isArray(data.sekce) ? data.sekce : []).slice(0, 40).map(s => ({
+        nadpis: String(s.nadpis || "").slice(0, 120),
+        body: (Array.isArray(s.body) ? s.body : []).slice(0, 200)
+            .map(b => String(b || "").slice(0, 1200))
+    }));
+    const zapis = {
+        datum: String(data.datum || "").slice(0, 10),
+        nazev: String(data.nazev || "").slice(0, 80) || "Porada",
+        sekce: sekce,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    };
+    if (!id) {
+        zapis.kdo = window.KB_USER || "";
+        zapis.uid = KB.currentUid();
+        zapis.ms = Date.now();
+    }
+    KB.zapisAktivitu("porada", (id ? "upravil" : "založil") + " zápis z porady " +
+        (zapis.datum || ""));
+    await setDoc(poradaDoc(pid), zapis, { merge: true });
+    return pid;
+};
+
+KB.smazPoradu = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const p = (KB.porady || []).find(x => x.id === id);
+    KB.zapisAktivitu("porada", "smazal zápis z porady " + ((p && p.datum) || id));
+    await deleteDoc(poradaDoc(id));
 };
 
 /* Hladiny plánu. Název, barva a průhlednost jsou SPOLEČNÉ – celá parta

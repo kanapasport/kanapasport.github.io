@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=199">
+    <link rel="stylesheet" href="assets/css/app.css?v=200">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -352,11 +352,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=199"></script>
-<script src="assets/js/doc.js?v=199"></script>
-<script src="assets/js/ui.js?v=199"></script>
-<script src="assets/js/vykazy.js?v=199"></script>
-<script type="module" src="assets/js/store.js?v=199"></script>
+<script src="assets/js/taxonomy.js?v=200"></script>
+<script src="assets/js/doc.js?v=200"></script>
+<script src="assets/js/ui.js?v=200"></script>
+<script src="assets/js/vykazy.js?v=200"></script>
+<script type="module" src="assets/js/store.js?v=200"></script>
 
 <script>
 (function () {
@@ -667,6 +667,19 @@
         const spoluucast = (q) => adresati(q).filter(x => x !== uid)
             .map(jmenoUid).filter(Boolean);
 
+        /* Začátek poznámky do řádku vzkazu. Poznámky chodí vlastním
+           odběrem a můžou dorazit později – než přijdou, radši nic než
+           „nenalezeno". */
+        const poznUkazka = (id) => {
+            const p = (window.KB.poznamky || []).find(x => x.id === id);
+            if (!p) return "";
+            const text = String(p.text || "").replace(/\s+/g, " ").trim();
+            return '<span style="font-style:italic">' +
+                esc(p.listNazev ? p.listNazev + ": " : "") +
+                esc(text.length > 120 ? text.slice(0, 120) + "…" : (text || "(bez textu)")) +
+                "</span>";
+        };
+
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' +
                 (q.hotovo ? " qtrad--hotovo" : (q.asap ? " qtrad--asap" : "")) + '">' +
@@ -689,8 +702,16 @@
                             ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatum(new Date(q.hotovoMs)
                                   .toISOString().slice(0, 10))) : "") + "</span>" : "") +
+                        /* U vzkazu k poznámce je vidět, o co jde – dřív tu
+                           stálo jen „Podívej se na poznámku" a člověk musel
+                           odejít z nástěnky, aby zjistil na jakou
+                           (přání Michala 2. 9. 2026). */
+                        (q.poznamka ? "<br>" + poznUkazka(q.poznamka) : "") +
                     "</span>" +
                 "</span>" +
+                (q.poznamka
+                    ? '<button type="button" class="btn btn--ghost btn--sm"' +
+                      ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
                 (q.hotovo
                     ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
@@ -1374,6 +1395,9 @@
         document.addEventListener("kb-role", aplikujRezim);
 
         window.KB.on("gsync", renderKontrola);
+        /* Vzkazy svázané s poznámkou ukazují její text a otevřou ji přes
+           nástěnku – bez odběru by se okno otevřelo prázdné. */
+        window.KB.watchPoznamky();
         window.KB.watchAuta();
         window.KB.on("auta", renderKalendarDlazdice);
         window.KB.on("ukoly", () => { renderNastenka(); renderKalendarDlazdice();

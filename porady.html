@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Porady – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=200">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* Zápis z porady je dokument, ne formulář: vlevo seznam porad,
+           vpravo list A4 přesně tak, jak se vytiskne. PDF se z něj vyrobí
+           stejnou cestou jako u návodů (KBDoc.exportPdf). */
+
+        .porady { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px;
+            align-items: start; }
+        @media (max-width: 900px) { .porady { grid-template-columns: minmax(0, 1fr); } }
+
+        .pseznam { display: flex; flex-direction: column; gap: 6px; }
+        .ppolozka { border: 1px solid var(--line); border-radius: var(--radius);
+            background: var(--surface); padding: 9px 12px; text-align: left; font: inherit;
+            cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+        .ppolozka:hover { border-color: var(--accent-lt); }
+        .ppolozka.je-aktivni { border-color: var(--accent); background: var(--accent-tint); }
+        .ppolozka__datum { font-size: 14px; font-weight: 900; }
+        .ppolozka__meta { font-size: 11.5px; color: var(--muted); }
+
+        /* --------------------------------------------------------- list A4 */
+        .plist { display: flex; flex-direction: column; gap: 14px; }
+        .plist__stage { transform-origin: 0 0; }
+        .pstrana { padding: 18mm 16mm 16mm; }
+        .pstrana__firma { font-size: 10pt; font-weight: 900; letter-spacing: .1em;
+            text-transform: uppercase; color: #7b8794; }
+        .pstrana__nadpis { font-size: 20pt; font-weight: 900; margin: 2mm 0 1mm; }
+        .pstrana__datum { font-size: 11pt; color: #46505c; margin-bottom: 8mm; }
+        .pstrana__sekce { margin-bottom: 6mm; }
+        .pstrana__h { font-size: 13pt; font-weight: 900; color: #1d556d;
+            border-bottom: 0.4mm solid #d7dee5; padding-bottom: 1mm; margin-bottom: 2.5mm; }
+        .pstrana__bod { display: flex; gap: 3mm; font-size: 11pt; line-height: 1.45;
+            margin-bottom: 1.6mm; }
+        .pstrana__cislo { min-width: 7mm; font-weight: 900; color: #1d556d; }
+        .pstrana__pata { position: absolute; left: 16mm; right: 16mm; bottom: 10mm;
+            font-size: 8.5pt; color: #8b95a1; display: flex; justify-content: space-between;
+            border-top: 0.3mm solid #e2e8ee; padding-top: 2mm; }
+
+        /* ---------------------------------------------------------- editace */
+        .ped { display: flex; flex-direction: column; gap: 12px; }
+        .psekce { border: 1px solid var(--line); border-radius: var(--radius);
+            background: var(--surface); padding: 12px 14px; }
+        .psekce__hlava { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .psekce__hlava .field { font-weight: 900; }
+        .pbod { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+        .pbod__cislo { min-width: 22px; padding-top: 9px; font-size: 12.5px; font-weight: 900;
+            color: var(--muted); }
+        .pbod textarea { resize: vertical; min-height: 38px; }
+        .pikona { border: 0; background: none; color: var(--text-soft); font-size: 15px;
+            font-weight: 900; cursor: pointer; padding: 4px 6px; line-height: 1; }
+        .pikona:hover { color: var(--accent); }
+        .pikona--smaz:hover { color: var(--danger, #c8102e); }
+
+        @media print {
+            .porady { grid-template-columns: minmax(0, 1fr); }
+            .pseznam, .phlavicka, #appHeader { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div class="row phlavicka" style="gap:18px;flex-wrap:wrap;align-items:flex-start">
+        <div style="min-width:0">
+            <h2 style="font-size:24px;font-weight:900;line-height:1.15">Porady</h2>
+            <p class="small muted" style="margin-top:3px;max-width:720px;line-height:1.6">
+                Zápisy z porad. Píšou se po bodech pod nadpisy projektů, samy
+                se číslují a hotový zápis se dá stáhnout jako PDF.
+            </p>
+        </div>
+        <div class="row" style="gap:8px;margin-left:auto">
+            <button type="button" id="btnNova" class="btn btn--primary" data-need="vykaz.view" hidden>
+                Nová porada</button>
+        </div>
+    </div>
+
+    <div class="porady">
+        <div>
+            <div class="tiny muted" style="font-weight:900;letter-spacing:.07em;
+                text-transform:uppercase;margin-bottom:6px">Zápisy</div>
+            <div id="seznam" class="pseznam"></div>
+        </div>
+
+        <div>
+            <div id="prazdno" class="card" style="padding:26px;text-align:center" hidden>
+                <p class="small muted" style="line-height:1.6">
+                    Zatím tu žádný zápis není.</p>
+            </div>
+
+            <div id="detail" hidden>
+                <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                    <button type="button" id="btnUpravit" class="btn btn--ghost btn--sm"
+                        data-need="vykaz.view" hidden>Upravit</button>
+                    <button type="button" id="btnUlozit" class="btn btn--primary btn--sm" hidden>
+                        Uložit</button>
+                    <button type="button" id="btnZahodit" class="btn btn--ghost btn--sm" hidden>
+                        Zahodit změny</button>
+                    <button type="button" id="btnPdf" class="btn btn--sm">Stáhnout PDF</button>
+                    <button type="button" id="btnSmazat" class="btn btn--ghost btn--sm"
+                        data-need="vykaz.view" hidden
+                        style="margin-left:auto;color:var(--danger,#c8102e)">Smazat zápis</button>
+                </div>
+
+                <!-- čtení: list přesně tak, jak se vytiskne -->
+                <div id="listWrap" class="plist">
+                    <div id="stage" class="plist__stage"></div>
+                </div>
+
+                <!-- psaní -->
+                <div id="editor" class="ped" hidden>
+                    <div class="card" style="padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap">
+                        <label class="grow" style="min-width:180px">
+                            <span class="label">Datum porady</span>
+                            <input type="date" class="field" id="edDatum"></label>
+                        <label class="grow" style="min-width:220px">
+                            <span class="label">Název (nepovinné)</span>
+                            <input type="text" class="field" id="edNazev" maxlength="80"
+                                placeholder="Porada"></label>
+                    </div>
+                    <div id="edSekce"></div>
+                    <button type="button" class="btn btn--ghost btn--sm" id="btnSekce">
+                        + přidat okruh</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script src="assets/js/taxonomy.js?v=200"></script>
+<script src="assets/js/doc.js?v=200"></script>
+<script src="assets/js/ui.js?v=200"></script>
+<script src="assets/js/vykazy.js?v=200"></script>
+<script type="module" src="assets/js/store.js?v=200"></script>
+
+<script>
+(function () {
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => window.KBUI.esc(s);
+
+    let otevreny = "";          // id zobrazeného zápisu
+    let upravuji = false;
+    let koncept = null;         // rozepsaný zápis, dokud se neuloží
+
+    const manazer = () => window.KBUI.can("vykaz.view");
+
+    const czDatum = (iso) => {
+        if (!iso) return "";
+        const [r, m, d] = String(iso).split("-");
+        return Number(d) + ". " + Number(m) + ". " + r;
+    };
+
+    /** Prázdný zápis – jeden okruh a jeden bod, ať je do čeho psát. */
+    const prazdnyZapis = () => ({
+        datum: new Date().toISOString().slice(0, 10),
+        nazev: "",
+        sekce: [{ nadpis: "Body k probrání", body: [""] }]
+    });
+
+    /* ------------------------------------------------------- seznam vlevo */
+
+    function vykresliSeznam() {
+        const vse = (window.KB.porady || []);
+        $("prazdno").hidden = !!vse.length || !!otevreny;
+        $("seznam").innerHTML = vse.map(p =>
+            '<button type="button" class="ppolozka' +
+                (p.id === otevreny ? " je-aktivni" : "") + '" data-porada="' + esc(p.id) + '">' +
+                '<span class="ppolozka__datum">' + esc(czDatum(p.datum)) + "</span>" +
+                '<span class="ppolozka__meta">' +
+                    esc(p.nazev || "Porada") + " · " +
+                    esc(String((p.sekce || []).reduce((n, s) => n + (s.body || []).length, 0))) +
+                    " bodů</span>" +
+            "</button>").join("");
+    }
+
+    /* ------------------------------------------------------- list ke čtení */
+
+    function stranaHtml(p) {
+        let poradi = 0;
+        return '<div class="a4-page pstrana">' +
+            '<div class="pstrana__firma">Pasport Kaňa s.r.o.</div>' +
+            '<div class="pstrana__nadpis">' + esc(p.nazev || "Porada") + "</div>" +
+            '<div class="pstrana__datum">' + esc(czDatum(p.datum)) + "</div>" +
+            (p.sekce || []).map(s =>
+                '<div class="pstrana__sekce">' +
+                    (s.nadpis ? '<div class="pstrana__h">' + esc(s.nadpis) + "</div>" : "") +
+                    (s.body || []).filter(b => String(b).trim()).map(b => {
+                        poradi += 1;
+                        return '<div class="pstrana__bod">' +
+                            '<span class="pstrana__cislo">' + poradi + ".</span>" +
+                            "<span>" + esc(b) + "</span></div>";
+                    }).join("") +
+                "</div>").join("") +
+            '<div class="pstrana__pata"><span>Zápis z porady · ' +
+                esc(czDatum(p.datum)) + "</span><span>" + esc(p.kdo || "") + "</span></div>" +
+        "</div>";
+    }
+
+    /* Číslování je průběžné přes celý zápis (1, 2, 3…), ne od jedničky
+       v každém okruhu – tak to Michal píše ve Wordu a odkazuje se pak na
+       „bod 12" bez toho, aby se muselo dohledávat, pod kterým nadpisem. */
+
+    function vykresliDetail() {
+        const p = (window.KB.porady || []).find(x => x.id === otevreny);
+        $("detail").hidden = !p;
+        $("prazdno").hidden = !!p || !!(window.KB.porady || []).length;
+        if (!p) return;
+
+        $("btnUpravit").hidden = !manazer() || upravuji;
+        $("btnSmazat").hidden = !manazer() || upravuji;
+        $("btnUlozit").hidden = !upravuji;
+        $("btnZahodit").hidden = !upravuji;
+        $("btnPdf").hidden = upravuji;
+        $("listWrap").hidden = upravuji;
+        $("editor").hidden = !upravuji;
+
+        if (upravuji) return void vykresliEditor();
+        $("stage").innerHTML = stranaHtml(p);
+        window.KBDoc.fitStage($("stage"), $("listWrap"));
+    }
+
+    /* ------------------------------------------------------------ editace */
+
+    function vykresliEditor() {
+        $("edDatum").value = koncept.datum || "";
+        $("edNazev").value = koncept.nazev || "";
+        let poradi = 0;
+        $("edSekce").innerHTML = (koncept.sekce || []).map((s, si) =>
+            '<div class="psekce" data-sekce="' + si + '">' +
+                '<div class="psekce__hlava">' +
+                    '<input type="text" class="field grow" data-nadpis maxlength="80" ' +
+                        'placeholder="Okruh (např. Sportovka)" value="' + esc(s.nadpis || "") + '">' +
+                    '<button type="button" class="pikona" data-sekce-nahoru title="Posunout výš">↑</button>' +
+                    '<button type="button" class="pikona" data-sekce-dolu title="Posunout níž">↓</button>' +
+                    '<button type="button" class="pikona pikona--smaz" data-sekce-smaz ' +
+                        'title="Odebrat okruh">×</button>' +
+                "</div>" +
+                (s.body || []).map((b, bi) => {
+                    poradi += 1;
+                    return '<div class="pbod" data-bod="' + bi + '">' +
+                        '<span class="pbod__cislo">' + poradi + ".</span>" +
+                        '<textarea class="field grow" data-text rows="1" ' +
+                            'placeholder="Co se domluvilo">' + esc(b) + "</textarea>" +
+                        '<button type="button" class="pikona" data-bod-nahoru title="Posunout výš">↑</button>' +
+                        '<button type="button" class="pikona pikona--smaz" data-bod-smaz ' +
+                            'title="Odebrat bod">×</button>' +
+                    "</div>";
+                }).join("") +
+                '<button type="button" class="btn btn--ghost btn--sm" data-bod-pridej>' +
+                    "+ přidat bod</button>" +
+            "</div>").join("");
+    }
+
+    /** Přečte, co je rozepsané na obrazovce, do konceptu. */
+    function ctiEditor() {
+        koncept.datum = $("edDatum").value;
+        koncept.nazev = $("edNazev").value.trim();
+        koncept.sekce = Array.from($("edSekce").querySelectorAll("[data-sekce]")).map(el => ({
+            nadpis: el.querySelector("[data-nadpis]").value.trim(),
+            body: Array.from(el.querySelectorAll("[data-text]")).map(t => t.value.trim())
+        }));
+    }
+
+    function zacniUpravu(p) {
+        koncept = JSON.parse(JSON.stringify({
+            datum: p.datum || "", nazev: p.nazev || "",
+            sekce: (p.sekce || []).length ? p.sekce : prazdnyZapis().sekce
+        }));
+        upravuji = true;
+        vykresliDetail();
+    }
+
+    /* ---------------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "porady.html" });
+
+        $("seznam").addEventListener("click", (e) => {
+            const b = e.target.closest("[data-porada]");
+            if (!b) return;
+            if (upravuji && !confirm("Rozepsaný zápis se zahodí. Pokračovat?")) return;
+            upravuji = false;
+            otevreny = b.dataset.porada;
+            vykresliSeznam();
+            vykresliDetail();
+        });
+
+        $("btnNova").addEventListener("click", async () => {
+            const p = prazdnyZapis();
+            try {
+                otevreny = await window.KB.ulozPoradu("", p);
+                zacniUpravu(p);
+                vykresliSeznam();
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Zápis se nepodařilo založit.", "error");
+            }
+        });
+
+        $("btnUpravit").addEventListener("click", () => {
+            const p = (window.KB.porady || []).find(x => x.id === otevreny);
+            if (p) zacniUpravu(p);
+        });
+
+        $("btnZahodit").addEventListener("click", () => {
+            upravuji = false;
+            koncept = null;
+            vykresliDetail();
+        });
+
+        $("btnUlozit").addEventListener("click", async () => {
+            ctiEditor();
+            /* Prázdné body a okruhy bez obsahu se do zápisu nepropíšou –
+               při psaní jich vždycky pár zbude a v PDF by dělaly díry. */
+            const cisty = {
+                datum: koncept.datum,
+                nazev: koncept.nazev,
+                sekce: koncept.sekce
+                    .map(s => ({ nadpis: s.nadpis, body: s.body.filter(Boolean) }))
+                    .filter(s => s.nadpis || s.body.length)
+            };
+            if (!cisty.datum) return window.KBUI.toast("Doplň datum porady.", "warn");
+            try {
+                await window.KB.ulozPoradu(otevreny, cisty);
+                upravuji = false;
+                koncept = null;
+                window.KBUI.toast("Zápis uložen.");
+                vykresliSeznam();
+                vykresliDetail();
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Uložení selhalo.", "error");
+            }
+        });
+
+        $("btnSmazat").addEventListener("click", async () => {
+            const p = (window.KB.porady || []).find(x => x.id === otevreny);
+            if (!p || !confirm("Smazat zápis z " + czDatum(p.datum) + "?")) return;
+            try {
+                await window.KB.smazPoradu(otevreny);
+                otevreny = "";
+                window.KBUI.toast("Zápis smazán.");
+            } catch (err) {
+                window.KBUI.toast("Smazání selhalo.", "error");
+            }
+        });
+
+        $("btnPdf").addEventListener("click", async (e) => {
+            const p = (window.KB.porady || []).find(x => x.id === otevreny);
+            if (!p) return;
+            const b = e.currentTarget;
+            const puvodni = b.textContent;
+            b.disabled = true;
+            b.textContent = "Generuji…";
+            try {
+                await window.KBDoc.exportPdf($("stage"),
+                    "Porada " + (p.datum || "").split("-").reverse().join("-"));
+                window.KBUI.toast("PDF staženo.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("PDF se nepodařilo vytvořit.", "error");
+            } finally {
+                b.disabled = false;
+                b.textContent = puvodni;
+                window.KBDoc.fitStage($("stage"), $("listWrap"));
+            }
+        });
+
+        /* okruhy a body – jedna obsluha na celý editor */
+        $("edSekce").addEventListener("click", (e) => {
+            const sekceEl = e.target.closest("[data-sekce]");
+            if (!sekceEl) return;
+            ctiEditor();
+            const si = Number(sekceEl.dataset.sekce);
+            const bodEl = e.target.closest("[data-bod]");
+            const bi = bodEl ? Number(bodEl.dataset.bod) : -1;
+
+            if (e.target.closest("[data-bod-pridej]")) {
+                koncept.sekce[si].body.push("");
+            } else if (e.target.closest("[data-bod-smaz]")) {
+                koncept.sekce[si].body.splice(bi, 1);
+            } else if (e.target.closest("[data-bod-nahoru]")) {
+                if (bi > 0) {
+                    const b = koncept.sekce[si].body;
+                    [b[bi - 1], b[bi]] = [b[bi], b[bi - 1]];
+                }
+            } else if (e.target.closest("[data-sekce-smaz]")) {
+                koncept.sekce.splice(si, 1);
+            } else if (e.target.closest("[data-sekce-nahoru]")) {
+                if (si > 0) {
+                    const s = koncept.sekce;
+                    [s[si - 1], s[si]] = [s[si], s[si - 1]];
+                }
+            } else if (e.target.closest("[data-sekce-dolu]")) {
+                if (si < koncept.sekce.length - 1) {
+                    const s = koncept.sekce;
+                    [s[si], s[si + 1]] = [s[si + 1], s[si]];
+                }
+            } else {
+                return;
+            }
+            vykresliEditor();
+        });
+
+        $("btnSekce").addEventListener("click", () => {
+            ctiEditor();
+            koncept.sekce.push({ nadpis: "", body: [""] });
+            vykresliEditor();
+        });
+
+        /* Enter v bodu založí další bod – píše se to pak jako ve Wordu. */
+        $("edSekce").addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" || e.shiftKey) return;
+            const bodEl = e.target.closest("[data-bod]");
+            if (!bodEl) return;
+            e.preventDefault();
+            ctiEditor();
+            const si = Number(bodEl.closest("[data-sekce]").dataset.sekce);
+            koncept.sekce[si].body.splice(Number(bodEl.dataset.bod) + 1, 0, "");
+            vykresliEditor();
+            const dalsi = $("edSekce")
+                .querySelectorAll('[data-sekce="' + si + '"] [data-text]')[Number(bodEl.dataset.bod) + 1];
+            if (dalsi) dalsi.focus();
+        });
+
+        window.KB.on("porady", () => {
+            /* Bez otevřeného zápisu se rovnou ukáže nejnovější – seznam
+               chodí seřazený od nejnovější porady. */
+            if (!otevreny && (window.KB.porady || []).length) {
+                otevreny = window.KB.porady[0].id;
+            }
+            vykresliSeznam();
+            if (!upravuji) vykresliDetail();
+        });
+        document.addEventListener("kb-role", () => { vykresliSeznam(); vykresliDetail(); });
+        window.KB.watchPorady();
+        vykresliSeznam();
+    });
+})();
+</script>
+</body>
+</html>
