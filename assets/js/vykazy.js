@@ -282,6 +282,18 @@
             "</tbody></table></div>";
     };
 
+    /**
+     * Sazba pro zápis: platí ta, kterou má člověk v Nastavení — a když má
+     * projekt nastavenou vlastní sazbu pro toho člověka, vyhrává ta.
+     * Dřív se brala jen obecná a sazby na projektu (Správa → Rozpočet)
+     * nikdo nepoužil (Michal 2. 9. 2026).
+     */
+    V.sazbaProZapis = (uid, zakazka) => {
+        if (!uid) return 0;
+        const proj = ((window.KB.rozpocty || {})[zakazka] || {}).sazby || {};
+        return Number(proj[uid]) || Number((window.KB.sazby || {})[uid]) || 0;
+    };
+
     V.rozpocet = (zakazka) => {
         const r = (window.KB.rozpocty || {})[zakazka] || {};
         return { kc: Number(r.kc) || 0, hodiny: Number(r.hodiny) || 0 };

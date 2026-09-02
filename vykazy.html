@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=192">
+    <link rel="stylesheet" href="assets/css/app.css?v=193">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -295,10 +295,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=192"></script>
-<script src="assets/js/ui.js?v=192"></script>
-<script src="assets/js/vykazy.js?v=192"></script>
-<script type="module" src="assets/js/store.js?v=192"></script>
+<script src="assets/js/taxonomy.js?v=193"></script>
+<script src="assets/js/ui.js?v=193"></script>
+<script src="assets/js/vykazy.js?v=193"></script>
+<script type="module" src="assets/js/store.js?v=193"></script>
 
 <script>
 (function () {
@@ -1353,11 +1353,26 @@
      */
     function nastavVychoziSazbu(tiche) {
         const stara = vychoziSazba;
-        vychoziSazba = Number((window.KB.sazby || {})[$("dOsoba").value]) || 0;
+        vychoziSazba = V.sazbaProZapis($("dOsoba").value, "");
         if (tiche || stara === vychoziSazba) return;
+        srovnejSazby(stara);
+    }
 
+    /**
+     * Přepíše sazbu v řádcích, které si ji ještě nepřepsaly ručně. Bere se
+     * podle projektu TOHO řádku – jeden den může mít dvě zakázky a na každé
+     * může mít člověk jinou sazbu (přání Michala 2. 9. 2026).
+     */
+    function srovnejSazby(stara) {
+        const uid = $("dOsoba").value;
         radkyBox().querySelectorAll('[data-f="sazba"]').forEach(input => {
-            if (!input.value || Number(input.value) === stara) input.value = vychoziSazba || "";
+            const box = input.closest("[data-polozka]");
+            const zakazka = box ? zakazkaZaznamu(box) : "";
+            const sazba = V.sazbaProZapis(uid, zakazka);
+            if (!input.value || Number(input.value) === stara ||
+                    Number(input.value) === vychoziSazba) {
+                input.value = sazba || "";
+            }
             // sazba je schovaná za „⋯ zobrazit" – číslo vedle se musí dorovnat
             const cislo = input.parentElement.querySelector("[data-sazba-cislo]");
             if (cislo) cislo.textContent = input.value || "–";
@@ -2175,6 +2190,8 @@
             blok.querySelectorAll("[data-misto]").forEach(el => {
                 el.outerHTML = mistoHtml(event.target.value, null);
             });
+            // jiný projekt může mít pro toho člověka jinou sazbu
+            srovnejSazby(vychoziSazba);
             // u absence se do popisu práce doplní „Dovolená – Jméno"
             polozkyBloku(blok).forEach(box =>
                 predvyplnAbsenci(box, event.target.value, $("dOsoba").value));

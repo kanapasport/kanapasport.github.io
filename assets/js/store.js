@@ -1600,7 +1600,11 @@ KB.doplnCastky = async () => {
         const jeAbsence = z.absence === true;
 
         if (!c) {
-            const sazba = jeAbsence ? 0 : (Number(KB.sazby[z.uid]) || 0);
+            /* Platí sazba člověka z Nastavení; když má projekt nastavenou
+               vlastní sazbu pro toho člověka, vyhrává ta (Michal 2. 9. 2026). */
+            const proj = ((KB.rozpocty || {})[z.zakazka] || {}).sazby || {};
+            const sazba = jeAbsence ? 0
+                : (Number(proj[z.uid]) || Number(KB.sazby[z.uid]) || 0);
             if (!jeAbsence && !sazba) { chybiSazba.add(z.uid); continue; }
             kUlozeni.push({ z: z, sazba: sazba });
             continue;
