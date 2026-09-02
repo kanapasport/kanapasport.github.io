@@ -3022,6 +3022,24 @@ KB.ulozPlanPaletu = async (planId, paleta) => {
     }, { merge: true });
 };
 
+/* Hladiny plánu. Název, barva a průhlednost jsou SPOLEČNÉ – celá parta
+   je vidí stejně. Co má kdo zapnuté, si drží prohlížeč, do databáze to
+   nejde: vypnutá hladina je pohled jednoho člověka, ne rozhodnutí za
+   ostatní. (Michal 2. 9. 2026.) */
+KB.ulozPlanHladiny = async (planId, hladiny) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(planDoc(planId), {
+        hladiny: Array.isArray(hladiny) ? hladiny.slice(0, 20).map(h => ({
+            id: String(h.id || "").slice(0, 40),
+            nazev: String(h.nazev || "").slice(0, 40),
+            barva: String(h.barva || "#23486e").slice(0, 12),
+            barvaHladiny: h.barvaHladiny === true,
+            pruh: Math.min(1, Math.max(0.05, Number(h.pruh) || 1))
+        })).filter(h => h.id) : []
+    }, { merge: true });
+};
+
 KB.smazPlan = async (id) => {
     if (authReady) await authReady;
     requireDb();
@@ -3067,9 +3085,14 @@ KB.ulozZnacku = async (planId, zid, data) => {
         uhel: tvar ? (Number(data.uhel) || 0) : 0,
         stav: Number(data.stav) || 0,
         vel: Number(data.vel) || 26,
-        /* Průhlednost barvy 0–1. Chybějící pole = plná barva, ať se starým
-           značkám nic nezmění. */
-        pruh: data.pruh === undefined ? 1 : Math.min(1, Math.max(0.05, Number(data.pruh) || 1)),
+        /* Hladina, do které značka patří (jako v CADu). Prázdné = základní,
+           tam sedí všechno, co vzniklo dřív, než hladiny přibyly. */
+        hl: String(data.hl || "").slice(0, 40),
+        /* Průhlednost barvy 0–1. NULA znamená „podle hladiny"; chybějící
+           pole = plná barva, ať se starým značkám nic nezmění. */
+        pruh: data.pruh === undefined ? 1
+            : (Number(data.pruh) === 0 ? 0
+                : Math.min(1, Math.max(0.05, Number(data.pruh) || 1))),
         /* Do kolečka se vejdou tři znaky. Obdélník označuje místnost a
            „3S01 – Injekce zebrafish" je potřeba přečíst celé. */
         text: tvar
