@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=193">
+    <link rel="stylesheet" href="assets/css/app.css?v=194">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -59,6 +59,11 @@
         /* zeleně u zaškrtávátka: ten den je HO nahlášený z Rychlého zápisu */
         .hovolba__znacka { color: var(--ok); font-size: 10.5px; font-weight: 900;
             letter-spacing: .06em; text-transform: uppercase; }
+
+        /* Sazba po odkrytí: obyčejné číslo v řádku, ne druhé pole v poli. */
+        .sazbapole { border: 0; background: none; font: inherit; font-weight: 800;
+            width: 74px; padding: 0; min-height: 0; }
+        .sazbapole:focus { outline: none; }
 
         /* Rozsah dnů dává smysl jen u absence – běžný záznam je vždycky jeden den. */
         .datumdo { display: none; }
@@ -295,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=193"></script>
-<script src="assets/js/ui.js?v=193"></script>
-<script src="assets/js/vykazy.js?v=193"></script>
-<script type="module" src="assets/js/store.js?v=193"></script>
+<script src="assets/js/taxonomy.js?v=194"></script>
+<script src="assets/js/ui.js?v=194"></script>
+<script src="assets/js/vykazy.js?v=194"></script>
+<script type="module" src="assets/js/store.js?v=194"></script>
 
 <script>
 (function () {
@@ -955,10 +960,14 @@
                    skrytém poli, ať ji ctiPolozku přečte jako dřív. */
                 (window.KBUI.can("vykaz.view")
                     ? '<div><label class="label">Sazba (Kč/h)</label>' +
-                          '<input type="hidden" data-f="sazba" value="' +
-                              (d.sazba ? Number(d.sazba) : "") + '">' +
                           '<span class="field tajne" style="display:flex;align-items:center;gap:8px">' +
-                              '<b data-sazba-cislo hidden>' + (d.sazba ? Number(d.sazba) : "–") + "</b>" +
+                              /* Po odkrytí jde přepsat – u cizího zápisu nešla
+                                 sazba opravit vůbec, pole bylo skryté
+                                 (Michal 2. 9. 2026). Prázdné = platí sazba
+                                 podle nastavení a projektu. */
+                              '<input type="number" class="sazbapole" data-f="sazba" min="0"' +
+                                  ' step="10" hidden title="Prázdné = sazba podle Nastavení' +
+                                  ' a projektu" value="' + (d.sazba ? Number(d.sazba) : "") + '">' +
                               '<span data-sazba-tecky>⋯</span>' +
                               '<button type="button" class="linkbtn" data-sazba-ukaz ' +
                                   'style="margin-left:auto">zobrazit</button>' +
@@ -1373,9 +1382,6 @@
                     Number(input.value) === vychoziSazba) {
                 input.value = sazba || "";
             }
-            // sazba je schovaná za „⋯ zobrazit" – číslo vedle se musí dorovnat
-            const cislo = input.parentElement.querySelector("[data-sazba-cislo]");
-            if (cislo) cislo.textContent = input.value || "–";
         });
         radkyBox().querySelectorAll("[data-polozka]").forEach(prepocti);
         soucetDne();
@@ -2160,12 +2166,14 @@
         const prepinac = event.target.closest("[data-sazba-ukaz]");
         if (!prepinac) return;
         const obal = prepinac.closest("span");
-        const cislo = obal.querySelector("[data-sazba-cislo]");
+        const pole = obal.querySelector('[data-f="sazba"]');
         const tecky = obal.querySelector("[data-sazba-tecky]");
-        const odkryt = cislo.hidden;
-        cislo.hidden = !odkryt;
+        if (!pole) return;
+        const odkryt = pole.hidden;
+        pole.hidden = !odkryt;
         tecky.hidden = odkryt;
         prepinac.textContent = odkryt ? "skrýt" : "zobrazit";
+        if (odkryt) pole.focus();
     });
 
     document.addEventListener("input", (event) => {
