@@ -969,6 +969,17 @@
      * (vpravo od něj ikony nástrojů) a úplně dole navigační lišta.
      * @param {Object} options – { active: "navody.html", big: true, subbar: true }
      */
+    /* Instalace na plochu. Manifest sám nestačí – Chrome na Androidu
+       nabídne „Instalovat aplikaci" (a udělá skutečnou ikonu, ne jen
+       zástupce) až když stránka má service worker. Ten náš nic necachuje,
+       je tam jen kvůli téhle podmínce. (Michal 2. 9. 2026.) */
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+        window.addEventListener("load", () => {
+            navigator.serviceWorker.register("sw.js")
+                .catch(err => console.warn("Service worker se nezaregistroval:", err));
+        });
+    }
+
     UI.mountNav = (options = {}) => {
         const slot = document.getElementById("appHeader");
         if (!slot) return;
