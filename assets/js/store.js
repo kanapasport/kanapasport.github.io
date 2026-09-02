@@ -1573,6 +1573,72 @@ function spojVykazy() {
     emit("vykazy", KB.vykazy);
 }
 
+/* ------------------------------------------- dopočet částek k výkazům ----
+   Zaměstnanec zapisuje jen čas – peníze psát nesmí a pravidla mu to
+   nedovolí. Sazbu k jeho zápisu měl „doplnit správce", jenže na to nikdy
+   nebyl žádný mechanismus: záznam zůstal za nula korun, v přehledech
+   nebyl vidět a do osobního výkazu v Tabulkách šel bez taxy, takže
+   sloupec „Odpracováno za" zůstal prázdný (našlo se 2. 9. 2026).
+
+   Tohle to dopočítá z manažerova prohlížeče: chybí-li k záznamu dokument
+   s částkou, založí se podle sazby toho člověka; když zaměstnanec zápis
+   dodatečně upravil, přepočítá se částka, ale RUČNĚ NASTAVENÁ SAZBA
+   zůstává (manažer ji u konkrétního zápisu mohl schválně změnit).
+   Absence má sazbu nula schválně – proplácet se nemá.                    */
+
+const DAVKA_CASTEK = 60;      // víc než dost na den; zbytek dojede příště
+
+KB.doplnCastky = async () => {
+    if (!db || !auth || !auth.currentUser) return null;
+    if (!KB.sazbyPrisly || vykazyRezim !== "vse") return null;   // jen manažer
+
+    const chybiSazba = new Set();
+    const kUlozeni = [];
+
+    for (const z of syroveZaznamy) {
+        const c = syroveCastky[z.id];
+        const jeAbsence = z.absence === true;
+
+        if (!c) {
+            const sazba = jeAbsence ? 0 : (Number(KB.sazby[z.uid]) || 0);
+            if (!jeAbsence && !sazba) { chybiSazba.add(z.uid); continue; }
+            kUlozeni.push({ z: z, sazba: sazba });
+            continue;
+        }
+        // zápis se po výpočtu změnil (opravené hodiny, oběd, kilometry)
+        if (Number(z.updatedMs || 0) > Number(c.updatedMs || 0)) {
+            kUlozeni.push({ z: z, sazba: Number(c.sazba) || 0 });
+        }
+        if (kUlozeni.length >= DAVKA_CASTEK) break;
+    }
+    if (!kUlozeni.length) {
+        return { doplneno: 0, chybiSazba: [...chybiSazba] };
+    }
+
+    let hotovo = 0;
+    for (const polozka of kUlozeni.slice(0, DAVKA_CASTEK)) {
+        const z = polozka.z;
+        try {
+            await setDoc(castkaDoc(z.id), Object.assign({
+                sazba: polozka.sazba,
+                uid: z.uid, datum: z.datum, zakazka: z.zakazka,
+                updatedMs: Date.now(),
+                updatedBy: "dopočet"
+            }, KB.spocitejCastky(z, polozka.sazba)), { merge: true });
+            /* Do Tabulek se řádek musí přepsat znovu – hodinová
+               synchronizace se řídí datem změny ZÁZNAMU, a ten se
+               nezměnil, takže sloupec s taxou by zůstal prázdný. */
+            KB.posliDoSheets(z.id);
+            hotovo++;
+        } catch (err) { console.warn("Částka se nedopočítala:", z.id, err); }
+    }
+    if (hotovo) {
+        KB.zapisAktivitu("vykaz",
+            "dopočítal částky u " + hotovo + " výkazů podle sazeb lidí", "Systém");
+    }
+    return { doplneno: hotovo, chybiSazba: [...chybiSazba] };
+};
+
 /**
  * Dotáhne výkazy staršího období, které živé okno nepokrývá. Volá se ze
  * stránek, kde si člověk vybere delší rozsah (přehled, vytížení, filtr
@@ -1664,6 +1730,9 @@ function sledujVykazy(jenSve) {
             ? data.technologie : KB.DEFAULT_TECHNOLOGIE.slice();
         KB.sazby = (data.sazby && typeof data.sazby === "object") ? data.sazby : {};
         KB.rozpocty = (data.rozpocty && typeof data.rozpocty === "object") ? data.rozpocty : {};
+        /* Bez tohohle příznaku by dopočet částek běžel s prázdným
+           číselníkem a všem by zapsal nulovou sazbu. */
+        KB.sazbyPrisly = true;
         emit("vykazy-meta", data);
     }, (err) => console.error("Chyba čtení číselníků výkazů:", err)));
 }

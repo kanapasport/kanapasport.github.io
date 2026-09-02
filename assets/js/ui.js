@@ -1059,7 +1059,8 @@
                    umí vyvolat i odběr částek dřív, než záznamy dorazí */
                 if (window.KB.vykazyPrisly) {
                     hlidkaPrislo.vykazy = true; hlidkaVykazu(); hlidkaDopredu();
-                } });
+                }
+                dopocitejCastky(); });
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
@@ -1237,6 +1238,39 @@
         }).then(() => {
             try { localStorage.setItem("kb-hlidka", id); } catch (err) { }
         }).catch(err => console.warn("Hlídka výkazů nezapsala vzkaz:", err));
+    }
+
+    /* --------------------------------------- dopočet částek k výkazům ---
+       Zaměstnanec zapisuje jen čas; sazbu a částku k tomu musí doplnit
+       manažer, protože peníze zaměstnanec zapsat nesmí. Dělá se to tady,
+       z manažerova prohlížeče, jakmile mu dorazí zápisy i tajný číselník
+       se sazbami — bez toho zůstávaly cizí výkazy za nula korun a do
+       Tabulek šly bez taxy (Michal 2. 9. 2026). */
+
+    let castkyBezi = false;
+
+    function dopocitejCastky() {
+        if (castkyBezi || !UI.can("vykaz.view")) return;
+        if (!window.KB.doplnCastky) return;
+        castkyBezi = true;
+        window.KB.doplnCastky()
+            .then(v => {
+                if (!v) return;
+                if (v.doplneno) {
+                    UI.toast("Doplněny sazby u " + v.doplneno + " výkazů.");
+                }
+                if (v.chybiSazba.length) {
+                    const jmena = v.chybiSazba.map(uid => {
+                        const u = (window.KB.users || []).find(x => x.id === uid);
+                        return u ? ((u.first || "") + " " + (u.last || "")).trim() : uid;
+                    });
+                    console.warn("Bez sazby v číselníku (výkazy zůstanou za 0 Kč):", jmena);
+                    UI.toast("Chybí sazba: " + jmena.join(", ") +
+                        " — doplň ji v Nastavení, jinak jsou jejich výkazy za 0 Kč.", "warn");
+                }
+            })
+            .catch(err => console.warn("Dopočet částek selhal:", err))
+            .finally(() => { castkyBezi = false; });
     }
 
     /* -------------------------------------- výkaz zapsaný dopředu ------
