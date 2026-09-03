@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Pokladna – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=211">
+    <link rel="stylesheet" href="assets/css/app.css?v=212">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -44,6 +44,19 @@
         .pkrad__pruh i { display: block; height: 100%; background: var(--accent);
             border-radius: 4px; }
         .pkrad__pocet { font-size: 11.5px; color: var(--muted); }
+
+        /* Srolování přehledu. Kdo si knihu jen prohlíží, nechce mít nad ní
+           dva žebříčky přes půl obrazovky (Michal 3. 9. 2026). Stav se drží
+           v prohlížeči, ať se nemusí sbalovat pokaždé znovu. */
+        .pkhlava { display: flex; align-items: center; gap: 8px; width: 100%;
+            border: 0; background: none; font: inherit; text-align: left;
+            cursor: pointer; padding: 0; color: inherit; }
+        .pkhlava b { font-size: 15px; }
+        .pkhlava__souhrn { margin-left: auto; font-size: 12px; color: var(--muted);
+            font-weight: 700; white-space: nowrap; }
+        .pkhlava__sipka { color: var(--muted); font-size: 12px; transition: transform .15s;
+            flex: none; }
+        .pkhlava[aria-expanded="false"] .pkhlava__sipka { transform: rotate(-90deg); }
 
         /* Kniha */
         .pkkniha { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -121,11 +134,21 @@
 
         <div class="pkprehled">
             <div class="card col" style="padding:14px 16px;gap:8px">
-                <b>Za co se utrácí</b>
+                <button type="button" class="pkhlava" data-sbal="co" aria-expanded="false"
+                        aria-controls="prehledCo">
+                    <b>Za co se utrácí</b>
+                    <span class="pkhlava__souhrn" id="souhrnCo"></span>
+                    <span class="pkhlava__sipka">▼</span>
+                </button>
                 <div id="prehledCo"></div>
             </div>
             <div class="card col" style="padding:14px 16px;gap:8px">
-                <b>Pro koho</b>
+                <button type="button" class="pkhlava" data-sbal="kdo" aria-expanded="false"
+                        aria-controls="prehledKdo">
+                    <b>Pro koho</b>
+                    <span class="pkhlava__souhrn" id="souhrnKdo"></span>
+                    <span class="pkhlava__sipka">▼</span>
+                </button>
                 <div id="prehledKdo"></div>
             </div>
         </div>
@@ -165,10 +188,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=211"></script>
-<script src="assets/js/ui.js?v=211"></script>
-<script src="assets/js/vykazy.js?v=211"></script>
-<script type="module" src="assets/js/store.js?v=211"></script>
+<script src="assets/js/taxonomy.js?v=212"></script>
+<script src="assets/js/ui.js?v=212"></script>
+<script src="assets/js/vykazy.js?v=212"></script>
+<script type="module" src="assets/js/store.js?v=212"></script>
 
 <script>
 (function () {
@@ -208,6 +231,27 @@
     /* Filtr podle člověka: "" = všichni, "-" = zápisy, u kterých není
        poznat, koho se týkají (nákupy do kanceláře, pošta, klíče). */
     let filtrKdo = "";
+
+    /* Sbalené přehledy. Ve výchozím stavu jsou ZAVŘENÉ – hlavní je kniha,
+       přehledy jsou doplněk (Michal 3. 9. 2026). Rozbalení se drží
+       v prohlížeči toho, kdo se dívá: je to jeho zvyk, ne nastavení
+       pokladny. */
+    const SBAL_KLIC = "kb-pokladna-sbaleno";
+    let sbaleno = { co: true, kdo: true };
+    try {
+        const u = JSON.parse(localStorage.getItem(SBAL_KLIC));
+        if (u) sbaleno = { co: u.co === true, kdo: u.kdo === true };
+    } catch (err) { /* soukromý režim */ }
+
+    function srovnejSbaleni() {
+        [["co", "prehledCo"], ["kdo", "prehledKdo"]].forEach(([klic, id]) => {
+            const telo = $(id);
+            const tlacitko = document.querySelector('[data-sbal="' + klic + '"]');
+            if (!telo || !tlacitko) return;
+            telo.hidden = sbaleno[klic];
+            tlacitko.setAttribute("aria-expanded", sbaleno[klic] ? "false" : "true");
+        });
+    }
 
     const czDatum = (iso) => {
         if (!iso) return "";
@@ -320,9 +364,12 @@
             o.castka += Number(z.vydej) || 0; o.pocet++;
             poKat.set(k, o);
         });
-        $("prehledCo").innerHTML = zebricek(
-            [...poKat.values()].sort((a, b) => b.castka - a.castka),
-            "Za vybrané období se nic nevydalo.");
+        const kategorie = [...poKat.values()].sort((a, b) => b.castka - a.castka);
+        $("prehledCo").innerHTML = zebricek(kategorie, "Za vybrané období se nic nevydalo.");
+        /* Sbalený přehled musí pořád něco říct – proto do hlavičky to
+           hlavní: kolik položek a co je z nich největší. */
+        $("souhrnCo").textContent = kategorie.length
+            ? kategorie.length + " kategorií · nejvíc " + kategorie[0].nazev : "";
 
         const poLidech = new Map();
         let bezJmena = { nazev: "Nepřiřazeno", castka: 0, pocet: 0, filtr: "-" };
@@ -337,6 +384,9 @@
         if (bezJmena.pocet) lide.push(bezJmena);
         $("prehledKdo").innerHTML = zebricek(lide,
             "Zatím není u čeho poznat, koho se výdaj týkal.");
+        const sJmenem = lide.filter(x => x.filtr !== "-");
+        $("souhrnKdo").textContent = sJmenem.length
+            ? sJmenem.length + " lidí · nejvíc " + sJmenem[0].nazev : "";
     }
 
     /* Jméno u zápisu: uložené `jmeno`, jinak to, co je v textu za „@". */
@@ -387,6 +437,7 @@
         vykresliStav();
         vykresliPrehledy();
         vykresliKnihu();
+        srovnejSbaleni();
     }
 
     /* ------------------------------------------------- zmínky přes „@" --- */
@@ -515,6 +566,16 @@
                 console.error(err);
                 window.KBUI.toast("Zápis se neuložil.", "error");
             }
+        });
+
+        document.addEventListener("click", (e) => {
+            const b = e.target.closest("[data-sbal]");
+            if (!b) return;
+            const klic = b.dataset.sbal;
+            sbaleno[klic] = !sbaleno[klic];
+            srovnejSbaleni();
+            try { localStorage.setItem(SBAL_KLIC, JSON.stringify(sbaleno)); }
+            catch (err) { /* soukromý režim */ }
         });
 
         /* Klik na pruh v přehledu „Pro koho" zapne filtr – rychlejší než
