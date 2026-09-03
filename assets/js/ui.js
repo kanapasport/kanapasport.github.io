@@ -1588,6 +1588,12 @@
                                 '<button type="button" class="linkbtn" data-quick-oblibene-uloz>uložit jako oblíbené</button>' +
                             "</div>" +
                             '<div class="quickpanel__oblibene" data-quick-oblibene></div>' +
+                            '<div class="quickpanel__hledej">' +
+                                '<input type="text" class="field" data-quick-hledej' +
+                                    ' placeholder="Hledat člověka…" aria-label="Hledat člověka">' +
+                                '<button type="button" data-quick-hledej-zrus hidden' +
+                                    ' title="Zrušit hledání">×</button>' +
+                            "</div>" +
                             '<div class="quickpanel__lide" data-quick-komu></div>' +
                         "</div>" +
 
@@ -1765,6 +1771,40 @@
         vykresliQuickSeznamy(uid);
     }
 
+    /* Schová jména, která hledanému nesedí. Zaškrtnutí zůstávají – kdo si
+       vybere tři lidi a pak hledá čtvrtého, o vybrané nepřijde; proto se jen
+       skrývá, nepřekresluje. Vybraní lidé zůstanou vidět vždycky, ať je
+       poznat, komu vzkaz opravdu jde. */
+    function profiltrujLidi(panel) {
+        const pole = panel.querySelector("[data-quick-hledej]");
+        const komu = panel.querySelector("[data-quick-komu]");
+        if (!pole || !komu) return;
+        const dotaz = pole.value.trim().toLowerCase();
+        panel.querySelector("[data-quick-hledej-zrus]").hidden = !dotaz;
+
+        let videt = 0;
+        komu.querySelectorAll("label").forEach(l => {
+            const ch = l.querySelector("input");
+            const sedi = !dotaz || l.textContent.toLowerCase().indexOf(dotaz) !== -1;
+            const nechat = sedi || (ch && ch.checked);
+            l.hidden = !nechat;
+            if (nechat) videt++;
+        });
+
+        let nic = komu.querySelector(".quickpanel__nic");
+        if (!videt) {
+            if (!nic) {
+                nic = document.createElement("div");
+                nic.className = "quickpanel__nic";
+                komu.appendChild(nic);
+            }
+            nic.textContent = "Nikdo takový v seznamu není.";
+            nic.hidden = false;
+        } else if (nic) {
+            nic.hidden = true;
+        }
+    }
+
     function naplnQuickForm(panel, uid) {
         // nabídky (jen jednou, ať se nepřepisuje rozepsaný výběr)
         const komu = panel.querySelector("[data-quick-komu]");
@@ -1790,6 +1830,7 @@
                     esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
         }
         vykresliOblibene();
+        profiltrujLidi(panel);
         const projektSel = panel.querySelector("[data-quick-projekt]");
         const projekty = (window.KB.projektyDocs || []).filter(p => !p.uzavreno).map(p => p.nazev);
         if (projekty.length && projektSel.options.length <= 1) {
@@ -2480,6 +2521,8 @@
             panel.querySelector("[data-quick-projekt]").value = "";
             panel.querySelectorAll("[data-quick-komu] input:checked")
                 .forEach(ch => { ch.checked = false; });
+            panel.querySelector("[data-quick-hledej]").value = "";
+            profiltrujLidi(panel);
 
             const jenJa = komu.length === 1 && komu[0] === window.KB.currentUid();
             UI.toast(jenJa ? "Poznámka uložena jen pro tebe."
@@ -2521,6 +2564,15 @@
             panel.querySelectorAll("[data-quick-komu] input").forEach(ch => {
                 if (vybrat.has(ch.value)) ch.checked = true;
             });
+            profiltrujLidi(panel);      // vybraní musí zůstat vidět i při hledání
+            return;
+        }
+
+        if (event.target.closest("[data-quick-hledej-zrus]")) {
+            const panel2 = document.getElementById("kbQuickPanel");
+            panel2.querySelector("[data-quick-hledej]").value = "";
+            profiltrujLidi(panel2);
+            panel2.querySelector("[data-quick-hledej]").focus();
             return;
         }
 
@@ -2533,7 +2585,20 @@
         }
     });
 
+    document.addEventListener("input", (event) => {
+        if (!event.target.matches || !event.target.matches("[data-quick-hledej]")) return;
+        profiltrujLidi(document.getElementById("kbQuickPanel"));
+    });
+
     document.addEventListener("keydown", (event) => {
+        /* Escape v hledání jen vyprázdní pole – zavřít celý panel a přijít
+           o rozepsaný vzkaz by za to nestálo. */
+        if (event.key === "Escape" && event.target && event.target.matches &&
+                event.target.matches("[data-quick-hledej]") && event.target.value) {
+            event.stopPropagation();
+            event.target.value = "";
+            return void profiltrujLidi(document.getElementById("kbQuickPanel"));
+        }
         if (event.key === "Escape") prepniQuick(false);
 
         /* Enter přepíná zaškrtávátko stejně jako mezerník. Tab mezi štítky
