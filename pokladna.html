@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Pokladna – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=210">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Pokladní kniha: nahoře stav, pod ním přehledy „za co" a „pro koho",
+           dole samotná kniha. Příjmy jsou zeleně, výdaje obyčejně – v papírové
+           knize to jsou dva sloupce a tady dvě barvy. */
+
+        .pkstav { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px; }
+        .pkkarta { border: 1px solid var(--line); border-radius: var(--radius-lg);
+            background: var(--surface); padding: 14px 16px; box-shadow: var(--shadow); }
+        .pkkarta__popis { font-size: 11px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); }
+        .pkkarta__cislo { font-size: 26px; font-weight: 900; line-height: 1.2; margin-top: 3px;
+            font-variant-numeric: tabular-nums; }
+        .pkkarta__pozn { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .pkkarta--zustatek { border-color: var(--accent); background: var(--accent-tint); }
+        .pkkarta--zustatek .pkkarta__cislo { color: var(--accent); }
+        .pkkarta--prijem .pkkarta__cislo { color: var(--ok); }
+
+        /* Přehledy: vodorovné pruhy jedné barvy – každý má svůj popisek,
+           takže by barva nerozlišovala nic. */
+        .pkprehled { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 14px; }
+        .pkrad { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+            gap: 4px 10px; align-items: baseline; margin-bottom: 9px; }
+        .pkrad__nazev { font-size: 13.5px; font-weight: 700; min-width: 0;
+            overflow-wrap: anywhere; }
+        .pkrad__castka { font-size: 13.5px; font-weight: 900; white-space: nowrap;
+            font-variant-numeric: tabular-nums; }
+        .pkrad__pruh { grid-column: 1/-1; height: 7px; border-radius: 4px;
+            background: var(--line-soft); overflow: hidden; }
+        .pkrad__pruh i { display: block; height: 100%; background: var(--accent);
+            border-radius: 4px; }
+        .pkrad__pocet { font-size: 11.5px; color: var(--muted); }
+
+        /* Kniha */
+        .pkkniha { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        .pkkniha th { text-align: left; font-size: 11px; font-weight: 900;
+            letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+            padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        .pkkniha td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft);
+            vertical-align: top; }
+        .pkkniha tr:last-child td { border-bottom: 0; }
+        .pkkniha .num { text-align: right; white-space: nowrap;
+            font-variant-numeric: tabular-nums; }
+        .pkkniha__datum { white-space: nowrap; color: var(--muted); }
+        /* Příjem je jiná věc než výdaj – celý řádek to musí říct na dálku. */
+        .pkkniha tr.pk--prijem { background: rgba(13, 125, 63, .07); }
+        .pkkniha tr.pk--prijem .pkkniha__castka { color: var(--ok); font-weight: 900; }
+        .pkkniha__castka { font-weight: 700; }
+        .pkstitek { display: inline-block; font-size: 11px; font-weight: 800;
+            padding: 1px 7px; border-radius: 999px; background: var(--bg-soft);
+            border: 1px solid var(--line); color: var(--text-soft); white-space: nowrap; }
+        .pkkdo { font-weight: 800; color: var(--accent); }
+        .pkakce { border: 0; background: none; color: var(--muted); cursor: pointer;
+            font-weight: 900; padding: 2px 5px; }
+        .pkakce:hover { color: var(--accent); }
+        .pkakce--smaz:hover { color: var(--danger, #c8102e); }
+
+        /* Zápis nového řádku */
+        .pkform { display: grid; grid-template-columns: 140px minmax(220px, 2fr) 120px 130px 150px auto;
+            gap: 10px; align-items: end; }
+        @media (max-width: 1000px) { .pkform { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .pkform label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .pkform .label { font-size: 11px; font-weight: 800; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); }
+
+        /* Našeptávač lidí po „@" – stejný jako v poradách. */
+        .pkzminky { position: absolute; z-index: 60; min-width: 200px; max-height: 220px;
+            overflow-y: auto; background: var(--surface); border: 1px solid var(--line);
+            border-radius: var(--radius); box-shadow: 0 10px 26px rgba(0,0,0,.16); padding: 4px; }
+        .pkzminky button { display: block; width: 100%; text-align: left; border: 0;
+            background: none; font: inherit; font-size: 13.5px; padding: 6px 9px;
+            border-radius: 6px; cursor: pointer; }
+        .pkzminky button:hover, .pkzminky button.je-aktivni {
+            background: var(--accent-tint); color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:17px">Pokladna je jen pro asistentku a manažery.</b>
+        <p class="small muted" style="margin-top:6px;line-height:1.6">
+            Kdo hotovost v kanceláři nevede, nemá k ní důvod vidět.</p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:16px">
+
+        <div class="row" style="gap:18px;flex-wrap:wrap;align-items:flex-start">
+            <div style="min-width:0">
+                <h2 style="font-size:24px;font-weight:900;line-height:1.15">Pokladna</h2>
+                <p class="small muted" style="margin-top:3px;max-width:720px;line-height:1.6">
+                    Hotovost v kanceláři — co přišlo, co se vydalo a komu.
+                    Do popisu se dá napsat <b>@</b> a vybrat člověka; podle toho
+                    se pak sčítá přehled „pro koho".
+                </p>
+            </div>
+            <select id="obdobi" class="field" style="width:auto;margin-left:auto"></select>
+        </div>
+
+        <div class="pkstav" id="stav"></div>
+
+        <div class="pkprehled">
+            <div class="card col" style="padding:14px 16px;gap:8px">
+                <b>Za co se utrácí</b>
+                <div id="prehledCo"></div>
+            </div>
+            <div class="card col" style="padding:14px 16px;gap:8px">
+                <b>Pro koho</b>
+                <div id="prehledKdo"></div>
+            </div>
+        </div>
+
+        <div class="card col" style="padding:14px 16px;gap:12px">
+            <b>Nový zápis</b>
+            <div class="pkform">
+                <label><span class="label">Datum</span>
+                    <input type="date" class="field" id="fDatum"></label>
+                <label style="position:relative"><span class="label">Za co / komu</span>
+                    <input type="text" class="field" id="fText" maxlength="200"
+                           placeholder="např. Oběd – @Petr Trávník"></label>
+                <label><span class="label">Příjem</span>
+                    <input type="number" class="field" id="fPrijem" min="0" step="1"
+                           placeholder="0"></label>
+                <label><span class="label">Výdej</span>
+                    <input type="number" class="field" id="fVydej" min="0" step="1"
+                           placeholder="0"></label>
+                <label><span class="label">Kategorie</span>
+                    <select class="field" id="fKategorie"></select></label>
+                <button type="button" id="btnPridej" class="btn btn--primary">Zapsat</button>
+            </div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Vyplň jen jedno z políček — příjem, nebo výdej. Kategorie se
+                sama nabídne podle toho, co napíšeš.
+            </p>
+        </div>
+
+        <div class="card" style="padding:6px 4px">
+            <div style="overflow-x:auto">
+                <table class="pkkniha" id="kniha"></table>
+            </div>
+            <div id="prazdno" class="tiny muted" style="padding:16px;text-align:center" hidden>
+                V tomhle období není žádný zápis.
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=210"></script>
+<script src="assets/js/ui.js?v=210"></script>
+<script src="assets/js/vykazy.js?v=210"></script>
+<script type="module" src="assets/js/store.js?v=210"></script>
+
+<script>
+(function () {
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const esc = (v) => window.KBUI.esc(v);
+    const V = window.KBVYK;
+
+    /* Kategorie výdajů. Drží se tady, ne v databázi: je to pár položek,
+       které se skoro nemění, a číselník navíc by se musel spravovat. */
+    const KATEGORIE = [
+        { id: "obed", nazev: "Obědy" },
+        { id: "kancelar", nazev: "Kancelář a vybavení" },
+        { id: "posta", nazev: "Pošta a úřady" },
+        { id: "zdravot", nazev: "Lékař a papíry" },
+        { id: "doprava", nazev: "Doprava" },
+        { id: "praxe", nazev: "Praxe a brigády" },
+        { id: "vklad", nazev: "Vklad do pokladny" },
+        { id: "ostatni", nazev: "Ostatní" }
+    ];
+    const nazevKat = (id) => (KATEGORIE.find(k => k.id === id) || {}).nazev || "Ostatní";
+
+    /** Kategorie odhadnutá z textu – ať se nemusí u každého oběda vybírat. */
+    function odhadniKategorii(text) {
+        const s = String(text || "").toLowerCase();
+        if (s.indexOf("oběd") === 0 || s.indexOf("obed") === 0) return "obed";
+        if (s.indexOf("vklad") !== -1 || s.indexOf("příjem") === 0) return "vklad";
+        if (/pošt|posl|úřad|konverze/.test(s)) return "posta";
+        if (/výpis|lékař|prohlídk|dokumentac/.test(s)) return "zdravot";
+        if (/tankov|vlak|jízden|benzín/.test(s)) return "doprava";
+        if (/praxe|brigád/.test(s)) return "praxe";
+        if (/jysk|pepco|kik|datart|kampi|káva|klíč|kancel|materiál/.test(s)) return "kancelar";
+        return "ostatni";
+    }
+
+    let obdobi = "";        // "" = vše, jinak "2026-09"
+
+    const czDatum = (iso) => {
+        if (!iso) return "";
+        const [r, m, d] = String(iso).split("-");
+        return Number(d) + ". " + Number(m) + ". " + r;
+    };
+    const kc = (n) => Math.round(Number(n) || 0).toLocaleString("cs-CZ") + " Kč";
+
+    /* --------------------------------------------------------- výběry ---- */
+
+    function naplnObdobi() {
+        const mesice = [...new Set((window.KB.pokladna || [])
+            .map(z => String(z.datum || "").slice(0, 7)).filter(Boolean))]
+            .sort().reverse();
+        const MES = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
+            "srpen", "září", "říjen", "listopad", "prosinec"];
+        $("obdobi").innerHTML = '<option value="">Celá kniha</option>' +
+            mesice.map(m => {
+                const [r, mm] = m.split("-");
+                return '<option value="' + esc(m) + '"' + (m === obdobi ? " selected" : "") +
+                    ">" + MES[Number(mm) - 1] + " " + r + "</option>";
+            }).join("");
+        if (obdobi && mesice.indexOf(obdobi) === -1) obdobi = "";
+    }
+
+    const vybrane = () => (window.KB.pokladna || [])
+        .filter(z => !obdobi || String(z.datum || "").indexOf(obdobi) === 0);
+
+    /* ---------------------------------------------------------- stav ----- */
+
+    function vykresliStav() {
+        const vse = window.KB.pokladna || [];
+        const zustatek = vse.reduce((n, z) => n + (Number(z.prijem) || 0) - (Number(z.vydej) || 0), 0);
+        const v = vybrane();
+        const prijem = v.reduce((n, z) => n + (Number(z.prijem) || 0), 0);
+        const vydej = v.reduce((n, z) => n + (Number(z.vydej) || 0), 0);
+        const popis = obdobi ? "za vybraný měsíc" : "za celou knihu";
+
+        $("stav").innerHTML =
+            '<div class="pkkarta pkkarta--zustatek"><div class="pkkarta__popis">Zůstatek v pokladně</div>' +
+                '<div class="pkkarta__cislo">' + esc(kc(zustatek)) + "</div>" +
+                '<div class="pkkarta__pozn">vždy z celé knihy, ne z vybraného měsíce</div></div>' +
+            '<div class="pkkarta pkkarta--prijem"><div class="pkkarta__popis">Příjmy</div>' +
+                '<div class="pkkarta__cislo">' + esc(kc(prijem)) + "</div>" +
+                '<div class="pkkarta__pozn">' + esc(popis) + "</div></div>" +
+            '<div class="pkkarta"><div class="pkkarta__popis">Výdaje</div>' +
+                '<div class="pkkarta__cislo">' + esc(kc(vydej)) + "</div>" +
+                '<div class="pkkarta__pozn">' + esc(popis) + "</div></div>" +
+            '<div class="pkkarta"><div class="pkkarta__popis">Zápisů</div>' +
+                '<div class="pkkarta__cislo">' + v.length + "</div>" +
+                '<div class="pkkarta__pozn">' + esc(popis) + "</div></div>";
+    }
+
+    /* ------------------------------------------------------- přehledy ---- */
+
+    /** Žebříček pruhů. Jedna barva schválně – rozlišuje popisek, ne odstín. */
+    function zebricek(polozky, prazdneText) {
+        if (!polozky.length) {
+            return '<div class="tiny muted" style="line-height:1.6">' + prazdneText + "</div>";
+        }
+        const nej = polozky[0].castka || 1;
+        return polozky.map(p =>
+            '<div class="pkrad">' +
+                '<span class="pkrad__nazev">' + esc(p.nazev) +
+                    ' <span class="pkrad__pocet">' + p.pocet + "×</span></span>" +
+                '<span class="pkrad__castka">' + esc(kc(p.castka)) + "</span>" +
+                '<span class="pkrad__pruh"><i style="width:' +
+                    Math.max(2, Math.round(p.castka / nej * 100)) + '%"></i></span>' +
+            "</div>").join("");
+    }
+
+    function vykresliPrehledy() {
+        const v = vybrane().filter(z => Number(z.vydej) > 0);
+
+        const poKat = new Map();
+        v.forEach(z => {
+            const k = z.kategorie || "ostatni";
+            const o = poKat.get(k) || { nazev: nazevKat(k), castka: 0, pocet: 0 };
+            o.castka += Number(z.vydej) || 0; o.pocet++;
+            poKat.set(k, o);
+        });
+        $("prehledCo").innerHTML = zebricek(
+            [...poKat.values()].sort((a, b) => b.castka - a.castka),
+            "Za vybrané období se nic nevydalo.");
+
+        const poLidech = new Map();
+        let bezJmena = { nazev: "Nepřiřazeno", castka: 0, pocet: 0 };
+        v.forEach(z => {
+            const jm = jmenoZaznamu(z);
+            if (!jm) { bezJmena.castka += Number(z.vydej) || 0; bezJmena.pocet++; return; }
+            const o = poLidech.get(jm) || { nazev: jm, castka: 0, pocet: 0 };
+            o.castka += Number(z.vydej) || 0; o.pocet++;
+            poLidech.set(jm, o);
+        });
+        const lide = [...poLidech.values()].sort((a, b) => b.castka - a.castka);
+        if (bezJmena.pocet) lide.push(bezJmena);
+        $("prehledKdo").innerHTML = zebricek(lide,
+            "Zatím není u čeho poznat, koho se výdaj týkal.");
+    }
+
+    /* Jméno u zápisu: uložené `jmeno`, jinak to, co je v textu za „@". */
+    function jmenoZaznamu(z) {
+        if (z.jmeno) return z.jmeno;
+        const m = /@([\wÀ-ž]+(?:\s+[A-ZÁ-Ž][\wÀ-ž]*)?)/.exec(String(z.text || ""));
+        return m ? m[1] : "";
+    }
+
+    /* ---------------------------------------------------------- kniha ---- */
+
+    /** Zvýrazní @jméno v popisu, ať je na první pohled vidět, koho se týká. */
+    const textSeZminkou = (t) => esc(t)
+        .replace(/@([\wÀ-ž]+(?:\s+[A-ZÁ-Ž][\wÀ-ž]*)?)/g, '<span class="pkkdo">@$1</span>');
+
+    function vykresliKnihu() {
+        const v = vybrane();
+        $("prazdno").hidden = !!v.length;
+        if (!v.length) { $("kniha").innerHTML = ""; return; }
+
+        $("kniha").innerHTML =
+            "<thead><tr><th>Datum</th><th>Za co / komu</th><th>Kategorie</th>" +
+                '<th class="num">Příjem</th><th class="num">Výdej</th><th></th></tr></thead>' +
+            "<tbody>" + v.map(z => {
+                const prijem = Number(z.prijem) || 0;
+                return '<tr' + (prijem ? ' class="pk--prijem"' : "") + ">" +
+                    '<td class="pkkniha__datum">' + esc(czDatum(z.datum)) + "</td>" +
+                    "<td>" + textSeZminkou(z.text || "") + "</td>" +
+                    '<td><span class="pkstitek">' + esc(nazevKat(z.kategorie)) + "</span></td>" +
+                    '<td class="num pkkniha__castka">' + (prijem ? esc(kc(prijem)) : "") + "</td>" +
+                    '<td class="num pkkniha__castka">' +
+                        (Number(z.vydej) ? esc(kc(z.vydej)) : "") + "</td>" +
+                    '<td class="num"><button type="button" class="pkakce pkakce--smaz" ' +
+                        'data-smaz="' + esc(z.id) + '" title="Smazat zápis">×</button></td>' +
+                "</tr>";
+            }).join("") + "</tbody>";
+    }
+
+    function vykresli() {
+        naplnObdobi();
+        vykresliStav();
+        vykresliPrehledy();
+        vykresliKnihu();
+    }
+
+    /* ------------------------------------------------- zmínky přes „@" --- */
+
+    let zminkyEl = null, zminkyOd = -1, zminkyVyber = 0;
+
+    function zavriZminky() {
+        if (zminkyEl) zminkyEl.remove();
+        zminkyEl = null; zminkyOd = -1; zminkyVyber = 0;
+    }
+
+    function otevriZminky() {
+        const pole = $("fText");
+        const pred = pole.value.slice(0, pole.selectionStart);
+        const m = /(^|\s)@([^@\s]{0,30})$/.exec(pred);
+        if (!m) return zavriZminky();
+        const q = m[2].toLowerCase();
+        const lide = (window.KB.users || [])
+            .filter(u => u.active !== false && window.KBUI.typUvazku(u) !== "servis")
+            .map(u => ((u.first || "") + " " + (u.last || "")).trim())
+            .filter(j => j && (!q || j.toLowerCase().indexOf(q) !== -1))
+            .sort((a, b) => a.localeCompare(b, "cs")).slice(0, 8);
+        if (!lide.length) return zavriZminky();
+
+        zminkyOd = pred.length - m[2].length - 1;
+        zminkyVyber = 0;
+        if (!zminkyEl) {
+            zminkyEl = document.createElement("div");
+            zminkyEl.className = "pkzminky";
+            document.body.appendChild(zminkyEl);
+        }
+        const r = pole.getBoundingClientRect();
+        zminkyEl.style.left = (r.left + window.scrollX) + "px";
+        zminkyEl.style.top = (r.bottom + window.scrollY + 4) + "px";
+        zminkyEl.innerHTML = lide.map((j, i) =>
+            '<button type="button" data-zminka="' + esc(j) + '"' +
+            (i === zminkyVyber ? ' class="je-aktivni"' : "") + ">" + esc(j) + "</button>").join("");
+    }
+
+    function doplnZminku(jmeno) {
+        const pole = $("fText");
+        const konec = pole.selectionStart;
+        pole.value = pole.value.slice(0, zminkyOd) + "@" + jmeno + " " + pole.value.slice(konec);
+        const kam = zminkyOd + jmeno.length + 2;
+        zavriZminky();
+        pole.focus();
+        pole.setSelectionRange(kam, kam);
+        $("fKategorie").value = odhadniKategorii(pole.value);
+    }
+
+    /* ---------------------------------------------------------- start ---- */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "pokladna.html" });
+
+        $("fKategorie").innerHTML = KATEGORIE
+            .map(k => '<option value="' + k.id + '">' + esc(k.nazev) + "</option>").join("");
+        $("fDatum").value = new Date().toISOString().slice(0, 10);
+
+        function paint() {
+            const smim = window.KBUI.can("vykaz.view");
+            $("stop").hidden = smim;
+            $("obsah").hidden = !smim;
+            if (smim) vykresli();
+        }
+
+        $("obdobi").addEventListener("change", () => { obdobi = $("obdobi").value; vykresli(); });
+
+        $("fText").addEventListener("input", () => {
+            otevriZminky();
+            // kategorie se nabídne sama, dokud do ní člověk sám nesáhne
+            if (!$("fKategorie").dataset.rucne) {
+                $("fKategorie").value = odhadniKategorii($("fText").value);
+            }
+        });
+        $("fKategorie").addEventListener("change", () => {
+            $("fKategorie").dataset.rucne = "1";
+        });
+        $("fText").addEventListener("keydown", (e) => {
+            if (!zminkyEl) return;
+            const volby = Array.from(zminkyEl.querySelectorAll("[data-zminka]"));
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                zminkyVyber = (zminkyVyber + (e.key === "ArrowDown" ? 1 : volby.length - 1)) % volby.length;
+                volby.forEach((b, i) => b.classList.toggle("je-aktivni", i === zminkyVyber));
+                return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                return void doplnZminku(volby[zminkyVyber].dataset.zminka);
+            }
+            if (e.key === "Escape") { e.preventDefault(); zavriZminky(); }
+        });
+        document.addEventListener("click", (e) => {
+            const b = e.target.closest("[data-zminka]");
+            if (b) return void doplnZminku(b.dataset.zminka);
+            if (zminkyEl && !e.target.closest(".pkzminky")) zavriZminky();
+        });
+
+        $("btnPridej").addEventListener("click", async () => {
+            const text = $("fText").value.trim();
+            const prijem = Number($("fPrijem").value) || 0;
+            const vydej = Number($("fVydej").value) || 0;
+            if (!text) return window.KBUI.toast("Napiš, za co to bylo.", "warn");
+            if (!prijem && !vydej) return window.KBUI.toast("Doplň příjem, nebo výdej.", "warn");
+            /* Obojí naráz by z jednoho řádku udělalo dva zápisy v jednom –
+               v knize se to pak nedá odsouhlasit. */
+            if (prijem && vydej) {
+                return window.KBUI.toast("Vyplň jen jedno – příjem, nebo výdej.", "warn");
+            }
+            const jmeno = (/@([\wÀ-ž]+(?:\s+[A-ZÁ-Ž][\wÀ-ž]*)?)/.exec(text) || [])[1] || "";
+            const clovek = (window.KB.users || []).find(u =>
+                ((u.first || "") + " " + (u.last || "")).trim() === jmeno);
+            try {
+                await window.KB.ulozPokladnu("", {
+                    datum: $("fDatum").value, text: text,
+                    prijem: prijem, vydej: vydej,
+                    kategorie: $("fKategorie").value,
+                    jmeno: jmeno, uid: clovek ? clovek.id : ""
+                });
+                $("fText").value = ""; $("fPrijem").value = ""; $("fVydej").value = "";
+                delete $("fKategorie").dataset.rucne;
+                window.KBUI.toast("Zapsáno.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Zápis se neuložil.", "error");
+            }
+        });
+
+        $("kniha").addEventListener("click", async (e) => {
+            const b = e.target.closest("[data-smaz]");
+            if (!b) return;
+            const z = (window.KB.pokladna || []).find(x => x.id === b.dataset.smaz);
+            if (!z || !confirm("Smazat zápis: " + (z.text || "") + "?")) return;
+            await window.KB.smazPokladnu(z.id)
+                .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+        });
+
+        window.KB.on("pokladna", paint);
+        window.KB.on("users", paint);
+        document.addEventListener("kb-role", paint);
+        window.KB.watchPokladna();
+        paint();
+    });
+})();
+</script>
+</body>
+</html>

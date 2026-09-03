@@ -1125,6 +1125,10 @@
                a ne ve Správě (ta je manažerská). */
             '<a class="siderail__btn" href="upozorneni.html" data-jen-prihlaseny hidden>' +
                 icon("calendar") + "<span>Upozornění</span></a>" +
+            /* Hotovost v kanceláři vede asistentka, koukají manažeři –
+               proto stejné právo jako na výkazy ostatních. */
+            '<a class="siderail__btn" href="pokladna.html" data-need="vykaz.view" hidden>' +
+                icon("building") + "<span>Pokladna</span></a>" +
             '<div class="siderail__spodek">' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +

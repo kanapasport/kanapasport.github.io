@@ -370,6 +370,7 @@ try {
             KB.vykazyPrisly = false;
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = []; KB.porady = [];
             KB.zustatky = {}; KB.poradyKomentare = []; KB.upozorneni = null;
+            KB.pokladna = [];
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -3028,6 +3029,79 @@ KB.ulozPlanPaletu = async (planId, paleta) => {
             p: String(x.p || "").slice(0, 30)
         })) : []
     }, { merge: true });
+};
+
+/* --------------------------------------------------- POKLADNA ----------
+   Hotovost v kanceláři: co přišlo, co se vydalo a komu. Vede ji asistentka,
+   koukají do ní manažeři – proto sedí pod `private/`, kam pravidla pouštějí
+   jen je. Zvláštní pravidlo tedy nepotřebuje.
+
+     private/pokladna/zaznamy/{id}
+       { datum:"2026-09-01", text, prijem, vydej, kategorie, uid, jmeno,
+         kdo, ms }
+
+   `prijem` a `vydej` jsou dvě pole, ne jedna částka se znaménkem – přesně
+   jako v papírové knize. Sčítá se pak bez přemýšlení nad znaménky a nedá
+   se omylem zapsat záporný výdaj.
+
+   Zůstatek se NIKDE neukládá: dopočítá se z celé knihy. Uložený by se
+   po první opravě staršího řádku rozešel s realitou. */
+
+const pokladnaCol = () => collection(db, "artifacts", APP_ID, "private", "pokladna", "zaznamy");
+const pokladnaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "pokladna", "zaznamy", id);
+
+KB.pokladna = [];
+let pokladnaOdber = null;
+
+KB.watchPokladna = async () => {
+    if (pokladnaOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || pokladnaOdber) return;
+    pokladnaOdber = onSnapshot(pokladnaCol(), (snap) => {
+        KB.pokladna = [];
+        snap.forEach(d => KB.pokladna.push({ id: d.id, ...d.data() }));
+        // nejnovější nahoře; ve stejný den drží pořadí zápisu
+        KB.pokladna.sort((a, b) => String(b.datum || "").localeCompare(String(a.datum || ""))
+            || (b.ms || 0) - (a.ms || 0));
+        emit("pokladna", KB.pokladna);
+    }, (err) => console.error("Chyba čtení pokladny:", err));
+};
+
+KB.newPokladnaId = () => "pk_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+KB.ulozPokladnu = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const pid = id || KB.newPokladnaId();
+    const zaznam = {
+        datum: String(data.datum || "").slice(0, 10),
+        text: String(data.text || "").slice(0, 200),
+        /* Záporná částka nedává v knize smysl – co je moc, patří na druhou
+           stranu. Proto se obojí ořízne na nulu. */
+        prijem: Math.max(0, Math.round((Number(data.prijem) || 0) * 100) / 100),
+        vydej: Math.max(0, Math.round((Number(data.vydej) || 0) * 100) / 100),
+        kategorie: String(data.kategorie || "ostatni").slice(0, 20),
+        // koho se výdaj týká (oběd, jízdenka, papíry) – nepovinné
+        uid: String(data.uid || "").slice(0, 60),
+        jmeno: String(data.jmeno || "").slice(0, 60),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    };
+    if (!id) {
+        zaznam.kdo = window.KB_USER || "";
+        zaznam.ms = data.ms || Date.now();
+    }
+    await setDoc(pokladnaDoc(pid), zaznam, { merge: true });
+    return pid;
+};
+
+KB.smazPokladnu = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const z = (KB.pokladna || []).find(x => x.id === id);
+    KB.zapisAktivitu("pokladna", "smazal z pokladny " +
+        ((z && z.datum + " – " + (z.text || "")) || id));
+    await deleteDoc(pokladnaDoc(id));
 };
 
 /* ------------------------------------------- UPOZORNĚNÍ NA E-MAIL -------
