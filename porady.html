@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Porady – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=201">
+    <link rel="stylesheet" href="assets/css/app.css?v=202">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -89,6 +89,36 @@
             background: var(--accent-tint); color: var(--accent); }
         .pzminky__typ { font-size: 11px; color: var(--muted); margin-left: 6px; }
 
+        /* ------------------------------------------------------- diskuze --
+           Pracovní pohled na tentýž zápis: bod, pod ním komentáře lidí
+           a závěr. Zápis (list A4) zůstává na tisk, tohle je na domlouvání. */
+        .pdisk { display: flex; flex-direction: column; gap: 10px; }
+        .pdisk__okruh { font-size: 12px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--accent); margin: 12px 0 2px; }
+        .pdisk__okruh:first-child { margin-top: 0; }
+        .pbodk { border: 1px solid var(--line); border-radius: var(--radius);
+            background: var(--surface); padding: 11px 13px; }
+        .pbodk__hlava { display: flex; gap: 9px; align-items: flex-start; }
+        .pbodk__cislo { font-weight: 900; color: var(--accent); min-width: 20px; }
+        .pbodk__text { font-size: 14.5px; line-height: 1.5; overflow-wrap: anywhere; }
+        .pbodk__kdy { font-size: 11.5px; color: var(--muted); margin-left: auto;
+            white-space: nowrap; }
+        .pbodk__zaver { margin: 8px 0 0 29px; padding: 7px 10px; border-radius: 7px;
+            background: var(--accent-tint); border: 1px solid var(--accent-lt);
+            font-size: 13.5px; line-height: 1.5; }
+        .pbodk__zaver b { color: var(--accent); }
+        .pbodk__kom { margin: 8px 0 0 29px; display: flex; flex-direction: column; gap: 6px; }
+        .pkom { font-size: 13.5px; line-height: 1.5; display: flex; gap: 7px;
+            align-items: flex-start; }
+        .pkom__kdo { font-weight: 800; white-space: nowrap; }
+        .pkom__kdy { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+        .pkom__smaz { border: 0; background: none; color: var(--muted); cursor: pointer;
+            font-weight: 900; padding: 0 4px; margin-left: auto; }
+        .pkom__smaz:hover { color: var(--danger, #c8102e); }
+        .pbodk__pole { margin: 8px 0 0 29px; display: flex; gap: 7px; flex-wrap: wrap; }
+        .pbodk__pole .field { flex: 1 1 240px; min-width: 0; }
+        .pzminka { font-weight: 800; color: var(--accent); }
+
         @media print {
             .porady { grid-template-columns: minmax(0, 1fr); }
             .pseznam, .phlavicka, #appHeader { display: none !important; }
@@ -130,6 +160,16 @@
 
             <div id="detail" hidden>
                 <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                    <span class="row" id="pohledy" style="gap:4px">
+                        <button type="button" class="chip chip--active" data-pohled="zapis"
+                            title="List přesně tak, jak se vytiskne">Zápis</button>
+                        <button type="button" class="chip" data-pohled="diskuze"
+                            title="Body s komentáři a závěry">Diskuze</button>
+                        <button type="button" class="chip" data-pohled="projekt"
+                            title="Co se kdy říkalo k jednomu projektu">Podle projektu</button>
+                    </span>
+                    <select id="filtrProjekt" class="field" hidden
+                        style="width:auto;max-width:280px"></select>
                     <button type="button" id="btnUpravit" class="btn btn--ghost btn--sm"
                         data-need="vykaz.view" hidden>Upravit</button>
                     <button type="button" id="btnUlozit" class="btn btn--primary btn--sm" hidden>
@@ -146,6 +186,9 @@
                 <div id="listWrap" class="plist">
                     <div id="stage" class="plist__stage"></div>
                 </div>
+
+                <!-- diskuze: body s komentáři a závěry -->
+                <div id="diskuze" class="pdisk" hidden></div>
 
                 <!-- psaní -->
                 <div id="editor" class="ped" hidden>
@@ -168,11 +211,11 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=201"></script>
-<script src="assets/js/doc.js?v=201"></script>
-<script src="assets/js/ui.js?v=201"></script>
-<script src="assets/js/vykazy.js?v=201"></script>
-<script type="module" src="assets/js/store.js?v=201"></script>
+<script src="assets/js/taxonomy.js?v=202"></script>
+<script src="assets/js/doc.js?v=202"></script>
+<script src="assets/js/ui.js?v=202"></script>
+<script src="assets/js/vykazy.js?v=202"></script>
+<script type="module" src="assets/js/store.js?v=202"></script>
 
 <script>
 (function () {
@@ -183,6 +226,23 @@
     let otevreny = "";          // id zobrazeného zápisu
     let upravuji = false;
     let koncept = null;         // rozepsaný zápis, dokud se neuloží
+    let pohled = "zapis";       // zapis | diskuze | projekt
+    let filtrProjekt = "";      // který projekt se prochází napříč poradami
+
+    /* Bod býval holý řetězec; od chvíle, kdy se k němu dají psát komentáře,
+       je z něj objekt s vlastním `id`. Starší zápisy se převedou při prvním
+       uložení, čtení proto musí unést obojí. */
+    const bodText = (b) => (b && typeof b === "object") ? (b.text || "") : String(b || "");
+    const bodId = (b) => (b && typeof b === "object") ? (b.id || "") : "";
+    const bodZaver = (b) => (b && typeof b === "object") ? (b.zaver || "") : "";
+
+    /* Pod co bod patří: vybraný projekt, jinak ručně psaný nadpis okruhu.
+       Starší zápisy mají jen nadpisy („Sportovka"), a i ty se dají
+       filtrovat – projekt se u nich doplní, až se zápis upraví. */
+    const okruhKlic = (sek) => (sek && (sek.projekt || sek.nadpis)) || "";
+
+    const komentare = (poradaId, bId) => (window.KB.poradyKomentare || [])
+        .filter(k => k.poradaId === poradaId && k.bodId === bId);
 
     const manazer = () => window.KBUI.can("vykaz.view");
 
@@ -196,7 +256,8 @@
     const prazdnyZapis = () => ({
         datum: new Date().toISOString().slice(0, 10),
         nazev: "",
-        sekce: [{ nadpis: "Body k probrání", projekt: "", body: [""] }]
+        sekce: [{ nadpis: "Body k probrání", projekt: "",
+            body: [{ id: "", text: "", zaver: "" }] }]
     });
 
     /** Otevřené projekty do roletky okruhu – porady se vedou po projektech. */
@@ -245,11 +306,17 @@
                 bloky.push({ nadpis: true,
                     html: '<div class="pstrana__h">' + esc(sek.nadpis) + "</div>" });
             }
-            (sek.body || []).filter(b => String(b).trim()).forEach(b => {
+            (sek.body || []).filter(b => bodText(b).trim()).forEach(b => {
                 poradi += 1;
+                /* Závěr patří do tištěného zápisu – je to to, na čem se
+                   parta domluvila. Komentáře ne: ty jsou pracovní diskuze
+                   a v zápisu by ho zavalily. */
+                const zaver = bodZaver(b).trim();
                 bloky.push({ html: '<div class="pstrana__bod">' +
                     '<span class="pstrana__cislo">' + poradi + ".</span>" +
-                    "<span>" + textBodu(b) + "</span></div>" });
+                    "<span>" + textBodu(bodText(b)) +
+                    (zaver ? '<br><b style="color:#1d556d">Závěr:</b> ' + textBodu(zaver) : "") +
+                    "</span></div>" });
             });
         });
         return bloky;
@@ -313,21 +380,128 @@
         "</div>";
     }
 
+    /* --------------------------------------------------------- diskuze --
+       Tentýž zápis, ale pracovně: pod bodem stojí komentáře lidí a závěr.
+       Komentář smí napsat každý, kdo poradu čte; závěr zapisuje manažer –
+       je to shrnutí, ne názor. */
+
+    function komentarHtml(k, ja) {
+        const smim = k.uid === ja || manazer();
+        return '<div class="pkom"><span class="pkom__kdo">' + esc(k.jmeno || "") + ":</span>" +
+            "<span>" + esc(k.text || "") + "</span>" +
+            '<span class="pkom__kdy">' +
+                esc(k.ms ? new Date(k.ms).toLocaleDateString("cs-CZ") : "") + "</span>" +
+            (smim ? '<button type="button" class="pkom__smaz" data-kom-smaz="' +
+                esc(k.id) + '" title="Smazat komentář">×</button>' : "") +
+        "</div>";
+    }
+
+    /** Jedna karta bodu i s diskuzí. `kdy` se plní jen v pohledu projektu. */
+    function bodKartaHtml(poradaId, b, cislo, kdy) {
+        const id = bodId(b);
+        const ja = window.KB.currentUid();
+        const kom = id ? komentare(poradaId, id) : [];
+        const zaver = bodZaver(b).trim();
+        return '<div class="pbodk" data-porada="' + esc(poradaId) + '" data-bod="' + esc(id) + '">' +
+            '<div class="pbodk__hlava">' +
+                '<span class="pbodk__cislo">' + cislo + ".</span>" +
+                '<span class="pbodk__text">' + textBodu(bodText(b)) + "</span>" +
+                (kdy ? '<span class="pbodk__kdy">' + esc(kdy) + "</span>" : "") +
+            "</div>" +
+            (zaver
+                ? '<div class="pbodk__zaver"><b>Závěr:</b> ' + textBodu(zaver) + "</div>" : "") +
+            (kom.length
+                ? '<div class="pbodk__kom">' + kom.map(k => komentarHtml(k, ja)).join("") + "</div>"
+                : "") +
+            (id
+                ? '<div class="pbodk__pole">' +
+                    '<input type="text" class="field" maxlength="600" data-kom-text ' +
+                        'placeholder="Napsat komentář…">' +
+                    '<button type="button" class="btn btn--sm btn--ghost" data-kom-pridej>' +
+                        "Přidat</button>" +
+                    (manazer()
+                        ? '<button type="button" class="btn btn--sm btn--ghost" data-zaver>' +
+                          (zaver ? "Upravit závěr" : "Zapsat závěr") + "</button>" : "") +
+                  "</div>"
+                : '<div class="tiny muted" style="margin:8px 0 0 29px">' +
+                  "Ke komentářům je potřeba zápis jednou uložit — otevři Upravit a dej Uložit.</div>") +
+        "</div>";
+    }
+
+    function vykresliDiskuzi() {
+        const p = (window.KB.porady || []).find(x => x.id === otevreny);
+        if (!p) return void ($("diskuze").innerHTML = "");
+        let poradi = 0;
+        $("diskuze").innerHTML = (p.sekce || []).map(sek =>
+            '<div class="pdisk__okruh">' + esc(sek.nadpis || "Body k probrání") + "</div>" +
+            (sek.body || []).filter(b => bodText(b).trim()).map(b => {
+                poradi += 1;
+                return bodKartaHtml(p.id, b, poradi, "");
+            }).join("")
+        ).join("") || '<p class="small muted">Zápis nemá žádné body.</p>';
+    }
+
+    /* -------------------------------------------- co se říkalo k projektu --
+       Napříč všemi poradami: vybere se okruh (projekt) a vypíšou se jeho
+       body od nejnovější porady. Přesně kvůli tomu, aby šlo dohledat, co
+       se kdy k té zakázce domluvilo (Michal 3. 9. 2026). */
+
+    function naplnFiltrProjekt() {
+        const klice = new Set();
+        (window.KB.porady || []).forEach(p =>
+            (p.sekce || []).forEach(sek => { if (okruhKlic(sek)) klice.add(okruhKlic(sek)); }));
+        const volby = [...klice].sort((a, b) => a.localeCompare(b, "cs"));
+        if (!volby.length) { $("filtrProjekt").innerHTML = ""; return; }
+        if (!filtrProjekt || volby.indexOf(filtrProjekt) === -1) filtrProjekt = volby[0];
+        $("filtrProjekt").innerHTML = volby.map(v =>
+            '<option value="' + esc(v) + '"' + (v === filtrProjekt ? " selected" : "") + ">" +
+            esc(v) + "</option>").join("");
+    }
+
+    function vykresliProjekt() {
+        const kusy = [];
+        (window.KB.porady || []).forEach(p => {
+            (p.sekce || []).forEach(sek => {
+                if (okruhKlic(sek) !== filtrProjekt) return;
+                (sek.body || []).filter(b => bodText(b).trim()).forEach(b => {
+                    kusy.push({ porada: p, bod: b });
+                });
+            });
+        });
+        // porady chodí od nejnovější, takže i body jdou odshora nejnovější
+        $("diskuze").innerHTML = kusy.length
+            ? '<div class="pdisk__okruh">' + esc(filtrProjekt) + " · " +
+                kusy.length + " bodů z " +
+                new Set(kusy.map(k => k.porada.id)).size + " porad</div>" +
+              kusy.map((k, i) => bodKartaHtml(k.porada.id, k.bod, i + 1,
+                  czDatum(k.porada.datum))).join("")
+            : '<p class="small muted">K tomuhle okruhu zatím nic zapsaného není.</p>';
+    }
+
     function vykresliDetail() {
         const p = (window.KB.porady || []).find(x => x.id === otevreny);
-        $("detail").hidden = !p;
-        $("prazdno").hidden = !!p || !!(window.KB.porady || []).length;
-        if (!p) return;
+        const jsouPorady = !!(window.KB.porady || []).length;
+        // pohled na projekt jde napříč poradami – nepotřebuje vybraný zápis
+        $("detail").hidden = !p && !(pohled === "projekt" && jsouPorady);
+        $("prazdno").hidden = !!p || jsouPorady;
+        if (!p && pohled !== "projekt") return;
 
-        $("btnUpravit").hidden = !manazer() || upravuji;
-        $("btnSmazat").hidden = !manazer() || upravuji;
+        const vProjektu = pohled === "projekt";
+        $("btnUpravit").hidden = !manazer() || upravuji || vProjektu;
+        $("btnSmazat").hidden = !manazer() || upravuji || pohled !== "zapis";
         $("btnUlozit").hidden = !upravuji;
         $("btnZahodit").hidden = !upravuji;
-        $("btnPdf").hidden = upravuji;
-        $("listWrap").hidden = upravuji;
+        $("btnPdf").hidden = upravuji || pohled !== "zapis";
+        $("filtrProjekt").hidden = !vProjektu;
+        $("listWrap").hidden = upravuji || pohled !== "zapis";
+        $("diskuze").hidden = upravuji || pohled === "zapis";
         $("editor").hidden = !upravuji;
+        document.querySelectorAll("#pohledy [data-pohled]").forEach(b =>
+            b.classList.toggle("chip--active", b.dataset.pohled === pohled));
 
         if (upravuji) return void vykresliEditor();
+        if (vProjektu) { naplnFiltrProjekt(); return void vykresliProjekt(); }
+        if (pohled === "diskuze") return void vykresliDiskuzi();
         const strany = rozdelNaStrany(blokyZapisu(p));
         $("stage").innerHTML = strany
             .map((obsah, i) => stranaHtml(p, obsah.join(""), i + 1, strany.length)).join("");
@@ -365,7 +539,9 @@
                     return '<div class="pbod" data-bod="' + bi + '">' +
                         '<span class="pbod__cislo">' + poradi + ".</span>" +
                         '<textarea class="field grow" data-text rows="1" ' +
-                            'placeholder="Co se domluvilo">' + esc(b) + "</textarea>" +
+                            'data-bod-id="' + esc(bodId(b)) + '" ' +
+                            'data-zaver-text="' + esc(bodZaver(b)) + '" ' +
+                            'placeholder="Co se domluvilo">' + esc(bodText(b)) + "</textarea>" +
                         '<button type="button" class="pikona" data-bod-nahoru title="Posunout výš">↑</button>' +
                         '<button type="button" class="pikona pikona--smaz" data-bod-smaz ' +
                             'title="Odebrat bod">×</button>' +
@@ -386,7 +562,13 @@
                 // vybraný projekt je zároveň nadpis – ať se nerozejdou
                 projekt: projekt,
                 nadpis: projekt || el.querySelector("[data-nadpis]").value.trim(),
-                body: Array.from(el.querySelectorAll("[data-text]")).map(t => t.value.trim())
+                /* Id bodu i závěr si editor nese s sebou – bez toho by se
+                   při uložení odtrhly komentáře, které na bod visí. */
+                body: Array.from(el.querySelectorAll("[data-text]")).map(t => ({
+                    id: t.dataset.bodId || "",
+                    text: t.value.trim(),
+                    zaver: t.dataset.zaverText || ""
+                }))
             };
         });
     }
@@ -396,7 +578,8 @@
             datum: p.datum || "", nazev: p.nazev || "",
             sekce: ((p.sekce || []).length ? p.sekce : prazdnyZapis().sekce)
                 .map(x => ({ nadpis: x.nadpis || "", projekt: x.projekt || "",
-                    body: (x.body || []).slice() }))
+                    body: (x.body || []).map(b => ({ id: bodId(b), text: bodText(b),
+                        zaver: bodZaver(b) })) }))
         }));
         upravuji = true;
         vykresliDetail();
@@ -520,7 +703,7 @@
                 nazev: koncept.nazev,
                 sekce: koncept.sekce
                     .map(s => ({ nadpis: s.nadpis, projekt: s.projekt || "",
-                        body: s.body.filter(Boolean) }))
+                        body: s.body.filter(b => bodText(b).trim()) }))
                     .filter(s => s.nadpis || s.body.length)
             };
             if (!cisty.datum) return window.KBUI.toast("Doplň datum porady.", "warn");
@@ -580,7 +763,7 @@
             const bi = bodEl ? Number(bodEl.dataset.bod) : -1;
 
             if (e.target.closest("[data-bod-pridej]")) {
-                koncept.sekce[si].body.push("");
+                koncept.sekce[si].body.push({ id: "", text: "", zaver: "" });
             } else if (e.target.closest("[data-bod-smaz]")) {
                 koncept.sekce[si].body.splice(bi, 1);
             } else if (e.target.closest("[data-bod-nahoru]")) {
@@ -617,7 +800,8 @@
 
         $("btnSekce").addEventListener("click", () => {
             ctiEditor();
-            koncept.sekce.push({ nadpis: "", projekt: "", body: [""] });
+            koncept.sekce.push({ nadpis: "", projekt: "",
+                body: [{ id: "", text: "", zaver: "" }] });
             vykresliEditor();
         });
 
@@ -654,12 +838,84 @@
             e.preventDefault();
             ctiEditor();
             const si = Number(bodEl.closest("[data-sekce]").dataset.sekce);
-            koncept.sekce[si].body.splice(Number(bodEl.dataset.bod) + 1, 0, "");
+            koncept.sekce[si].body.splice(Number(bodEl.dataset.bod) + 1, 0,
+                { id: "", text: "", zaver: "" });
             vykresliEditor();
             const dalsi = $("edSekce")
                 .querySelectorAll('[data-sekce="' + si + '"] [data-text]')[Number(bodEl.dataset.bod) + 1];
             if (dalsi) dalsi.focus();
         });
+
+        /* přepínání pohledů */
+        $("pohledy").addEventListener("click", (e) => {
+            const b = e.target.closest("[data-pohled]");
+            if (!b || upravuji) return;
+            pohled = b.dataset.pohled;
+            vykresliDetail();
+        });
+        $("filtrProjekt").addEventListener("change", () => {
+            filtrProjekt = $("filtrProjekt").value;
+            vykresliProjekt();
+        });
+
+        /* ------------------------------------------- komentáře a závěry -- */
+        $("diskuze").addEventListener("click", async (e) => {
+            const karta = e.target.closest(".pbodk");
+
+            const smaz = e.target.closest("[data-kom-smaz]");
+            if (smaz) {
+                if (!confirm("Smazat komentář?")) return;
+                await window.KB.smazPoradaKomentar(smaz.dataset.komSmaz)
+                    .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+                return;
+            }
+
+            if (!karta) return;
+            const poradaId = karta.dataset.porada;
+            const bId = karta.dataset.bod;
+
+            if (e.target.closest("[data-kom-pridej]")) {
+                const pole = karta.querySelector("[data-kom-text]");
+                const text = pole.value.trim();
+                if (!text) return window.KBUI.toast("Napiš komentář.", "warn");
+                pole.value = "";
+                await window.KB.pridejPoradaKomentar(poradaId, bId, text)
+                    .catch(() => window.KBUI.toast("Komentář se neuložil.", "error"));
+                return;
+            }
+
+            if (e.target.closest("[data-zaver]")) {
+                /* Závěr sedí přímo u bodu (na rozdíl od komentářů) – je to
+                   to, na čem se parta domluvila, a patří i do tištěného
+                   zápisu. Zapisuje ho manažer. */
+                const p = (window.KB.porady || []).find(x => x.id === poradaId);
+                if (!p) return;
+                const sek = (p.sekce || []).find(x => (x.body || []).some(b => bodId(b) === bId));
+                const bod = sek && sek.body.find(b => bodId(b) === bId);
+                if (!bod) return;
+                const novy = prompt("Závěr k bodu (prázdný závěr smaže):",
+                    bodZaver(bod) || "");
+                if (novy === null) return;
+                const kopie = JSON.parse(JSON.stringify(p));
+                kopie.sekce.forEach(x => (x.body || []).forEach(b => {
+                    if (bodId(b) === bId) b.zaver = novy.trim();
+                }));
+                await window.KB.ulozPoradu(p.id, kopie)
+                    .catch(() => window.KBUI.toast("Závěr se neuložil.", "error"));
+            }
+        });
+        $("diskuze").addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && e.target.matches("[data-kom-text]")) {
+                e.preventDefault();
+                const b = e.target.closest(".pbodk").querySelector("[data-kom-pridej]");
+                if (b) b.click();
+            }
+        });
+
+        window.KB.on("porady-komentare", () => {
+            if (!upravuji && pohled !== "zapis") vykresliDetail();
+        });
+        window.KB.watchPoradyKomentare();
 
         window.KB.on("porady", () => {
             /* Bez otevřeného zápisu se rovnou ukáže nejnovější – seznam

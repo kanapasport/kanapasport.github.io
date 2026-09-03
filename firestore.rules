@@ -202,6 +202,18 @@ service cloud.firestore {
       allow read: if clen();
     }
 
+    /* Komentáře k bodům porad. Napsat je smí každý, kdo poradu čte – proto
+       má každý komentář vlastní dokument. Kdyby se přidávaly do pole
+       v zápisu, musel by mít každý právo přepsat celý zápis.
+       Svůj komentář smí autor opravit i smazat, cizí jen manažer. */
+    match /artifacts/firemni-kb-app/private/porady/komentare/{kid} {
+      allow read:   if clen();
+      allow create: if clen() && request.resource.data.uid == request.auth.uid;
+      allow update: if clen() && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid;
+      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+    }
+
     // --- historie aktivit ------------------------------------------------
     // Každý přihlášený zapisuje svoje kroky (jinak by log nešel plnit),
     // ale číst je smí jen manažer – jsou tam i zmínky o výkazech.

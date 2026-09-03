@@ -369,7 +369,7 @@ try {
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.vykazyPrisly = false;
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = []; KB.porady = [];
-            KB.zustatky = {};
+            KB.zustatky = {}; KB.poradyKomentare = [];
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -3086,10 +3086,24 @@ KB.ulozZustatek = async (uid, data) => {
    manažerský a nad zápisy stojí vlastní pravidlo na čtení).
 
      private/porady/zapisy/{id}
-       { datum:"2026-08-12", nazev, sekce:[{nadpis, body:[...]}], kdo, ms }
+       { datum:"2026-08-12", nazev, kdo, ms,
+         sekce: [{ nadpis, projekt, body: [{ id, text, zaver }] }] }
+     private/porady/komentare/{kid}
+       { poradaId, bodId, uid, jmeno, text, ms }
 
    Sekce se schválně nedělí do podkolekcí: zápis je jeden dokument, čte se
-   i vytiskne vcelku a i ta nejdelší porada se do limitu vejde. */
+   i vytiskne vcelku a i ta nejdelší porada se do limitu vejde.
+
+   KOMENTÁŘE ale ANO, a to schválně. Napsat komentář smí každý, kdo poradu
+   čte – a kdyby se přidával do pole v dokumentu zápisu, musela by pravidla
+   pustit zápis celého dokumentu a kdokoliv by mohl přepsat celou poradu.
+   Vlastní dokument na komentář to řeší: každý smí založit svůj a sáhnout
+   jen na něj. `zaver` je naopak shrnutí diskuze a patří manažerovi, proto
+   sedí přímo u bodu. (Michal 3. 9. 2026.)
+
+   Bod byl původně jen řetězec. Aby se na něj dal navěsit komentář, musí
+   mít stálé `id`; starší zápisy se převedou při prvním uložení a čtení
+   snese obojí (viz `bodText` na stránce). */
 
 const poradyCol = () => collection(db, "artifacts", APP_ID, "private", "porady", "zapisy");
 const poradaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "porady", "zapisy", id);
@@ -3114,10 +3128,21 @@ KB.ulozPoradu = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
     const pid = id || "por_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    let poradiBodu = 0;
+    const novyBodId = () => "b" + Date.now().toString(36) + (poradiBodu++).toString(36);
     const sekce = (Array.isArray(data.sekce) ? data.sekce : []).slice(0, 40).map(s => ({
         nadpis: String(s.nadpis || "").slice(0, 120),
-        body: (Array.isArray(s.body) ? s.body : []).slice(0, 200)
-            .map(b => String(b || "").slice(0, 1200))
+        projekt: String(s.projekt || "").slice(0, 120),
+        /* Starší zápisy mají body jako holé řetězce – převedou se tady,
+           ať mají id a dá se k nim psát. */
+        body: (Array.isArray(s.body) ? s.body : []).slice(0, 200).map(b => {
+            const o = (b && typeof b === "object") ? b : { text: b };
+            return {
+                id: String(o.id || "").slice(0, 40) || novyBodId(),
+                text: String(o.text || "").slice(0, 1200),
+                zaver: String(o.zaver || "").slice(0, 1200)
+            };
+        })
     }));
     const zapis = {
         datum: String(data.datum || "").slice(0, 10),
@@ -3137,11 +3162,59 @@ KB.ulozPoradu = async (id, data) => {
     return pid;
 };
 
+/* Komentáře k bodům porad. Drží se všechny naráz – je jich řádově
+   stovky za rok a stránka je potřebuje pro počty u projektů. */
+const poradyKomCol = () => collection(db, "artifacts", APP_ID, "private", "porady", "komentare");
+const poradyKomDoc = (id) => doc(db, "artifacts", APP_ID, "private", "porady", "komentare", id);
+
+KB.poradyKomentare = [];
+let poradyKomOdber = null;
+
+KB.watchPoradyKomentare = async () => {
+    if (poradyKomOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || poradyKomOdber) return;
+    poradyKomOdber = onSnapshot(poradyKomCol(), (snap) => {
+        KB.poradyKomentare = [];
+        snap.forEach(d => KB.poradyKomentare.push({ id: d.id, ...d.data() }));
+        KB.poradyKomentare.sort((a, b) => (a.ms || 0) - (b.ms || 0));
+        emit("porady-komentare", KB.poradyKomentare);
+    }, (err) => console.error("Chyba čtení komentářů k poradám:", err));
+};
+
+KB.pridejPoradaKomentar = async (poradaId, bodId, text) => {
+    if (authReady) await authReady;
+    requireDb();
+    const cisty = String(text || "").trim().slice(0, 1200);
+    if (!cisty) return "";
+    const kid = "pk_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(poradyKomDoc(kid), {
+        poradaId: String(poradaId || ""),
+        bodId: String(bodId || ""),
+        uid: KB.currentUid(),
+        jmeno: window.KB_USER || "",
+        text: cisty,
+        ms: Date.now()
+    });
+    return kid;
+};
+
+/** Smazat smí svůj komentář autor, cizí jen manažer (hlídají pravidla). */
+KB.smazPoradaKomentar = async (kid) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(poradyKomDoc(kid));
+};
+
 KB.smazPoradu = async (id) => {
     if (authReady) await authReady;
     requireDb();
     const p = (KB.porady || []).find(x => x.id === id);
     KB.zapisAktivitu("porada", "smazal zápis z porady " + ((p && p.datum) || id));
+    // komentáře k bodům by jinak zůstaly viset u zápisu, který už není
+    for (const k of (KB.poradyKomentare || []).filter(k => k.poradaId === id)) {
+        await deleteDoc(poradyKomDoc(k.id)).catch(() => {});
+    }
     await deleteDoc(poradaDoc(id));
 };
 
