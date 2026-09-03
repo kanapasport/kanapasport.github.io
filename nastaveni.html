@@ -32,8 +32,20 @@
         .zamek__mrizka .field { width: 100%; }
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
+        /* Řádek dovolené: jméno vlevo, čtyři políčka vedle sebe. Na úzké
+           obrazovce se zalomí pod sebe, ať se dá vyplnit i na tabletu. */
+        .zustatky { display: flex; flex-direction: column; gap: 8px; }
+        .zustrad { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+            padding: 8px 10px; border: 1px solid var(--line-soft);
+            border-radius: var(--radius); background: var(--bg-soft); }
+        .zustrad__jmeno { flex: 1 1 190px; min-width: 150px; font-weight: 800;
+            font-size: 14px; align-self: center; }
+        .zustrad__pole { display: flex; flex-direction: column; gap: 3px; }
+        .zustrad__pole > span { font-size: 11px; font-weight: 800; letter-spacing: .04em;
+            text-transform: uppercase; color: var(--muted); }
+        .zustrad__pole input[type="date"] { width: 150px; }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=200">
+    <link rel="stylesheet" href="assets/css/app.css?v=201">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -147,16 +159,40 @@
         </section>
 
 
+        <!-- ======================================= DOVOLENÁ A PŘESČASY -->
+        <section class="card col nastaveni" id="sekce-zustatky" hidden>
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Dovolená a přesčasy</b>
+                    <span class="small muted">odkud web počítá a s čím do toho člověk jde</span>
+                </div>
+                <span class="tag" id="pocetZustatku"></span>
+            </div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Web zná jen to, co je v něm zapsané. Proto se u každého nastaví
+                <b>datum, od kterého počítá</b>, a stav k tomu dni: nárok na rok,
+                kolik dní dovolené už měl vybráno a kolik hodin přesčasu si nesl.
+                Od toho data si pak zůstatek dopočítá sám z výkazů — a každý ho
+                vidí u svého výkazu.
+            </p>
+            <div id="zustatky" class="zustatky"></div>
+            <div class="row row--wrap" style="gap:12px">
+                <button type="button" id="btnZustatkyUloz" class="btn btn--primary">
+                    Uložit dovolené a přesčasy</button>
+                <span id="stavZustatky" class="small muted"></span>
+            </div>
+        </section>
+
         <p class="tiny muted" style="text-align:center;line-height:1.6">
             Postupně sem přibude i zbytek nastavení webu.
         </p>
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=200"></script>
-<script src="assets/js/ui.js?v=200"></script>
-<script src="assets/js/vykazy.js?v=200"></script>
-<script type="module" src="assets/js/store.js?v=200"></script>
+<script src="assets/js/taxonomy.js?v=201"></script>
+<script src="assets/js/ui.js?v=201"></script>
+<script src="assets/js/vykazy.js?v=201"></script>
+<script type="module" src="assets/js/store.js?v=201"></script>
 
 <script>
 (function () {
@@ -393,6 +429,84 @@
         }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
     }
 
+    /* -------------------------------------------- dovolená a přesčasy --- */
+
+    /* Za zámkem k citlivým sekcím schválně NENÍ – nárok na dovolenou není
+       tajemství jako hodinovka a zamykat kvůli němu obrazovku by jen
+       zdržovalo. Stránka je stejně jen pro manažery. */
+    function naplnZustatky() {
+        if (upravovano) return;
+        const z = window.KB.zustatky || {};
+        const lide = V.lide();
+        $("pocetZustatku").textContent =
+            Object.keys(z).length + " z " + lide.length + " nastaveno";
+
+        const radek = (u) => {
+            const d = z[u.id] || {};
+            const pole = (klic, hodnota, krok, sirka) =>
+                '<input type="number" class="field" step="' + krok + '" ' +
+                    'style="width:' + sirka + 'px" data-zust="' + esc(u.id) + '" ' +
+                    'data-pole="' + klic + '" value="' + (hodnota === 0 ? "0" : (hodnota || "")) + '">';
+            return '<div class="zustrad">' +
+                '<span class="zustrad__jmeno">' + esc(V.jmeno(u)) + "</span>" +
+                '<label class="zustrad__pole"><span>Počítat od</span>' +
+                    '<input type="date" class="field" data-zust="' + esc(u.id) + '" ' +
+                        'data-pole="odIso" value="' + esc(d.odIso || "") + '"></label>' +
+                '<label class="zustrad__pole"><span>Nárok (dní)</span>' +
+                    pole("narok", Number(d.narok) || "", "1", 78) + "</label>" +
+                '<label class="zustrad__pole"><span>Vybráno do té doby</span>' +
+                    pole("cerpanoPred", Number(d.cerpanoPred) || "", "0.5", 78) + "</label>" +
+                '<label class="zustrad__pole"><span>Přesčas (h)</span>' +
+                    pole("prescasPred", Number(d.prescasPred) || "", "0.5", 86) + "</label>" +
+            "</div>";
+        };
+
+        /* Stejné dělení jako u sazeb. Dovolená se týká hlavně zaměstnanců,
+           ale nechává se všem – i student na dohodě si může nést přesčas. */
+        $("zustatky").innerHTML = window.KBUI.TYPY.map(t => {
+            const skupina = lide.filter(u => window.KBUI.typUvazku(u) === t.id);
+            return skupina.length
+                ? '<div class="popisek" style="margin:10px 0 2px">' + esc(t.mnozne) +
+                    ' <span class="muted">(' + skupina.length + ")</span></div>" +
+                  skupina.map(radek).join("")
+                : "";
+        }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+    }
+
+    async function ulozZustatky() {
+        const podle = new Map();
+        $("zustatky").querySelectorAll("[data-zust]").forEach(el => {
+            const uid = el.dataset.zust;
+            if (!podle.has(uid)) podle.set(uid, {});
+            podle.get(uid)[el.dataset.pole] =
+                el.type === "date" ? el.value : (el.value === "" ? "" : Number(el.value));
+        });
+
+        /* Ukládá se jen to, co je opravdu vyplněné – prázdný řádek by
+           člověku nastavil nárok nula a tvářil se, že mu nic nezbývá. */
+        const kUlozeni = [...podle.entries()].filter(([, d]) =>
+            d.odIso || d.narok !== "" || d.cerpanoPred !== "" || d.prescasPred !== "");
+        const bezData = kUlozeni.filter(([, d]) => !d.odIso);
+        if (bezData.length) {
+            return window.KBUI.toast("U vyplněných lidí doplň i datum, od kterého se počítá.", "warn");
+        }
+
+        $("btnZustatkyUloz").disabled = true;
+        $("stavZustatky").textContent = "Ukládám…";
+        try {
+            for (const [uid, d] of kUlozeni) await window.KB.ulozZustatek(uid, d);
+            $("stavZustatky").textContent = "Uloženo u " + kUlozeni.length + " lidí.";
+            window.KBUI.toast("Dovolené a přesčasy uloženy.");
+            upravovano = false;
+        } catch (err) {
+            console.error(err);
+            $("stavZustatky").textContent = "";
+            window.KBUI.toast("Uložení selhalo – tohle mění jen správce.", "error");
+        } finally {
+            $("btnZustatkyUloz").disabled = false;
+        }
+    }
+
     /* ----------------------------------------------------------- uložení */
 
     async function uloz() {
@@ -432,6 +546,8 @@
         $("obsah").hidden = false;
         paintZamek();
         naplnSazby();
+        naplnZustatky();
+        $("sekce-zustatky").hidden = false;
         nactiZamek();
     }
 
@@ -450,6 +566,10 @@
         paintPodlista("sazby");
 
         $("btnUloz").addEventListener("click", uloz);
+        $("btnZustatkyUloz").addEventListener("click", ulozZustatky);
+        $("zustatky").addEventListener("input", () => { upravovano = true; });
+        window.KB.on("zustatky", naplnZustatky);
+        window.KB.watchZustatky();
         $("btnOdemknout").addEventListener("click", odemkni);
         $("zHeslo").addEventListener("keydown", (event) => {
             if (event.key === "Enter") { event.preventDefault(); odemkni(); }

@@ -369,6 +369,7 @@ try {
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.vykazyPrisly = false;
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = []; KB.porady = [];
+            KB.zustatky = {};
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -3019,6 +3020,63 @@ KB.ulozPlanPaletu = async (planId, paleta) => {
             b: String(x.b || "#888888").slice(0, 12),
             p: String(x.p || "").slice(0, 30)
         })) : []
+    }, { merge: true });
+};
+
+/* ------------------------------------------- ZŮSTATKY DOVOLENÉ ----------
+   Kolik komu zbývá dovolené a kolik má naběháno přesčasů. Web nemá
+   historii z doby před sebou, takže se u každého člověka nastaví, OD KDY
+   počítá a s čím do toho jde – nárok na rok, dny už vyčerpané a hodiny
+   přesčasu. Bez toho by všichni začali na nule a čísla by lhala.
+
+     private/vykazy/zustatky/{uid}
+       { narok:20, cerpanoPred:5, prescasPred:12.5, odIso:"2026-09-01", pozn }
+
+   Svůj zůstatek vidí každý – je to jeho nárok a má si ho hlídat. Cizí
+   a zápis jen manažer (firestore.rules). */
+
+const zustatekDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "vykazy", "zustatky", uid);
+const zustatkyCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", "zustatky");
+
+KB.zustatky = {};               // uid -> nastavení
+let zustatkyOdber = null;
+
+/**
+ * Manažer poslouchá zůstatky všech, ostatní jenom svůj – pravidla nejsou
+ * filtr, dotaz na celou kolekci by zaměstnanci odmítla celý.
+ */
+KB.watchZustatky = async () => {
+    if (zustatkyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || zustatkyOdber) return;
+    const ja = KB.users.find(u => u.id === auth.currentUser.uid);
+    const manazer = ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"]
+        .indexOf(ja.role) !== -1;
+    const prijmi = (snap) => {
+        KB.zustatky = {};
+        snap.forEach(d => { KB.zustatky[d.id] = d.data(); });
+        emit("zustatky", KB.zustatky);
+    };
+    zustatkyOdber = manazer
+        ? onSnapshot(zustatkyCol(), prijmi,
+            (err) => console.error("Chyba čtení zůstatků:", err))
+        : onSnapshot(zustatekDoc(auth.currentUser.uid), (d) => {
+            KB.zustatky = d.exists() ? { [d.id]: d.data() } : {};
+            emit("zustatky", KB.zustatky);
+        }, (err) => console.error("Chyba čtení zůstatku:", err));
+};
+
+KB.ulozZustatek = async (uid, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(zustatekDoc(uid), {
+        narok: Math.max(0, Number(data.narok) || 0),
+        cerpanoPred: Math.max(0, Number(data.cerpanoPred) || 0),
+        prescasPred: Number(data.prescasPred) || 0,
+        odIso: String(data.odIso || "").slice(0, 10),
+        pozn: String(data.pozn || "").slice(0, 200),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
     }, { merge: true });
 };
 

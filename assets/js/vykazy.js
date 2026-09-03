@@ -148,6 +148,72 @@
     V.firmy       = () => (window.KB.firmy || []);
     V.zakazky     = () => (window.KB.zakazky || []);
 
+    /* ---------------------------------------------- zůstatky člověka ----
+       Kolik zbývá dovolené a kolik je naběháno přesčasů. Počítá se od data,
+       které je u člověka nastavené (Nastavení → Dovolená a přesčasy) –
+       před ním web historii nemá a musí se do něj vstoupit s ručně zadanou
+       hodnotou, jinak by všichni začali na nule. */
+
+    /** Fond pracovních hodin mezi dvěma dny – bez víkendů a svátků. */
+    V.fondHodin = (odIso, doIso) => {
+        if (!odIso || !doIso || odIso > doIso) return 0;
+        const d = new Date(odIso + "T00:00:00");
+        const konec = new Date(doIso + "T00:00:00");
+        let dnu = 0, pojistka = 0;
+        while (d <= konec && pojistka++ < 4000) {
+            const den = d.getDay();
+            if (den !== 0 && den !== 6) {
+                const iso = d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(d.getDate()).padStart(2, "0");
+                if (!(window.KBUI.svatek && window.KBUI.svatek(iso))) dnu++;
+            }
+            d.setDate(d.getDate() + 1);
+        }
+        return dnu * 8;
+    };
+
+    V.zustatek = (uid) => {
+        const z = (window.KB.zustatky || {})[uid] || {};
+        const od = z.odIso || "";
+        const dnes = V.dnesISO();
+        const nastaveno = !!od;
+
+        const moje = (window.KB.vykazy || []).filter(v =>
+            v.uid === uid && v.datum && v.datum >= od && v.datum <= dnes);
+
+        /* Dovolená se ukládá rozepsaná po pracovních dnech, takže jeden
+           zápis = jeden den. Volno a nemoc se do nároku nepočítají. */
+        const dovolenaDnu = moje.filter(v => v.zakazka === "Dovolená").length;
+        const narok = Number(z.narok) || 0;
+        const cerpano = (Number(z.cerpanoPred) || 0) + dovolenaDnu;
+
+        /* Přesčas stejně jako ve Vytížení: odpracováno + absence po osmi
+           hodinách − fond. Absence se počítá jako odpracovaná směna, jinak
+           by týden dovolené shodil přesčas o 40 hodin do mínusu. */
+        const absenceDnu = moje.filter(v => v.absence === true).length;
+        const prace = moje.filter(v => v.absence !== true)
+            .reduce((n, v) => n + (Number(v.hodiny) || 0), 0);
+        const fond = V.fondHodin(od, dnes);
+        const prescas = (Number(z.prescasPred) || 0) + prace + absenceDnu * 8 - fond;
+
+        /* Manažer poslouchá výkazy jen v okně několika měsíců – když je
+           začátek počítání starší, chybí mu data a číslo by bylo mimo. */
+        const okno = window.KB.vykazyOknoOd || "";
+        return {
+            nastaveno: nastaveno,
+            od: od,
+            narok: narok,
+            cerpano: cerpano,
+            zbyva: narok - cerpano,
+            dovolenaDnu: dovolenaDnu,
+            prescas: Math.round(prescas * 10) / 10,
+            fond: fond,
+            prace: Math.round(prace * 10) / 10,
+            neuplne: nastaveno && !!okno && od < okno
+        };
+    };
+
     /** Projekty uvnitř zakázky. Bez zakázky nemá smysl nabízet nic. */
     V.projekty = (zakazka) => {
         const mapa = window.KB.projekty || {};

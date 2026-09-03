@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Porady – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=200">
+    <link rel="stylesheet" href="assets/css/app.css?v=201">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -31,20 +31,32 @@
         .ppolozka__datum { font-size: 14px; font-weight: 900; }
         .ppolozka__meta { font-size: 11.5px; color: var(--muted); }
 
-        /* --------------------------------------------------------- list A4 */
+        /* --------------------------------------------------------- list A4
+           Záhlaví i patička sedí v okrajích listu (position:absolute), aby
+           byl obsah na KAŽDÉ straně stejně vysoký – jen tak se dá zápis
+           spolehlivě rozstránkovat. */
         .plist { display: flex; flex-direction: column; gap: 14px; }
-        .plist__stage { transform-origin: 0 0; }
-        .pstrana { padding: 18mm 16mm 16mm; }
-        .pstrana__firma { font-size: 10pt; font-weight: 900; letter-spacing: .1em;
-            text-transform: uppercase; color: #7b8794; }
-        .pstrana__nadpis { font-size: 20pt; font-weight: 900; margin: 2mm 0 1mm; }
-        .pstrana__datum { font-size: 11pt; color: #46505c; margin-bottom: 8mm; }
-        .pstrana__sekce { margin-bottom: 6mm; }
+        .plist__stage { display: flex; flex-direction: column; gap: 14px;
+            transform-origin: 0 0; }
+        .pstrana { padding: 30mm 16mm 22mm; }
+        .pstrana__zahlavi { position: absolute; left: 16mm; right: 16mm; top: 12mm;
+            display: flex; align-items: center; gap: 4mm;
+            border-bottom: 0.3mm solid #e2e8ee; padding-bottom: 2.5mm; }
+        .pstrana__logo { height: 9mm; width: auto; }
+        .pstrana__firma { font-size: 9.5pt; font-weight: 900; letter-spacing: .09em;
+            text-transform: uppercase; color: #46505c; }
+        .pstrana__zahlavi-vpravo { margin-left: auto; text-align: right;
+            font-size: 9pt; color: #7b8794; line-height: 1.35; }
+        .pstrana__nadpis { font-size: 20pt; font-weight: 900; margin: 0 0 1mm; }
+        .pstrana__datum { font-size: 11pt; color: #46505c; margin-bottom: 7mm; }
         .pstrana__h { font-size: 13pt; font-weight: 900; color: #1d556d;
-            border-bottom: 0.4mm solid #d7dee5; padding-bottom: 1mm; margin-bottom: 2.5mm; }
+            border-bottom: 0.4mm solid #d7dee5; padding-bottom: 1mm;
+            margin: 4mm 0 2.5mm; }
+        .pstrana__h:first-child { margin-top: 0; }
         .pstrana__bod { display: flex; gap: 3mm; font-size: 11pt; line-height: 1.45;
             margin-bottom: 1.6mm; }
         .pstrana__cislo { min-width: 7mm; font-weight: 900; color: #1d556d; }
+        .pstrana__kdo { font-weight: 700; color: #1d556d; }
         .pstrana__pata { position: absolute; left: 16mm; right: 16mm; bottom: 10mm;
             font-size: 8.5pt; color: #8b95a1; display: flex; justify-content: space-between;
             border-top: 0.3mm solid #e2e8ee; padding-top: 2mm; }
@@ -63,6 +75,19 @@
             font-weight: 900; cursor: pointer; padding: 4px 6px; line-height: 1; }
         .pikona:hover { color: var(--accent); }
         .pikona--smaz:hover { color: var(--danger, #c8102e); }
+
+        /* Našeptávač lidí po napsání „@" – stejný nápad jako v chatu:
+           píše se dál a seznam se zužuje, Enter nebo klik doplní jméno. */
+        .pzminky { position: absolute; z-index: 60; min-width: 200px; max-height: 220px;
+            overflow-y: auto; background: var(--surface); border: 1px solid var(--line);
+            border-radius: var(--radius); box-shadow: 0 10px 26px rgba(0,0,0,.16);
+            padding: 4px; }
+        .pzminky button { display: block; width: 100%; text-align: left; border: 0;
+            background: none; font: inherit; font-size: 13.5px; padding: 6px 9px;
+            border-radius: 6px; cursor: pointer; }
+        .pzminky button:hover, .pzminky button.je-aktivni {
+            background: var(--accent-tint); color: var(--accent); }
+        .pzminky__typ { font-size: 11px; color: var(--muted); margin-left: 6px; }
 
         @media print {
             .porady { grid-template-columns: minmax(0, 1fr); }
@@ -143,11 +168,11 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=200"></script>
-<script src="assets/js/doc.js?v=200"></script>
-<script src="assets/js/ui.js?v=200"></script>
-<script src="assets/js/vykazy.js?v=200"></script>
-<script type="module" src="assets/js/store.js?v=200"></script>
+<script src="assets/js/taxonomy.js?v=201"></script>
+<script src="assets/js/doc.js?v=201"></script>
+<script src="assets/js/ui.js?v=201"></script>
+<script src="assets/js/vykazy.js?v=201"></script>
+<script type="module" src="assets/js/store.js?v=201"></script>
 
 <script>
 (function () {
@@ -171,8 +196,15 @@
     const prazdnyZapis = () => ({
         datum: new Date().toISOString().slice(0, 10),
         nazev: "",
-        sekce: [{ nadpis: "Body k probrání", body: [""] }]
+        sekce: [{ nadpis: "Body k probrání", projekt: "", body: [""] }]
     });
+
+    /** Otevřené projekty do roletky okruhu – porady se vedou po projektech. */
+    const nabidkaProjektu = () => (window.KB.projektyDocs || [])
+        .filter(p => !p.uzavreno)
+        .map(p => p.nazev)
+        .filter((n, i, pole) => n && pole.indexOf(n) === i)
+        .sort((a, b) => a.localeCompare(b, "cs"));
 
     /* ------------------------------------------------------- seznam vlevo */
 
@@ -192,30 +224,94 @@
 
     /* ------------------------------------------------------- list ke čtení */
 
-    function stranaHtml(p) {
+    /* Jméno zmíněné přes „@" se v listu zvýrazní, ať je na první pohled
+       vidět, koho se bod týká. */
+    function textBodu(t) {
+        return esc(t).replace(/@([\wÀ-ž]+(?:\s+[A-ZÁ-Ž][\wÀ-ž]*)?)/g,
+            '<span class="pstrana__kdo">@$1</span>');
+    }
+
+    /* Zápis se skládá z BLOKŮ (nadpis okruhu, jednotlivé body). Kus po kuse
+       se pak rozdělí na strany – dřív byl celý zápis v jednom listu
+       s `overflow:hidden`, takže co se nevešlo, to v PDF prostě chybělo
+       (Michal 3. 9. 2026). */
+    function blokyZapisu(p) {
+        const bloky = [];
+        bloky.push({ html: '<div class="pstrana__nadpis">' + esc(p.nazev || "Porada") +
+            "</div>" + '<div class="pstrana__datum">' + esc(czDatum(p.datum)) + "</div>" });
         let poradi = 0;
-        return '<div class="a4-page pstrana">' +
-            '<div class="pstrana__firma">Pasport Kaňa s.r.o.</div>' +
-            '<div class="pstrana__nadpis">' + esc(p.nazev || "Porada") + "</div>" +
-            '<div class="pstrana__datum">' + esc(czDatum(p.datum)) + "</div>" +
-            (p.sekce || []).map(s =>
-                '<div class="pstrana__sekce">' +
-                    (s.nadpis ? '<div class="pstrana__h">' + esc(s.nadpis) + "</div>" : "") +
-                    (s.body || []).filter(b => String(b).trim()).map(b => {
-                        poradi += 1;
-                        return '<div class="pstrana__bod">' +
-                            '<span class="pstrana__cislo">' + poradi + ".</span>" +
-                            "<span>" + esc(b) + "</span></div>";
-                    }).join("") +
-                "</div>").join("") +
-            '<div class="pstrana__pata"><span>Zápis z porady · ' +
-                esc(czDatum(p.datum)) + "</span><span>" + esc(p.kdo || "") + "</span></div>" +
-        "</div>";
+        (p.sekce || []).forEach(sek => {
+            if (sek.nadpis) {
+                bloky.push({ nadpis: true,
+                    html: '<div class="pstrana__h">' + esc(sek.nadpis) + "</div>" });
+            }
+            (sek.body || []).filter(b => String(b).trim()).forEach(b => {
+                poradi += 1;
+                bloky.push({ html: '<div class="pstrana__bod">' +
+                    '<span class="pstrana__cislo">' + poradi + ".</span>" +
+                    "<span>" + textBodu(b) + "</span></div>" });
+            });
+        });
+        return bloky;
     }
 
     /* Číslování je průběžné přes celý zápis (1, 2, 3…), ne od jedničky
        v každém okruhu – tak to Michal píše ve Wordu a odkazuje se pak na
        „bod 12" bez toho, aby se muselo dohledávat, pod kterým nadpisem. */
+
+    /**
+     * Rozdělí bloky na strany. Měří se doopravdy: bloky se vysypou do
+     * neviditelné kopie listu, změří se jejich výška a pak se skládají,
+     * dokud se na stranu vejdou. Odhad podle počtu řádků by u dlouhých
+     * bodů lhal.
+     */
+    function rozdelNaStrany(bloky) {
+        const mer = document.createElement("div");
+        mer.className = "a4-page pstrana";
+        mer.style.cssText = "position:absolute;left:-10000px;top:0;visibility:hidden";
+        mer.innerHTML = bloky.map(b => b.html).join("");
+        document.body.appendChild(mer);
+
+        const styl = getComputedStyle(mer);
+        const misto = mer.clientHeight -
+            parseFloat(styl.paddingTop) - parseFloat(styl.paddingBottom);
+        const vysky = Array.from(mer.children).map(el => {
+            const s2 = getComputedStyle(el);
+            return el.offsetHeight + parseFloat(s2.marginTop || 0) +
+                parseFloat(s2.marginBottom || 0);
+        });
+        mer.remove();
+
+        const strany = [[]];
+        let zbyva = misto;
+        bloky.forEach((b, i) => {
+            const h = vysky[i] || 0;
+            /* Nadpis okruhu nesmí zůstat sám na konci strany – když by na
+               něj s prvním bodem nezbylo místo, jde rovnou na další. */
+            const potrebuje = b.nadpis ? h + (vysky[i + 1] || 0) : h;
+            if (potrebuje > zbyva && strany[strany.length - 1].length) {
+                strany.push([]);
+                zbyva = misto;
+            }
+            strany[strany.length - 1].push(b.html);
+            zbyva -= h;
+        });
+        return strany;
+    }
+
+    function stranaHtml(p, obsah, cislo, celkem) {
+        return '<div class="a4-page pstrana">' +
+            '<div class="pstrana__zahlavi">' +
+                '<img class="pstrana__logo" src="Pasport_Kana_black.png" alt="">' +
+                '<span class="pstrana__firma">Pasport Kaňa s.r.o.</span>' +
+                '<span class="pstrana__zahlavi-vpravo">Zápis z porady<br>' +
+                    esc(czDatum(p.datum)) + "</span>" +
+            "</div>" +
+            obsah +
+            '<div class="pstrana__pata"><span>' + esc(p.kdo || "") + "</span>" +
+                "<span>strana " + cislo + " / " + celkem + "</span></div>" +
+        "</div>";
+    }
 
     function vykresliDetail() {
         const p = (window.KB.porady || []).find(x => x.id === otevreny);
@@ -232,7 +328,9 @@
         $("editor").hidden = !upravuji;
 
         if (upravuji) return void vykresliEditor();
-        $("stage").innerHTML = stranaHtml(p);
+        const strany = rozdelNaStrany(blokyZapisu(p));
+        $("stage").innerHTML = strany
+            .map((obsah, i) => stranaHtml(p, obsah.join(""), i + 1, strany.length)).join("");
         window.KBDoc.fitStage($("stage"), $("listWrap"));
     }
 
@@ -245,8 +343,18 @@
         $("edSekce").innerHTML = (koncept.sekce || []).map((s, si) =>
             '<div class="psekce" data-sekce="' + si + '">' +
                 '<div class="psekce__hlava">' +
+                    /* Okruh je nejčastěji projekt – vybere se z roletky a
+                       nadpis se z něj vezme. „Vlastní nadpis" zůstává pro
+                       body, které pod žádný projekt nepatří (Dovolená,
+                       Zápisy…). Michal 3. 9. 2026. */
+                    '<select class="field" data-projekt style="max-width:230px">' +
+                        '<option value="">— vlastní nadpis —</option>' +
+                        nabidkaProjektu().map(n => '<option value="' + esc(n) + '"' +
+                            (s.projekt === n ? " selected" : "") + ">" + esc(n) + "</option>").join("") +
+                    "</select>" +
                     '<input type="text" class="field grow" data-nadpis maxlength="80" ' +
-                        'placeholder="Okruh (např. Sportovka)" value="' + esc(s.nadpis || "") + '">' +
+                        'placeholder="Okruh (např. Sportovka)" value="' + esc(s.nadpis || "") + '"' +
+                        (s.projekt ? " readonly" : "") + ">" +
                     '<button type="button" class="pikona" data-sekce-nahoru title="Posunout výš">↑</button>' +
                     '<button type="button" class="pikona" data-sekce-dolu title="Posunout níž">↓</button>' +
                     '<button type="button" class="pikona pikona--smaz" data-sekce-smaz ' +
@@ -272,19 +380,97 @@
     function ctiEditor() {
         koncept.datum = $("edDatum").value;
         koncept.nazev = $("edNazev").value.trim();
-        koncept.sekce = Array.from($("edSekce").querySelectorAll("[data-sekce]")).map(el => ({
-            nadpis: el.querySelector("[data-nadpis]").value.trim(),
-            body: Array.from(el.querySelectorAll("[data-text]")).map(t => t.value.trim())
-        }));
+        koncept.sekce = Array.from($("edSekce").querySelectorAll("[data-sekce]")).map(el => {
+            const projekt = el.querySelector("[data-projekt]").value;
+            return {
+                // vybraný projekt je zároveň nadpis – ať se nerozejdou
+                projekt: projekt,
+                nadpis: projekt || el.querySelector("[data-nadpis]").value.trim(),
+                body: Array.from(el.querySelectorAll("[data-text]")).map(t => t.value.trim())
+            };
+        });
     }
 
     function zacniUpravu(p) {
         koncept = JSON.parse(JSON.stringify({
             datum: p.datum || "", nazev: p.nazev || "",
-            sekce: (p.sekce || []).length ? p.sekce : prazdnyZapis().sekce
+            sekce: ((p.sekce || []).length ? p.sekce : prazdnyZapis().sekce)
+                .map(x => ({ nadpis: x.nadpis || "", projekt: x.projekt || "",
+                    body: (x.body || []).slice() }))
         }));
         upravuji = true;
         vykresliDetail();
+    }
+
+    /* ------------------------------------------------- zmínky přes „@" ---
+       Napsané „@" otevře vyhledávání lidí – stejný zvyk jako v chatu.
+       Píše se dál a seznam se zužuje, Enter nebo klik doplní celé jméno.
+       V listu se pak zmínka zvýrazní (viz textBodu). */
+
+    let zminkyEl = null;        // otevřený seznam
+    let zminkyPole = null;      // textarea, do které se doplňuje
+    let zminkyOd = -1;          // pozice „@" v textu
+    let zminkyVyber = 0;
+
+    function zavriZminky() {
+        if (zminkyEl) zminkyEl.remove();
+        zminkyEl = null; zminkyPole = null; zminkyOd = -1; zminkyVyber = 0;
+    }
+
+    /** Lidé, kteří se dají zmínit – bez služebních účtů. */
+    function lideProZminku(dotaz) {
+        const q = dotaz.toLowerCase();
+        return (window.KB.users || [])
+            .filter(u => u.active !== false && window.KBUI.typUvazku(u) !== "servis")
+            .map(u => ({
+                jmeno: ((u.first || "") + " " + (u.last || "")).trim() || u.email || "",
+                role: window.KBUI.roleTitle(u.role)
+            }))
+            .filter(u => u.jmeno && (!q || u.jmeno.toLowerCase().indexOf(q) !== -1))
+            .sort((a, b) => a.jmeno.localeCompare(b.jmeno, "cs"))
+            .slice(0, 8);
+    }
+
+    function vykresliZminky(lide) {
+        zminkyEl.innerHTML = lide.map((u, i) =>
+            '<button type="button" data-zminka="' + esc(u.jmeno) + '"' +
+                (i === zminkyVyber ? ' class="je-aktivni"' : "") + ">" +
+                esc(u.jmeno) + '<span class="pzminky__typ">' + esc(u.role) + "</span></button>"
+        ).join("");
+    }
+
+    function otevriZminky(pole) {
+        const pred = pole.value.slice(0, pole.selectionStart);
+        /* „@" platí jen na začátku slova – v e-mailu uprostřed textu by
+           našeptávač jen překážel. */
+        const m = /(^|\s)@([^@\s]{0,30})$/.exec(pred);
+        if (!m) return zavriZminky();
+        const lide = lideProZminku(m[2]);
+        if (!lide.length) return zavriZminky();
+
+        zminkyOd = pred.length - m[2].length - 1;
+        zminkyPole = pole;
+        zminkyVyber = 0;
+        if (!zminkyEl) {
+            zminkyEl = document.createElement("div");
+            zminkyEl.className = "pzminky";
+            document.body.appendChild(zminkyEl);
+        }
+        const r = pole.getBoundingClientRect();
+        zminkyEl.style.left = (r.left + window.scrollX) + "px";
+        zminkyEl.style.top = (r.bottom + window.scrollY + 4) + "px";
+        vykresliZminky(lide);
+    }
+
+    function doplnZminku(jmeno) {
+        if (!zminkyPole) return;
+        const pole = zminkyPole;
+        const konec = pole.selectionStart;
+        pole.value = pole.value.slice(0, zminkyOd) + "@" + jmeno + " " + pole.value.slice(konec);
+        const kam = zminkyOd + jmeno.length + 2;
+        zavriZminky();
+        pole.focus();
+        pole.setSelectionRange(kam, kam);
     }
 
     /* ---------------------------------------------------------------- start */
@@ -333,7 +519,8 @@
                 datum: koncept.datum,
                 nazev: koncept.nazev,
                 sekce: koncept.sekce
-                    .map(s => ({ nadpis: s.nadpis, body: s.body.filter(Boolean) }))
+                    .map(s => ({ nadpis: s.nadpis, projekt: s.projekt || "",
+                        body: s.body.filter(Boolean) }))
                     .filter(s => s.nadpis || s.body.length)
             };
             if (!cisty.datum) return window.KBUI.toast("Doplň datum porady.", "warn");
@@ -419,14 +606,48 @@
             vykresliEditor();
         });
 
-        $("btnSekce").addEventListener("click", () => {
+        /* Výběr projektu rovnou přepíše nadpis okruhu – a naopak
+           „vlastní nadpis" ho uvolní k psaní. */
+        $("edSekce").addEventListener("change", (e) => {
+            const sel = e.target.closest("[data-projekt]");
+            if (!sel) return;
             ctiEditor();
-            koncept.sekce.push({ nadpis: "", body: [""] });
             vykresliEditor();
         });
 
-        /* Enter v bodu založí další bod – píše se to pak jako ve Wordu. */
+        $("btnSekce").addEventListener("click", () => {
+            ctiEditor();
+            koncept.sekce.push({ nadpis: "", projekt: "", body: [""] });
+            vykresliEditor();
+        });
+
+        $("edSekce").addEventListener("input", (e) => {
+            if (e.target.matches("[data-text]")) otevriZminky(e.target);
+        });
+        document.addEventListener("click", (e) => {
+            const b = e.target.closest("[data-zminka]");
+            if (b) return void doplnZminku(b.dataset.zminka);
+            if (zminkyEl && !e.target.closest(".pzminky")) zavriZminky();
+        });
+
+        /* Enter v bodu založí další bod – píše se to pak jako ve Wordu.
+           Když je otevřený našeptávač lidí, patří Enter jemu. */
         $("edSekce").addEventListener("keydown", (e) => {
+            if (zminkyEl && e.target.matches("[data-text]")) {
+                const volby = Array.from(zminkyEl.querySelectorAll("[data-zminka]"));
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    zminkyVyber = (zminkyVyber + (e.key === "ArrowDown" ? 1 : volby.length - 1))
+                        % volby.length;
+                    volby.forEach((b, i) => b.classList.toggle("je-aktivni", i === zminkyVyber));
+                    return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    return void doplnZminku(volby[zminkyVyber].dataset.zminka);
+                }
+                if (e.key === "Escape") { e.preventDefault(); return void zavriZminky(); }
+            }
             if (e.key !== "Enter" || e.shiftKey) return;
             const bodEl = e.target.closest("[data-bod]");
             if (!bodEl) return;
@@ -451,6 +672,11 @@
         });
         document.addEventListener("kb-role", () => { vykresliSeznam(); vykresliDetail(); });
         window.KB.watchPorady();
+        /* Okruhy porady se vybírají z projektů – manažer má všechny,
+           ostatní ty svoje (víc jim pravidla stejně nevydají). */
+        if (window.KBUI.can("vykaz.view")) window.KB.watchProjekty();
+        else window.KB.watchMojeProjekty();
+        window.KB.on("projekty-docs", () => { if (upravuji) vykresliEditor(); });
         vykresliSeznam();
     });
 })();

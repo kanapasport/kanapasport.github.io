@@ -187,6 +187,13 @@ service cloud.firestore {
     // nepotřebuje – kryje ji spodní zachytávací blok pro `private` (správce).
     // Komentář tu je, aby kolekce nezapadla při příštím čtení pravidel.
 
+    /* Zůstatky dovolené a přesčasů. SVŮJ vidí každý – je to jeho nárok
+       a má si ho hlídat; cizí a zápis jen manažer (spodní pravidlo pro
+       `private`). Michal 3. 9. 2026. */
+    match /artifacts/firemni-kb-app/private/vykazy/zustatky/{uid} {
+      allow read: if spravce() || (clen() && uid == request.auth.uid);
+    }
+
     /* --- porady ---------------------------------------------------------
        Zápis z porady čte celý tým: je to shrnutí toho, co se domluvilo,
        a lidé se na body odkazují. Psát a mazat je smí manažer – to už

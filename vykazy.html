@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=200">
+    <link rel="stylesheet" href="assets/css/app.css?v=201">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=200"></script>
-<script src="assets/js/ui.js?v=200"></script>
-<script src="assets/js/vykazy.js?v=200"></script>
-<script type="module" src="assets/js/store.js?v=200"></script>
+<script src="assets/js/taxonomy.js?v=201"></script>
+<script src="assets/js/ui.js?v=201"></script>
+<script src="assets/js/vykazy.js?v=201"></script>
+<script type="module" src="assets/js/store.js?v=201"></script>
 
 <script>
 (function () {
@@ -355,6 +355,9 @@
     const REZIE = [ADMINISTRATIVA, PORADA, WEB_PRACE];
     const REZIE_FIRMA = "Pasport Kaňa s.r.o.";
     const jeRezie = (nazev) => REZIE.indexOf(nazev) !== -1;
+    /* Práci na webu vidí i vykazuje jen hlavní správce – ostatním manažerům
+       se v cizích výkazech ani nezobrazí. */
+    const jeMujWeb = () => window.KBUI.role() === "hlavni-spravce";
 
     /* KDO VIDÍ PENÍZE. Manažer (`vykaz.view`) u všech. Kdo si práci
        fakturuje sám – OSVČ a student na dohodu – u SVÉHO výkazu taky:
@@ -410,9 +413,13 @@
            zakázce a nikdo ji nechce zakládat jako projekt. Firma se k ní
            doplní z `firmaMap` stejně jako u ostatních; nastavuje se tím,
            že se v číselníku firem přiřadí k projektu „Administrativa". */
-        const zvlastni = ABSENCE.concat([ADMINISTRATIVA, PORADA, WEB_PRACE]);
+        /* Na webu dělá jenom Michal – ostatním se „Web" v nabídce vůbec
+           neukazuje, jinak by to vypadalo jako projekt, na který si můžou
+           zapsat hodiny (Michal 3. 9. 2026). */
+        const zvlastni = ABSENCE.concat([ADMINISTRATIVA, PORADA]
+            .concat(jeMujWeb() ? [WEB_PRACE] : []));
         return zvlastni.concat(
-            jmena.filter(z => zvlastni.indexOf(z) === -1));
+            jmena.filter(z => zvlastni.indexOf(z) === -1 && z !== WEB_PRACE));
     }
 
     /**
@@ -1920,7 +1927,9 @@
         const zaklad = (spravce
             ? (window.KB.vykazy || [])
             : (window.KB.vykazy || []).filter(z => z.uid === ja))
-            .filter(z => jedenClovek || !(z.absence === true || jeAbsence(z.zakazka)));
+            .filter(z => jedenClovek || !(z.absence === true || jeAbsence(z.zakazka)))
+            // hodiny na webu jsou Michalova věc, ne firemní přehled
+            .filter(z => z.zakazka !== WEB_PRACE || jeMujWeb());
 
         const zaznamy = V.vyber(zaklad, filtr).slice().sort((a, b) =>
             (b.datum || "").localeCompare(a.datum || "") || (a.od || "").localeCompare(b.od || ""));
@@ -1939,13 +1948,29 @@
         /* Průměrná sazba a fakturováno místo najetých kilometrů: kdo si píše
            fakturu, potřebuje vidět peníze, ne kilometry (Michal 2. 9. 2026).
            Zaměstnanci zůstávají kilometry – peníze mu neříkají nic. */
+        /* ZŮSTATKY. Dovolená a přesčas se počítají za celý rok, ne za
+           vybrané období – proto stojí vedle součtů z filtru a ne v nich.
+           Ukazují se jen u JEDNOHO člověka; „Všichni lidé" by je slil
+           dohromady a nedávalo by to smysl. */
+        const kdoZustatek = spravce ? filtr.uid : window.KB.currentUid();
+        const zst = (kdoZustatek && jedenClovek) ? V.zustatek(kdoZustatek) : null;
+        const zbyvaText = zst && (zst.zbyva === Math.round(zst.zbyva)
+            ? V.cislo(zst.zbyva) : zst.zbyva.toFixed(1).replace(".", ","));
+
         $("souhrn").innerHTML =
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
             V.dlazdice("Odpracovaných dní", V.cislo(s.dny), vicLidi ? "napříč lidmi" : "") +
             (penize
                 ? penizeDlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
                   penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
-                : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady"));
+                : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady")) +
+            (zst && zst.nastaveno
+                ? V.dlazdice("Dovolená zbývá", zbyvaText + " dní",
+                      "z " + V.cislo(zst.narok) + " · vyčerpáno " + V.cislo(zst.cerpano) +
+                      (zst.neuplne ? " · neúplné" : "")) +
+                  V.dlazdice("Přesčas", V.hod(zst.prescas),
+                      "od " + V.czDatum(zst.od) + (zst.neuplne ? " · neúplné" : ""))
+                : "");
 
         // po překreslení se peníze zase schovají, dokud si je někdo nevyžádá
         pouzijSkryti();
@@ -2175,6 +2200,8 @@
     function zapniSledovani() {
         if (sledovaniZapnuto || !window.KBUI.can("vykaz.otevrit")) return;
         sledovaniZapnuto = true;
+        // dovolená a přesčasy – svůj zůstatek vidí každý, manažer všechny
+        window.KB.watchZustatky();
         if (window.KBUI.can("vykaz.view")) {
             window.KB.watchVykazy();
             window.KB.watchProjekty();
@@ -2614,6 +2641,7 @@
         }
 
         window.KB.on("vykazy", render);
+        window.KB.on("zustatky", render);   // dlaždice dovolené a přesčasu
         window.KB.on("vykazy-meta", () => { naplnFiltry(); nastavVychoziSazbu(true); });
         window.KB.on("users", render);
         window.KB.on("zakazky", naplnFiltry);
