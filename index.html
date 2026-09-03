@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=202">
+    <link rel="stylesheet" href="assets/css/app.css?v=204">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -208,6 +208,10 @@
         .kudal__tecka { flex: none; width: 9px; height: 9px; border-radius: 3px; background: var(--dim); }
         .kudal--ukol { color: #c26a00; font-weight: 700; }
         .ktyp--udalost { background: #0f62c4; }
+
+        /* Patička dlaždice: drží se dole vlevo, i když je seznam krátký. */
+        .nastenka__pata { margin-top: auto; padding-top: 10px;
+            display: flex; align-items: center; gap: 10px; }
         .ktyp--dovolena { background: #0d7d3f; }
         .ktyp--nemoc { background: #c8102e; }
         .ktyp--skoleni { background: #8a2be2; }
@@ -278,6 +282,9 @@
                     </span>
                 </div>
                 <div id="quickSeznam" class="nastenka__telo"></div>
+                <!-- historie patří dolů pod seznam, ne doprostřed mezi vzkazy
+                     (přání Michala 3. 9. 2026) -->
+                <div class="nastenka__pata" id="quickPata"></div>
             </div>
             <div class="card nastenka__karta" id="wMilniky">
                 <div class="nastenka__hlava" data-otevri="milniky.html" title="Otevřít milníky">
@@ -352,11 +359,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=202"></script>
-<script src="assets/js/doc.js?v=202"></script>
-<script src="assets/js/ui.js?v=202"></script>
-<script src="assets/js/vykazy.js?v=202"></script>
-<script type="module" src="assets/js/store.js?v=202"></script>
+<script src="assets/js/taxonomy.js?v=204"></script>
+<script src="assets/js/doc.js?v=204"></script>
+<script src="assets/js/ui.js?v=204"></script>
+<script src="assets/js/vykazy.js?v=204"></script>
+<script type="module" src="assets/js/store.js?v=204"></script>
 
 <script>
 (function () {
@@ -680,9 +687,16 @@
                 "</span>";
         };
 
+        /* Splněno se čte podle režimu vzkazu: společný má `hotovo`,
+           u „každý sám" rozhoduje, jestli je člověk v `hotoviUids`.
+           U vzkazu, který jsem poslal, se ukazuje, jestli ho mají všichni. */
+        const hotovoPro = (q, mujVzkaz) => mujVzkaz
+            ? window.KBUI.quickHotovoVse(q) : window.KBUI.quickHotovoPro(q, uid);
+
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' +
-                (q.hotovo ? " qtrad--hotovo" : (q.asap ? " qtrad--asap" : "")) + '">' +
+                (hotovoPro(q, mujVzkaz) ? " qtrad--hotovo"
+                    : (q.asap ? " qtrad--asap" : "")) + '">' +
                 '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
                     '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:12.5px">' +
@@ -697,8 +711,12 @@
                         ].filter(Boolean).join(" · ") +
                         // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
                         (spoluucast(q).length
-                            ? "<br>Spoluúčast: " + esc(spoluucast(q).join(", ")) : "") +
-                        (q.hotovo && q.hotovoKdo
+                            ? "<br>Spoluúčast: " + esc(spoluucast(q).join(", ")) +
+                              (q.rezim === "kazdy" ? " · každý sám" : "") : "") +
+                        (q.rezim === "kazdy" && spoluucast(q).length
+                            ? '<br><span class="quickrad__splnil">' +
+                              esc(window.KBUI.quickStav(q)) + "</span>" : "") +
+                        (q.rezim !== "kazdy" && q.hotovo && q.hotovoKdo
                             ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatum(new Date(q.hotovoMs)
                                   .toISOString().slice(0, 10))) : "") + "</span>" : "") +
@@ -713,11 +731,15 @@
                     ? '<button type="button" class="btn btn--ghost btn--sm"' +
                       ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
-                (q.hotovo
-                    ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
-                        esc(q.id) + '" data-zpet="1">Vrátit</button>'
-                    : '<button type="button" class="btn btn--sm quicksplnit" data-quick-hotovo="' +
-                        esc(q.id) + '">Splněno</button>') +
+                /* Zadavatel, který mezi adresáty není, nemá u „každý sám" co
+                   odškrtávat – splnění je na těch, komu vzkaz patří. */
+                (mujVzkaz && q.rezim === "kazdy"
+                    ? ""
+                    : (hotovoPro(q, mujVzkaz)
+                        ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
+                            esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                        : '<button type="button" class="btn btn--sm quicksplnit" data-quick-hotovo="' +
+                            esc(q.id) + '">Splněno</button>')) +
                 (q.odKoho === uid
                     ? '<button type="button" class="linkbtn" data-quick-smaz="' + esc(q.id) +
                       '" title="Smazat vzkaz" style="padding:2px 8px">×</button>' : "") +
@@ -733,10 +755,14 @@
            (přání Michala 1. 9. 2026). */
         const jenPozn = quickRozsah === "poznamky";
         const tydenZpet = Date.now() - 7 * 24 * 3600 * 1000;
+        /* Co je pro mě, se řídí MÝM splněním; co jsem poslal, mizí ze
+           seznamu, až to má celá parta. */
+        const hotovoTady = (q) => mojeRezim
+            ? window.KBUI.quickHotovoPro(q, uid) : window.KBUI.quickHotovoVse(q);
         const aktivni = (mojeRezim ? proMe : odeMe)
-            .filter(q => !q.hotovo && (!jenPozn || q.poznamka)).sort(naporadi);
+            .filter(q => !hotovoTady(q) && (!jenPozn || q.poznamka)).sort(naporadi);
         const splnene = (mojeRezim ? proMe : odeMe)
-            .filter(q => q.hotovo && (!jenPozn || q.poznamka)
+            .filter(q => hotovoTady(q) && (!jenPozn || q.poznamka)
                 && (q.hotovoMs || q.ms || 0) >= tydenZpet);
 
         document.querySelectorAll("[data-qrozsah]").forEach(ch => {
@@ -751,12 +777,14 @@
                    (jenPozn ? "Žádné upozornění k poznámce."
                     : mojeRezim ? "Žiješ šťastný život, nikdo po tobě nic nechce."
                               : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
-            (splnene.length
-                ? '<button type="button" class="linkbtn" data-quick-splnene-tile style="margin-top:12px">' +
-                    (quickSplneneTile ? "Skrýt historii" : "Splněné za poslední týden (" + splnene.length + ")") +
-                  "</button>" +
-                  (quickSplneneTile ? splnene.map(q => radek(q, !mojeRezim)).join("") : "")
-                : "");
+            // rozbalená historie zůstává u seznamu, tlačítko k ní je v patičce
+            (quickSplneneTile ? splnene.map(q => radek(q, !mojeRezim)).join("") : "");
+
+        document.getElementById("quickPata").innerHTML = splnene.length
+            ? '<button type="button" class="linkbtn" data-quick-splnene-tile>' +
+                (quickSplneneTile ? "Skrýt historii"
+                    : "Splněné za poslední týden (" + splnene.length + ")") + "</button>"
+            : "";
     }
 
     let quickSplneneTile = false;
@@ -804,16 +832,12 @@
             quickSplneneTile = !quickSplneneTile;
             return void renderQuick();
         }
-        const hotovoBtn = event.target.closest("#quickSeznam [data-quick-hotovo]");
+        const hotovoBtn = event.target.closest("#quickSeznam [data-quick-hotovo]," +
+            " #quickPata [data-quick-hotovo]");
         if (hotovoBtn) {
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
-            // u společného vzkazu se zapíše, kdo ho odškrtl za všechny
-            const jeHotovo = !hotovoBtn.dataset.zpet;
-            if (q) window.KB.saveQuickTodo(q.id, Object.assign({}, q, {
-                hotovo: jeHotovo,
-                hotovoKdo: jeHotovo ? (window.KB_USER || "") : "",
-                hotovoMs: jeHotovo ? Date.now() : 0
-            }))
+            // společné se odškrtne za všechny, „každý sám" jen za mě – viz KBUI
+            if (q) window.KBUI.quickPrepni(q, !hotovoBtn.dataset.zpet)
                 .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
             return;
         }
@@ -846,9 +870,23 @@
        Dnešek a nejbližší dny: absence a události z kalendáře plus termíny
        úkolů. Dny bez obsahu se vynechávají – prázdné řádky nic neřeknou. */
 
-    const TYP_BARVA = { udalost: "#0f62c4", doktor: "#00695c", dovolena: "#0d7d3f", nemoc: "#c8102e",
+    /* Akce jen pro vybrané lidi (`proUids`) vidí jen oni a ten, kdo ji
+       založil – přesně jako v kalendáři. Nástěnka to dřív nehlídala, takže
+       ukazovala i to, co kalendář schoval, a nesedělo to k sobě
+       (našlo se 3. 9. 2026). */
+    const proMneJe = (k) => {
+        const ja = window.KB.currentUid();
+        return !(Array.isArray(k.proUids) && k.proUids.length &&
+            k.uid !== ja && k.proUids.indexOf(ja) === -1);
+    };
+    /* Druhy, u kterých se v seznamu píše vlastní název místo názvu druhu. */
+    const TEXTOVE_TYPY = ["udalost", "teams", "schuzka"];
+
+    const TYP_BARVA = { udalost: "#0f62c4", teams: "#4b53bc", schuzka: "#a1541b",
+        doktor: "#00695c", dovolena: "#0d7d3f", nemoc: "#c8102e",
         skoleni: "#8a2be2", homeoffice: "#0e7490", volno: "#6b8e23" };
-    const TYP_NAZEV = { udalost: "Firemní akce", doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
+    const TYP_NAZEV = { udalost: "Firemní akce", teams: "Teams call", schuzka: "Schůzka",
+        doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
         skoleni: "Školení", homeoffice: "Home office", volno: "Volno" };
     // absence, které platí až po manažerově razítku
     const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená", volno: "Nepotvrzené volno" };
@@ -863,12 +901,13 @@
 
             const radky = [];
             (window.KB.kalendar || []).forEach(k => {
+                if (!proMneJe(k)) return;
                 if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
                     let druh = TYP_NAZEV[k.typ] || "událost";
                     if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true) druh = NEPOTVRZENE[k.typ];
                     radky.push({ barva: TYP_BARVA[k.typ] || TYP_BARVA.udalost,
-                        text: k.typ === "udalost"
-                            ? (k.text || "Firemní akce") + (k.osoba ? " – " + k.osoba : "")
+                        text: TEXTOVE_TYPY.indexOf(k.typ || "udalost") !== -1
+                            ? (k.text || druh) + (k.osoba ? " – " + k.osoba : "")
                             : druh + " – " + (k.osoba || "") });
                 }
             });

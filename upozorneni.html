@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Upozornění – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=204">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Nastavení si mění každý sám a týká se jen jeho – proto žádné
+           tabulky lidí, jen seznam zaškrtávátek. */
+        .upoz { max-width: 760px; display: flex; flex-direction: column; gap: 16px; }
+        .upskupina { display: flex; flex-direction: column; gap: 2px; }
+        .upskupina__nadpis { font-size: 11.5px; font-weight: 900; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--muted); margin: 10px 0 4px;
+            padding-bottom: 4px; border-bottom: 1px solid var(--line-soft); }
+        .upvolba { display: flex; align-items: flex-start; gap: 10px; padding: 9px 2px;
+            cursor: pointer; border-bottom: 1px solid var(--line-soft); }
+        .upvolba:last-child { border-bottom: 0; }
+        .upvolba input { margin-top: 3px; flex: none; }
+        .upvolba__text { min-width: 0; }
+        .upvolba__nazev { font-size: 14.5px; font-weight: 700; line-height: 1.35; }
+        .upvolba__popis { font-size: 12.5px; color: var(--muted); line-height: 1.5;
+            margin-top: 2px; }
+        .upvolba--vyp { opacity: .45; }
+        .upstav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div>
+        <h2 style="font-size:24px;font-weight:900;line-height:1.15">Upozornění na e-mail</h2>
+        <p class="small muted" style="margin-top:3px;max-width:720px;line-height:1.6">
+            Vyber si, o čem chceš vědět i mimo web. Nastavení je jen tvoje —
+            nikomu jinému nic nezapíná ani nevypíná.
+        </p>
+    </div>
+
+    <div class="upoz">
+        <div class="card col" style="padding:16px 18px;gap:12px">
+            <label class="row" style="gap:9px;cursor:pointer;font-size:15px">
+                <input type="checkbox" id="upZapnuto">
+                <b>Posílat mi upozornění na e-mail</b>
+            </label>
+            <div class="upstav">
+                <span class="small muted">Chodit budou na <b id="upEmail">—</b></span>
+                <span class="small muted" id="upStav"></span>
+            </div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                E-mail se bere z tvého účtu. Když nesedí, řekni si o změnu
+                hlavnímu správci — mění se v Uživatelích.
+            </p>
+        </div>
+
+        <div class="card col" id="volby" style="padding:6px 18px 14px;gap:0"></div>
+
+        <div class="row" style="gap:12px">
+            <button type="button" id="btnUloz" class="btn btn--primary">Uložit nastavení</button>
+            <span id="stav" class="small muted"></span>
+        </div>
+
+        <p class="tiny muted" style="line-height:1.6;margin:0">
+            Web sám e-maily neposílá — je to jen stránka v prohlížeči. Rozesílá
+            je skript, který už běží kvůli výkazům do Tabulek Google, a dívá se
+            sem každou hodinu.
+        </p>
+    </div>
+
+</main>
+
+<script src="assets/js/taxonomy.js?v=204"></script>
+<script src="assets/js/ui.js?v=204"></script>
+<script src="assets/js/vykazy.js?v=204"></script>
+<script type="module" src="assets/js/store.js?v=204"></script>
+
+<script>
+(function () {
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const esc = (v) => window.KBUI.esc(v);
+
+    /* CO SE DÁ POSÍLAT.
+       `need` omezuje volbu na lidi, kteří na tu věc vůbec mají právo –
+       zaměstnanci nemá co nabízet potvrzování dovolených.
+       `vychozi` je stav pro toho, kdo si tu ještě nic nenastavil: zapnuté
+       jsou jen věci, které se člověka opravdu týkají a nechodí často. */
+    const VOLBY = [
+        { skupina: "Co po mně kdo chce", polozky: [
+            { id: "quickNovy", nazev: "Nový Quick TO-DO pro mě",
+              popis: "Hned jak mi ho někdo zadá.", vychozi: true },
+            { id: "quickTermin", nazev: "Blíží se termín Quick TO-DO",
+              popis: "Ráno v den termínu a den předem.", vychozi: true },
+            { id: "ukolNovy", nazev: "Nový úkol přiřazený mně",
+              popis: "Když mě někdo přidá na úkol v projektu.", vychozi: true },
+            { id: "ukolTermin", nazev: "Blíží se termín mého úkolu",
+              popis: "Tři dny předem.", vychozi: false },
+            { id: "milnik", nazev: "Blíží se milník, u kterého jsem",
+              popis: "Týden předem.", vychozi: false }
+        ] },
+        { skupina: "Kalendář", polozky: [
+            { id: "akce", nazev: "Připomenutí akcí, schůzek a Teams callů",
+              popis: "Podle připomenutí nastaveného u akce (den, týden, měsíc předem).",
+              vychozi: true },
+            { id: "akceNova", nazev: "Nová akce, která se týká mě",
+              popis: "Když mě někdo přidá do akce jen pro vybrané lidi.", vychozi: false }
+        ] },
+        { skupina: "Porady a poznámky", polozky: [
+            { id: "poradaNova", nazev: "Nový zápis z porady",
+              popis: "Když se objeví zápis z porady.", vychozi: false },
+            { id: "poradaZminka", nazev: "Někdo mě zmínil v poradě přes @",
+              popis: "V bodu nebo v komentáři.", vychozi: true },
+            { id: "poradaKomentar", nazev: "Komentář u bodu, ke kterému jsem psal",
+              popis: "Jen tam, kde už jsem něco napsal.", vychozi: false },
+            { id: "poznamkaSdilena", nazev: "Nová poznámka na listu, který mám nasdílený",
+              popis: "Aby mi neutekla aktualizace od kolegy.", vychozi: false }
+        ] },
+        { skupina: "Výkazy", need: "vykaz.otevrit", polozky: [
+            { id: "vykazChybi", nazev: "Nemám zapsaný výkaz za minulý týden",
+              popis: "V pondělí ráno, dokud to nedoplním.", vychozi: true },
+            { id: "dovolenaStav", nazev: "Moje dovolená byla potvrzená nebo zamítnutá",
+              popis: "Jakmile s ní manažer pohne.", vychozi: true }
+        ] },
+        { skupina: "Jen pro manažery", need: "vykaz.view", polozky: [
+            { id: "dovolenaKPotvrzeni", nazev: "Dovolená čeká na moje potvrzení",
+              popis: "Když si někdo nahlásí dovolenou nebo volno.", vychozi: true },
+            { id: "vykazyChybejici", nazev: "Souhrn, kdo nemá zapsaný výkaz",
+              popis: "V pondělí ráno jeden e-mail za celou partu.", vychozi: false }
+        ] },
+        { skupina: "Souhrny", polozky: [
+            { id: "souhrnPondeli", nazev: "Co mě čeká tenhle týden",
+              popis: "V pondělí ráno: moje úkoly, termíny a akce na následujících sedm dní.",
+              vychozi: true }
+        ] }
+    ];
+
+    let nactene = null;         // co je uložené v databázi
+    let upravovano = false;
+
+    /** Volby, na které má přihlášený vůbec právo. */
+    const mojeSkupiny = () => VOLBY.filter(s => !s.need || window.KBUI.can(s.need));
+
+    function vykresli() {
+        if (upravovano) return;
+        const u = nactene || {};
+        const volby = u.volby || {};
+        $("upZapnuto").checked = u.zapnuto !== false;
+
+        const ja = (window.KB.users || []).find(x => x.id === window.KB.currentUid());
+        $("upEmail").textContent = (ja && ja.email) || "—";
+        $("upStav").textContent = nactene
+            ? "Naposledy uloženo " + (u.ms ? new Date(u.ms).toLocaleDateString("cs-CZ") : "")
+            : "Zatím sis nic nenastavil — platí výchozí nastavení.";
+
+        $("volby").innerHTML = mojeSkupiny().map(s =>
+            '<div class="upskupina">' +
+                '<div class="upskupina__nadpis">' + esc(s.skupina) + "</div>" +
+                s.polozky.map(p =>
+                    '<label class="upvolba"><input type="checkbox" data-volba="' + esc(p.id) + '"' +
+                        ((volby[p.id] === undefined ? p.vychozi : volby[p.id]) ? " checked" : "") +
+                        ">" +
+                        '<span class="upvolba__text">' +
+                            '<span class="upvolba__nazev">' + esc(p.nazev) + "</span>" +
+                            '<span class="upvolba__popis">' + esc(p.popis) + "</span>" +
+                        "</span></label>").join("") +
+            "</div>").join("");
+        srovnejVypnuto();
+    }
+
+    /** Když je posílání vypnuté, je vidět, že se jednotlivé volby neuplatní. */
+    function srovnejVypnuto() {
+        const zap = $("upZapnuto").checked;
+        $("volby").classList.toggle("upvolba--vyp", !zap);
+        $("volby").querySelectorAll("[data-volba]").forEach(ch => { ch.disabled = !zap; });
+    }
+
+    async function uloz() {
+        const volby = {};
+        /* Ukládají se jen volby, na které má člověk právo – kdyby se
+           posílalo všechno, přibyly by mu v databázi věci, které ani
+           nevidí, a při změně role by se tiše zapnuly. */
+        mojeSkupiny().forEach(s => s.polozky.forEach(p => {
+            const ch = $("volby").querySelector('[data-volba="' + p.id + '"]');
+            if (ch) volby[p.id] = ch.checked;
+        }));
+
+        $("btnUloz").disabled = true;
+        $("stav").textContent = "Ukládám…";
+        try {
+            await window.KB.ulozUpozorneni({ zapnuto: $("upZapnuto").checked, volby: volby });
+            upravovano = false;
+            $("stav").textContent = "Uloženo.";
+            window.KBUI.toast("Nastavení upozornění uloženo.");
+        } catch (err) {
+            console.error(err);
+            $("stav").textContent = "";
+            window.KBUI.toast("Uložení selhalo.", "error");
+        } finally {
+            $("btnUloz").disabled = false;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "upozorneni.html" });
+        $("btnUloz").addEventListener("click", uloz);
+        $("upZapnuto").addEventListener("change", () => { upravovano = true; srovnejVypnuto(); });
+        $("volby").addEventListener("change", () => { upravovano = true; });
+
+        window.KB.on("upozorneni", (data) => { nactene = data; vykresli(); });
+        window.KB.on("users", vykresli);
+        document.addEventListener("kb-role", vykresli);
+        window.KB.watchUpozorneni();
+        vykresli();
+    });
+})();
+</script>
+</body>
+</html>

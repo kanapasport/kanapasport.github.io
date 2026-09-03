@@ -369,7 +369,7 @@ try {
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.vykazyPrisly = false;
             KB.projektyDocs = []; KB.ukoly = []; KB.kalendar = []; KB.porady = [];
-            KB.zustatky = {}; KB.poradyKomentare = [];
+            KB.zustatky = {}; KB.poradyKomentare = []; KB.upozorneni = null;
             KB.ready = true;
             setStatus("odhlasen");
             emit("guides", KB.guides);
@@ -695,6 +695,13 @@ KB.saveQuickTodo = async (id, data) => {
            Řadí se před všechny termíny. */
         asap:    data.asap === true,
         projekt: data.projekt || "",       // nepovinná vazba na projekt
+        /* DVA ZPŮSOBY SPLNĚNÍ (Michal 3. 9. 2026):
+             "" (společný)  jeden odškrtne za všechny – vzkaz zhasne partě
+             "kazdy"        každý si škrtá sám, hotovo je pro toho, kdo je
+                            v `hotoviUids`; zadavatel vidí, kolik jich už má
+           Společný zůstává výchozí, protože takhle to fungovalo dosud. */
+        rezim:   data.rezim === "kazdy" ? "kazdy" : "",
+        hotoviUids: Array.isArray(data.hotoviUids) ? data.hotoviUids.slice(0, 40) : [],
         hotovo:  data.hotovo === true,
         // u společného vzkazu je potřeba vědět, kdo ho odškrtl za všechny
         hotovoKdo: data.hotovoKdo || "",
@@ -3020,6 +3027,49 @@ KB.ulozPlanPaletu = async (planId, paleta) => {
             b: String(x.b || "#888888").slice(0, 12),
             p: String(x.p || "").slice(0, 30)
         })) : []
+    }, { merge: true });
+};
+
+/* ------------------------------------------- UPOZORNĚNÍ NA E-MAIL -------
+   Co komu chodí mimo web. Nastavení je osobní: čte a mění ho vlastník,
+   manažer ho vidí (ať se dá poradit, proč někomu nic nechodí), ale
+   rozesílku samotnou dělá Apps Script – web je jen stránka v prohlížeči
+   a odesílat poštu neumí.
+
+     private/upozorneni/lide/{uid}   { zapnuto, volby:{klic:true}, ms } */
+
+const upozDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "upozorneni", "lide", uid);
+
+KB.upozorneni = null;
+let upozOdber = null;
+
+KB.watchUpozorneni = async () => {
+    if (upozOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || upozOdber) return;
+    upozOdber = onSnapshot(upozDoc(auth.currentUser.uid), (d) => {
+        KB.upozorneni = d.exists() ? d.data() : null;
+        emit("upozorneni", KB.upozorneni);
+    }, (err) => console.error("Chyba čtení upozornění:", err));
+};
+
+KB.ulozUpozorneni = async (data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid) throw new Error("Není kdo ukládá.");
+    const volby = {};
+    Object.keys(data.volby || {}).slice(0, 40).forEach(k => {
+        volby[String(k).slice(0, 40)] = (data.volby || {})[k] === true;
+    });
+    await setDoc(upozDoc(uid), {
+        zapnuto: data.zapnuto !== false,
+        volby: volby,
+        /* E-mail se sem opisuje schválně: rozesílací skript pak nemusí
+           sahat do seznamu lidí a stačí mu jedna kolekce. */
+        email: (KB.users.find(u => u.id === uid) || {}).email || "",
+        jmeno: window.KB_USER || "",
+        ms: Date.now()
     }, { merge: true });
 };
 

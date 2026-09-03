@@ -194,6 +194,14 @@ service cloud.firestore {
       allow read: if spravce() || (clen() && uid == request.auth.uid);
     }
 
+    /* Nastavení upozornění na e-mail. Mění si ho každý sám; manažer ho
+       vidí, ať se dá poradit, proč někomu nic nechodí. Rozesílku dělá
+       Apps Script pod svým účtem (Michal 3. 9. 2026). */
+    match /artifacts/firemni-kb-app/private/upozorneni/lide/{uid} {
+      allow read:  if spravce() || (clen() && uid == request.auth.uid);
+      allow write: if clen() && uid == request.auth.uid;
+    }
+
     /* --- porady ---------------------------------------------------------
        Zápis z porady čte celý tým: je to shrnutí toho, co se domluvilo,
        a lidé se na body odkazují. Psát a mazat je smí manažer – to už

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Kalendář – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=202">
+    <link rel="stylesheet" href="assets/css/app.css?v=204">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -73,6 +73,10 @@
         .ud--volno { background: #6b8e23; }
         .ud--ukol { background: #c26a00; }
         .ud--milnik { background: #b3006b; }
+        /* Online hovor a osobní schůzka – dvě běžné věci, které se do
+           „firemní akce" schovávaly a nešlo je odlišit (Michal 3. 9. 2026). */
+        .ud--teams { background: #4b53bc; }
+        .ud--schuzka { background: #a1541b; }
 
         /* Celodenní záznam nemá kdy začít ani skončit, takže v mřížce nemá kam
            sednout – drží se v pruhu nad ní. Výšku pruhu diktuje den s nejvíc
@@ -184,6 +188,8 @@
              Nahoře nad mřížkou, ať je vidět bez rolování i u celého měsíce. -->
         <div class="filtr">
             <label class="filtr__druh"><input type="checkbox" data-druh="udalost"><i class="ud--udalost"></i>Firemní akce</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="teams"><i class="ud--teams"></i>Teams call</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="schuzka"><i class="ud--schuzka"></i>Schůzky</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="dovolena"><i class="ud--dovolena"></i>Dovolené</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="nemoc"><i class="ud--nemoc"></i>Nemoci</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="skoleni"><i class="ud--skoleni"></i>Školení</label>
@@ -225,6 +231,8 @@
                         <option value="volno">Volno</option>
                         <option value="doktor">Doktor</option>
                         <option value="udalost">Firemní akce</option>
+                        <option value="teams">Teams call</option>
+                        <option value="schuzka">Schůzka</option>
                     </select></label>
                 <label class="pole"><span class="popisek">Od dne</span>
                     <input type="date" id="uOd" class="field"></label>
@@ -276,10 +284,19 @@
      (cizí jen manažer, hlídají to pravidla databáze). -->
 <div id="akceOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:115;display:flex;align-items:center;justify-content:center;padding:18px">
     <div class="card col" style="padding:0;max-width:520px;width:100%;gap:0;overflow:hidden">
-        <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+        <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em"
+             id="akNadpis">
             Nová firemní akce
         </div>
         <div class="col" style="padding:16px 18px;gap:12px">
+            <!-- Druh mění jen barvu v kalendáři a název v pruhu; všechno
+                 ostatní (pro koho, připomenutí, víc dní) funguje stejně. -->
+            <label class="pole"><span class="popisek">Druh</span>
+                <select id="akTyp" class="field">
+                    <option value="udalost">Firemní akce</option>
+                    <option value="teams">Teams call — online</option>
+                    <option value="schuzka">Schůzka — osobně</option>
+                </select></label>
             <label class="pole"><span class="popisek">Co se koná</span>
                 <input type="text" id="akText" class="field" maxlength="120"
                        placeholder="grilovačka, porada, teambuilding…"></label>
@@ -354,10 +371,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=202"></script>
-<script src="assets/js/ui.js?v=202"></script>
-<script src="assets/js/vykazy.js?v=202"></script>
-<script type="module" src="assets/js/store.js?v=202"></script>
+<script src="assets/js/taxonomy.js?v=204"></script>
+<script src="assets/js/ui.js?v=204"></script>
+<script src="assets/js/vykazy.js?v=204"></script>
+<script type="module" src="assets/js/store.js?v=204"></script>
 
 <script>
 (function () {
@@ -370,7 +387,13 @@
     /* Popisky druhů s velkým písmenem – v kalendáři stojí druh na začátku
        řádku („Dovolená – Jan Novák"), takže se píše jako začátek věty. */
     const DRUHY = { udalost: "Firemní akce", doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", homeoffice: "Home office", volno: "Volno" };
+        skoleni: "Školení", homeoffice: "Home office", volno: "Volno",
+        teams: "Teams call", schuzka: "Schůzka" };
+    /* Druhy, u kterých je v mřížce vlastní název místo názvu druhu – jsou
+       to domluvené věci, ne stavy člověka. „Teams call" a „Schůzka" se
+       chovají jako firemní akce, jen mají svou barvu. */
+    const TEXTOVE = ["udalost", "teams", "schuzka"];
+    const jeTextova = (typ) => TEXTOVE.indexOf(typ || "udalost") !== -1;
     const DNY_KRATCE = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
         "srpen", "září", "říjen", "listopad", "prosinec"];
@@ -412,7 +435,8 @@
 
     const FILTR_KLIC = "kb-kalendar-filtr";
     const VYCHOZI_DRUHY = { udalost: true, doktor: true, dovolena: true, nemoc: true, skoleni: true,
-        homeoffice: true, volno: true, ukol: true, milnik: true };
+        homeoffice: true, volno: true, ukol: true, milnik: true,
+        teams: true, schuzka: true };
 
     function vychoziFiltr() {
         return { druhy: Object.assign({}, VYCHOZI_DRUHY), kdo: "" };
@@ -481,8 +505,8 @@
            jednotný vzhled pruhu a stejně se nevejde. Text je vidět v detailu
            po rozkliknutí. */
         const vlastni = (u.text || "").trim();
-        let druh = (u.typ || "udalost") === "udalost"
-            ? (vlastni || DRUHY.udalost)
+        let druh = jeTextova(u.typ)
+            ? (vlastni || nazevDruhu)
             : nazevDruhu;
         // dovolená a volno bez manažerova razítka to musí říct rovnou v mřížce
         if (u.typ === "dovolena" && u.potvrzeno !== true) druh = "Nepotvrzená dovolená";
@@ -1053,11 +1077,31 @@
             $("akOdCas").value = ""; $("akDoCas").value = "";
             $("akPripomenout").value = "";
             $("akPripomenout2").value = "";
+            $("akTyp").value = "udalost";
+            srovnejDruhAkce();
             nastavKomu("vsichni");
             naplnLidi();
             $("akceOverlay").hidden = false;
             $("akText").focus();
         });
+
+        /* Nadpis a nápověda podle druhu – ať je hned poznat, že se zakládá
+           Teams call a ne grilovačka. */
+        function srovnejDruhAkce() {
+            const typ = $("akTyp").value;
+            $("akNadpis").textContent = typ === "teams" ? "Nový Teams call"
+                : typ === "schuzka" ? "Nová schůzka" : "Nová firemní akce";
+            $("akText").placeholder = typ === "teams" ? "s kým a o čem — např. MUNI, koordinace"
+                : typ === "schuzka" ? "s kým a kde — např. CEITEC, kontrolní den"
+                : "grilovačka, porada, teambuilding…";
+            /* Hovor ani schůzka celý den netrvají – rovnou se nabídnou časy.
+               Přepnout zpátky na celý den jde pořád. */
+            if (typ !== "udalost" && $("akCely").checked) {
+                $("akCely").checked = false;
+                $("akCasyBox").hidden = false;
+            }
+        }
+        $("akTyp").addEventListener("change", srovnejDruhAkce);
 
         // rozsah dnů se odemyká, jednodenní akce je běžnější
         $("akVicDni").addEventListener("click", () => {
@@ -1117,7 +1161,7 @@
                     return void window.KBUI.toast("Vyber, komu akce patří.", "warn");
                 }
                 await window.KB.saveUdalost(window.KB.newUdalostId(), {
-                    typ: "udalost",
+                    typ: $("akTyp").value || "udalost",
                     text: text,
                     od: od,
                     do: $("akDo").value && $("akDo").value > od ? $("akDo").value : od,
