@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=215">
+    <link rel="stylesheet" href="assets/css/app.css?v=216">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=215"></script>
-<script src="assets/js/ui.js?v=215"></script>
-<script src="assets/js/vykazy.js?v=215"></script>
-<script type="module" src="assets/js/store.js?v=215"></script>
+<script src="assets/js/taxonomy.js?v=216"></script>
+<script src="assets/js/ui.js?v=216"></script>
+<script src="assets/js/vykazy.js?v=216"></script>
+<script type="module" src="assets/js/store.js?v=216"></script>
 
 <script>
 (function () {
@@ -795,7 +795,9 @@
 
     const OSY = {
         patro: {
-            pole: ["patro", "patro2", "patro3"],
+            /* Čtyři patra za den se u velkých budov stanou (Michal 4. 9. 2026);
+               technologie zůstávají tři, víc jich na jeden zápis nepadne. */
+            pole: ["patro", "patro2", "patro3", "patro4"],
             podil: "podilPatra",
             popis: "Patro",
             pridej: "+ další patro",
@@ -932,6 +934,39 @@
 
     const srovnejVsechnyOsy = (box) =>
         Object.keys(OSY).forEach(druh => srovnejVic(box, druh));
+
+    /**
+     * Popis práce podle toho, co je vybrané. Bez úkolu zůstávala kolonka
+     * prázdná a ve výkazu i v Tabulkách byl v koloně Úkol prázdný řádek –
+     * teď se do ní napíše „1PP, 2PP · TER, VODA" (Michal 4. 9. 2026).
+     *
+     * Vlastní text má vždycky přednost: sahá se jen na to, co sem napsala
+     * tahle funkce (`autoMisto`). Text předvyplněný u absence nese vlastní
+     * `auto` a ten se odsud nepřepisuje.
+     */
+    function predvyplnMisto(box) {
+        const pole = box.querySelector('[data-f="nazev"]');
+        if (!pole) return;
+        const moje = pole.dataset.autoMisto === "1";
+        if (pole.value && !moje) return;
+
+        const smaz = () => {
+            if (!moje) return;
+            pole.value = "";
+            delete pole.dataset.autoMisto;
+        };
+
+        // úkol si popis nese sám – doplňovat k němu místo by bylo dvakrát totéž
+        const ukol = box.querySelector('[data-f="ukolId"]');
+        if (ukol && ukol.value) return void smaz();
+
+        const casti = [ctiOsu(box, "patro").hodnoty.join(", "),
+                       ctiOsu(box, "technologie").hodnoty.join(", ")].filter(Boolean);
+        if (!casti.length) return void smaz();
+
+        pole.value = casti.join(" · ");
+        pole.dataset.autoMisto = "1";
+    }
 
     document.addEventListener("click", (event) => {
         if (!event.target.closest) return;
@@ -2157,13 +2192,13 @@
         /* Sloupce s penězi se tomu, kdo je nemá vidět, úplně vynechají –
            neschovávají se, aby v HTML vůbec nebyly. Kdo je vidí, má o dva
            sloupce víc; manažer navíc sloupec „Kdo". */
-        const sloupcu = 8 + (spravce ? 1 : 0) + (penize ? 2 : 0);
+        const sloupcu = 9 + (spravce ? 1 : 0) + (penize ? 2 : 0);
 
         $("tabulka").innerHTML =
             "<thead><tr>" +
                 (spravce ? "<th>Kdo</th>" : "") +
                 "<th>Úkol</th><th>Projekt</th><th>Firma</th>" +
-                "<th>Druh</th><th>Tech.</th><th>Čas</th>" +
+                "<th>Druh</th><th>Patro</th><th>Tech.</th><th>Čas</th>" +
                 '<th class="vyk__num">Hodin</th>' +
                 (penize ? '<th class="vyk__num">Sazba</th><th class="vyk__num">Částka</th>' : "") +
                 "<th></th>" +
@@ -2179,6 +2214,20 @@
             "</tbody>";
 
         zvyrazniZapis();
+
+        /* Patro i technologie můžou být na jednom zápisu dvě i čtyři.
+           Pod hodnotami se pak ukáže, jak se mezi ně práce dělí – bez toho
+           by se z výkazu nedalo poznat, čím je která buňka plnění naplněná.
+           Budova (a celé názvy technologií) jsou v bublině, ať řádek neroste. */
+        function osaBunka(hodnota, podilText, titulek) {
+            const casti = V.casti(hodnota);
+            const podily = V.podily(podilText, casti.length || 1);
+            const pozn = casti.length > 1 ? podily.join(" / ") + " %" : "";
+            return "<td" + (titulek ? ' title="' + esc(titulek) + '"' : "") + ">" +
+                esc(hodnota || "") +
+                (pozn ? '<span class="vyk__pozn">' + esc(pozn) + "</span>" : "") +
+            "</td>";
+        }
 
         function radek(z) {
             const pauza = Number(z.pauza) || 0;
@@ -2198,7 +2247,8 @@
                     (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
                 "<td>" + esc(z.firma || "") + "</td>" +
                 "<td>" + esc(z.cinnost || "") + "</td>" +
-                '<td title="' + esc(V.techLabel(z.technologie)) + '">' + esc(z.technologie || "") + "</td>" +
+                osaBunka(z.patro, z.podilPatra, z.budova) +
+                osaBunka(z.technologie, z.podilTech, V.techLabel(z.technologie)) +
                 "<td>" + esc((z.od || "") + "–" + (z.do || "")) +
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
                 '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
@@ -2470,6 +2520,7 @@
         if (event.target.dataset.f === "ukolId") {
             zamkniPodleUkolu(box);
             srovnejVsechnyOsy(box);
+            predvyplnMisto(box);
         }
         // budova/patro/technologie zužují nabídku úkolů
         if (["budova", "patro", "technologie"].indexOf(event.target.dataset.f) !== -1) {
@@ -2479,10 +2530,16 @@
            srovnat na nový počet, jinak by zůstala „50,50" u jediného patra. */
         const zmenenaOsa = Object.keys(OSY).find(druh =>
             OSY[druh].pole.indexOf(event.target.dataset.f) !== -1);
-        if (zmenenaOsa) srovnejVic(box, zmenenaOsa);
+        if (zmenenaOsa) {
+            srovnejVic(box, zmenenaOsa);
+            predvyplnMisto(box);
+        }
 
         // popis si člověk přepsal sám – od téhle chvíle mu ho předvyplňování nesahá
-        if (event.target.dataset.f === "nazev") delete event.target.dataset.auto;
+        if (event.target.dataset.f === "nazev") {
+            delete event.target.dataset.auto;
+            delete event.target.dataset.autoMisto;
+        }
         // jiné datum = jiný den, hlídka HO se přepočítá
         if (event.target.dataset.f === "datum") { obnovHoHlasku(box); obnovLhutu(box); }
 

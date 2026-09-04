@@ -434,21 +434,36 @@
     /** Podíly se klikají po desetinách – jemnější dělení je stejně odhad. */
     V.PODIL_KROK = 10;
 
-    /** Rozdělí `co` procent na `kolik` dílů po desítkách; zbytek dostanou první. */
+    /**
+     * Rozdělí `co` procent na `kolik` dílů. Dělí se po desítkách, ať se dá
+     * všechno vyklikat; co po desítkách nevyjde, přilepí se k prvnímu dílu.
+     * Součet vždycky sedí přesně na `co` – jinak by se procenta rozešla se
+     * stem a zápis by rozdělil víc peněz, než kolik stál.
+     */
     function rozdel(co, kolik) {
         if (kolik <= 0) return [];
-        const kroku = Math.max(0, Math.round(co / V.PODIL_KROK));
-        const zaklad = Math.floor(kroku / kolik);
-        const navic = kroku - zaklad * kolik;
-        const out = [];
-        for (let j = 0; j < kolik; j++) {
-            out.push((zaklad + (j < navic ? 1 : 0)) * V.PODIL_KROK);
+        const krok = V.PODIL_KROK;
+        const zaklad = Math.max(0, Math.floor(co / kolik / krok) * krok);
+        const out = new Array(kolik).fill(zaklad);
+        let zbytek = co - zaklad * kolik;
+        for (let j = 0; zbytek >= krok; j = (j + 1) % kolik) {
+            out[j] += krok;
+            zbytek -= krok;
         }
+        if (zbytek) out[0] += zbytek;
         return out;
     }
 
-    /** Rovným dílem: 1 → [100], 2 → [50, 50], 3 → [40, 30, 30]. */
-    V.podilyRovnym = (pocet) => rozdel(100, pocet);
+    /**
+     * Rovným dílem: 1 → [100], 2 → [50, 50], 3 → [40, 30, 30],
+     * 4 → [25, 25, 25, 25]. Kde to vyjde beze zbytku, dělí se přesně –
+     * čtyři patra po třiceti a dvaceti by vypadala jako omyl.
+     */
+    V.podilyRovnym = (pocet) => {
+        if (pocet <= 0) return [];
+        if (100 % pocet === 0) return new Array(pocet).fill(100 / pocet);
+        return rozdel(100, pocet);
+    };
 
     /**
      * Podíly ze zápisu. Když uložený text nesedí na počet vybraných pater
@@ -687,6 +702,11 @@
             radek.pocet += 1;
         });
 
+        return dobarvi(mapa, poradi);
+    };
+
+    /** Společný závěr obou součtů: barvy podle číselníku a řazení podle peněz. */
+    function dobarvi(mapa, poradi) {
         const index = (hodnota) => {
             const i = (poradi || []).indexOf(hodnota);
             return i === -1 ? -1 : i;
@@ -694,6 +714,33 @@
         return Array.from(mapa.values())
             .map(radek => Object.assign(radek, { barva: V.barva(index(radek.klic), radek.klic) }))
             .sort((a, b) => b.castka - a.castka || b.hodiny - a.hodiny);
+    }
+
+    /**
+     * Jako `V.podle`, ale pro pole, které nese víc hodnot naráz („TER, VODA").
+     * Zápis se mezi ně rozdělí podle podílů práce. Bez toho by v přehledu
+     * stál pruh „TER, VODA" vedle pruhů „TER" a „VODA" a nic by se nesečetlo
+     * (Michal 4. 9. 2026).
+     */
+    V.podleCasti = (zaznamy, klic, podilKlic, poradi) => {
+        const mapa = new Map();
+        (zaznamy || []).forEach(z => {
+            const casti = V.casti(z[klic]);
+            const kusy = casti.length ? casti : ["Nezařazeno"];
+            const podily = V.podily(z[podilKlic], kusy.length);
+            kusy.forEach((hodnota, i) => {
+                const dil = (podily[i] || 0) / 100;
+                if (!mapa.has(hodnota)) {
+                    mapa.set(hodnota, { klic: hodnota, hodiny: 0, castka: 0, pocet: 0 });
+                }
+                const radek = mapa.get(hodnota);
+                radek.hodiny += (Number(z.hodiny) || 0) * dil;
+                radek.castka += (Number(z.castka) || 0) * dil;
+                // počet zápisů, kterých se technologie týkala – ne zlomek zápisu
+                radek.pocet += 1;
+            });
+        });
+        return dobarvi(mapa, poradi);
     };
 
     /**
