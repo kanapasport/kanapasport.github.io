@@ -245,6 +245,9 @@
      * @param {Object} [volby] – { rezim: "pct"|"zbyva", odpracovano: fn(id)→h }.
      *   „zbyva" místo % TO-DO ukáže v buňce zbývající hodiny (budget úkolů
      *   buňky − odpracováno z výkazů) – červeně, když je buňka přes.
+     *   `cerpaniBunky(budova, patro, tech)` a `cerpaniTech(tech)` berou peníze
+     *   z ROZPADU VÝKAZŮ (V.rozpadProjektu) – zápis na dvě patra se tak dělí.
+     *   Bez nich se počítá postaru přes vazbu na úkoly (volby.cerpani).
      */
     V.maticePlneni = (ukoly, budgety, osy, klikaci, techBudgety, volby) => {
         const esc = window.KBUI.esc;
@@ -260,10 +263,25 @@
                 u.budova === budova && u.patro === patro && u.technologie === tech);
             const klic = esc(budova) + "|" + esc(tech) + "|" + esc(patro);
             if (!moje.length) {
+                /* Buňka bez úkolu může mít odvedenou práci: zápis na dvě
+                   patra spadne i tam, kde úkol nikdo nezaložil. Ať to není
+                   vidět jako prázdno – peníze se ukážou i tak. */
+                const kde = esc(budova + " – " + tech + " – " + patro);
+                /* Koruny se ukážou jen v režimu „Zbývá peněz" – vedle procent
+                   TO-DO by míchaly dvě různé veličiny do jedné tabulky. */
+                const bez = (volby && volby.rezim === "zbyva" && volby.cerpaniBunky)
+                    ? volby.cerpaniBunky(budova, patro, tech).castka : 0;
+                const popisek = bez
+                    ? Math.round(bez).toLocaleString("cs-CZ") + "&nbsp;Kč"
+                    : (klikaci ? "+" : "·");
+                const titulek = bez
+                    ? "Vykázáno bez úkolu – " + kde +
+                        (klikaci ? " · klikni a úkol založ" : "")
+                    : (klikaci ? "Založit úkol " + kde : kde);
                 return klikaci
                     ? '<td><button type="button" class="mx__bunka mx__bunka--nic" data-mx="' + klic +
-                        '" title="Založit úkol ' + esc(budova + " – " + tech + " – " + patro) + '">+</button></td>'
-                    : '<td><span class="mx__bunka mx__bunka--nic">·</span></td>';
+                        '" title="' + titulek + '">' + popisek + "</button></td>"
+                    : '<td><span class="mx__bunka mx__bunka--nic">' + popisek + "</span></td>";
             }
             let vaha = 0, soucet = 0;
             moje.forEach(u => {
@@ -280,8 +298,9 @@
                    z výkazů (částky přes vazbu na úkol) */
                 const budget = moje.reduce((x, u) =>
                     x + (Number(((budgety || {})[u.id] || {}).budgetKc) || 0), 0);
-                const cerpano = volby.cerpani
-                    ? moje.reduce((x, u) => x + volby.cerpani(u.id), 0) : 0;
+                const cerpano = volby.cerpaniBunky
+                    ? volby.cerpaniBunky(budova, patro, tech).castka
+                    : (volby.cerpani ? moje.reduce((x, u) => x + volby.cerpani(u.id), 0) : 0);
                 const zbyva = budget - cerpano;
                 obsah = Math.round(zbyva).toLocaleString("cs-CZ") + "&nbsp;Kč";
                 trida = zbyva < 0 ? "mx__bunka--pres" : "mx__bunka--" + uroven(pct);
@@ -300,10 +319,13 @@
            záznamů na úkoly technologie) – stejná veličina jako v buňkách
            režimu „Zbývá peněz". Rozdělené budgety úkolů (dřívější
            „ukrojeno") ukazuje tabulka Vyčleněno níž. */
-        const vyfakturovano = (tech) => (volby && volby.cerpani)
-            ? ukoly.filter(u => u.technologie === tech)
-                .reduce((sum, u) => sum + (Number(volby.cerpani(u.id)) || 0), 0)
-            : 0;
+        const vyfakturovano = (tech) => {
+            if (volby && volby.cerpaniTech) return volby.cerpaniTech(tech).castka;
+            return (volby && volby.cerpani)
+                ? ukoly.filter(u => u.technologie === tech)
+                    .reduce((sum, u) => sum + (Number(volby.cerpani(u.id)) || 0), 0)
+                : 0;
+        };
 
         const cislo = (n) => (Math.round(n * 10) / 10).toLocaleString("cs-CZ");
 
@@ -395,6 +417,138 @@
 
     V.techLabel = (hodnota) => V.techCasti(hodnota).map(techPopis).join(" · ") ||
         String(hodnota || "");
+
+    /* ----------------------------------------------- patra a podíly ----
+
+       Od 4. 9. 2026 se stejně jako technologie dělí i PATRA: kdo za den
+       obejde dvě patra, nemá to psát na dva výkazy (přání Michala).
+       Ukládá se to stejně – spojené do „1PP, 2PP“ – a k tomu podíly
+       práce v procentech jako text „50,50“.
+
+       Proč procenta a ne hodiny: nikdo si nepamatuje, kolik minut strávil
+       na kterém patře. Odhad po desítkách se dá vyklikat a sečte se do sta. */
+
+    /** Jedna hodnota, nebo víc spojených čárkou – stejně pro patra i technologie. */
+    V.casti = V.techCasti;
+
+    /** Podíly se klikají po desetinách – jemnější dělení je stejně odhad. */
+    V.PODIL_KROK = 10;
+
+    /** Rozdělí `co` procent na `kolik` dílů po desítkách; zbytek dostanou první. */
+    function rozdel(co, kolik) {
+        if (kolik <= 0) return [];
+        const kroku = Math.max(0, Math.round(co / V.PODIL_KROK));
+        const zaklad = Math.floor(kroku / kolik);
+        const navic = kroku - zaklad * kolik;
+        const out = [];
+        for (let j = 0; j < kolik; j++) {
+            out.push((zaklad + (j < navic ? 1 : 0)) * V.PODIL_KROK);
+        }
+        return out;
+    }
+
+    /** Rovným dílem: 1 → [100], 2 → [50, 50], 3 → [40, 30, 30]. */
+    V.podilyRovnym = (pocet) => rozdel(100, pocet);
+
+    /**
+     * Podíly ze zápisu. Když uložený text nesedí na počet vybraných pater
+     * (někdo patro přidal nebo ubral) nebo se nesečte do sta, platí rovný díl –
+     * lepší rovnoměrně než podle nastavení pro jiný počet pater.
+     */
+    V.podily = (text, pocet) => {
+        if (!pocet || pocet < 1) return [];
+        const kusy = String(text || "").split(",")
+            .map(x => Math.round(Number(String(x).trim())))
+            .filter(x => Number.isFinite(x));
+        if (kusy.length !== pocet) return V.podilyRovnym(pocet);
+        if (kusy.some(x => x <= 0)) return V.podilyRovnym(pocet);
+        if (kusy.reduce((a, b) => a + b, 0) !== 100) return V.podilyRovnym(pocet);
+        return kusy;
+    };
+
+    /**
+     * Klik na podíl: tomu vyklikanému přidá deset procent, zbytek si rozdělí
+     * ostatní rovným dílem. Za maximem se začíná znovu od deseti – jedním
+     * tlačítkem se tak dá projet celá škála tam i zpět.
+     */
+    V.podilKlik = (podily, index) => {
+        const n = podily.length;
+        if (n < 2) return podily.slice();
+        const min = V.PODIL_KROK;
+        const max = 100 - min * (n - 1);
+        let v = podily[index] + V.PODIL_KROK;
+        if (v > max) v = min;
+        const zbylo = rozdel(100 - v, n - 1);
+        const out = [];
+        let k = 0;
+        for (let j = 0; j < n; j++) out.push(j === index ? v : zbylo[k++]);
+        return out;
+    };
+
+    /**
+     * Rozpad jednoho zápisu na buňky budova × patro × technologie.
+     * `dil` je zlomek částky: podíl patra × podíl technologie. Dvě patra
+     * a dvě technologie po padesáti procentech tak dají čtyři čtvrtiny.
+     *
+     * Co zápis nemá vlastní, doplní úkol – starší zápisy patro ani
+     * technologii nenesou a bez toho by z matice plnění vypadly.
+     */
+    V.rozpadZapisu = (z, ukol) => {
+        const patra = V.casti(z.patro);
+        const techy = V.casti(z.technologie);
+        const p = patra.length ? patra : [(ukol && ukol.patro) || ""];
+        const t = techy.length ? techy : [(ukol && ukol.technologie) || ""];
+        const pp = V.podily(z.podilPatra, p.length);
+        const tp = V.podily(z.podilTech, t.length);
+        const budova = z.budova || (ukol && ukol.budova) || "";
+        const out = [];
+        p.forEach((patro, i) => t.forEach((tech, j) => {
+            out.push({ budova: budova, patro: patro, tech: tech,
+                       dil: (pp[i] / 100) * (tp[j] / 100) });
+        }));
+        return out;
+    };
+
+    /**
+     * Peníze a hodiny z výkazů projektu rozpuštěné do pater a technologií.
+     * Používá to matice plnění i přehled pater – do 4. 9. 2026 se četly
+     * jen přes vazbu na úkol, takže zápis na dvě patra spadl celý na jedno.
+     */
+    V.rozpadProjektu = (nazev) => {
+        const ukoly = new Map();
+        (window.KB.ukoly || []).forEach(u => ukoly.set(u.id, u));
+        const bunky = new Map(), patra = new Map(), techy = new Map();
+        let celkem = 0, hodinCelkem = 0;
+
+        const pricti = (mapa, klic, castka, hodiny) => {
+            const o = mapa.get(klic) || { castka: 0, hodiny: 0 };
+            o.castka += castka; o.hodiny += hodiny;
+            mapa.set(klic, o);
+        };
+
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.absence === true) return;
+            if ((z.zakazka || "") !== nazev && (z.projekt || "") !== nazev) return;
+            const castka = Number(z.castka) || 0;
+            const hodiny = Number(z.hodiny) || 0;
+            celkem += castka; hodinCelkem += hodiny;
+            V.rozpadZapisu(z, ukoly.get(z.ukolId)).forEach(d => {
+                pricti(bunky, d.budova + "|" + d.patro + "|" + d.tech,
+                       castka * d.dil, hodiny * d.dil);
+                pricti(patra, d.budova + "|" + d.patro, castka * d.dil, hodiny * d.dil);
+                pricti(techy, d.tech, castka * d.dil, hodiny * d.dil);
+            });
+        });
+
+        const cti = (mapa, klic) => mapa.get(klic) || { castka: 0, hodiny: 0 };
+        return {
+            bunka: (budova, patro, tech) => cti(bunky, budova + "|" + patro + "|" + tech),
+            patro: (budova, patro) => cti(patra, budova + "|" + patro),
+            tech: (tech) => cti(techy, tech),
+            celkem: celkem,
+            hodiny: hodinCelkem
+        };
+    };
 
     /** Volby do roletky; `prazdne` je popisek nevyplněné položky. */
     V.options = (hodnoty, vybrano, prazdne) =>

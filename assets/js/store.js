@@ -1630,10 +1630,13 @@ KB.doplnCastky = async () => {
         if (kUlozeni.length >= DAVKA_CASTEK) break;
     }
     if (!kUlozeni.length) {
-        return { doplneno: 0, chybiSazba: [...chybiSazba] };
+        return { doplneno: 0, doplnene: [], chybiSazba: [...chybiSazba] };
     }
 
     let hotovo = 0;
+    /* Hláška o dopočtu má říct, ČÍ výkaz a k jakému dni se doplnil – samotné
+       „u 3 výkazů" se nedalo s ničím spojit (Michal 4. 9. 2026). */
+    const doplnene = [];
     for (const polozka of kUlozeni.slice(0, DAVKA_CASTEK)) {
         const z = polozka.z;
         try {
@@ -1648,13 +1651,14 @@ KB.doplnCastky = async () => {
                nezměnil, takže sloupec s taxou by zůstal prázdný. */
             KB.posliDoSheets(z.id);
             hotovo++;
+            doplnene.push({ uid: z.uid || "", osoba: z.osoba || "", datum: z.datum || "" });
         } catch (err) { console.warn("Částka se nedopočítala:", z.id, err); }
     }
     if (hotovo) {
         KB.zapisAktivitu("vykaz",
             "dopočítal částky u " + hotovo + " výkazů podle sazeb lidí", "Systém");
     }
-    return { doplneno: hotovo, chybiSazba: [...chybiSazba] };
+    return { doplneno: hotovo, doplnene: doplnene, chybiSazba: [...chybiSazba] };
 };
 
 /**
@@ -1867,7 +1871,13 @@ function zaznamPayload(data) {
         /* budova a patro – ať se dá sečíst, kolik hodin stálo jedno patro;
            nabídka se bere z nastavení projektu ve Správě */
         budova:   data.budova || "",
+        /* Patro i technologie můžou být dvě nebo tři, spojené do „1PP, 2PP".
+           Vedle nich podíl práce v procentech („50,50"): v plnění projektu
+           se peníze zápisu dělí podíl patra × podíl technologie
+           (Michal 4. 9. 2026). Prázdné = rovným dílem. */
         patro:    data.patro || "",
+        podilPatra: data.podilPatra || "",
+        podilTech:  data.podilTech || "",
         od:       data.od || "",
         do:       data.do || "",
         pauza:    Math.max(0, Number(data.pauza) || 0),

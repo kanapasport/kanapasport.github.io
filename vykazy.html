@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=212">
+    <link rel="stylesheet" href="assets/css/app.css?v=213">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=212"></script>
-<script src="assets/js/ui.js?v=212"></script>
-<script src="assets/js/vykazy.js?v=212"></script>
-<script type="module" src="assets/js/store.js?v=212"></script>
+<script src="assets/js/taxonomy.js?v=213"></script>
+<script src="assets/js/ui.js?v=213"></script>
+<script src="assets/js/vykazy.js?v=213"></script>
+<script type="module" src="assets/js/store.js?v=213"></script>
 
 <script>
 (function () {
@@ -713,6 +713,15 @@
         return seznam;
     }
 
+    /* Patra do roletky. Co zápis nese, musí v nabídce zůstat, i když
+       číselník projektu už to patro nezná – jinak by se při úpravě tiše
+       přepsalo na první položku. Stejná pojistka jako u technologií. */
+    function patraProjektu(zakazka, vybrane) {
+        let seznam = mistoProjektu(zakazka).patra.slice();
+        if (vybrane && seznam.indexOf(vybrane) === -1) seznam = seznam.concat([vybrane]);
+        return seznam;
+    }
+
     /* Druhy vypracování do roletky – stejná písnička jako technologie:
        projekt si může ve Správě nadefinovat vlastní seznam (budgetCiselnik
        […].cinnosti), firemní číselník slouží jen projektům bez vlastního. */
@@ -731,7 +740,9 @@
        se při změně projektu – jiný projekt má jiné budovy. */
     function mistoHtml(zakazka, d) {
         const misto = mistoProjektu(zakazka);
-        const patroDiv = misto.patra.length
+        /* Jednoduchá zakázka zůstává jednoduchá: jedno patro, jedna
+           technologie. Dělit rodinný dům na procenta nikdo nepotřebuje. */
+        const patroJedno = misto.patra.length
             ? '<div><label class="label">Patro</label>' +
                 '<select class="field" data-f="patro">' +
                 V.options(misto.patra, (d && d.patro) || "", "— nezadáno —") + "</select></div>"
@@ -747,7 +758,7 @@
                         '<select class="field" data-f="budova">' +
                         V.options(misto.budovy, (d && d.budova) || "", "— nezadáno —") + "</select></div>"
                     : "") +
-                patroDiv +
+                patroJedno +
                 (tech.length
                     ? '<div><label class="label">Technologie</label>' +
                         '<select class="field" data-f="technologie">' +
@@ -761,64 +772,152 @@
                     '<select class="field" data-f="budova">' +
                     V.options(misto.budovy, (d && d.budova) || "", "— nezadáno —") + "</select></div>"
                 : "") +
-            patroDiv +
-            technologieHtml(zakazka, d) +
+            (misto.patra.length ? vicHtml("patro", zakazka, d) : "") +
+            vicHtml("technologie", zakazka, d) +
         "</span>";
     }
 
 
-    /**
-     * Technologie zápisu – až tři. Kdo na jednom patře kreslí kanalizaci
-     * a vodu zároveň, nemá to psát na dva výkazy: úkol určí první (a tu
-     * zamkne), zbytek si přidá tlačítkem. Do databáze i do Tabulek Google
-     * jdou spojené do „KAN, VOD, SLB" (přání Michala 25. 8. 2026).
-     */
-    const TECH_POLE = ["technologie", "technologie2", "technologie3"];
+    /* ================================================ PATRA A TECHNOLOGIE ==
 
-    function technologieHtml(zakazka, d) {
-        const casti = V.techCasti(d && d.technologie);
-        const roletka = (klic, hodnota, skryta) =>
-            '<select class="field" data-f="' + klic + '"' + (skryta ? " hidden" : "") + ">" +
-            V.options(technologieProjektu(zakazka, hodnota), hodnota, "— nezadáno —") +
-            "</select>";
+       Obojí se zapisuje stejně: až tři hodnoty a k nim podíl práce
+       v procentech. Kdo na jednom patře kreslí kanalizaci a vodu zároveň,
+       nemá to psát na dva výkazy (25. 8. 2026); a kdo za den obejde dvě
+       patra, taky ne (Michal 4. 9. 2026).
 
-        return '<div><label class="label">Technologie</label>' +
-            '<div class="techvic" data-techvic>' +
-                TECH_POLE.map((klic, i) =>
-                    roletka(klic, casti[i] || "", i > 0 && !casti[i])).join("") +
-                '<button type="button" class="linkbtn techvic__pridej" data-tech-pridej' +
-                    (casti.length >= TECH_POLE.length ? " hidden" : "") +
-                    ' title="Práce na víc technologiích naráz">+ další technologie</button>' +
-                '<span class="tiny muted" data-tech-pozn' +
-                    (casti.length >= 2 ? "" : " hidden") +
-                    ">Hodiny se při vyhodnocení budgetu dělí rovnoměrně mezi vybrané technologie.</span>" +
+       Do databáze i do Tabulek Google jdou hodnoty spojené do „KAN, VOD"
+       a „1PP, 2PP"; podíly vedle nich jako „50,50". Peníze zápisu se pak
+       v plnění projektu dělí podíl patra × podíl technologie – dvě patra
+       a dvě technologie po padesáti procentech udělají ze dvou tisíc
+       čtyři pětistovky.
+
+       Úkol určí PRVNÍ hodnotu a zamkne ji; zbytek si člověk přidá tlačítkem. */
+
+    const OSY = {
+        patro: {
+            pole: ["patro", "patro2", "patro3"],
+            podil: "podilPatra",
+            popis: "Patro",
+            pridej: "+ další patro",
+            titulek: "Práce na víc patrech za jeden den",
+            moznosti: (zakazka, hodnota) => patraProjektu(zakazka, hodnota)
+        },
+        technologie: {
+            pole: ["technologie", "technologie2", "technologie3"],
+            podil: "podilTech",
+            popis: "Technologie",
+            pridej: "+ další technologie",
+            titulek: "Práce na víc technologiích naráz",
+            moznosti: (zakazka, hodnota) => technologieProjektu(zakazka, hodnota)
+        }
+    };
+
+    const TECH_POLE = OSY.technologie.pole;
+
+    function vicHtml(druh, zakazka, d) {
+        const osa = OSY[druh];
+        // hodnota je v zápisu uložená spojená v prvním poli („1PP, 2PP")
+        const casti = V.casti(d && d[osa.pole[0]]);
+        const podily = V.podily(d && d[osa.podil], Math.max(1, casti.length));
+
+        const radek = (klic, hodnota, i, skryty) =>
+            '<div class="vicpole__radek"' + (skryty ? " hidden" : "") + ">" +
+                '<select class="field" data-f="' + klic + '">' +
+                V.options(osa.moznosti(zakazka, hodnota), hodnota, "— nezadáno —") +
+                "</select>" +
+                '<button type="button" class="vicpole__podil" data-podil="' + druh +
+                    '" data-i="' + i + '"' +
+                    (casti.length >= 2 && i < casti.length ? "" : " hidden") +
+                    ' title="Podíl práce. Klikáním se zvedá po 10 %, ostatní se dorovnají.">' +
+                    (podily[i] || 0) + "&nbsp;%</button>" +
+            "</div>";
+
+        return '<div><label class="label">' + osa.popis + "</label>" +
+            '<div class="vicpole" data-vic="' + druh + '">' +
+                osa.pole.map((klic, i) =>
+                    radek(klic, casti[i] || "", i, i > 0 && !casti[i])).join("") +
+                '<button type="button" class="linkbtn vicpole__pridej" data-vic-pridej="' + druh + '"' +
+                    (casti.length >= osa.pole.length ? " hidden" : "") +
+                    ' title="' + osa.titulek + '">' + osa.pridej + "</button>" +
+                '<input type="hidden" data-f="' + osa.podil + '" value="' + podily.join(",") + '">' +
             "</div></div>";
+    }
+
+    /**
+     * Přečte jednu osu zápisu: vyplněné hodnoty, jejich podíly a k tomu
+     * mapu „kolikátá roletka → kolikátý podíl". Bez té mapy by se po
+     * vymazání prostřední roletky rozešla procenta s poli.
+     */
+    function ctiOsu(box, druh) {
+        const osa = OSY[druh];
+        const hodnoty = [], poradi = [];
+        osa.pole.forEach((klic, i) => {
+            const pole = box.querySelector('[data-f="' + klic + '"]');
+            const hodnota = pole ? String(pole.value || "").trim() : "";
+            if (hodnota && hodnoty.indexOf(hodnota) === -1) {
+                hodnoty.push(hodnota);
+                poradi[i] = hodnoty.length - 1;
+            } else {
+                poradi[i] = -1;
+            }
+        });
+        const skryte = box.querySelector('[data-f="' + osa.podil + '"]');
+        return { osa: osa, hodnoty: hodnoty, poradi: poradi, skryte: skryte,
+                 podily: V.podily(skryte ? skryte.value : "", Math.max(1, hodnoty.length)) };
     }
 
     /** Technologie zápisu jako jeden text – „KAN, VOD, SLB". */
     function techZapisu(box) {
-        const videne = [];
-        TECH_POLE.forEach(klic => {
-            const pole = box.querySelector('[data-f="' + klic + '"]');
-            const hodnota = pole ? String(pole.value || "").trim() : "";
-            if (hodnota && videne.indexOf(hodnota) === -1) videne.push(hodnota);
-        });
-        return videne.join(", ");
+        return ctiOsu(box, "technologie").hodnoty.join(", ");
     }
 
+    /** Srovná procenta na skutečný počet vybraných hodnot a překreslí tlačítka. */
+    function srovnejVic(box, druh) {
+        const obal = box.querySelector('[data-vic="' + druh + '"]');
+        if (!obal) return;
+        const o = ctiOsu(box, druh);
+        if (o.skryte) o.skryte.value = o.podily.join(",");
+        obal.querySelectorAll("[data-podil]").forEach(b => {
+            const i = Number(b.dataset.i);
+            const misto = o.poradi[i];
+            b.hidden = o.hodnoty.length < 2 || misto < 0;
+            if (misto >= 0) b.innerHTML = (o.podily[misto] || 0) + "&nbsp;%";
+        });
+    }
+
+    const srovnejVsechnyOsy = (box) =>
+        Object.keys(OSY).forEach(druh => srovnejVic(box, druh));
+
     document.addEventListener("click", (event) => {
-        const tlacitko = event.target.closest && event.target.closest("[data-tech-pridej]");
-        if (!tlacitko) return;
-        const obal = tlacitko.closest("[data-techvic]");
-        const dalsi = obal.querySelector("select[hidden]");
-        if (dalsi) {
-            dalsi.hidden = false;
-            dalsi.focus();
+        if (!event.target.closest) return;
+
+        const pridej = event.target.closest("[data-vic-pridej]");
+        if (pridej) {
+            const obal = pridej.closest("[data-vic]");
+            const box = pridej.closest("[data-polozka]") || obal;
+            const dalsi = obal.querySelector(".vicpole__radek[hidden]");
+            if (dalsi) {
+                dalsi.hidden = false;
+                const sel = dalsi.querySelector("select");
+                if (sel) sel.focus();
+            }
+            // víc než tři patra ani technologie na jeden zápis nedávají smysl
+            if (!obal.querySelector(".vicpole__radek[hidden]")) pridej.hidden = true;
+            srovnejVic(box, obal.dataset.vic);
+            return;
         }
-        // víc než tři technologie na jeden zápis už nedávají smysl
-        if (!obal.querySelector("select[hidden]")) tlacitko.hidden = true;
-        const pozn = obal.querySelector("[data-tech-pozn]");
-        if (pozn) pozn.hidden = false;
+
+        const podil = event.target.closest("[data-podil]");
+        if (podil) {
+            const box = podil.closest("[data-polozka]");
+            if (!box) return;
+            const druh = podil.dataset.podil;
+            const o = ctiOsu(box, druh);
+            const misto = o.poradi[Number(podil.dataset.i)];
+            if (misto < 0) return;
+            if (o.skryte) o.skryte.value = V.podilKlik(o.podily, misto).join(",");
+            srovnejVic(box, druh);
+        }
     });
 
     /* iPad a iPhone kreslí k rozbalovací nabídce časů prázdné bílé okno –
@@ -1094,18 +1193,26 @@
             return !!(el && el.checked);
         };
 
+        /* Patra i technologie čte stejná funkce: spojený text („1PP, 2PP")
+           a k němu podíly práce („50,50"). U jednoduché zakázky je roletka
+           jen jedna a podíl vyjde na sto procent. */
+        const patra = ctiOsu(box, "patro");
+        const techy = ctiOsu(box, "technologie");
+
         return {
             nazev: val("nazev").trim(),
             zakazka: val("zakazka"),
             projekt: val("projekt"),
             firma: val("firma"),
             cinnost: val("cinnost"),
-            technologie: techZapisu(box),
+            technologie: techy.hodnoty.join(", "),
+            podilTech: techy.podily.join(","),
             datum: val("datum"),
             datumDo: val("datumDo"),
             ukolId: val("ukolId"),
             budova: val("budova"),
-            patro: val("patro"),
+            patro: patra.hodnoty.join(", "),
+            podilPatra: patra.podily.join(","),
             od: val("od"),
             do: val("do"),
             celyden: zaskrtnuto("celyden"),
@@ -1482,7 +1589,7 @@
     function srovnejAbsenci(p) {
         p.absence = jeAbsence(p.zakazka);
         if (!p.absence) return p;
-        p.projekt = ""; p.cinnost = ""; p.technologie = "";
+        p.projekt = ""; p.cinnost = ""; p.technologie = ""; p.podilTech = "";
         p.pauza = 0; p.obed = false; p.km = 0; p.sazba = 0;
         p.nazev = p.nazev || p.zakazka;
         /* Celý den je opravdu celý den: 00:00–23:59. Do fondu se ale počítá
@@ -1503,8 +1610,8 @@
     function srovnejRezii(p) {
         p.rezie = jeRezie(p.zakazka);
         if (!p.rezie) return p;
-        p.cinnost = ""; p.technologie = ""; p.ukolId = "";
-        p.budova = ""; p.patro = "";
+        p.cinnost = ""; p.technologie = ""; p.podilTech = ""; p.ukolId = "";
+        p.budova = ""; p.patro = ""; p.podilPatra = "";
         p.firma = p.firma || REZIE_FIRMA;
         p.nazev = p.nazev || p.zakazka;
         return p;
@@ -2303,11 +2410,19 @@
         if (event.target.dataset.f === "celyden") return void prepniCelyDen(box);
 
         // výběr úkolu zamkne budovu/patro/technologii a předvyplní druh
-        if (event.target.dataset.f === "ukolId") zamkniPodleUkolu(box);
+        if (event.target.dataset.f === "ukolId") {
+            zamkniPodleUkolu(box);
+            srovnejVsechnyOsy(box);
+        }
         // budova/patro/technologie zužují nabídku úkolů
         if (["budova", "patro", "technologie"].indexOf(event.target.dataset.f) !== -1) {
             prefiltrujUkoly(box);
         }
+        /* Přibylo nebo ubylo patro (technologie)? Procenta podílů se musí
+           srovnat na nový počet, jinak by zůstala „50,50" u jediného patra. */
+        const zmenenaOsa = Object.keys(OSY).find(druh =>
+            OSY[druh].pole.indexOf(event.target.dataset.f) !== -1);
+        if (zmenenaOsa) srovnejVic(box, zmenenaOsa);
 
         // popis si člověk přepsal sám – od téhle chvíle mu ho předvyplňování nesahá
         if (event.target.dataset.f === "nazev") delete event.target.dataset.auto;
@@ -2634,6 +2749,7 @@
                 nastav("cinnost", u.druh);
                 // budovu, patro a technologii nastaví a zamkne zámek úkolu
                 zamkniPodleUkolu(box);
+                srovnejVsechnyOsy(box);
                 prepocti(box);
             };
             window.KB.on("ukoly", predvypln);

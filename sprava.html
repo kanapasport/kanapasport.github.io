@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=212">
+    <link rel="stylesheet" href="assets/css/app.css?v=213">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -296,6 +296,9 @@
                                 <select id="pZakaznik" class="field"
                                     title="Pro koho je práce nakonec určená"></select></label>
                         </div>
+                        <!-- co z rozpočtu ubraly hodiny a co externí náklady -->
+                        <div id="krajicRozpocet" class="row row--wrap"
+                             style="gap:10px;margin-top:12px"></div>
 
                         </div>
                     </section>
@@ -639,10 +642,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=212"></script>
-<script src="assets/js/ui.js?v=212"></script>
-<script src="assets/js/vykazy.js?v=212"></script>
-<script type="module" src="assets/js/store.js?v=212"></script>
+<script src="assets/js/taxonomy.js?v=213"></script>
+<script src="assets/js/ui.js?v=213"></script>
+<script src="assets/js/vykazy.js?v=213"></script>
+<script type="module" src="assets/js/store.js?v=213"></script>
 
 <script>
 (function () {
@@ -1189,6 +1192,8 @@
     function vykresliNaklady() {
         const box = $("naklady");
         if (!box) return;
+        // náklady se načítají zvlášť – krajíc rozpočtu se s nimi musí srovnat
+        vykresliRozpocetKrajic();
         $("nkFirmy").innerHTML = V.firmy().map(f =>
             '<option value="' + esc(f) + '">').join("");
 
@@ -1263,6 +1268,33 @@
         }
     }
 
+    /* Rozpad výkazů poslední vykreslené sestavy. Matici překresluje i klik
+       na přepínač režimu, kde se `vykresliBudget` nevolá. */
+    let maticniRozpad = null;
+
+    /* Krajíc rozpočtu: kolik z něj snědly hodiny ve výkazech, kolik externí
+       náklady a co zbývá. Externí náklad je pro zakázku stejná díra jako
+       odpracovaná hodina – do 4. 9. 2026 se nikde neodečítal (Michal). */
+    function vykresliRozpocetKrajic() {
+        const box = $("krajicRozpocet");
+        if (!box) return;
+        const p = vybranyProjekt();
+        if (!p) { box.innerHTML = ""; return; }
+        const nazev = p.nazev || "";
+        const strop = window.KBUI.penize($("fKc")) || (V.rozpocet(nazev).kc || 0);
+        const vykazy = V.rozpadProjektu(nazev).celkem;
+        const naklady = nakladyProjektu.reduce((x, n) => x + (Number(n.castka) || 0), 0);
+        const zbyva = strop - vykazy - naklady;
+        const dlazdice = (popis, hodnota, minus) =>
+            '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' +
+            V.kc(hodnota) + "</b><span>" + popis + "</span></div>";
+        box.innerHTML =
+            dlazdice("Rozpočet projektu", strop) +
+            dlazdice("Přiděleno ve výkazech", vykazy) +
+            dlazdice("Externí náklady", naklady) +
+            dlazdice("Zbývá z rozpočtu", zbyva, zbyva < 0);
+    }
+
     function vykresliBudget(p, force) {
         if (!p) return;
         /* Rozepsané číslo v tabulce nesmí přepsat příchod dat – překreslí se,
@@ -1273,6 +1305,7 @@
             document.activeElement.closest("#budgetUkoly, #matice")) return;
 
         nactiNaklady(p);
+        vykresliRozpocetKrajic();
         const budgety = window.KB.ukolBudgety || {};
         const ukoly = ukolyProjektu(p);
         const osy = osyProjektu(p);
@@ -1289,18 +1322,24 @@
         const prideleno = ukoly.reduce((sum, u) => sum + (Number((budgety[u.id] || {}).budgetKc) || 0), 0);
         // rezervy zrušené 31. 8. 2026 – jedna kolonka budgetu stačí
         const zbyva = strop - prideleno;
+        /* Rozpad výkazů na patra a technologie – zápis na dvě patra se dělí
+           podle vyklikaných procent (Michal 4. 9. 2026). Počítá se jednou
+           a půjčuje ho matice i přehled pater. */
+        const rozpad = V.rozpadProjektu(p.nazev || "");
         const dlazdice = (popis, hodnota, minus) =>
             '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' +
             V.kc(hodnota) + "</b><span>" + popis + "</span></div>";
         $("krajic").innerHTML =
             dlazdice("Rozpočet projektu (Kč)", strop) +
             dlazdice("Přiděleno úkolům", prideleno) +
-            dlazdice("Zbývá rozdělit", zbyva, zbyva < 0);
+            dlazdice("Zbývá rozdělit", zbyva, zbyva < 0) +
+            dlazdice("Vyfakturováno celkem", rozpad.celkem);
 
         /* Jednoduchý projekt (rodinný dům) se nedělí na patra ani
            technologie – matice i přehled pater by u něj byly prázdné
            tabulky. Místo nich souhrn toho, co se na zakázce odvedlo. */
         const jednoduchy = p.jednoduchy === true;
+        maticniRozpad = rozpad;
         $("techPrehled").innerHTML = jednoduchy ? "" : techPrehledHtml(p, ukoly, budgety);
         $("souhrnPrace").innerHTML = jednoduchy ? souhrnPraceHtml(p) : "";
         document.querySelector('[data-list="plneni"] .sblok__stitek').textContent =
@@ -1315,7 +1354,7 @@
             $("matice").innerHTML = "";
         } else {
             // ---- přehled po patrech (druhá matice) ----
-            vykresliPatra(p, ukoly, budgety, osy);
+            vykresliPatra(p, ukoly, budgety, osy, rozpad);
         }
 
         // ---- filtr úkolů ----
@@ -1501,8 +1540,10 @@
             '<button type="button" class="chip' + (mxRezim === "zbyva" ? " chip--active" : "") +
                 '" data-mxrezim="zbyva">Zbývá peněz</button></div>';
 
+        const rozpad = maticniRozpad || V.rozpadProjektu(p.nazev || "");
         const telo = V.maticePlneni(ukoly, budgety, osy, true, techBudgety,
             { rezim: mxRezim, cerpani: penizeUkolu,
+              cerpaniBunky: rozpad.bunka, cerpaniTech: rozpad.tech,
               sazbaTech: (tech) => prumernaSazbaTech(p, tech) });
         $("matice").innerHTML = telo
             ? prepinac + telo
@@ -1551,8 +1592,13 @@
         return Array.from(podle.values()).sort((a, b) => b.castka - a.castka);
     }
 
-    /** Součty za skupinu úkolů – používá přehled pater i detail patra. */
-    function souctyUkolu(seznam, budgety) {
+    /**
+     * Součty za skupinu úkolů – používá přehled pater i detail patra.
+     * `zVykazu` (nepovinné) nahradí peníze a hodiny rozpadem z výkazů:
+     * zápis na dvě patra se pak mezi ně rozdělí, místo aby spadl celý na to,
+     * ke kterému je připnutý úkol (Michal 4. 9. 2026).
+     */
+    function souctyUkolu(seznam, budgety, zVykazu) {
         /* Všechno v penězích – budgety úkolů jsou v Kč a hodiny se u nich
            nevedou (každý má jinou hodinovku). `vykazano` zůstává v hodinách
            jen pro doplněk v detailu patra. */
@@ -1570,6 +1616,7 @@
             ? (vaha ? Math.round(pctVaha / vaha)
                     : Math.round(seznam.reduce((x, u) => x + pctUkolu(u), 0) / seznam.length))
             : 0;
+        if (zVykazu) { vykazano = zVykazu.hodiny; penize = zVykazu.castka; }
         return { predepsano, rezerva, vykazano, penize, pct, pocet: seznam.length,
                  hotovych: seznam.filter(u => u.stav === "hotovo").length };
     }
@@ -1667,14 +1714,14 @@
             "</div>";
     }
 
-    function vykresliPatra(p, ukoly, budgety, osy) {
+    function vykresliPatra(p, ukoly, budgety, osy, rozpad) {
         if (!osy.budovy.length || !osy.patra.length) {
             $("patraPrehled").innerHTML = "";
             return;
         }
         const radek = (budova, patro) => {
             const moje = ukoly.filter(u => u.budova === budova && u.patro === patro);
-            const c = souctyUkolu(moje, budgety);
+            const c = souctyUkolu(moje, budgety, rozpad && rozpad.patro(budova, patro));
             const zbyva = c.predepsano - c.penize;   // Kč − Kč
             return '<tr data-patro="' + esc(budova) + "|" + esc(patro) + '">' +
                 "<td><b>" + esc(patro) + "</b></td>" +
@@ -1754,7 +1801,8 @@
         const [budova, patro] = klic.split("|");
         const budgety = window.KB.ukolBudgety || {};
         const moje = ukolyProjektu(p).filter(u => u.budova === budova && u.patro === patro);
-        const c = souctyUkolu(moje, budgety);
+        const rozpad = V.rozpadProjektu(p.nazev || "");
+        const c = souctyUkolu(moje, budgety, rozpad.patro(budova, patro));
 
         const dlazdice = (popis, hodnota, minus) =>
             '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' + hodnota +
@@ -1782,7 +1830,8 @@
                   '<th class="num">Úkolů</th><th class="num">Hotovo</th><th class="num">Předepsáno Kč</th>' +
                   '<th class="num">Vyfakturováno Kč</th><th class="num">Hodin</th></tr></thead><tbody>' +
                   technologie.map(t => {
-                      const ct = souctyUkolu(moje.filter(u => u.technologie === t), budgety);
+                      const ct = souctyUkolu(moje.filter(u => u.technologie === t), budgety,
+                          rozpad.bunka(budova, patro, t));
                       return "<tr><td><b>" + esc(t) + "</b></td>" +
                           '<td class="num">' + ct.pocet + "</td>" +
                           '<td class="num">' + ct.pct + " %</td>" +

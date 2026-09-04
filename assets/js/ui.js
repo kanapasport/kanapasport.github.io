@@ -1418,7 +1418,26 @@
             .then(v => {
                 if (!v) return;
                 if (v.doplneno) {
-                    UI.toast("Doplněny sazby u " + v.doplneno + " výkazů.");
+                    /* Hláška má říct, ČÍ výkaz a k jakému dni se doplnil.
+                       Samotné „u 3 výkazů" se nedalo s ničím spojit a manažer
+                       nevěděl, komu se co dopočítalo (Michal 4. 9. 2026). */
+                    const den = (iso) => {
+                        const kusy = String(iso || "").split("-");
+                        return kusy.length === 3
+                            ? Number(kusy[2]) + ". " + Number(kusy[1]) + "." : "";
+                    };
+                    const kdo = (z) => {
+                        if (z.osoba) return z.osoba;
+                        const u = (window.KB.users || []).find(x => x.id === z.uid);
+                        return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
+                    };
+                    const popisy = (v.doplnene || [])
+                        .map(z => (kdo(z) + " " + den(z.datum)).trim())
+                        .filter(Boolean);
+                    UI.toast(popisy.length
+                        ? "Doplněny sazby k výkazům: " + popisy.slice(0, 3).join(", ") +
+                            (popisy.length > 3 ? " a další " + (popisy.length - 3) : "") + "."
+                        : "Doplněny sazby u " + v.doplneno + " výkazů.");
                 }
                 if (v.chybiSazba.length) {
                     const jmena = v.chybiSazba.map(uid => {
