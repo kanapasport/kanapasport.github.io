@@ -1154,6 +1154,41 @@
          „každý sám"         každý má svoje odškrtnutí v `hotoviUids`;
                              zadavatel vidí, kolik lidí to už má */
 
+    /* ------------------------------------------------- obrázky ---------
+       Zmenšení screenshotu a náhled na dlaždici. Bydlelo to v poznámkách;
+       od chvíle, kdy screenshot nese i Quick TO-DO, to musí umět obojí
+       stejně – jinak by jedno okno vzalo obrázek, který druhé odmítne
+       (Michal 4. 9. 2026). */
+
+    /** Zmenší obrázek na rozumnou velikost (limit dokumentu je 1 MB). */
+    UI.zmensiObrazek = async (blob) => {
+        const bitmapa = await createImageBitmap(blob);
+        const k = Math.min(1, 1600 / Math.max(bitmapa.width, bitmapa.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(bitmapa.width * k);
+        c.height = Math.round(bitmapa.height * k);
+        c.getContext("2d").drawImage(bitmapa, 0, 0, c.width, c.height);
+        let out = c.toDataURL("image/jpeg", 0.8);
+        if (out.length > 900000) out = c.toDataURL("image/jpeg", 0.6);
+        if (out.length > 900000) throw new Error("Obrázek je moc velký.");
+        return out;
+    };
+
+    /** Malý náhled na dlaždici (ze screenshotu v plné velikosti). */
+    UI.nahledObrazku = (dataUrl) => new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => {
+            const c = document.createElement("canvas");
+            const k = Math.min(1, 420 / img.naturalWidth);
+            c.width = Math.round(img.naturalWidth * k);
+            c.height = Math.round(img.naturalHeight * k);
+            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+            ok(c.toDataURL("image/jpeg", 0.7));
+        };
+        img.onerror = () => ok("");
+        img.src = dataUrl;
+    });
+
     UI.quickAdresati = (q) => (q && q.proUids && q.proUids.length)
         ? q.proUids : [(q && q.proUid) || ""].filter(Boolean);
 
@@ -1178,12 +1213,24 @@
         return hotovych + " z " + komu.length + " splnilo";
     };
 
+    /* Odškrtnutí posílá celý vzkaz zpátky – náhled screenshotu a komentáře
+       se z něj ale vypouští. Náhled je desítky kilobajtů, které nemá cenu
+       posílat při každém kliknutí, a komentář, který mezitím někdo přidal,
+       by se přepsal starou kopií. Merge je v databázi nechá být. */
+    const bezPriloh = (q) => {
+        const kopie = Object.assign({}, q);
+        delete kopie.nahled;
+        delete kopie.obrazku;
+        delete kopie.komentare;
+        return kopie;
+    };
+
     /** Odškrtnutí i vrácení – podle režimu sáhne na správné pole. */
     UI.quickPrepni = (q, hotovo) => {
         const uid = window.KB.currentUid();
         if (q.rezim === "kazdy") {
             const bez = (q.hotoviUids || []).filter(x => x !== uid);
-            return window.KB.saveQuickTodo(q.id, Object.assign({}, q, {
+            return window.KB.saveQuickTodo(q.id, Object.assign(bezPriloh(q), {
                 hotoviUids: hotovo ? bez.concat([uid]) : bez,
                 /* `hotovo` drží, jestli to mají VŠICHNI – podle něj se vzkaz
                    uklidí ze seznamu zadavateli. */
@@ -1195,7 +1242,7 @@
                 hotovoMs: hotovo ? Date.now() : 0
             }));
         }
-        return window.KB.saveQuickTodo(q.id, Object.assign({}, q, {
+        return window.KB.saveQuickTodo(q.id, Object.assign(bezPriloh(q), {
             hotovo: hotovo,
             hotovoKdo: hotovo ? (window.KB_USER || "") : "",
             hotovoMs: hotovo ? Date.now() : 0
@@ -1606,7 +1653,7 @@
                         /* Lidí může být víc – stejný vzkaz se často posílá
                            celé partě. Zaškrtávátka místo roletky, ať je vidět,
                            komu to jde, bez rozbalování. */
-                        '<div class="quickpanel__kdo">' +
+                        '<div class="quickpanel__kdo" data-lide-vyber>' +
                             '<div class="quickpanel__popisek">Komu' +
                                 '<button type="button" class="linkbtn" data-quick-oblibene-uloz>uložit jako oblíbené</button>' +
                             "</div>" +
@@ -1640,6 +1687,23 @@
                         "</label>" +
 
                         '<select class="field" data-quick-projekt aria-label="Projekt"></select>' +
+
+                        /* Screenshot ke vzkazu (Michal 4. 9. 2026): co je
+                           vidět na obrazovce, se popisuje hůř, než se to
+                           vyfotí. Vkládá se stejně jako v poznámkách. */
+                        '<div class="quickpanel__fotky">' +
+                            '<div class="row" style="gap:8px;flex-wrap:wrap">' +
+                                '<button type="button" class="btn btn--sm btn--ghost" data-quick-vlozit' +
+                                    ' title="Stiskni PrintScreen (nebo Win+Shift+S) a pak sem klikni">' +
+                                    "+ Vložit screenshot</button>" +
+                                '<button type="button" class="btn btn--sm btn--ghost" data-quick-vybrat>' +
+                                    "Vybrat z PC</button>" +
+                                '<span class="tiny muted" style="align-self:center">nebo Ctrl+V</span>' +
+                            "</div>" +
+                            '<input type="file" data-quick-soubor accept="image/*" multiple hidden>' +
+                            '<div class="pnahledy" data-quick-nahledy style="margin-top:8px"></div>' +
+                        "</div>" +
+
                         '<button type="button" class="btn btn--primary" data-quick-uloz>Zadat quick to-do</button>' +
                     "</div>" +
                     /* přehled vzkazů má vlastní stránku – panel je na tvorbu */
@@ -1664,6 +1728,189 @@
         const panel = document.getElementById("kbQuickPanel");
         if (panel) panel.hidden = !otevrit;
     }
+
+    /* -------------------------------------- screenshoty k rozepsanému vzkazu */
+
+    let quickNoveObrazky = [];
+
+    function vykresliQuickNahledy() {
+        const box = document.querySelector("[data-quick-nahledy]");
+        if (!box) return;
+        box.innerHTML = quickNoveObrazky.map((d, i) =>
+            '<span class="pnahled"><img src="' + d + '" alt="">' +
+            '<button type="button" data-quick-odeber="' + i + '" title="Odebrat">×</button></span>').join("");
+    }
+
+    async function pridejQuickObrazky(soubory) {
+        for (const soubor of soubory) {
+            try { quickNoveObrazky.push(await UI.zmensiObrazek(soubor)); }
+            catch (err) { UI.toast("Obrázek se nepodařilo zpracovat.", "error"); }
+        }
+        vykresliQuickNahledy();
+    }
+
+    const quickPanelOtevreny = () => {
+        const panel = document.getElementById("kbQuickPanel");
+        return !!(panel && !panel.hidden);
+    };
+
+    document.addEventListener("paste", (event) => {
+        if (!quickPanelOtevreny()) return;
+        const obrazek = Array.from((event.clipboardData || {}).items || [])
+            .find(i => i.type && i.type.indexOf("image/") === 0);
+        if (obrazek) { event.preventDefault(); pridejQuickObrazky([obrazek.getAsFile()]); }
+    });
+
+    document.addEventListener("change", (event) => {
+        if (!event.target.matches || !event.target.matches("[data-quick-soubor]")) return;
+        if (event.target.files.length) pridejQuickObrazky(Array.from(event.target.files));
+        event.target.value = "";
+    });
+
+    /* ------------------------------------------------- okno vzkazu ------
+       Vzkaz se screenshotem se do řádku nevejde. Rozkliknutím se otevře
+       okno přes stránku: obrázek v plné velikosti, splnění a komentáře –
+       stejně jako u poznámek (Michal 4. 9. 2026). */
+
+    let quickOknoId = "";
+    let quickOknoObrazky = { id: "", seznam: [] };
+
+    function quickOkno() {
+        let okno = document.getElementById("kbQuickOkno");
+        if (okno) return okno;
+        okno = document.createElement("div");
+        okno.id = "kbQuickOkno";
+        okno.className = "hookno no-print";
+        okno.hidden = true;
+        okno.innerHTML =
+            '<div class="hookno__deska card">' +
+                '<div class="hookno__hlava">Quick TO-DO' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy"' +
+                        " data-quick-okno-zavri>Zavřít</button></div>" +
+                '<div class="hookno__telo" data-quick-okno-telo></div>' +
+            "</div>";
+        document.body.appendChild(okno);
+        okno.addEventListener("click", (e) => {
+            if (e.target === okno || e.target.closest("[data-quick-okno-zavri]")) zavriQuickOkno();
+        });
+        return okno;
+    }
+
+    function zavriQuickOkno() {
+        quickOknoId = "";
+        const okno = document.getElementById("kbQuickOkno");
+        if (okno) okno.hidden = true;
+    }
+
+    function vykresliQuickOkno() {
+        const okno = document.getElementById("kbQuickOkno");
+        if (!okno || okno.hidden || !quickOknoId) return;
+        const telo = okno.querySelector("[data-quick-okno-telo]");
+        const q = (window.KB.quicktodo || []).find(x => x.id === quickOknoId);
+        if (!q) {
+            telo.innerHTML = '<p class="small muted">Tenhle vzkaz už neexistuje.</p>';
+            return;
+        }
+        const uid = window.KB.currentUid();
+        const jmeno = (id) => {
+            const u = (window.KB.users || []).find(x => x.id === id);
+            return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
+        };
+        const mujVzkaz = q.odKoho === uid;
+        const jsemAdresat = UI.quickAdresati(q).indexOf(uid) !== -1;
+        const hotovoMne = jsemAdresat ? UI.quickHotovoPro(q, uid) : UI.quickHotovoVse(q);
+        const ostatni = UI.quickAdresati(q).filter(x => x !== uid).map(jmeno).filter(Boolean);
+        const obrazky = quickOknoObrazky.id === quickOknoId ? quickOknoObrazky.seznam : [];
+
+        telo.innerHTML =
+            '<div class="small muted" style="margin-bottom:8px">' +
+                [ mujVzkaz ? "Zadal jsem" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
+                  q.projekt ? esc(q.projekt) : "",
+                  q.asap ? "co nejdříve" : "",
+                  q.doKdy ? "do " + esc(czDatumKratke(q.doKdy)) : ""
+                ].filter(Boolean).join(" · ") +
+                (hotovoMne ? ' · <b style="color:var(--ok)">splněno</b>' : "") +
+            "</div>" +
+            '<div style="font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere">' +
+                esc(q.text || "") + "</div>" +
+            (ostatni.length
+                ? '<div class="tiny muted" style="margin-top:6px">Spoluúčast: ' +
+                  esc(ostatni.join(", ")) + (q.rezim === "kazdy" ? " · každý sám" : "") + "</div>"
+                : "") +
+            (obrazky.length
+                ? '<div class="quickokno__obrazky">' + obrazky.map(o =>
+                    '<img src="' + esc(o.data) + '" alt="">').join("") + "</div>"
+                : (Number(q.obrazku)
+                    ? '<p class="tiny muted" style="margin-top:10px">Načítám obrázek…</p>' : "")) +
+
+            /* Splnit smí ten, komu vzkaz patří. Zadavatel mimo adresáty
+               nemá co odškrtávat – u „každý sám" už vůbec. */
+            (jsemAdresat && !(mujVzkaz && q.rezim === "kazdy")
+                ? '<div class="row" style="gap:8px;margin-top:14px">' +
+                    (hotovoMne
+                        ? '<button type="button" class="btn btn--sm btn--ghost"' +
+                            ' data-quick-hotovo="' + esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                        : '<button type="button" class="btn btn--sm quicksplnit"' +
+                            ' data-quick-hotovo="' + esc(q.id) + '">Splněno</button>') +
+                  "</div>"
+                : "") +
+
+            '<div style="margin-top:14px;border-top:1px solid var(--line-soft);padding-top:10px">' +
+                '<div class="tiny muted" style="font-weight:900;letter-spacing:.06em;' +
+                    'text-transform:uppercase;margin-bottom:6px">Komentáře</div>' +
+                ((q.komentare || []).length
+                    ? (q.komentare || []).slice()
+                        .sort((a, b) => (a.ms || 0) - (b.ms || 0)).map(k =>
+                        '<div style="font-size:13.5px;line-height:1.55;margin-bottom:8px">' +
+                            "<b>" + esc(k.jmeno || "") + "</b> " +
+                            '<span class="muted">' + esc(k.ms
+                                ? new Date(k.ms).toLocaleDateString("cs-CZ") : "") + "</span><br>" +
+                            esc(k.text || "") + "</div>").join("")
+                    : '<div class="tiny muted" style="margin-bottom:8px">Zatím bez komentáře.</div>') +
+                '<div class="row" style="gap:8px">' +
+                    '<input type="text" class="field grow" data-quick-koment maxlength="500"' +
+                        ' placeholder="Napsat komentář…">' +
+                    '<button type="button" class="btn btn--sm btn--primary" data-quick-koment-odesli>' +
+                        "Odeslat</button>" +
+                "</div>" +
+            "</div>";
+    }
+
+    /**
+     * Otevře vzkaz v okně přes stránku. Obrázky se dotahují zvlášť –
+     * v seznamu vzkazů leží jen malý náhled.
+     */
+    UI.otevriQuick = async (id) => {
+        if (!id) return;
+        quickOknoId = id;
+        quickOkno().hidden = false;
+        vykresliQuickOkno();
+
+        const q = (window.KB.quicktodo || []).find(x => x.id === id);
+        if (!q || !Number(q.obrazku) || quickOknoObrazky.id === id) return;
+        try {
+            const seznam = await window.KB.nactiQuickObrazky(id);
+            quickOknoObrazky = { id: id, seznam: seznam };
+            if (quickOknoId === id) vykresliQuickOkno();
+        } catch (err) {
+            console.warn("Obrázky vzkazu se nenačetly:", err);
+        }
+    };
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && quickOknoId) return void zavriQuickOkno();
+        if (e.key === "Enter" && e.target.matches && e.target.matches("[data-quick-koment]")) {
+            const btn = document.querySelector("[data-quick-koment-odesli]");
+            if (btn) btn.click();
+        }
+        /* Klávesnicí se vzkaz otevře stejně jako myší – text řádku je
+           tlačítko jen rolí, ne značkou. */
+        if ((e.key === "Enter" || e.key === " ") && e.target.matches &&
+            e.target.matches("[data-quick-detail]")) {
+            e.preventDefault();
+            UI.otevriQuick(e.target.dataset.quickDetail);
+        }
+    });
 
     function prepniPanel(id, otevrit) {
         const panel = document.getElementById(id);
@@ -1792,6 +2039,8 @@
         if (!uid) return;
         if (panel) naplnQuickForm(panel, uid);
         vykresliQuickSeznamy(uid);
+        // otevřené okno vzkazu musí přijmout nový komentář i cizí splnění
+        vykresliQuickOkno();
     }
 
     /* Schová jména, která hledanému nesedí. Zaškrtnutí zůstávají – kdo si
@@ -1799,11 +2048,14 @@
        skrývá, nepřekresluje. Vybraní lidé zůstanou vidět vždycky, ať je
        poznat, komu vzkaz opravdu jde. */
     function profiltrujLidi(panel) {
+        if (!panel) return;
         const pole = panel.querySelector("[data-quick-hledej]");
         const komu = panel.querySelector("[data-quick-komu]");
         if (!pole || !komu) return;
         const dotaz = pole.value.trim().toLowerCase();
-        panel.querySelector("[data-quick-hledej-zrus]").hidden = !dotaz;
+        // křížek nemusí být všude – funkci půjčují i poznámky
+        const zrus = panel.querySelector("[data-quick-hledej-zrus]");
+        if (zrus) zrus.hidden = !dotaz;
 
         let videt = 0;
         komu.querySelectorAll("label").forEach(l => {
@@ -1828,30 +2080,48 @@
         }
     }
 
+    /* Stejné hledání v lidech použije i poznámka, když se posílá víc
+       kolegům naráz – ať se to všude ovládá stejně (Michal 4. 9. 2026).
+       Stačí, aby kontejner nesl stejná data-jména jako panel vzkazů. */
+    UI.profiltrujLidi = profiltrujLidi;
+
+    /* Výběrů lidí je na webu víc (panel vzkazů, upozornění u poznámky).
+       Hledání proto pracuje s tím nejbližším, ne natvrdo s panelem –
+       jinak by psaní v poznámce filtrovalo seznam v panelu. */
+    const vyberLidi = (el) => (el && el.closest && el.closest("[data-lide-vyber]")) ||
+        document.getElementById("kbQuickPanel");
+
+    /**
+     * Zaškrtávátka lidí do libovolného kontejneru – panel Quick TO-DO i
+     * poznámky z nich vybírají stejně. Řadí manažery, pak zaměstnance,
+     * pak studenty; `sJa` přidá volbu „Jen pro mě".
+     */
+    UI.lideDoVyberu = (kontejner, sJa, vynech) => {
+        const uid = window.KB.currentUid();
+        const pryc = new Set(vynech || []);
+        const PORADI = { "hlavni-spravce": 0, "majitel": 1, "spravce": 2, "asistentka": 3,
+                         "zamestnanec": 4, "student": 5 };
+        const lide = (window.KB.users || [])
+            .filter(u => u.active !== false && u.id !== uid && !pryc.has(u.id))
+            .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
+                            (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
+                            (a.last || "").localeCompare(b.last || "", "cs"));
+        kontejner.innerHTML =
+            (sJa ? '<label class="quickpanel__ja"><input type="checkbox" value="' + esc(uid) +
+                '" data-quick-jaja> Jen pro mě</label>' : "") +
+            lide.map(u =>
+                '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
+                esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
+    };
+
     function naplnQuickForm(panel, uid) {
         // nabídky (jen jednou, ať se nepřepisuje rozepsaný výběr)
         const komu = panel.querySelector("[data-quick-komu]");
         /* Sebe si zadavatel zaškrtne první volbou „Jen pro mě" – poznámka
            pro sebe je jiný záměr než vzkaz kolegovi a dřív se nedala uložit
-           vůbec (bez vybraného člověka to hlásilo chybu).
-           Řadí se manažeři, pak zaměstnanci, pak studenti; nadpisy k tomu
-           netřeba, stačí, že to drží pohromadě. */
-        const PORADI = { "hlavni-spravce": 0, "majitel": 1, "spravce": 2, "asistentka": 3,
-                         "zamestnanec": 4, "student": 5 };
-        const lide = (window.KB.users || [])
-            .filter(u => u.active !== false && u.id !== uid)
-            .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
-                            (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
-                            (a.last || "").localeCompare(b.last || "", "cs"));
-
-        if (!komu.querySelector("input")) {
-            komu.innerHTML =
-                '<label class="quickpanel__ja"><input type="checkbox" value="' + esc(uid) +
-                    '" data-quick-jaja> Jen pro mě</label>' +
-                lide.map(u =>
-                    '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
-                    esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
-        }
+           vůbec (bez vybraného člověka to hlásilo chybu). Seznam i řazení
+           staví UI.lideDoVyberu, ať je stejný i jinde. */
+        if (!komu.querySelector("input")) UI.lideDoVyberu(komu, true);
         vykresliOblibene();
         profiltrujLidi(panel);
         const projektSel = panel.querySelector("[data-quick-projekt]");
@@ -1866,6 +2136,12 @@
     /* MOJE = co mi kdo poslal, ZADANÉ = co jsem poslal já – stejné
        přepínání jako Moje/Všechny u zadaných úkolů (přání Michala 21. 8.). */
     let quickRezim = "moje";
+
+    const IKONA_FOTO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+        ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<rect x="3" y="6" width="18" height="14" rx="2"></rect>' +
+        '<circle cx="12" cy="13" r="3.2"></circle>' +
+        '<path d="M8 6l1.6-2h4.8L16 6"></path></svg>';
 
     function vykresliQuickSeznamy(uid) {
         const jmeno = (id) => {
@@ -1898,9 +2174,24 @@
                 q.hlidka === "minuly" ? "#c8102e" :
                 q.hlidka === "tyden" ? "#b06000" : "";
 
+            /* Náhled screenshotu rovnou v řádku – ať je na první pohled
+               vidět, že vzkaz nějaký obrázek nese. Klik na text i na náhled
+               otevře vzkaz v okně (Michal 4. 9. 2026). */
+            const foto = q.nahled
+                ? '<button type="button" class="quickrad__foto" data-quick-detail="' +
+                    esc(q.id) + '" title="Otevřít vzkaz i s obrázkem">' +
+                    '<img src="' + esc(q.nahled) + '" alt=""></button>'
+                : (Number(q.obrazku)
+                    ? '<button type="button" class="quickrad__foto quickrad__foto--ikona"' +
+                        ' data-quick-detail="' + esc(q.id) + '" title="Vzkaz nese obrázek">' +
+                        IKONA_FOTO + "</button>"
+                    : "");
+
             return '<div class="quickrad' +
                 (hotovoMne ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) + '">' +
-                '<span class="quickrad__text">' +
+                '<span class="quickrad__text quickrad__text--klik" data-quick-detail="' +
+                    esc(q.id) + '" role="button" tabindex="0"' +
+                    ' title="Otevřít vzkaz – komentáře a obrázky">' +
                 (hlidkaBarva
                     ? '<b style="color:' + hlidkaBarva + '">' + esc(q.text) + "</b>"
                     : esc(q.text)) +
@@ -1928,6 +2219,7 @@
                                   .toISOString().slice(0, 10))) : "") + "</span>" : "") +
                     "</span>" +
                 "</span>" +
+                foto +
                 /* vzkaz svázaný s poznámkou nese odkaz – proklik přistane
                    rovnou na té poznámce (poznamky.html si ji samo otevře) */
                 (q.poznamka ? '<button type="button" class="btn btn--ghost btn--sm"' +
@@ -2490,6 +2782,51 @@
                 .catch(() => UI.toast("Smazání selhalo.", "error"));
             return;
         }
+        /* Rozkliknutí vzkazu – okno s obrázkem, splněním a komentáři. */
+        const detail = event.target.closest("[data-quick-detail]");
+        if (detail) {
+            UI.otevriQuick(detail.dataset.quickDetail);
+            return;
+        }
+        if (event.target.closest("[data-quick-vlozit]")) {
+            try {
+                const kusy = await navigator.clipboard.read();
+                for (const p of kusy) {
+                    const typ = (p.types || []).find(t => t.indexOf("image/") === 0);
+                    if (typ) return void pridejQuickObrazky([await p.getType(typ)]);
+                }
+                UI.toast("Ve schránce není obrázek – stiskni PrintScreen" +
+                    " (nebo Win+Shift+S) a klikni znovu.", "warn");
+            } catch (err) {
+                UI.toast("Prohlížeč schránku nevydal – vlož screenshot klávesami Ctrl+V.", "warn");
+            }
+            return;
+        }
+        if (event.target.closest("[data-quick-vybrat]")) {
+            const pole = document.querySelector("[data-quick-soubor]");
+            if (pole) pole.click();
+            return;
+        }
+        const odeber = event.target.closest("[data-quick-odeber]");
+        if (odeber) {
+            quickNoveObrazky.splice(Number(odeber.dataset.quickOdeber), 1);
+            vykresliQuickNahledy();
+            return;
+        }
+        if (event.target.closest("[data-quick-koment-odesli]")) {
+            const pole = document.querySelector("[data-quick-koment]");
+            const text = pole ? pole.value.trim() : "";
+            if (!text || !quickOknoId) return;
+            try {
+                await window.KB.pridejQuickKomentar(quickOknoId, text);
+                pole.value = "";
+            } catch (err) {
+                console.error(err);
+                UI.toast("Komentář se neuložil.", "error");
+            }
+            return;
+        }
+
         const quickPrep = event.target.closest("[data-quick-rezim]");
         if (quickPrep) {
             quickRezim = quickPrep.dataset.quickRezim;
@@ -2505,7 +2842,7 @@
         const hotovoBtn = event.target.closest("[data-quick-hotovo]");
         if (hotovoBtn && hotovoBtn.tagName === "BUTTON") {
             // dlaždice na nástěnce si Splněno obsluhuje sama – viz mazání výš
-            if (!hotovoBtn.closest("#kbQuickPanel, [data-quick-seznam]")) return;
+            if (!hotovoBtn.closest("#kbQuickPanel, #kbQuickOkno, [data-quick-seznam]")) return;
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
             if (q) {
                 UI.quickPrepni(q, !hotovoBtn.dataset.zpet)
@@ -2518,7 +2855,10 @@
         const panel = document.getElementById("kbQuickPanel");
         const text = panel.querySelector("[data-quick-text]").value.trim();
         const komu = vybraniKomu();
-        if (!text) return UI.toast("Napiš, co se nemá zapomenout.", "warn");
+        // screenshot sám o sobě dává smysl – ať kvůli němu nikdo nevymýšlí text
+        if (!text && !quickNoveObrazky.length) {
+            return UI.toast("Napiš, co se nemá zapomenout – nebo vlož screenshot.", "warn");
+        }
         if (!komu.length) return UI.toast("Vyber, komu vzkaz patří – nebo zaškrtni Jen pro mě.", "warn");
 
         const asap = panel.querySelector("[data-quick-asap]").checked;
@@ -2529,13 +2869,27 @@
         try {
             /* Jeden vzkaz pro všechny vybrané. Ve společném režimu ho kdokoliv
                odškrtne za všechny; v „každý sám" si ho škrtá každý zvlášť. */
-            await window.KB.saveQuickTodo(window.KB.newQuickId(), {
-                text: text, proUids: komu,
+            const id = window.KB.newQuickId();
+            await window.KB.saveQuickTodo(id, {
+                text: text || "(jen screenshot)", proUids: komu,
                 doKdy: asap ? "" : doKdy,   // „co nejdříve" termín nemá
                 asap: asap,
                 rezim: kazdy ? "kazdy" : "",
                 projekt: projekt
             });
+
+            /* Obrázky až po vzkazu – pravidla se u nich ptají rodičovského
+               dokumentu, takže dřív by na ně nikdo neměl právo. Náhled jde
+               s prvním z nich, ať je vzkaz v seznamu poznat na první pohled. */
+            if (quickNoveObrazky.length) {
+                const nahled = await UI.nahledObrazku(quickNoveObrazky[0]);
+                for (let i = 0; i < quickNoveObrazky.length; i++) {
+                    await window.KB.pridejQuickObrazek(id, quickNoveObrazky[i],
+                        i === 0 ? nahled : "");
+                }
+                quickNoveObrazky = [];
+                vykresliQuickNahledy();
+            }
 
             panel.querySelector("[data-quick-text]").value = "";
             panel.querySelector("[data-quick-kdy]").value = "";
@@ -2592,10 +2946,11 @@
         }
 
         if (event.target.closest("[data-quick-hledej-zrus]")) {
-            const panel2 = document.getElementById("kbQuickPanel");
-            panel2.querySelector("[data-quick-hledej]").value = "";
-            profiltrujLidi(panel2);
-            panel2.querySelector("[data-quick-hledej]").focus();
+            const obal = vyberLidi(event.target);
+            if (!obal) return;
+            obal.querySelector("[data-quick-hledej]").value = "";
+            profiltrujLidi(obal);
+            obal.querySelector("[data-quick-hledej]").focus();
             return;
         }
 
@@ -2610,7 +2965,7 @@
 
     document.addEventListener("input", (event) => {
         if (!event.target.matches || !event.target.matches("[data-quick-hledej]")) return;
-        profiltrujLidi(document.getElementById("kbQuickPanel"));
+        profiltrujLidi(vyberLidi(event.target));
     });
 
     document.addEventListener("keydown", (event) => {
@@ -2620,7 +2975,7 @@
                 event.target.matches("[data-quick-hledej]") && event.target.value) {
             event.stopPropagation();
             event.target.value = "";
-            return void profiltrujLidi(document.getElementById("kbQuickPanel"));
+            return void profiltrujLidi(vyberLidi(event.target));
         }
         if (event.key === "Escape") prepniQuick(false);
 

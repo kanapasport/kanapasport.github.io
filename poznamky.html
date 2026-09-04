@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=217">
+    <link rel="stylesheet" href="assets/css/app.css?v=218">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -79,13 +79,8 @@
         .pokno__zavrit { margin-left: auto; border: 0; background: none; font-size: 20px;
             cursor: pointer; color: var(--muted); line-height: 1; padding: 4px; }
 
-        .pnahledy { display: flex; gap: 8px; flex-wrap: wrap; }
-        .pnahled { position: relative; }
-        .pnahled img { width: 110px; height: 74px; object-fit: cover;
-            border-radius: 6px; border: 1px solid var(--line); display: block; }
-        .pnahled button { position: absolute; top: -7px; right: -7px; width: 20px;
-            height: 20px; border-radius: 50%; border: 0; background: var(--danger, #c8102e);
-            color: #fff; font-size: 12px; font-weight: 900; cursor: pointer; line-height: 1; }
+        /* .pnahledy a .pnahled jsou ve společném app.css – stejné náhledy
+           používá i vkládání screenshotu do Quick TO-DO. */
 
         .pdetail__obrazky img { width: 100%; border-radius: var(--radius);
             border: 1px solid var(--line); display: block; margin-bottom: 10px; }
@@ -190,11 +185,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=217"></script>
-<script src="assets/js/doc.js?v=217"></script>
-<script src="assets/js/ui.js?v=217"></script>
-<script src="assets/js/vykazy.js?v=217"></script>
-<script type="module" src="assets/js/store.js?v=217"></script>
+<script src="assets/js/taxonomy.js?v=218"></script>
+<script src="assets/js/doc.js?v=218"></script>
+<script src="assets/js/ui.js?v=218"></script>
+<script src="assets/js/vykazy.js?v=218"></script>
+<script type="module" src="assets/js/store.js?v=218"></script>
 
 <script>
 (function () {
@@ -361,7 +356,6 @@
             (moje ? "" : " · " + (z.jmeno || jmenoUid(z.uid)));
 
         const obrazky = obrazkyCache.get(z.id);
-        const moznosti = kolegove().filter(u => u.id !== z.uid);
 
         $("detailTelo").innerHTML =
             '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
@@ -395,16 +389,29 @@
             "</div>" +
 
             '<div style="border-top:1px solid var(--line-soft);padding-top:12px">' +
-                '<span class="label">Upozornit kolegu (přistane mu to v Quick TO-DO)</span>' +
-                '<div class="row" style="gap:8px">' +
-                    '<select id="upozornitKoho" class="field" style="width:auto;min-width:200px">' +
-                        '<option value="">— vyber kolegu —</option>' +
-                        moznosti.map(u => '<option value="' + esc(u.id) + '">' +
-                            esc(((u.first || "") + " " + (u.last || "")).trim()) + "</option>").join("") +
-                    "</select>" +
-                    '<button type="button" class="btn btn--sm btn--primary" id="btnUpozornit">Upozornit</button>' +
+                /* Vzkaz o poznámce jde často celé partě – zaškrtávátka
+                   a hledání stejné jako v Quick TO-DO (Michal 4. 9. 2026). */
+                '<span class="label">Upozornit kolegy (přistane jim to v Quick TO-DO)</span>' +
+                '<div class="quickpanel__kdo" id="upozornitKdo" data-lide-vyber' +
+                        ' style="margin-top:6px">' +
+                    '<div class="quickpanel__hledej">' +
+                        '<input type="text" class="field" data-quick-hledej' +
+                            ' placeholder="Hledat člověka…" aria-label="Hledat člověka">' +
+                        '<button type="button" data-quick-hledej-zrus hidden' +
+                            ' title="Zrušit hledání">×</button>' +
+                    "</div>" +
+                    '<div class="quickpanel__lide" data-quick-komu></div>' +
+                "</div>" +
+                '<div class="row" style="gap:8px;margin-top:8px">' +
+                    '<button type="button" class="btn btn--sm btn--primary" id="btnUpozornit">' +
+                        "Upozornit vybrané</button>" +
                 "</div>" +
             "</div>";
+
+        /* Autor poznámky mezi adresáty nepatří – ten už o ní ví. */
+        window.KBUI.lideDoVyberu($("upozornitKdo").querySelector("[data-quick-komu]"),
+            false, [z.uid]);
+        window.KBUI.profiltrujLidi($("upozornitKdo"));
 
         $("btnKoment").addEventListener("click", async () => {
             const text = $("komentText").value.trim();
@@ -418,18 +425,31 @@
             if (e.key === "Enter") $("btnKoment").click();
         });
         $("btnUpozornit").addEventListener("click", async () => {
-            const komu = $("upozornitKoho").value;
-            if (!komu) return window.KBUI.toast("Vyber, koho upozornit.", "warn");
+            const komu = Array.from($("upozornitKdo")
+                .querySelectorAll("[data-quick-komu] input:checked")).map(ch => ch.value);
+            if (!komu.length) return window.KBUI.toast("Vyber, koho upozornit.", "warn");
+            $("btnUpozornit").disabled = true;
             try {
-                // přisdílení, ať dotyčný poznámku po prokliku opravdu vidí
-                await window.KB.pridejPoznSdileni(z.id, komu);
+                // přisdílení, ať poznámku po prokliku opravdu vidí
+                for (const uid of komu) await window.KB.pridejPoznSdileni(z.id, uid);
+                /* Jeden vzkaz pro všechny – dřív se zakládal každému zvlášť
+                   a v přehledu se pak objevil několikrát. */
                 await window.KB.saveQuickTodo(window.KB.newQuickId(), {
                     text: "Mrkni na poznámku: " + String(z.text || "").slice(0, 80),
-                    proUids: [komu],
+                    proUids: komu,
                     poznamka: z.id
                 });
-                window.KBUI.toast("Upozornění odesláno do Quick TO-DO.");
-            } catch (err) { window.KBUI.toast("Upozornění se nepodařilo.", "error"); }
+                $("upozornitKdo").querySelectorAll("input:checked")
+                    .forEach(ch => { ch.checked = false; });
+                window.KBUI.toast(komu.length === 1
+                    ? "Upozornění odesláno do Quick TO-DO."
+                    : "Upozornění odesláno " + komu.length + " lidem.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Upozornění se nepodařilo.", "error");
+            } finally {
+                $("btnUpozornit").disabled = false;
+            }
         });
         if (moje) {
             $("btnStav").addEventListener("click", () =>
@@ -446,36 +466,11 @@
 
     /* ------------------------------------------------- nová poznámka --- */
 
-    /** Zmenší obrázek na rozumnou velikost (limit dokumentu je 1 MB). */
-    async function zmensi(blob) {
-        const bitmapa = await createImageBitmap(blob);
-        const k = Math.min(1, 1600 / Math.max(bitmapa.width, bitmapa.height));
-        const c = document.createElement("canvas");
-        c.width = Math.round(bitmapa.width * k);
-        c.height = Math.round(bitmapa.height * k);
-        c.getContext("2d").drawImage(bitmapa, 0, 0, c.width, c.height);
-        let out = c.toDataURL("image/jpeg", 0.8);
-        if (out.length > 900000) out = c.toDataURL("image/jpeg", 0.6);
-        if (out.length > 900000) throw new Error("Obrázek je moc velký.");
-        return out;
-    }
-
-    /** Malý náhled na dlaždici (ze screenshotu v plné velikosti). */
-    function udelejNahled(dataUrl) {
-        return new Promise((ok) => {
-            const img = new Image();
-            img.onload = () => {
-                const c = document.createElement("canvas");
-                const k = Math.min(1, 420 / img.naturalWidth);
-                c.width = Math.round(img.naturalWidth * k);
-                c.height = Math.round(img.naturalHeight * k);
-                c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-                ok(c.toDataURL("image/jpeg", 0.7));
-            };
-            img.onerror = () => ok("");
-            img.src = dataUrl;
-        });
-    }
+    /* Zmenšení screenshotu i náhled na dlaždici umí ui.js – stejně je
+       potřebuje vkládání obrázku do Quick TO-DO a dvě kopie téhož by se
+       dřív nebo později rozešly (Michal 4. 9. 2026). */
+    const zmensi = (blob) => window.KBUI.zmensiObrazek(blob);
+    const udelejNahled = (dataUrl) => window.KBUI.nahledObrazku(dataUrl);
 
     async function pridejObrazky(soubory) {
         for (const s of soubory) {

@@ -218,6 +218,13 @@ const zamekDoc = () => doc(db, "artifacts", APP_ID, "private", "nastaveni", "zam
    po dvojici polí odKoho/proUid) */
 const quickCol = () => collection(db, "artifacts", APP_ID, "osobni", "quicktodo", "seznam");
 const quickDoc = (id) => doc(db, "artifacts", APP_ID, "osobni", "quicktodo", "seznam", id);
+/* Screenshoty vzkazu leží stejně jako u poznámek v podkolekci – v dokumentu
+   by se velký obrázek nevešel a stahoval by se s každým vzkazem. Na vzkazu
+   samotném zůstává jen malý náhled (`nahled`) a počet (`obrazku`). */
+const quickObrazkyCol = (id) =>
+    collection(db, "artifacts", APP_ID, "osobni", "quicktodo", "seznam", id, "obrazky");
+const quickObrazekDoc = (id, n) =>
+    doc(db, "artifacts", APP_ID, "osobni", "quicktodo", "seznam", id, "obrazky", String(n));
 /* kdo je právě na webu – malý dokument na člověka, vidí ho všichni */
 const pritomnostCol = () => collection(db, "artifacts", APP_ID, "public", "data", "pritomnost");
 const pritomnostDoc = (uid) => doc(db, "artifacts", APP_ID, "public", "data", "pritomnost", uid);
@@ -684,7 +691,7 @@ KB.saveQuickTodo = async (id, data) => {
         ? data.proUids.slice()
         : [data.proUid || KB.currentUid()];
 
-    await setDoc(quickDoc(id), {
+    const zapis = {
         text:    String(data.text || "").slice(0, 300),
         proUids: komu,
         proUid:  komu[0],
@@ -712,7 +719,17 @@ KB.saveQuickTodo = async (id, data) => {
         // vzkaz hlídky výkazů: "tyden" (oranžově) | "minuly" (červeně)
         hlidka: data.hlidka || "",
         ms:      data.ms || Date.now()
-    }, { merge: true });
+    };
+
+    /* Náhled a počet obrázků se zapisují JEN když je volající opravdu posílá.
+       Komentáře se odsud nezapisují vůbec – přibývají přes `arrayUnion`.
+       Kdyby je přepisoval každý zápis vzkazu, odškrtnutí „Splněno" ze
+       staršího okna by smazalo komentář, který mezitím někdo přidal
+       (Michal 4. 9. 2026). */
+    if ("nahled" in data) zapis.nahled = String(data.nahled || "").slice(0, 90000);
+    if ("obrazku" in data) zapis.obrazku = Number(data.obrazku) || 0;
+
+    await setDoc(quickDoc(id), zapis, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
        vidět, o jaký vzkaz šlo. Vzkaz tím pádem čtou i manažeři. */
     KB.zapisAktivitu("quicktodo", (data.hotovo === true
@@ -726,7 +743,50 @@ KB.saveQuickTodo = async (id, data) => {
 KB.deleteQuickTodo = async (id) => {
     if (authReady) await authReady;
     requireDb();
+    // obrázky napřed – po smazání vzkazu už na ně nikdo nemá právo
+    const obrazky = await getDocs(quickObrazkyCol(id)).catch(() => null);
+    if (obrazky) { for (const d of obrazky.docs) await deleteDoc(d.ref); }
     await deleteDoc(quickDoc(id));
+};
+
+/**
+ * Přidá vzkazu screenshot. `nahled` je zmenšená podoba pro dlaždici –
+ * posílá se u prvního obrázku, ať je na vzkazu hned vidět, že něco nese.
+ * `ms` se schválně nemění: podle něj se vzkazy řadí a ohlašují jako nové.
+ */
+KB.pridejQuickObrazek = async (id, dataUrl, nahled) => {
+    if (authReady) await authReady;
+    requireDb();
+    const n = "img_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(quickObrazekDoc(id, n), { data: dataUrl, ms: Date.now() });
+    const patch = { obrazku: increment(1) };
+    if (nahled) patch.nahled = String(nahled).slice(0, 90000);
+    await setDoc(quickDoc(id), patch, { merge: true });
+    return n;
+};
+
+KB.nactiQuickObrazky = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(quickObrazkyCol(id));
+    const ven = [];
+    snap.forEach(d => ven.push({ id: d.id, ...d.data() }));
+    ven.sort((a, b) => (a.ms || 0) - (b.ms || 0));
+    return ven;
+};
+
+/** Komentář ke vzkazu – stejně jako u poznámek, ať se dá odpovědět na místě. */
+KB.pridejQuickKomentar = async (id, text) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(quickDoc(id), {
+        komentare: arrayUnion({
+            uid: KB.currentUid(),
+            jmeno: window.KB_USER || "",
+            text: String(text || "").slice(0, 500),
+            ms: Date.now()
+        })
+    }, { merge: true });
 };
 
 /* ------------------------------------------------------------ poznámky ---

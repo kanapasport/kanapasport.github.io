@@ -410,6 +410,17 @@ service cloud.firestore {
     // --- Quick TO-DO: rychlé vzkazy mezi dvěma lidmi ---------------------
     // Schválně MIMO `private` – tam má správce plošné čtení, kdežto tohle
     // má vidět jen autor a adresát. Nikdo jiný, ani manažer.
+    function quickData(id) {
+      return get(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/quicktodo/seznam/$(id)).data;
+    }
+
+    function quickPristup(id) {
+      return quickData(id).odKoho == request.auth.uid
+             || quickData(id).proUid == request.auth.uid
+             || (quickData(id).proUids is list
+                 && request.auth.uid in quickData(id).proUids);
+    }
+
     match /artifacts/firemni-kb-app/osobni/quicktodo/seznam/{id} {
       /* Vzkaz může mít víc adresátů – `proUids`. Starší záznamy mají jen
          `proUid`, proto se hlídají obě podoby. Splní-li společný vzkaz
@@ -434,6 +445,14 @@ service cloud.firestore {
                                   || resource.data.proUid == request.auth.uid
                                   || (resource.data.proUids is list
                                       && request.auth.uid in resource.data.proUids));
+
+      /* Screenshoty vzkazu (4. 9. 2026). Obrázek nenese uid – právo se
+         bere z vlastního vzkazu, stejně jako u poznámek. Zapisovat smí
+         každý, koho se vzkaz týká: autor obrázek přikládá, a kdo vzkaz
+         maže, po sobě musí umět uklidit i obrázky. */
+      match /obrazky/{n} {
+        allow read, write: if clen() && quickPristup(id);
+      }
     }
 
     // --- poznámky: osobní zápisník problémů (screenshot + text) ----------
