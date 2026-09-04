@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=216">
+    <link rel="stylesheet" href="assets/css/app.css?v=217">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=216"></script>
-<script src="assets/js/ui.js?v=216"></script>
-<script src="assets/js/vykazy.js?v=216"></script>
-<script type="module" src="assets/js/store.js?v=216"></script>
+<script src="assets/js/taxonomy.js?v=217"></script>
+<script src="assets/js/ui.js?v=217"></script>
+<script src="assets/js/vykazy.js?v=217"></script>
+<script type="module" src="assets/js/store.js?v=217"></script>
 
 <script>
 (function () {
@@ -936,9 +936,14 @@
         Object.keys(OSY).forEach(druh => srovnejVic(box, druh));
 
     /**
-     * Popis práce podle toho, co je vybrané. Bez úkolu zůstávala kolonka
-     * prázdná a ve výkazu i v Tabulkách byl v koloně Úkol prázdný řádek –
-     * teď se do ní napíše „1PP, 2PP · TER, VODA" (Michal 4. 9. 2026).
+     * Popis práce podle toho, co je vybrané: „1PP, 2PP · TER, VODA".
+     *
+     * Píše se i k vybranému úkolu. Úkol je schránka na peníze, ne popis
+     * práce – když se k němu přidá druhé patro, musí být z výkazu vidět,
+     * do čeho všeho zápis spadá, ne jak se ta schránka jmenuje
+     * (Michal 4. 9. 2026). Když není vybrané ani patro, ani technologie,
+     * poslouží aspoň název úkolu, ať kolonka nezůstane prázdná – plní se
+     * z ní i sloupec „Činnost, náplň (úkol)" v Tabulkách Google.
      *
      * Vlastní text má vždycky přednost: sahá se jen na to, co sem napsala
      * tahle funkce (`autoMisto`). Text předvyplněný u absence nese vlastní
@@ -950,21 +955,22 @@
         const moje = pole.dataset.autoMisto === "1";
         if (pole.value && !moje) return;
 
-        const smaz = () => {
-            if (!moje) return;
-            pole.value = "";
-            delete pole.dataset.autoMisto;
-        };
-
-        // úkol si popis nese sám – doplňovat k němu místo by bylo dvakrát totéž
-        const ukol = box.querySelector('[data-f="ukolId"]');
-        if (ukol && ukol.value) return void smaz();
-
         const casti = [ctiOsu(box, "patro").hodnoty.join(", "),
                        ctiOsu(box, "technologie").hodnoty.join(", ")].filter(Boolean);
-        if (!casti.length) return void smaz();
+        let text = casti.join(" · ");
 
-        pole.value = casti.join(" · ");
+        if (!text) {
+            const vyber = box.querySelector('[data-f="ukolId"]');
+            const u = (vyber && vyber.value)
+                ? (window.KB.ukoly || []).find(x => x.id === vyber.value) : null;
+            text = (u && u.nazev) || "";
+        }
+
+        if (!text) {
+            if (moje) { pole.value = ""; delete pole.dataset.autoMisto; }
+            return;
+        }
+        pole.value = text;
         pole.dataset.autoMisto = "1";
     }
 
@@ -1156,7 +1162,12 @@
                    25. 8. 2026). */
                 '<div class="polozka__nazev" style="grid-column:1/-1">' +
                     '<label class="label">Popis práce (nepovinné)</label>' +
+                    /* `data-auto-misto` říká, že popis napsal web podle výběru
+                       pater a technologií. Bez něj by se po znovuotevření
+                       zápisu tvářil jako ručně psaný a přestal se srovnávat
+                       s tím, co k zápisu mezitím přibylo (Michal 4. 9. 2026). */
                     '<input type="text" class="field" data-f="nazev" placeholder="doplnění k úkolu" ' +
+                        (d.nazevAuto ? 'data-auto-misto="1" ' : "") +
                         'value="' + esc(d.nazev || "") + '">' +
                 "</div>" +
             "</div>" +
@@ -1289,8 +1300,11 @@
         const patra = ctiOsu(box, "patro");
         const techy = ctiOsu(box, "technologie");
 
+        const popisPole = box.querySelector('[data-f="nazev"]');
+
         return {
             nazev: val("nazev").trim(),
+            nazevAuto: !!(popisPole && popisPole.dataset.autoMisto === "1"),
             zakazka: val("zakazka"),
             projekt: val("projekt"),
             firma: val("firma"),
@@ -2229,6 +2243,12 @@
             "</td>";
         }
 
+        function ukolNazev(z) {
+            if (!z.ukolId) return "";
+            const u = (window.KB.ukoly || []).find(x => x.id === z.ukolId);
+            return (u && u.nazev) || "";
+        }
+
         function radek(z) {
             const pauza = Number(z.pauza) || 0;
             // co k zápisu patří navíc – ať je vidět i bez otvírání úpravy
@@ -2239,7 +2259,11 @@
 
             return '<tr data-zid="' + esc(z.id || "") + '">' +
                 (spravce ? "<td>" + esc(V.osobaText(z)) + "</td>" : "") +
-                '<td class="vyk__nazev">' + esc(z.nazev || "") +
+                /* Popis říká, do čeho zápis spadá; jak se jmenuje úkol,
+                   na který se to účtuje, je v bublině. */
+                '<td class="vyk__nazev"' + (ukolNazev(z)
+                    ? ' title="' + esc("Úkol: " + ukolNazev(z)) + '"' : "") + ">" +
+                    esc(z.nazev || "") +
                     (jeVypomoc(z) ? ' <span class="tag" title="Hodiny na úkolu, který má přiřazený někdo jiný" ' +
                         'style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">výpomoc</span>' : "") +
                     (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +

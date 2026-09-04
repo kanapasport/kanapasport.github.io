@@ -1861,6 +1861,10 @@ function zaznamPayload(data) {
         osoba:    data.osoba || "",
         datum:    data.datum || "",
         nazev:    data.nazev || "",
+        /* Popis si podle vybraných pater a technologií doplňuje web. Příznak
+           říká, že do něj nikdo nesáhl rukou – při další úpravě se tedy smí
+           přepsat na to, co zápis obsahuje teď (Michal 4. 9. 2026). */
+        nazevAuto: data.nazevAuto === true,
         zakazka:  data.zakazka || "",
         projekt:  data.projekt || "",
         firma:    data.firma || "",
