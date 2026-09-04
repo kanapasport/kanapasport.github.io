@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=213">
+    <link rel="stylesheet" href="assets/css/app.css?v=214">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=213"></script>
-<script src="assets/js/ui.js?v=213"></script>
-<script src="assets/js/vykazy.js?v=213"></script>
-<script type="module" src="assets/js/store.js?v=213"></script>
+<script src="assets/js/taxonomy.js?v=214"></script>
+<script src="assets/js/ui.js?v=214"></script>
+<script src="assets/js/vykazy.js?v=214"></script>
+<script type="module" src="assets/js/store.js?v=214"></script>
 
 <script>
 (function () {
@@ -814,6 +814,18 @@
 
     const TECH_POLE = OSY.technologie.pole;
 
+    /* Zámeček u podílu. Zamčenou hodnotu klikání nesahá a zbytek se dělí jen
+       mezi odemčenými – jinak se nedalo nastavit 60/30/10 (Michal 4. 9.
+       2026). Nabízí se až u TŘÍ hodnot: u dvou by zámek určil rovnou obě
+       a nezbylo by co dělit. */
+    const ZAMEK_SVG = (zavreny) =>
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+        ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<rect x="4" y="11" width="16" height="10" rx="2"></rect>' +
+        (zavreny ? '<path d="M8 11V7a4 4 0 0 1 8 0v4"></path>'
+                 : '<path d="M8 11V7a4 4 0 0 1 7.9-1"></path>') +
+        "</svg>";
+
     function vicHtml(druh, zakazka, d) {
         const osa = OSY[druh];
         // hodnota je v zápisu uložená spojená v prvním poli („1PP, 2PP")
@@ -830,6 +842,11 @@
                     (casti.length >= 2 && i < casti.length ? "" : " hidden") +
                     ' title="Podíl práce. Klikáním se zvedá po 10 %, ostatní se dorovnají.">' +
                     (podily[i] || 0) + "&nbsp;%</button>" +
+                '<button type="button" class="vicpole__zamek" data-zamek="' + druh +
+                    '" data-i="' + i + '" aria-pressed="false"' +
+                    (casti.length >= 3 && i < casti.length ? "" : " hidden") +
+                    ' title="Zamknout podíl – ostatní se pak dorovnávají jen mezi sebou">' +
+                    ZAMEK_SVG(false) + "</button>" +
             "</div>";
 
         return '<div><label class="label">' + osa.popis + "</label>" +
@@ -861,8 +878,17 @@
                 poradi[i] = -1;
             }
         });
+        /* Zámky drží tlačítka sama (aria-pressed) – do zápisu se neukládají.
+           Uložený je až výsledek, tedy samotné podíly. */
+        const zamky = [];
+        osa.pole.forEach((klic, i) => {
+            const misto = poradi[i];
+            if (misto < 0) return;
+            const z = box.querySelector('[data-zamek="' + druh + '"][data-i="' + i + '"]');
+            zamky[misto] = !!(z && z.getAttribute("aria-pressed") === "true");
+        });
         const skryte = box.querySelector('[data-f="' + osa.podil + '"]');
-        return { osa: osa, hodnoty: hodnoty, poradi: poradi, skryte: skryte,
+        return { osa: osa, hodnoty: hodnoty, poradi: poradi, skryte: skryte, zamky: zamky,
                  podily: V.podily(skryte ? skryte.value : "", Math.max(1, hodnoty.length)) };
     }
 
@@ -881,7 +907,26 @@
             const i = Number(b.dataset.i);
             const misto = o.poradi[i];
             b.hidden = o.hodnoty.length < 2 || misto < 0;
-            if (misto >= 0) b.innerHTML = (o.podily[misto] || 0) + "&nbsp;%";
+            if (misto < 0) return;
+            b.innerHTML = (o.podily[misto] || 0) + "&nbsp;%";
+            const zamceno = !!o.zamky[misto];
+            b.classList.toggle("vicpole__podil--zamceno", zamceno);
+            b.title = zamceno
+                ? "Podíl je zamčený – klikáním se nemění. Odemkni ho zámečkem vedle."
+                : "Podíl práce. Klikáním se zvedá po 10 %, ostatní se dorovnají.";
+        });
+        obal.querySelectorAll("[data-zamek]").forEach(b => {
+            const i = Number(b.dataset.i);
+            const misto = o.poradi[i];
+            // u dvou hodnot nemá zámek co dělit – schová se a rovnou povolí
+            const patri = o.hodnoty.length >= 3 && misto >= 0;
+            b.hidden = !patri;
+            if (!patri) b.setAttribute("aria-pressed", "false");
+            const zamceno = b.getAttribute("aria-pressed") === "true";
+            b.innerHTML = ZAMEK_SVG(zamceno);
+            b.title = zamceno
+                ? "Podíl je zamčený – odemkni ho, ať se zase dorovnává"
+                : "Zamknout podíl – ostatní se pak dorovnávají jen mezi sebou";
         });
     }
 
@@ -907,6 +952,16 @@
             return;
         }
 
+        const zamek = event.target.closest("[data-zamek]");
+        if (zamek) {
+            const box = zamek.closest("[data-polozka]");
+            if (!box) return;
+            zamek.setAttribute("aria-pressed",
+                zamek.getAttribute("aria-pressed") === "true" ? "false" : "true");
+            srovnejVic(box, zamek.dataset.zamek);
+            return;
+        }
+
         const podil = event.target.closest("[data-podil]");
         if (podil) {
             const box = podil.closest("[data-polozka]");
@@ -915,7 +970,7 @@
             const o = ctiOsu(box, druh);
             const misto = o.poradi[Number(podil.dataset.i)];
             if (misto < 0) return;
-            if (o.skryte) o.skryte.value = V.podilKlik(o.podily, misto).join(",");
+            if (o.skryte) o.skryte.value = V.podilKlik(o.podily, misto, o.zamky).join(",");
             srovnejVic(box, druh);
         }
     });
@@ -1739,17 +1794,19 @@
 
     /**
      * Smí přihlášený tenhle záznam smazat? Musí to sedět s pravidly
-     * databáze, jinak tlačítko slíbí něco, co zápis odmítne: zaměstnanec
-     * smaže jen svůj záznam z Rychlého zápisu (`zdroj: "panel"`), a jen
-     * dokud ho může upravovat. Manažer kdykoliv.
+     * databáze, jinak tlačítko slíbí něco, co zápis odmítne.
+     *
+     * Od 4. 9. 2026 smí každý smazat SVŮJ záznam, dokud ho může upravovat –
+     * tedy do půlnoci dne, kdy ho zapsal. Kdo si všimne, že si den zapsal
+     * špatně, si ho má umět zahodit, ne o to prosit manažera (Michal).
+     * Dřív to šlo jen u záznamů z Rychlého zápisu. Manažer kdykoliv.
      * (V náhledu „prohlížím jako zaměstnanec" se to řídí náhledem – jinak
      * bylo v roli zaměstnance vidět mazání, které by mu databáze
      * nedovolila. Michal 1. 9. 2026.)
      */
     function smimSmazat(z) {
         if (window.KBUI.can("vykaz.view")) return true;
-        return !!z && z.uid === window.KB.currentUid() &&
-            z.zdroj === "panel" && smimUpravit(z);
+        return !!z && z.uid === window.KB.currentUid() && smimUpravit(z);
     }
 
     /**

@@ -119,12 +119,13 @@ service cloud.firestore {
                        && resource.data.datum >= uzaverkaOd()
                        && request.resource.data.datum >= uzaverkaOd()
                        && request.resource.data.get('zdroj', '') == resource.data.get('zdroj', ''));
-      /* Vlastní záznam z rychlého zápisu (volno/dovolená naklikaná
-         dopředu) si člověk smí zase odkliknout – jiné záznamy maže jen
-         správce. */
+      /* Vlastní záznam si člověk smí smazat stejně, jako si ho smí opravit.
+         Web mu to pouští jen do půlnoci dne, kdy zápis vznikl (přání Michala
+         4. 9. 2026); tvrdou hranicí v databázi je uzávěrka – co je jednou
+         uzavřené, nesmaže ani vlastník. Dřív to šlo jen u záznamů
+         z Rychlého zápisu (`zdroj: "panel"`). */
       allow delete: if spravce() || (clen()
                        && resource.data.uid == request.auth.uid
-                       && resource.data.zdroj == "panel"
                        && resource.data.datum >= uzaverkaOd());
     }
 
@@ -135,7 +136,13 @@ service cloud.firestore {
     match /artifacts/firemni-kb-app/private/vykazy/castky/{id} {
       allow read:  if spravce() || (fakturujeSi()
                       && resource.data.uid == request.auth.uid);
-      allow write: if spravce();
+      allow create, update: if spravce();
+      /* Když si člověk smaže svůj zápis, musí s ním zmizet i jeho částka –
+         jinak by v databázi zůstala peněžní věta bez zápisu. Zapisovat
+         částky pořád smí jen manažer (4. 9. 2026). */
+      allow delete: if spravce() || (clen()
+                       && resource.data.get('uid', '') == request.auth.uid
+                       && resource.data.get('datum', '') >= uzaverkaOd());
     }
 
     // --- projekty (dřív „zakázky") --------------------------------------

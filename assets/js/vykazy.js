@@ -470,18 +470,35 @@
      * Klik na podíl: tomu vyklikanému přidá deset procent, zbytek si rozdělí
      * ostatní rovným dílem. Za maximem se začíná znovu od deseti – jedním
      * tlačítkem se tak dá projet celá škála tam i zpět.
+     *
+     * `zamky` je pole true/false. Zamčená hodnota se nesahá a dělí se jen
+     * to, co po ní zbylo. Bez zámků se u tří technologií nedalo nastavit
+     * 60/30/10: klik na druhou hodnotu srovnal tu první zpátky na rovný díl
+     * (Michal 4. 9. 2026).
      */
-    V.podilKlik = (podily, index) => {
+    V.podilKlik = (podily, index, zamky) => {
         const n = podily.length;
         if (n < 2) return podily.slice();
+        const zamceno = (j) => !!(zamky && zamky[j]);
+        if (zamceno(index)) return podily.slice();
+
+        const volne = [];
+        for (let j = 0; j < n; j++) if (j !== index && !zamceno(j)) volne.push(j);
+        // všechno ostatní je zamčené – není z čeho ubrat, hodnota je daná
+        if (!volne.length) return podily.slice();
+
+        let bazen = 100;
+        for (let j = 0; j < n; j++) if (zamceno(j)) bazen -= podily[j];
         const min = V.PODIL_KROK;
-        const max = 100 - min * (n - 1);
+        const max = bazen - min * volne.length;
+        if (max < min) return podily.slice();
+
         let v = podily[index] + V.PODIL_KROK;
         if (v > max) v = min;
-        const zbylo = rozdel(100 - v, n - 1);
-        const out = [];
-        let k = 0;
-        for (let j = 0; j < n; j++) out.push(j === index ? v : zbylo[k++]);
+        const zbylo = rozdel(bazen - v, volne.length);
+        const out = podily.slice();
+        out[index] = v;
+        volne.forEach((j, k) => { out[j] = zbylo[k]; });
         return out;
     };
 
