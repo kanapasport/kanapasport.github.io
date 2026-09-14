@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=222">
+    <link rel="stylesheet" href="assets/css/app.css?v=223">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -642,10 +642,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=222"></script>
-<script src="assets/js/ui.js?v=222"></script>
-<script src="assets/js/vykazy.js?v=222"></script>
-<script type="module" src="assets/js/store.js?v=222"></script>
+<script src="assets/js/taxonomy.js?v=223"></script>
+<script src="assets/js/ui.js?v=223"></script>
+<script src="assets/js/vykazy.js?v=223"></script>
+<script type="module" src="assets/js/store.js?v=223"></script>
 
 <script>
 (function () {
@@ -666,6 +666,42 @@
     let hledani = "";
 
     const seznamZTextu = (text) => String(text || "").split(",").map(x => x.trim()).filter(Boolean);
+
+    /**
+     * Patra z pole v Údajích. Patro, které je jen v některé budově, se píše
+     * se závorkou: „Datový sál (G62)" – čárka uvnitř závorky neodděluje
+     * patra, ale budovy. Vrací čistý seznam názvů (ten čte zbytek webu beze
+     * změny) a zvlášť mapu omezení (Michal 14. 9. 2026).
+     */
+    function patraZTextu(text) {
+        const kusy = [];
+        let kus = "", hloubka = 0;
+        String(text || "").split("").forEach(ch => {
+            if (ch === "(") hloubka++;
+            if (ch === ")") hloubka = Math.max(0, hloubka - 1);
+            if (ch === "," && !hloubka) { kusy.push(kus); kus = ""; return; }
+            kus += ch;
+        });
+        kusy.push(kus);
+        const patra = [], patraBudov = {};
+        kusy.map(k => k.trim()).filter(Boolean).forEach(k => {
+            const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(k);
+            const nazev = (m ? m[1] : k).trim();
+            if (!nazev) return;
+            if (patra.indexOf(nazev) === -1) patra.push(nazev);
+            if (m) {
+                const budovy = m[2].split(/[,;]/).map(b => b.trim()).filter(Boolean);
+                if (budovy.length) patraBudov[nazev] = budovy;
+            }
+        });
+        return { patra: patra, patraBudov: patraBudov };
+    }
+
+    /** Opak – patra zpátky do pole, u omezených i se závorkou. */
+    const patraDoTextu = (patra, patraBudov) => (patra || []).map(pt => {
+        const kde = (patraBudov || {})[pt];
+        return Array.isArray(kde) && kde.length ? pt + " (" + kde.join(", ") + ")" : pt;
+    }).join(", ");
 
     /* ------------------------------------------------------------ projekty */
 
@@ -1044,7 +1080,7 @@
            (nález revize 31. 8. 2026); co platí u projektu bez vlastního
            nastavení, ukazuje našedlý text v poli. */
         $("fBudovy").value = (b.budovy || []).join(", ");
-        $("fPatra").value = (b.patra || []).join(", ");
+        $("fPatra").value = patraDoTextu(b.patra, b.patraBudov);
         $("fTech").value = (b.technologie || []).join(", ");
         $("fDruhy").value = ((b.cinnosti && b.cinnosti.length) ? b.cinnosti
             : V.cinnosti()).join(", ");
@@ -1153,7 +1189,10 @@
         const b = (window.KB.budgetCiselnik || {})[p.nazev || ""] || {};
         const zPole = (id, klic) => seznamZTextu($(id).value).length
             ? seznamZTextu($(id).value) : (b[klic] || []);
-        return { budovy: zPole("fBudovy", "budovy"), patra: zPole("fPatra", "patra"),
+        const zPatra = patraZTextu($("fPatra").value);
+        return { budovy: zPole("fBudovy", "budovy"),
+                 patra: zPatra.patra.length ? zPatra.patra : (b.patra || []),
+                 patraBudov: zPatra.patra.length ? zPatra.patraBudov : (b.patraBudov || {}),
                  technologie: zPole("fTech", "technologie") };
     }
 
@@ -1485,8 +1524,11 @@
             '<td colspan="7"><div class="butodo__telo">' +
                 todo.map(t => {
                     const pct = Math.max(0, Math.min(100, Number(t.pct) || 0));
-                    return '<div class="butodo__radek">' +
-                        '<span class="butodo__text">' + esc(t.text || "") + "</span>" +
+                    const vyp = t.vypnuto === true;
+                    return '<div class="butodo__radek' + (vyp ? " butodo__radek--vyp" : "") + '">' +
+                        '<span class="butodo__text">' + esc(t.text || "") +
+                            (vyp ? ' <span class="tiny muted">(vypnuto – nepočítá se)</span>' : "") +
+                        "</span>" +
                         '<span class="butodo__pruh"><i style="width:' + pct + '%"></i></span>' +
                         '<span class="butodo__pct">' + pct + " %</span>" +
                         (t.pozn ? '<span class="butodo__pozn">' + esc(t.pozn) + "</span>" : "") +
@@ -1722,6 +1764,8 @@
             return;
         }
         const radek = (budova, patro) => {
+            // patro, které v téhle budově není, se v jejím výčtu nevypisuje
+            if (!V.patroVBudove(osy.patraBudov, budova, patro)) return "";
             const moje = ukoly.filter(u => u.budova === budova && u.patro === patro);
             const c = souctyUkolu(moje, budgety, rozpad && rozpad.patro(budova, patro));
             const zbyva = c.predepsano - c.penize;   // Kč − Kč
@@ -1731,6 +1775,9 @@
                 '<td class="num">' + (c.pocet ? c.pct + " %" : "–") + "</td>" +
                 '<td class="num">' + (c.predepsano ? V.kc(c.predepsano) : "–") + "</td>" +
                 '<td class="num">' + (c.penize ? V.kc(c.penize) : "–") + "</td>" +
+                /* Hodiny zvlášť: u patra bez budgetu (Datový sál) je jediné,
+                   co se sleduje, kolik se tam vykázalo (Michal 14. 9. 2026). */
+                '<td class="num">' + (c.vykazano ? V.hod(Math.round(c.vykazano * 10) / 10) : "–") + "</td>" +
                 '<td class="num' + (zbyva < 0 ? " pt__pres" : "") + '">' +
                     (c.predepsano || c.penize ? V.kc(zbyva) : "–") + "</td>" +
             "</tr>";
@@ -1743,10 +1790,10 @@
             '<div style="overflow-x:auto"><table class="pt"><thead><tr><th>Patro</th>' +
                 '<th class="num">Úkolů</th><th class="num">Hotovo</th>' +
                 '<th class="num">Předepsáno Kč</th><th class="num">Vyfakturováno Kč</th>' +
-                '<th class="num">Zbývá Kč</th>' +
+                '<th class="num">Hodin</th><th class="num">Zbývá Kč</th>' +
             "</tr></thead><tbody>" +
             osy.budovy.map(b =>
-                '<tr class="pt__budova"><td colspan="6">Budova ' + esc(b) + "</td></tr>" +
+                '<tr class="pt__budova"><td colspan="7">Budova ' + esc(b) + "</td></tr>" +
                 osy.patra.map(pt => radek(b, pt)).join("")).join("") +
             "</tbody></table></div>";
     }
@@ -1927,6 +1974,7 @@
             const budovy = osy.budovy.length ? osy.budovy : [""];
             for (const budova of budovy) {
                 for (const patro of osy.patra) {
+                    if (!V.patroVBudove(osy.patraBudov, budova, patro)) continue;
                     if (stavajici.some(u => !u.technologie && u.patro === patro
                             && (u.budova || "") === budova)) continue;
                     nove.push(Object.assign({}, spolecne,
@@ -2589,14 +2637,16 @@
 
         const budget = Object.assign({}, window.KB.budgetCiselnik);
         const budovy = seznamZTextu($("fBudovy").value);
-        const patra = seznamZTextu($("fPatra").value);
+        const patraPole = patraZTextu($("fPatra").value);
+        const patra = patraPole.patra;
         const technologie = seznamZTextu($("fTech").value);
         /* Vždycky se zapisují všechna tři pole, i prázdná. Databáze
            slučuje mapy do hloubky a smazaný klíč by v ní zůstal – prázdné
            pole je jediný způsob, jak seznam opravdu vyprázdnit (Michal
            26. 8.: nešla smazat patra u 2026-027). */
         budget[nazev] = Object.assign({}, budget[nazev],
-            { budovy: budovy, patra: patra, technologie: technologie,
+            { budovy: budovy, patra: patra, patraBudov: patraPole.patraBudov,
+              technologie: technologie,
               cinnosti: seznamZTextu($("fDruhy").value) });
 
         /* Údaje projektu se ukládají spolu s nastavením – je to jeden projekt

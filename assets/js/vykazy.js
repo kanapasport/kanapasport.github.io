@@ -221,10 +221,29 @@
     };
 
     /** Plnění úkolu v procentech – průměr TO-DO položek. */
+    /**
+     * TO-DO, které se u úkolu počítají. Položku jde vypnout (`vypnuto: true`),
+     * když na tom místě nedává smysl – patro třeba rozvaděč vůbec nemá.
+     * Vypnutá se nepočítá do procent ani do „hotovo" (Michal 14. 9. 2026).
+     */
+    V.todoAktivni = (u) => ((u && u.todo) || []).filter(t => t && t.vypnuto !== true);
+
     V.pctUkolu = (u) => {
-        const todo = u.todo || [];
+        const todo = V.todoAktivni(u);
         if (!todo.length) return u.stav === "hotovo" ? 100 : 0;
         return Math.round(todo.reduce((sum, t) => sum + (Number(t.pct) || 0), 0) / todo.length);
+    };
+
+    /**
+     * Patří patro do budovy? Číselník projektu může mít `patraBudov`,
+     * třeba { "Datový sál": ["G62"] }. Patro, které v mapě není, platí ve
+     * všech budovách – starší projekty se tím nijak nemění
+     * (Michal 14. 9. 2026).
+     */
+    V.patroVBudove = (patraBudov, budova, patro) => {
+        const kde = (patraBudov || {})[patro];
+        if (!Array.isArray(kde) || !kde.length || !budova) return true;
+        return kde.indexOf(budova) !== -1;
     };
 
     /**
@@ -259,6 +278,12 @@
             : pct >= 75 ? "p75" : pct >= 50 ? "p50" : "p0";
 
         const bunka = (budova, tech, patro) => {
+            /* Patro, které v téhle budově není (Datový sál jen v G62),
+               nemá co nabízet – ani „+" na založení úkolu. */
+            if (!V.patroVBudove(osy.patraBudov, budova, patro)) {
+                return '<td><span class="mx__bunka mx__bunka--mimo" title="' +
+                    esc(patro + " v budově " + budova + " není") + '"></span></td>';
+            }
             const moje = ukoly.filter(u =>
                 u.budova === budova && u.patro === patro && u.technologie === tech);
             const klic = esc(budova) + "|" + esc(tech) + "|" + esc(patro);

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=222">
+    <link rel="stylesheet" href="assets/css/app.css?v=223">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -196,10 +196,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=222"></script>
-<script src="assets/js/ui.js?v=222"></script>
-<script src="assets/js/vykazy.js?v=222"></script>
-<script type="module" src="assets/js/store.js?v=222"></script>
+<script src="assets/js/taxonomy.js?v=223"></script>
+<script src="assets/js/ui.js?v=223"></script>
+<script src="assets/js/vykazy.js?v=223"></script>
+<script type="module" src="assets/js/store.js?v=223"></script>
 
 <script>
 (function () {
@@ -266,9 +266,8 @@
     const jeManazer = () => window.KBUI.can("vykaz.view");
 
     const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
-    const pctUkolu = (u) => (u.todo && u.todo.length)
-        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length)
-        : (u.stav === "hotovo" ? 100 : 0);
+    // vypnuté TO-DO se nepočítají – stejné pravidlo jako V.pctUkolu
+    const pctUkolu = V.pctUkolu;
 
     const najdiUkol = (id) => (window.KB.ukoly || []).find(x => x.id === id) || null;
     const najdiTodo = (ukolId, todoId) => {
@@ -418,16 +417,23 @@
     }
 
     function todoHtml(u, smiPsat) {
-        const zamek = smiPsat ? "" : " disabled";
         const radky = (u.todo || []).map(t => {
             const pct = Number(t.pct) || 0;
             const klic = esc(u.id) + "|" + esc(t.id);
-            const kdo = t.by
-                ? "zapsal " + esc(t.by) + " · " + esc(casRazitko(t.ms))
-                : "zatím nikdo nepotvrdil";
+            /* Vypnutá položka na tomhle místě nedává smysl (patro třeba
+               rozvaděč nemá) – do procent se nepočítá a procenta u ní
+               nejdou měnit, dokud ji někdo zase nezapne (Michal 14. 9. 2026). */
+            const vyp = t.vypnuto === true;
+            const zamek = (smiPsat && !vyp) ? "" : " disabled";
+            const kdo = vyp
+                ? "vypnuto – do procent se nepočítá"
+                : t.by
+                    ? "zapsal " + esc(t.by) + " · " + esc(casRazitko(t.ms))
+                    : "zatím nikdo nepotvrdil";
 
             return '<div class="subtaskblok">' +
-            '<div class="subtask subtask--' + pctUroven(pct) + (pct === 100 ? " subtask--done" : "") + '">' +
+            '<div class="subtask subtask--' + pctUroven(pct) + (pct === 100 && !vyp ? " subtask--done" : "") +
+                (vyp ? " subtask--vyp" : "") + '">' +
                 '<button type="button" class="subtask__check" data-prepni="' + klic + '"' + zamek +
                     ' title="Přepnout mezi 0 a 100 %">' + CHECK + "</button>" +
                 '<span class="subtask__name">' + esc(t.text) + "</span>" +
@@ -446,8 +452,15 @@
                         'data-tahlo="' + klic + '"' + zamek +
                         ' title="Přetažením nastavíš přesná procenta" aria-label="Postup v procentech">') +
                 (smiPsat
-                    ? '<button type="button" class="btn btn--sm btn--ghost subtask__add" ' +
-                        'data-pozn-nova="' + klic + '" title="Přidat poznámku">+</button>'
+                    ? '<span class="subtask__akce">' +
+                        '<button type="button" class="btn btn--sm btn--ghost subtask__vyp" data-vypni="' + klic +
+                            '" title="' + (vyp
+                                ? "Zapnout – položka se zase počítá do procent"
+                                : "Tady to není – vypnout, ať se nepočítá do procent") + '">' +
+                            (vyp ? "Zapnout" : "Vypnout") + "</button>" +
+                        '<button type="button" class="btn btn--sm btn--ghost subtask__add" ' +
+                            'data-pozn-nova="' + klic + '" title="Přidat poznámku">+</button>' +
+                      "</span>"
                     : "") +
             "</div>" +
             poznamkyHtml(u, t, smiPsat) +
@@ -655,7 +668,8 @@
         const puvodni = (u.todo || []).find(t => t.id === todoId);
         const todo = (u.todo || []).map(t => t.id === todoId
             ? Object.assign({}, t, { pct: pct, by: window.KB_USER || "", ms: Date.now() }) : t);
-        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        const aktivni = todo.filter(t => t.vypnuto !== true);
+        const hotovo = aktivni.length && aktivni.every(t => (Number(t.pct) || 0) === 100);
         try {
             await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
                 puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
@@ -671,7 +685,8 @@
 
     /** Uloží změněné položky; stav se dopočítá z procent. */
     async function ulozTodo(ukolId, todo, popis) {
-        const hotovo = todo.length && todo.every(t => (Number(t.pct) || 0) === 100);
+        const aktivni = todo.filter(t => t.vypnuto !== true);
+        const hotovo = aktivni.length && aktivni.every(t => (Number(t.pct) || 0) === 100);
         try {
             await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
                 null, popis);
@@ -1109,6 +1124,19 @@
                 const id = rozbal.dataset.rozbal;
                 otevrene.has(id) ? otevrene.delete(id) : otevrene.add(id);
                 return void vykresli();
+            }
+
+            // vypnutí položky, která na tomhle místě nedává smysl
+            const vypni = event.target.closest("[data-vypni]");
+            if (vypni && !vypni.disabled) {
+                const [ukolId, todoId] = vypni.dataset.vypni.split("|");
+                const u = najdiUkol(ukolId);
+                const t = najdiTodo(ukolId, todoId);
+                if (!u || !t) return;
+                const vypnout = t.vypnuto !== true;
+                return void ulozTodo(ukolId,
+                    sPolozkou(u, todoId, x => Object.assign({}, x, { vypnuto: vypnout })),
+                    (vypnout ? "vypnul TO-DO: " : "zapnul TO-DO: ") + (t.text || ""));
             }
 
             // zaškrtávátko: hotovo ↔ nic

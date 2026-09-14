@@ -3014,7 +3014,7 @@
         const nejblizsi = mojeUkoly.filter(u => u.termin).sort((a, b) => a.termin.localeCompare(b.termin))[0];
         // TO-DO = nedodělané položky napříč mými úkoly; Quick = co mi kdo poslal
         const todoZbyva = mojeUkoly.reduce((s, u) =>
-            s + (u.todo || []).filter(t => (Number(t.pct) || 0) < 100).length, 0);
+            s + (u.todo || []).filter(t => t.vypnuto !== true && (Number(t.pct) || 0) < 100).length, 0);
         const quickZbyva = (window.KB.quicktodo || [])
             .filter(q => !UI.quickHotovoPro(q, uid) && q.proUid === uid).length;
 

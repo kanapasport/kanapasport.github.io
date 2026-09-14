@@ -1254,6 +1254,9 @@ KB.saveUser = async (data) => {
     };
     // typ spolupráce (zaměstnanec | osvc | student) – jen když ho volající předá
     if (data.typ !== undefined) payload.typ = data.typ || "";
+    /* Výkaz po půlhodinách: člověk místo příchodu a odchodu vybírá rovnou
+       počet hodin (Petr Kyselka, Michal 14. 9. 2026). */
+    if (data.vykazPulhodiny !== undefined) payload.vykazPulhodiny = data.vykazPulhodiny === true;
     /* HESLA SE NEUKLÁDAJÍ. Otisk (`hash`+`salt`) i šifrovaná podoba (`enc`)
        tu dřív ležely v `public/data/users`, kam vidí každý člen – kdokoliv
        si je mohl stáhnout a doma lámat. Heslo ověřuje Firebase Auth,

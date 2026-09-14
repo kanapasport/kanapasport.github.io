@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=222">
+    <link rel="stylesheet" href="assets/css/app.css?v=223">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -300,10 +300,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=222"></script>
-<script src="assets/js/ui.js?v=222"></script>
-<script src="assets/js/vykazy.js?v=222"></script>
-<script type="module" src="assets/js/store.js?v=222"></script>
+<script src="assets/js/taxonomy.js?v=223"></script>
+<script src="assets/js/ui.js?v=223"></script>
+<script src="assets/js/vykazy.js?v=223"></script>
+<script type="module" src="assets/js/store.js?v=223"></script>
 
 <script>
 (function () {
@@ -391,6 +391,39 @@
      * nejsou v databázi: sdílí ho ostrý web a nové projekty do něj
      * schválně nepřibývají.
      */
+    /* ČÍSLA PROJEKTŮ v roletce – „2024-007 Biopharm Hub…". Volba je osobní
+       a drží ji prohlížeč: kdo projekty zná podle čísla, zapne si ji, zbytek
+       má roletku kratší (Michal 14. 9. 2026). Hodnota zůstává název
+       projektu, mění se jen popisek – do databáze jde totéž co dřív. */
+    const CISLA_KLIC = "kb-vykaz-cisla-projektu";
+
+    function cislaProjektu() {
+        try { return localStorage.getItem(CISLA_KLIC) === "1"; } catch (err) { return false; }
+    }
+
+    function projektyVolby() {
+        const nazvy = nabidkaProjektu();
+        if (!cislaProjektu()) return nazvy;
+        const cisla = {};
+        (window.KB.projektyDocs || []).forEach(p => {
+            if (p.nazev && p.cislo) cisla[p.nazev] = String(p.cislo).trim();
+        });
+        return nazvy.map(n => ({ value: n, label: cisla[n] ? cisla[n] + " " + n : n }));
+    }
+
+    document.addEventListener("change", (event) => {
+        if (!event.target.matches || !event.target.matches("[data-cisla-projektu]")) return;
+        const zapnuto = event.target.checked;
+        try { localStorage.setItem(CISLA_KLIC, zapnuto ? "1" : "0"); } catch (err) { /* nevadí */ }
+        document.querySelectorAll("[data-cisla-projektu]").forEach(ch => { ch.checked = zapnuto; });
+        const volby = projektyVolby();
+        document.querySelectorAll('[data-z="zakazka"], [data-f="zakazka"]').forEach(sel => {
+            const drzena = sel.value;
+            sel.innerHTML = V.options(volby, drzena, "— vyber —");
+            sel.value = drzena;
+        });
+    });
+
     function nabidkaProjektu() {
         const zEvidence = (window.KB.projektyDocs || [])
             .filter(p => !p.uzavreno).map(p => p.nazev).filter(Boolean);
@@ -684,7 +717,9 @@
     function mistoProjektu(zakazka) {
         const b = (window.KB.budgetCiselnik || {})[zakazka] || {};
         return { budovy: Array.isArray(b.budovy) ? b.budovy : [],
-                 patra:  Array.isArray(b.patra)  ? b.patra  : [] };
+                 patra:  Array.isArray(b.patra)  ? b.patra  : [],
+                 // patro jen v některé budově – { "Datový sál": ["G62"] }
+                 patraBudov: (b.patraBudov && typeof b.patraBudov === "object") ? b.patraBudov : {} };
     }
 
     /**
@@ -716,8 +751,10 @@
     /* Patra do roletky. Co zápis nese, musí v nabídce zůstat, i když
        číselník projektu už to patro nezná – jinak by se při úpravě tiše
        přepsalo na první položku. Stejná pojistka jako u technologií. */
-    function patraProjektu(zakazka, vybrane) {
-        let seznam = mistoProjektu(zakazka).patra.slice();
+    function patraProjektu(zakazka, vybrane, budova) {
+        const misto = mistoProjektu(zakazka);
+        // patro, které v zvolené budově není (Datový sál jen v G62), se nenabízí
+        let seznam = misto.patra.filter(pt => V.patroVBudove(misto.patraBudov, budova, pt));
         if (vybrane && seznam.indexOf(vybrane) === -1) seznam = seznam.concat([vybrane]);
         return seznam;
     }
@@ -802,7 +839,7 @@
             popis: "Patro",
             pridej: "+ další patro",
             titulek: "Práce na víc patrech za jeden den",
-            moznosti: (zakazka, hodnota) => patraProjektu(zakazka, hodnota)
+            moznosti: (zakazka, hodnota, budova) => patraProjektu(zakazka, hodnota, budova)
         },
         technologie: {
             pole: ["technologie", "technologie2", "technologie3"],
@@ -837,7 +874,7 @@
         const radek = (klic, hodnota, i, skryty) =>
             '<div class="vicpole__radek"' + (skryty ? " hidden" : "") + ">" +
                 '<select class="field" data-f="' + klic + '">' +
-                V.options(osa.moznosti(zakazka, hodnota), hodnota, "— nezadáno —") +
+                V.options(osa.moznosti(zakazka, hodnota, d && d.budova), hodnota, "— nezadáno —") +
                 "</select>" +
                 '<button type="button" class="vicpole__podil" data-podil="' + druh +
                     '" data-i="' + i + '"' +
@@ -936,6 +973,27 @@
         Object.keys(OSY).forEach(druh => srovnejVic(box, druh));
 
     /**
+     * Jiná budova = jiná nabídka pater. Patro, které v nové budově není,
+     * se z výběru zahodí – zapsat hodiny do „G61 · Datový sál" nejde,
+     * protože takové místo neexistuje (Michal 14. 9. 2026).
+     */
+    function prestavPatra(box) {
+        if (!box.querySelector('[data-vic="patro"]')) return;
+        const zakazka = zakazkaZaznamu(box);
+        const budovaPole = box.querySelector('[data-f="budova"]');
+        const budova = budovaPole ? budovaPole.value : "";
+        const misto = mistoProjektu(zakazka);
+        OSY.patro.pole.forEach(klic => {
+            const sel = box.querySelector('[data-f="' + klic + '"]');
+            if (!sel || sel.disabled) return;
+            const drzena = V.patroVBudove(misto.patraBudov, budova, sel.value) ? sel.value : "";
+            sel.innerHTML = V.options(patraProjektu(zakazka, drzena, budova), drzena, "— nezadáno —");
+            sel.value = drzena;
+        });
+        srovnejVic(box, "patro");
+    }
+
+    /**
      * Popis práce podle toho, co je vybrané: „1PP, 2PP · TER, VODA".
      *
      * Píše se i k vybranému úkolu. Úkol je schránka na peníze, ne popis
@@ -1023,6 +1081,31 @@
         /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
 
     /** Pole pro čas: psaní i rozbalovací nabídka po čtvrthodinách. */
+    /* VÝKAZ PO PŮLHODINÁCH. Kdo si nepíše příchod a odchod (Petr Kyselka,
+       Michal 14. 9. 2026), vybere rovnou počet hodin po půl hodině. Zapíná
+       se u člověka v Uživatelích; roletka je v každém záznamu, jen se
+       ukazuje podle toho, za koho se zapisuje (třída `s-pulhodinami`). */
+    const PULHODINY = (() => {
+        const out = [];
+        for (let h = 0.5; h <= 16; h += 0.5) out.push(h);
+        return out;
+    })();
+
+    const pulhodinyOsoba = (uid) => {
+        const u = uid ? V.clovek(uid) : null;
+        return !!(u && u.vykazPulhodiny === true);
+    };
+
+    /** Hodiny zapsané bez času – ať je okno úpravy ukáže v roletce. */
+    const hodinyBezCasu = (d) => (d && !d.od && !d.do && Number(d.hodiny) > 0)
+        ? Math.round(Number(d.hodiny) * 2) / 2 : 0;
+
+    function srovnejPulhodiny() {
+        const zapis = $("zapis"), okno = $("editOverlay");
+        if (zapis) zapis.classList.toggle("s-pulhodinami", pulhodinyOsoba($("dOsoba").value));
+        if (okno) okno.classList.toggle("s-pulhodinami", pulhodinyOsoba($("eOsoba").value));
+    }
+
     function casPole(klic, hodnota) {
         return '<input type="text" class="field cas" data-f="' + klic + '" data-cas ' +
             (APPLE_DOTYK ? "" : 'list="' + V.CAS_LIST_ID + '" ') +
@@ -1089,7 +1172,7 @@
         const zakazkaCast = o.sZakazkou
             ? '<div><label class="label">Projekt</label>' +
                   '<select class="field" data-f="zakazka">' +
-                      V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
+                      V.options(projektyVolby(), d.zakazka || "", "— vyber —") + "</select></div>" +
 
               '<div><label class="label">Fakturovat firmě</label>' +
                   '<select class="field" data-f="firma">' +
@@ -1177,6 +1260,13 @@
                 datumCast +
                 '<div><label class="label">Od</label>' + casPole("od", d.od) + "</div>" +
                 '<div><label class="label">Do</label>' + casPole("do", d.do) + "</div>" +
+                '<div class="polozka__hodiny"><label class="label">Hodin</label>' +
+                    '<select class="field" data-f="hodinyVolba" title="Po půl hodině – čas od–do pak není potřeba">' +
+                        '<option value="">— podle času —</option>' +
+                        PULHODINY.map(h => '<option value="' + h + '"' +
+                            (hodinyBezCasu(d) === h ? " selected" : "") + ">" +
+                            String(h).replace(".", ",") + " h</option>").join("") +
+                    "</select></div>" +
                 // u dovolené, nemoci a školení: celý den = 8 hodin evidenčně
                 '<label class="celyden"><input type="checkbox" data-f="celyden"' +
                     (d.celyden ? " checked" : "") + "> <b>Celý den</b></label>" +
@@ -1258,13 +1348,16 @@
             '<div class="zblok__grid">' +
                 '<div><label class="label">Projekt</label>' +
                     '<select class="field" data-z="zakazka">' +
-                        V.options(nabidkaProjektu(), d.zakazka || "", "— vyber —") + "</select></div>" +
+                        V.options(projektyVolby(), d.zakazka || "", "— vyber —") + "</select></div>" +
 
 
 
                 '<div><label class="label">Fakturovat firmě</label>' +
                     '<select class="field" data-z="firma">' +
                         V.options(V.firmy(), d.firma || "", "— vyber —") + "</select></div>" +
+                '<label class="cisla-prep" title="U projektů ukáže jejich čísla – třeba 2024-007">' +
+                    '<input type="checkbox" data-cisla-projektu' + (cislaProjektu() ? " checked" : "") + "> " +
+                    "Zobrazit čísla projektů</label>" +
             "</div>" +
 
             '<div class="zblok__polozky" data-polozky></div>' +
@@ -1319,6 +1412,10 @@
             podilPatra: patra.podily.join(","),
             od: val("od"),
             do: val("do"),
+            /* Hodiny vybrané po půlhodinách přebijí výpočet z času –
+               `hodinyPevne` čte zápis do databáze stejně jako u absence. */
+            hodinyVolba: Number(val("hodinyVolba")) || 0,
+            hodinyPevne: Number(val("hodinyVolba")) || 0,
             celyden: zaskrtnuto("celyden"),
             pauza: zapnuto("pauza") ? (Number(val("pauza")) || 0) : 0,
             obed: zapnuto("obed"),
@@ -1442,7 +1539,7 @@
         // celý den je v časech 00:00–23:59, ale do fondu jde jedna směna
         const hodiny = p.celyden
             ? HODIN_ZA_DEN
-            : window.KB.spocitejHodiny(p.od, p.do, p.pauza);
+            : (p.hodinyVolba > 0 ? p.hodinyVolba : window.KB.spocitejHodiny(p.od, p.do, p.pauza));
         const castky = window.KB.spocitejCastky(Object.assign({}, p, { hodiny: hodiny }), p.sazba);
 
         box.querySelector("[data-vysledek-hod]").textContent = V.hod(hodiny);
@@ -1601,6 +1698,7 @@
             ? osobyOptions(volby, vybrany)
             : '<option value="">— nikdo v seznamu —</option>';
         nastavVychoziSazbu(true);
+        srovnejPulhodiny();
     }
 
     /**
@@ -1892,9 +1990,12 @@
         const polozky = prectiRadky().map(srovnejZapis);
         /* Popis práce je NEPOVINNÝ (19. 8.) – povinný je druh vypracování
            a tam, kde projekt úkoly má, i úkol: zápis se váže k úkolu. */
-        const chybny = polozky.find(p =>
-            !p.datum || !p.od || !p.do || !p.zakazka ||
-            window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0);
+        const chybny = polozky.find(p => {
+            if (!p.datum || !p.zakazka) return true;
+            // vybrané hodiny po půlhodinách čas od–do nepotřebují
+            if (Number(p.hodinyVolba) > 0) return false;
+            return !p.od || !p.do || window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0;
+        });
         if (chybny) {
             return window.KBUI.toast(chybny._popis +
                 ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
@@ -2273,7 +2374,7 @@
                 "<td>" + esc(z.cinnost || "") + "</td>" +
                 osaBunka(z.patro, z.podilPatra, z.budova) +
                 osaBunka(z.technologie, z.podilTech, V.techLabel(z.technologie)) +
-                "<td>" + esc((z.od || "") + "–" + (z.do || "")) +
+                "<td>" + esc(z.od || z.do ? (z.od || "") + "–" + (z.do || "") : "bez času") +
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
                 '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
                 (penize
@@ -2305,6 +2406,7 @@
         $("btnSmaz").hidden = !smimSmazat(z);
         $("eDatum").value = z.datum || "";
         $("eOsoba").innerHTML = osobyOptions(V.lide(), z.uid);
+        srovnejPulhodiny();
 
         /* Výkaz si příznak „celý den" nenese – pozná se z časů 00:00–23:59.
            Bez odvození se okno otevřelo s odškrtnutým políčkem, počítalo
@@ -2324,7 +2426,7 @@
         const p = srovnejZapis(ctiPolozku($("editRadek").querySelector("[data-polozka]")));
         const puvodni = (window.KB.vykazy || []).find(v => v.id === editId) || {};
 
-        if (!p.od || !p.do || !p.zakazka) {
+        if (!p.zakazka || (!(Number(p.hodinyVolba) > 0) && (!p.od || !p.do))) {
             return window.KBUI.toast("Doplň projekt a časy.", "warn");
         }
         if (!p.absence && !p.rezie && !p.cinnost) {
@@ -2547,6 +2649,7 @@
             predvyplnMisto(box);
         }
         // budova/patro/technologie zužují nabídku úkolů
+        if (event.target.dataset.f === "budova") prestavPatra(box);
         if (["budova", "patro", "technologie"].indexOf(event.target.dataset.f) !== -1) {
             prefiltrujUkoly(box);
         }
@@ -2734,10 +2837,12 @@
         });
         $("btnUloz").addEventListener("click", ulozDen);
         $("dOsoba").addEventListener("change", () => {
+            srovnejPulhodiny();
             nastavVychoziSazbu(false);
             obnovAbsenceTexty();        // „Dovolená – Jméno" musí sedět na vybraného člověka
         });
         $("eOsoba").addEventListener("change", () => {
+            srovnejPulhodiny();
             const box = $("editRadek").querySelector("[data-polozka]");
             if (box) {
                 const druh = box.querySelector('[data-f="zakazka"]');

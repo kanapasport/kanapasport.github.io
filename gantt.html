@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Plán projektů (Gantt) – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=222">
+    <link rel="stylesheet" href="assets/css/app.css?v=223">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -249,10 +249,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=222"></script>
-<script src="assets/js/ui.js?v=222"></script>
-<script src="assets/js/vykazy.js?v=222"></script>
-<script type="module" src="assets/js/store.js?v=222"></script>
+<script src="assets/js/taxonomy.js?v=223"></script>
+<script src="assets/js/ui.js?v=223"></script>
+<script src="assets/js/vykazy.js?v=223"></script>
+<script type="module" src="assets/js/store.js?v=223"></script>
 
 <script>
 (function () {
@@ -344,8 +344,12 @@
             || (a.nazev || "").localeCompare(b.nazev || "", "cs"));
 
     // hotovost úkolu = průměr položek todo; bez todo se nic neudělalo, tedy 0
-    const pctUkolu = (u) => u.todo && u.todo.length
-        ? Math.round(u.todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / u.todo.length) : 0;
+    const pctUkolu = (u) => {
+        // vypnuté TO-DO se nepočítají (Michal 14. 9. 2026)
+        const todo = (u.todo || []).filter(t => t.vypnuto !== true);
+        return todo.length
+            ? Math.round(todo.reduce((s, t) => s + (Number(t.pct) || 0), 0) / todo.length) : 0;
+    };
 
     // hotovost projektu = průměr úkolů; bez úkolů null, ať se nekreslí falešná nula
     const pctProjektu = (ukoly) => ukoly.length
