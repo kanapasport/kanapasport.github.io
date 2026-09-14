@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=221">
+    <link rel="stylesheet" href="assets/css/app.css?v=222">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -96,10 +96,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=221"></script>
-<script src="assets/js/ui.js?v=221"></script>
-<script src="assets/js/vykazy.js?v=221"></script>
-<script type="module" src="assets/js/store.js?v=221"></script>
+<script src="assets/js/taxonomy.js?v=222"></script>
+<script src="assets/js/ui.js?v=222"></script>
+<script src="assets/js/vykazy.js?v=222"></script>
+<script type="module" src="assets/js/store.js?v=222"></script>
 
 <script>
 (function () {
@@ -306,7 +306,12 @@
         $("upZapnuto").addEventListener("change", () => { upravovano = true; srovnejVypnuto(); });
         $("volby").addEventListener("change", () => { upravovano = true; });
 
-        window.KB.on("upozorneni", (data) => { nactene = data; vykresli(); });
+        /* POZOR: KB.on je obyčejný addEventListener, takže posluchač dostane
+           UDÁLOST, ne data. Dřív se do `nactene` ukládala ta událost – vždycky
+           něco, takže se stránka tvářila, že nastavení uložené je, i když
+           v databázi nebylo nic. Data se čtou z KB, jako to dělá zbytek webu
+           (Michal 14. 9. 2026). */
+        window.KB.on("upozorneni", () => { nactene = window.KB.upozorneni; vykresli(); });
         window.KB.on("upozorneni-stav", vykresliBeh);
         window.KB.on("users", vykresli);
         document.addEventListener("kb-role", vykresli);
