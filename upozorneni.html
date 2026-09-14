@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=220">
+    <link rel="stylesheet" href="assets/css/app.css?v=221">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -44,6 +44,7 @@
         .upbeh--ok { background: var(--ok-tint); border-color: #bfe3d0; color: var(--ok); }
         .upbeh--pozor { background: #fff3d6; border-color: #e8c877; color: #8a5a00; }
         .upbeh--stop { background: #fde3e3; border-color: #eeb4b4; color: var(--danger); }
+        .upbeh--vyp { background: var(--bg-soft); border-color: var(--line); color: var(--text-soft); }
     </style>
 </head>
 <body>
@@ -62,6 +63,7 @@
 
     <div class="upoz">
         <div id="behStav" class="upbeh" hidden></div>
+        <div id="stavUlozeni" class="upbeh" hidden></div>
 
         <div class="card col" style="padding:16px 18px;gap:12px">
             <label class="row" style="gap:9px;cursor:pointer;font-size:15px">
@@ -94,10 +96,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=220"></script>
-<script src="assets/js/ui.js?v=220"></script>
-<script src="assets/js/vykazy.js?v=220"></script>
-<script type="module" src="assets/js/store.js?v=220"></script>
+<script src="assets/js/taxonomy.js?v=221"></script>
+<script src="assets/js/ui.js?v=221"></script>
+<script src="assets/js/vykazy.js?v=221"></script>
+<script type="module" src="assets/js/store.js?v=221"></script>
 
 <script>
 (function () {
@@ -173,7 +175,28 @@
         $("upEmail").textContent = (ja && ja.email) || "—";
         $("upStav").textContent = nactene
             ? "Naposledy uloženo " + (u.ms ? new Date(u.ms).toLocaleDateString("cs-CZ") : "")
-            : "Zatím sis nic nenastavil — platí výchozí nastavení.";
+            : "Zatím neuloženo.";
+
+        /* Stránka se otevírá s rozumně předzaškrtnutými volbami, takže
+           vypadá nastavená — a dřív k tomu drobným šedým písmem tvrdila,
+           že „platí výchozí nastavení". Neplatilo: rozesílač čte jen to,
+           co je uložené v databázi, a kdo Uložit nedal, ten pro něj
+           neexistuje. Michal si myslel, že to má zapnuté, a čekal na
+           e-maily, které nikomu nechodily (14. 9. 2026). */
+        const ul = $("stavUlozeni");
+        if (!nactene) {
+            ul.hidden = false;
+            ul.className = "upbeh upbeh--pozor";
+            ul.innerHTML = "<b>Nastavení ještě není uložené.</b> Co je zaškrtnuté níž, " +
+                "je jen návrh — dokud nedáš <b>Uložit nastavení</b>, nepřijde ti nic.";
+        } else if (u.zapnuto === false) {
+            ul.hidden = false;
+            ul.className = "upbeh upbeh--vyp";
+            ul.innerHTML = "<b>Upozornění máš vypnutá.</b> Nechodí ti nic, " +
+                "i když je níž něco zaškrtnuté.";
+        } else {
+            ul.hidden = true;
+        }
 
         $("volby").innerHTML = mojeSkupiny().map(s =>
             '<div class="upskupina">' +
