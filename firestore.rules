@@ -69,6 +69,15 @@ service cloud.firestore {
       return clen() && typSpoluprace() in ['osvc', 'student'];
     }
 
+    /* Účet, pod kterým běží Apps Script – v seznamu lidí má typ
+       spolupráce „servis". Není to člověk: píše hodiny do Tabulek
+       a rozesílá upozornění na e-mail. Právo se schválně váže na TYP,
+       ne na roli – manažer je pořád člověk a ten se k cizím vzkazům
+       nedostane. (Repozitář je veřejný, adresa účtu sem nepatří.) */
+    function rozesilac() {
+      return clen() && typSpoluprace() == 'servis';
+    }
+
     match /artifacts/firemni-kb-app/public/data/{document=**} {
       // číst smí každý, kdo je v seznamu lidí
       allow read: if clen();
@@ -429,9 +438,13 @@ service cloud.firestore {
       /* U čtení NESMÍ být pojistka `is list`: dotaz array-contains přes
          `proUids` pak Firestore neumí ověřit a celý spadne na právech
          (u jednotlivého dokumentu `in` na ne-seznamu prostě vyjde false). */
-      allow read: if clen() && (resource.data.odKoho == request.auth.uid
+      /* Rozesílací účet čte celou kolekci – bez toho nemá z čeho poslat
+         „Máš nový Quick TO-DO". Podmínka se schválně neptá na dokument,
+         aby prošel i hromadný dotaz (Michal 14. 9. 2026). Pro lidi platí
+         dál, co platilo: vzkaz vidí jen autor a adresáti, ani manažer ne. */
+      allow read: if rozesilac() || (clen() && (resource.data.odKoho == request.auth.uid
                                 || resource.data.proUid == request.auth.uid
-                                || request.auth.uid in resource.data.proUids);
+                                || request.auth.uid in resource.data.proUids));
       allow create: if clen() && request.resource.data.odKoho == request.auth.uid;
       // přeposlat vzkaz jinému nejde – adresáti ani autor se měnit nesmí
       allow update: if clen()
