@@ -3191,6 +3191,21 @@ const upozDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "upozorneni", "
 KB.upozorneni = null;
 let upozOdber = null;
 
+/* Stav rozesílání – otisk posledního běhu Apps Scriptu. Leží ve veřejné
+   části, takže ho vidí každý; nastavení samotné zůstává osobní. */
+KB.upozorneniStav = null;
+let upozStavOdber = null;
+
+KB.watchUpozorneniStav = async () => {
+    if (upozStavOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || upozStavOdber) return;
+    upozStavOdber = onSnapshot(metaDoc("upozorneni"), (d) => {
+        KB.upozorneniStav = d.exists() ? d.data() : null;
+        emit("upozorneni-stav", KB.upozorneniStav);
+    }, (err) => console.error("Chyba čtení stavu rozesílání:", err));
+};
+
 KB.watchUpozorneni = async () => {
     if (upozOdber) return;
     if (authReady) await authReady;

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=218">
+    <link rel="stylesheet" href="assets/css/app.css?v=219">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -34,6 +34,16 @@
         .upvolba__popis::before { content: "/"; margin-right: 9px; opacity: .45; }
         .upvolba--vyp { opacity: .45; }
         .upstav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+        /* Jestli rozesílání vůbec jede. Bez toho si člověk zapne patnáct
+           upozornění a čeká na poštu, kterou nemá kdo poslat
+           (Michal 14. 9. 2026). */
+        .upbeh { padding: 11px 14px; border-radius: var(--radius); font-size: 13.5px;
+            line-height: 1.6; border: 1px solid; }
+        .upbeh b { font-weight: 900; }
+        .upbeh--ok { background: var(--ok-tint); border-color: #bfe3d0; color: var(--ok); }
+        .upbeh--pozor { background: #fff3d6; border-color: #e8c877; color: #8a5a00; }
+        .upbeh--stop { background: #fde3e3; border-color: #eeb4b4; color: var(--danger); }
     </style>
 </head>
 <body>
@@ -51,6 +61,8 @@
     </div>
 
     <div class="upoz">
+        <div id="behStav" class="upbeh" hidden></div>
+
         <div class="card col" style="padding:16px 18px;gap:12px">
             <label class="row" style="gap:9px;cursor:pointer;font-size:15px">
                 <input type="checkbox" id="upZapnuto">
@@ -75,17 +87,17 @@
 
         <p class="tiny muted" style="line-height:1.6;margin:0">
             Web sám e-maily neposílá — je to jen stránka v prohlížeči. Rozesílá
-            je skript, který už běží kvůli výkazům do Tabulek Google, a dívá se
-            sem každou hodinu.
+            je skript, který běží vedle zápisu výkazů do Tabulek Google. Jestli
+            zrovna jede, je vidět nahoře.
         </p>
     </div>
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=218"></script>
-<script src="assets/js/ui.js?v=218"></script>
-<script src="assets/js/vykazy.js?v=218"></script>
-<script type="module" src="assets/js/store.js?v=218"></script>
+<script src="assets/js/taxonomy.js?v=219"></script>
+<script src="assets/js/ui.js?v=219"></script>
+<script src="assets/js/vykazy.js?v=219"></script>
+<script type="module" src="assets/js/store.js?v=219"></script>
 
 <script>
 (function () {
@@ -211,6 +223,57 @@
         }
     }
 
+    /* Kdy skript naposledy běžel. „dnes v 9:07" se čte líp než datum
+       a čas u něčeho, co má jet každou hodinu. */
+    function kdyText(ms) {
+        const d = new Date(ms);
+        const cas = d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+        const dnes = new Date();
+        const stejnyDen = d.toDateString() === dnes.toDateString();
+        if (stejnyDen) return "dnes v " + cas;
+        const vcera = new Date(dnes.getTime() - 86400000);
+        if (d.toDateString() === vcera.toDateString()) return "včera v " + cas;
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". v " + cas;
+    }
+
+    /**
+     * Proužek se stavem rozesílání. Tři stavy, každý říká, co s tím:
+     *   nikdy neběželo  – nastavení se uloží, ale pošta nechodí
+     *   běželo dávno    – spouštěč nejspíš stojí
+     *   běželo nedávno  – všechno v pořádku
+     * Tříhodinová hranice je schválně velkorysá: spouštěč jede po hodině,
+     * ale Google ho umí o pár desítek minut odsunout.
+     */
+    function vykresliBeh() {
+        const el = $("behStav");
+        const stav = window.KB.upozorneniStav;
+        const bezel = Number(stav && stav.bezelMs) || 0;
+        el.hidden = false;
+
+        if (!bezel) {
+            el.className = "upbeh upbeh--stop";
+            el.innerHTML = "<b>Rozesílání zatím neběží.</b> Co si tu zapneš, " +
+                "se uloží, ale e-maily zatím nikdo nerozesílá. Řekni si o to " +
+                "hlavnímu správci — pustí se to v Apps Scriptu vedle zápisu " +
+                "výkazů do Tabulek.";
+            return;
+        }
+
+        const stari = Date.now() - bezel;
+        const posledni = "naposledy " + esc(kdyText(bezel));
+        if (stari > 3 * 60 * 60 * 1000) {
+            el.className = "upbeh upbeh--pozor";
+            el.innerHTML = "<b>Rozesílání stojí.</b> Skript běžel " + posledni +
+                " a od té doby se neozval — nejspíš spadl spouštěč. " +
+                "Do té doby e-maily nechodí.";
+            return;
+        }
+        el.className = "upbeh upbeh--ok";
+        el.innerHTML = "<b>Rozesílání běží</b> · " + posledni +
+            (Number(stav.zapnuto)
+                ? " · zapnuté to má " + Number(stav.zapnuto) + " lidí" : "") + ".";
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "upozorneni.html" });
         $("btnUloz").addEventListener("click", uloz);
@@ -218,10 +281,13 @@
         $("volby").addEventListener("change", () => { upravovano = true; });
 
         window.KB.on("upozorneni", (data) => { nactene = data; vykresli(); });
+        window.KB.on("upozorneni-stav", vykresliBeh);
         window.KB.on("users", vykresli);
         document.addEventListener("kb-role", vykresli);
         window.KB.watchUpozorneni();
+        window.KB.watchUpozorneniStav();
         vykresli();
+        vykresliBeh();
     });
 })();
 </script>
