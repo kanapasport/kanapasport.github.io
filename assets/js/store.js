@@ -33,7 +33,7 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, increment, arrayUnion,
+    collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, increment, arrayUnion, arrayRemove,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -2595,6 +2595,33 @@ KB.saveUkol = async (id, data) => {
     KB.zapisAktivitu("ukol", "uložil úkol " + (data.nazev || "") +
         (data.projekt ? " (" + data.projekt + ")" : ""));
     return id;
+};
+
+/**
+ * Hromadné přidání (nebo odebrání) člověka k úkolům – třeba ke všem VZT
+ * úkolům projektu naráz (Michal 15. 9. 2026).
+ *
+ * Sahá se JEN na `prirazeni`, a to přes arrayUnion / arrayRemove. Kdyby se
+ * přepisoval celý úkol, smazala by se procenta TO-DO, která mezitím někdo
+ * zapsal, a ostatní přiřazení lidé by se přepsali starou kopií. Do aktivit
+ * jde jeden řádek, ne dvacet.
+ */
+KB.hromadnePrirazeni = async (ids, uid, pridat, popis) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!uid || !Array.isArray(ids) || !ids.length) return 0;
+    let hotovo = 0;
+    for (const id of ids) {
+        await setDoc(ukolDoc(id), {
+            prirazeni: pridat ? arrayUnion(uid) : arrayRemove(uid),
+            updatedMs: Date.now(),
+            updatedBy: window.KB_USER || ""
+        }, { merge: true });
+        hotovo++;
+    }
+    KB.zapisAktivitu("ukol", popis ||
+        ((pridat ? "hromadně přidal člověka k úkolům (" : "hromadně odebral člověka z úkolů (") + hotovo + ")"));
+    return hotovo;
 };
 
 /**

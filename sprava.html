@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=223">
+    <link rel="stylesheet" href="assets/css/app.css?v=224">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -496,6 +496,8 @@
                                     title="Jeden souhrnný úkol pro celý projekt – pro jednoduché zakázky bez dělení.">
                                     + Souhrnný úkol</button>
                             </div>
+                            <!-- člověk na všechny vyfiltrované úkoly naráz -->
+                            <div id="hromadneLide"></div>
                             <div id="budgetUkoly"></div>
                             </div>
                         </section>
@@ -642,10 +644,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=223"></script>
-<script src="assets/js/ui.js?v=223"></script>
-<script src="assets/js/vykazy.js?v=223"></script>
-<script type="module" src="assets/js/store.js?v=223"></script>
+<script src="assets/js/taxonomy.js?v=224"></script>
+<script src="assets/js/ui.js?v=224"></script>
+<script src="assets/js/vykazy.js?v=224"></script>
+<script type="module" src="assets/js/store.js?v=224"></script>
 
 <script>
 (function () {
@@ -1116,6 +1118,12 @@
     /* Filtr nad tabulkou úkolů – u velkého projektu je úkolů přes sto
        a hledat mezi nimi očima nejde. */
     const ukolFiltr = { budova: "", patro: "", tech: "", stav: "", text: "" };
+
+    /* Hromadné přidání člověka k úkolům, které zrovna ukazuje filtr
+       (Michal 15. 9. 2026). Vybraný člověk i seznam úkolů se drží mezi
+       překresleními – seznam se překreslí s každou změnou v databázi. */
+    let hromadneKdo = "";
+    let hromadneUkoly = [];
     const jeFiltrZapnuty = () => Object.keys(ukolFiltr).some(k => ukolFiltr[k]);
 
     /* ---------------------------------------------- budget technologií ----
@@ -1425,6 +1433,8 @@
             (!ukolFiltr.stav || (ukolFiltr.stav === "hotovo" ? u.stav === "hotovo" : u.stav !== "hotovo")) &&
             (!ukolFiltr.text || window.KBUI.fold(u.nazev || "").includes(window.KBUI.fold(ukolFiltr.text))));
 
+        vykresliHromadne(vypsat);
+
         // ---- tabulka úkolů, po technologiích ----
         $("budgetUkoly").innerHTML = vypsat.length
             ? ukolySkupinyHtml(vypsat, budgety)
@@ -1433,6 +1443,45 @@
                 : "Projekt zatím nemá úkoly – založ je kliknutím do matice.") + "</p>";
 
         vykresliMatici(p, ukoly, budgety);
+    }
+
+    /**
+     * Lišta nad úkoly: vyber člověka a přidej ho ke všem úkolům, které
+     * zrovna ukazuje filtr – třeba ke všem VZT. Bez filtru se to týká všech
+     * úkolů projektu, proto lišta vždycky říká, kolika úkolů se to týká,
+     * a tlačítko se před změnou zeptá.
+     */
+    function vykresliHromadne(vypsat) {
+        const box = $("hromadneLide");
+        if (!box) return;
+        hromadneUkoly = vypsat.map(u => u.id);
+        if (!vypsat.length) { box.innerHTML = ""; return; }
+
+        // služební účet (zápis do Tabulek) na úkoly nepatří
+        const lide = V.lide().filter(u => window.KBUI.typUvazku(u) !== "servis");
+        if (hromadneKdo && !lide.some(u => u.id === hromadneKdo)) hromadneKdo = "";
+        const maji = hromadneKdo
+            ? vypsat.filter(u => (u.prirazeni || []).indexOf(hromadneKdo) !== -1).length : 0;
+
+        box.innerHTML =
+            '<div class="hromadne">' +
+                '<span class="hromadne__popis">Člověk na ' +
+                    (jeFiltrZapnuty() ? "vyfiltrované" : "všechny") + " úkoly (" +
+                    esc(V.pocet(vypsat.length, ["úkol", "úkoly", "úkolů"])) + ")</span>" +
+                '<select class="field" data-hromadne-kdo style="width:auto;min-width:190px">' +
+                    V.options(lide.map(u => ({ value: u.id, label: V.jmeno(u) })),
+                        hromadneKdo, "— vyber člověka —") +
+                "</select>" +
+                '<button type="button" class="btn btn--sm btn--primary" data-hromadne="pridat"' +
+                    (!hromadneKdo || maji === vypsat.length ? " disabled" : "") +
+                    ">Přidat ke všem</button>" +
+                '<button type="button" class="btn btn--sm btn--ghost" data-hromadne="odebrat"' +
+                    (!hromadneKdo || !maji ? " disabled" : "") +
+                    ">Odebrat ze všech</button>" +
+                (hromadneKdo
+                    ? '<span class="tiny muted">už je na ' + maji + " z " + vypsat.length + "</span>"
+                    : '<span class="tiny muted">tip: nejdřív vyfiltruj třeba technologii</span>') +
+            "</div>";
     }
 
     /**
@@ -2855,6 +2904,44 @@
             if (event.target.closest("[data-ufiltr-reset]")) {
                 Object.keys(ukolFiltr).forEach(k => { ukolFiltr[k] = ""; });
                 return void vykresliBudget(vybranyProjekt(), true);
+            }
+        });
+
+        /* Hromadné přidání člověka: výběr člověka jen překreslí lištu,
+           tlačítka mění úkoly. Mění se jen tam, kde to opravdu něco změní. */
+        $("hromadneLide").addEventListener("change", (event) => {
+            const sel = event.target.closest("[data-hromadne-kdo]");
+            if (!sel) return;
+            event.stopPropagation();
+            hromadneKdo = sel.value;
+            vykresliBudget(vybranyProjekt(), true);
+        });
+        $("hromadneLide").addEventListener("click", async (event) => {
+            const btn = event.target.closest("[data-hromadne]");
+            if (!btn || btn.disabled || !hromadneKdo) return;
+            const pridat = btn.dataset.hromadne === "pridat";
+            const kdo = V.jmeno(V.clovek(hromadneKdo)) || "Vybraný člověk";
+            const cil = (window.KB.ukoly || []).filter(u =>
+                hromadneUkoly.indexOf(u.id) !== -1 &&
+                ((u.prirazeni || []).indexOf(hromadneKdo) !== -1) !== pridat);
+            if (!cil.length) return;
+
+            const filtr = [ukolFiltr.tech, ukolFiltr.budova, ukolFiltr.patro].filter(Boolean).join(" · ");
+            const otazka = pridat
+                ? kdo + " se přidá k " + V.pocet(cil.length, ["úkolu", "úkolům", "úkolům"])
+                : kdo + " se odebere z " + V.pocet(cil.length, ["úkolu", "úkolů", "úkolů"]);
+            if (!confirm(otazka + (filtr ? " (" + filtr + ")" : "") + ". Pokračovat?")) return;
+
+            btn.disabled = true;
+            try {
+                const n = await window.KB.hromadnePrirazeni(cil.map(u => u.id), hromadneKdo, pridat,
+                    (pridat ? "hromadně přidal na úkoly: " : "hromadně odebral z úkolů: ") + kdo +
+                    " (" + cil.length + "×" + (filtr ? " · " + filtr : "") + ")");
+                window.KBUI.toast("Hotovo – změněno " + V.pocet(n, ["úkol", "úkoly", "úkolů"]) + ".");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Nepovedlo se – úkoly hromadně mění jen manažer.", "error");
+                btn.disabled = false;
             }
         });
 
