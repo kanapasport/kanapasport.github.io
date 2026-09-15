@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=224">
+    <link rel="stylesheet" href="assets/css/app.css?v=225">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -644,10 +644,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=224"></script>
-<script src="assets/js/ui.js?v=224"></script>
-<script src="assets/js/vykazy.js?v=224"></script>
-<script type="module" src="assets/js/store.js?v=224"></script>
+<script src="assets/js/taxonomy.js?v=225"></script>
+<script src="assets/js/ui.js?v=225"></script>
+<script src="assets/js/vykazy.js?v=225"></script>
+<script type="module" src="assets/js/store.js?v=225"></script>
 
 <script>
 (function () {
@@ -1119,9 +1119,12 @@
        a hledat mezi nimi očima nejde. */
     const ukolFiltr = { budova: "", patro: "", tech: "", stav: "", text: "" };
 
-    /* Hromadné přidání člověka k úkolům, které zrovna ukazuje filtr
-       (Michal 15. 9. 2026). Vybraný člověk i seznam úkolů se drží mezi
-       překresleními – seznam se překreslí s každou změnou v databázi. */
+    /* Hromadné přidání člověka k úkolům JEDNÉ TECHNOLOGIE – třeba ke všem
+       VZT úkolům projektu (Michal 15. 9. 2026). Schválně se neváže na filtr
+       seznamu: bez filtru by se to týkalo všech úkolů projektu a jedním
+       kliknutím by se člověk dostal i tam, kam nepatří. Vybraná technologie,
+       člověk i seznam úkolů se drží mezi překresleními. */
+    let hromadneTech = "";
     let hromadneKdo = "";
     let hromadneUkoly = [];
     const jeFiltrZapnuty = () => Object.keys(ukolFiltr).some(k => ukolFiltr[k]);
@@ -1433,7 +1436,7 @@
             (!ukolFiltr.stav || (ukolFiltr.stav === "hotovo" ? u.stav === "hotovo" : u.stav !== "hotovo")) &&
             (!ukolFiltr.text || window.KBUI.fold(u.nazev || "").includes(window.KBUI.fold(ukolFiltr.text))));
 
-        vykresliHromadne(vypsat);
+        vykresliHromadne(ukoly);
 
         // ---- tabulka úkolů, po technologiích ----
         $("budgetUkoly").innerHTML = vypsat.length
@@ -1446,41 +1449,62 @@
     }
 
     /**
-     * Lišta nad úkoly: vyber člověka a přidej ho ke všem úkolům, které
-     * zrovna ukazuje filtr – třeba ke všem VZT. Bez filtru se to týká všech
-     * úkolů projektu, proto lišta vždycky říká, kolika úkolů se to týká,
-     * a tlačítko se před změnou zeptá.
+     * Lišta nad úkoly: vyber technologii a člověka a přidej ho ke všem
+     * úkolům té technologie v projektu. Bez vybrané technologie nejde
+     * kliknout nic – na všechny úkoly projektu naráz se člověk nepřidává.
+     * Když je v seznamu vyfiltrovaná technologie, lišta ji převezme.
      */
-    function vykresliHromadne(vypsat) {
+    function vykresliHromadne(ukoly) {
         const box = $("hromadneLide");
         if (!box) return;
-        hromadneUkoly = vypsat.map(u => u.id);
-        if (!vypsat.length) { box.innerHTML = ""; return; }
+
+        // technologie, které mají v projektu úkoly – v pořadí firemního číselníku
+        const poradi = V.technologie().map(t => t.zkratka);
+        const misto = (t) => { const i = poradi.indexOf(t); return i === -1 ? 999 : i; };
+        const pocty = {};
+        ukoly.forEach(u => {
+            const t = (u.technologie || "").trim();
+            if (t) pocty[t] = (pocty[t] || 0) + 1;
+        });
+        const techy = Object.keys(pocty).sort((a, b) => misto(a) - misto(b) || a.localeCompare(b, "cs"));
+        if (!techy.length) { box.innerHTML = ""; hromadneUkoly = []; return; }
+
+        if (!hromadneTech && ukolFiltr.tech && pocty[ukolFiltr.tech]) hromadneTech = ukolFiltr.tech;
+        if (hromadneTech && !pocty[hromadneTech]) hromadneTech = "";
+
+        const cilove = hromadneTech ? ukoly.filter(u => (u.technologie || "").trim() === hromadneTech) : [];
+        hromadneUkoly = cilove.map(u => u.id);
 
         // služební účet (zápis do Tabulek) na úkoly nepatří
         const lide = V.lide().filter(u => window.KBUI.typUvazku(u) !== "servis");
         if (hromadneKdo && !lide.some(u => u.id === hromadneKdo)) hromadneKdo = "";
         const maji = hromadneKdo
-            ? vypsat.filter(u => (u.prirazeni || []).indexOf(hromadneKdo) !== -1).length : 0;
+            ? cilove.filter(u => (u.prirazeni || []).indexOf(hromadneKdo) !== -1).length : 0;
+        const pripraveno = !!(hromadneTech && hromadneKdo);
 
         box.innerHTML =
             '<div class="hromadne">' +
-                '<span class="hromadne__popis">Člověk na ' +
-                    (jeFiltrZapnuty() ? "vyfiltrované" : "všechny") + " úkoly (" +
-                    esc(V.pocet(vypsat.length, ["úkol", "úkoly", "úkolů"])) + ")</span>" +
+                '<span class="hromadne__popis">Člověk k technologii</span>' +
+                '<select class="field" data-hromadne-tech style="width:auto;min-width:150px">' +
+                    V.options(techy.map(t => ({ value: t, label: t + " (" + pocty[t] + ")" })),
+                        hromadneTech, "— technologie —") +
+                "</select>" +
                 '<select class="field" data-hromadne-kdo style="width:auto;min-width:190px">' +
                     V.options(lide.map(u => ({ value: u.id, label: V.jmeno(u) })),
                         hromadneKdo, "— vyber člověka —") +
                 "</select>" +
                 '<button type="button" class="btn btn--sm btn--primary" data-hromadne="pridat"' +
-                    (!hromadneKdo || maji === vypsat.length ? " disabled" : "") +
-                    ">Přidat ke všem</button>" +
+                    (!pripraveno || maji === cilove.length ? " disabled" : "") + ">" +
+                    (hromadneTech
+                        ? "Přidat ke všem " + esc(hromadneTech) + " úkolům"
+                        : "Přidat ke všem úkolům technologie") + "</button>" +
                 '<button type="button" class="btn btn--sm btn--ghost" data-hromadne="odebrat"' +
-                    (!hromadneKdo || !maji ? " disabled" : "") +
-                    ">Odebrat ze všech</button>" +
-                (hromadneKdo
-                    ? '<span class="tiny muted">už je na ' + maji + " z " + vypsat.length + "</span>"
-                    : '<span class="tiny muted">tip: nejdřív vyfiltruj třeba technologii</span>') +
+                    (!pripraveno || !maji ? " disabled" : "") + ">Odebrat</button>" +
+                '<span class="tiny muted">' +
+                    (!hromadneTech ? "nejdřív vyber technologii"
+                        : !hromadneKdo ? esc(V.pocet(cilove.length, ["úkol", "úkoly", "úkolů"])) + " " + esc(hromadneTech)
+                        : "už je na " + maji + " z " + cilove.length) +
+                "</span>" +
             "</div>";
     }
 
@@ -2910,15 +2934,17 @@
         /* Hromadné přidání člověka: výběr člověka jen překreslí lištu,
            tlačítka mění úkoly. Mění se jen tam, kde to opravdu něco změní. */
         $("hromadneLide").addEventListener("change", (event) => {
-            const sel = event.target.closest("[data-hromadne-kdo]");
-            if (!sel) return;
+            const tech = event.target.closest("[data-hromadne-tech]");
+            const kdo = event.target.closest("[data-hromadne-kdo]");
+            if (!tech && !kdo) return;
             event.stopPropagation();
-            hromadneKdo = sel.value;
+            if (tech) hromadneTech = tech.value;
+            if (kdo) hromadneKdo = kdo.value;
             vykresliBudget(vybranyProjekt(), true);
         });
         $("hromadneLide").addEventListener("click", async (event) => {
             const btn = event.target.closest("[data-hromadne]");
-            if (!btn || btn.disabled || !hromadneKdo) return;
+            if (!btn || btn.disabled || !hromadneKdo || !hromadneTech) return;
             const pridat = btn.dataset.hromadne === "pridat";
             const kdo = V.jmeno(V.clovek(hromadneKdo)) || "Vybraný člověk";
             const cil = (window.KB.ukoly || []).filter(u =>
@@ -2926,11 +2952,11 @@
                 ((u.prirazeni || []).indexOf(hromadneKdo) !== -1) !== pridat);
             if (!cil.length) return;
 
-            const filtr = [ukolFiltr.tech, ukolFiltr.budova, ukolFiltr.patro].filter(Boolean).join(" · ");
+            const filtr = hromadneTech;
             const otazka = pridat
                 ? kdo + " se přidá k " + V.pocet(cil.length, ["úkolu", "úkolům", "úkolům"])
                 : kdo + " se odebere z " + V.pocet(cil.length, ["úkolu", "úkolů", "úkolů"]);
-            if (!confirm(otazka + (filtr ? " (" + filtr + ")" : "") + ". Pokračovat?")) return;
+            if (!confirm(otazka + " technologie " + filtr + ". Pokračovat?")) return;
 
             btn.disabled = true;
             try {
