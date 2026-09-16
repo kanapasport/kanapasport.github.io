@@ -1205,12 +1205,31 @@
         return komu.length > 0 && komu.every(u => (q.hotoviUids || []).indexOf(u) !== -1);
     };
 
-    /** „2 z 5 splnilo" pod vzkazem, který si každý škrtá sám. */
+    /** Vzal si vzkaz tenhle člověk aspoň na vědomí? */
+    UI.quickVzal = (q, uid) => !!(q && (q.vzaliUids || []).indexOf(uid) !== -1);
+
+    /**
+     * „2 z 5 splnilo · chybí Petr Trávník, Marek Pelikán" pod vzkazem, který
+     * si každý škrtá sám. Samotný počet nestačil – zadavatel z něj nepoznal,
+     * koho má popohnat (Michal 16. 9. 2026). Kdo si vzkaz vzal aspoň na
+     * vědomí, je u jména poznat.
+     */
     UI.quickStav = (q) => {
         if (!q || q.rezim !== "kazdy") return "";
         const komu = UI.quickAdresati(q);
-        const hotovych = komu.filter(u => (q.hotoviUids || []).indexOf(u) !== -1).length;
-        return hotovych + " z " + komu.length + " splnilo";
+        const hotovych = komu.filter(u => (q.hotoviUids || []).indexOf(u) !== -1);
+        const jmeno = (uid) => {
+            const u = (window.KB.users || []).find(x => x.id === uid);
+            return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
+        };
+        const chybi = komu.filter(u => hotovych.indexOf(u) === -1)
+            .map(u => jmeno(u) + (UI.quickVzal(q, u) ? " (ví o tom)" : ""))
+            .filter(t => t.trim());
+        const vypis = chybi.length > 4
+            ? chybi.slice(0, 4).join(", ") + " a další " + (chybi.length - 4)
+            : chybi.join(", ");
+        return hotovych.length + " z " + komu.length + " splnilo" +
+            (vypis ? " · chybí " + vypis : "");
     };
 
     /* Odškrtnutí posílá celý vzkaz zpátky – náhled screenshotu a komentáře
@@ -1222,6 +1241,7 @@
         delete kopie.nahled;
         delete kopie.obrazku;
         delete kopie.komentare;
+        delete kopie.vzaliUids;   // „beru na vědomí" se dopisuje zvlášť
         return kopie;
     };
 
@@ -1382,6 +1402,10 @@
         if (hlidkaBezela || !hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
         const uid = window.KB.currentUid && window.KB.currentUid();
         if (!uid || !UI.can("vykaz.otevrit")) return;
+        /* Komu se výkazy nehlídají (majitelé) a kdo momentálně nepracuje,
+           ten připomínku nedostane (Michal 16. 9. 2026). */
+        const ja = UI.me();
+        if (ja && (ja.bezHlidky === true || ja.nepracuje === true)) return;
 
         hlidkaBezela = true;    // rozhodnuto – druhé kolo by zapsalo duplicitu
 
@@ -1852,6 +1876,13 @@
                             ' data-quick-hotovo="' + esc(q.id) + '" data-zpet="1">Vrátit</button>'
                         : '<button type="button" class="btn btn--sm quicksplnit"' +
                             ' data-quick-hotovo="' + esc(q.id) + '">Splněno</button>') +
+                    (!hotovoMne
+                        ? (UI.quickVzal(q, uid)
+                            ? '<button type="button" class="btn btn--sm btn--ghost"' +
+                                ' data-quick-vzal="' + esc(q.id) + '" data-zpet="1">Zrušit beru na vědomí</button>'
+                            : '<button type="button" class="btn btn--sm btn--ghost"' +
+                                ' data-quick-vzal="' + esc(q.id) + '">Beru na vědomí</button>')
+                        : "") +
                   "</div>"
                 : "") +
 
@@ -2103,15 +2134,20 @@
                          "zamestnanec": 4, "student": 5 };
         const lide = (window.KB.users || [])
             .filter(u => u.active !== false && u.id !== uid && !pryc.has(u.id))
-            .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
+            // kdo momentálně nepracuje, je až za všemi ostatními
+            .sort((a, b) => (a.nepracuje === true ? 1 : 0) - (b.nepracuje === true ? 1 : 0) ||
+                            (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
                             (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
                             (a.last || "").localeCompare(b.last || "", "cs"));
         kontejner.innerHTML =
             (sJa ? '<label class="quickpanel__ja"><input type="checkbox" value="' + esc(uid) +
                 '" data-quick-jaja> Jen pro mě</label>' : "") +
             lide.map(u =>
-                '<label><input type="checkbox" value="' + esc(u.id) + '"> ' +
-                esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("");
+                '<label' + (u.nepracuje === true ? ' class="je-nepracuje"' : "") + '>' +
+                '<input type="checkbox" value="' + esc(u.id) + '"> ' +
+                esc(((u.first || "") + " " + (u.last || "")).trim()) +
+                (u.nepracuje === true ? ' <span class="tiny muted">(nepracuje)</span>' : "") +
+                "</label>").join("");
     };
 
     function naplnQuickForm(panel, uid) {
@@ -2163,6 +2199,11 @@
                u „každý sám" rozhoduje, jestli je člověk v `hotoviUids`.
                Zadavatel u svého vzkazu vidí, jestli ho mají všichni. */
             const hotovoMne = mujVzkaz ? UI.quickHotovoVse(q) : UI.quickHotovoPro(q, uid);
+            /* „Beru na vědomí": vzkaz zůstane v seznamu, jen zešedne a spadne
+               dolů. Na připomínku akce se nedá říct „splněno" – a přitom má
+               zmizet z toho, co po mně ještě někdo chce (Michal 16. 9. 2026). */
+            const jsemAdresat = adresati(q).indexOf(uid) !== -1;
+            const vzatoMne = jsemAdresat && !hotovoMne && UI.quickVzal(q, uid);
             const poTerminu = !hotovoMne && q.doKdy && q.doKdy < dnesISO();
             /* U společného vzkazu se vypisuje, s kým na tom člověk je –
                sebe v tom seznamu vidět nepotřebuje. */
@@ -2188,7 +2229,8 @@
                     : "");
 
             return '<div class="quickrad' +
-                (hotovoMne ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) + '">' +
+                (hotovoMne ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) +
+                (vzatoMne ? " quickrad--vzato" : "") + '">' +
                 '<span class="quickrad__text quickrad__text--klik" data-quick-detail="' +
                     esc(q.id) + '" role="button" tabindex="0"' +
                     ' title="Otevřít vzkaz – komentáře a obrázky">' +
@@ -2213,6 +2255,8 @@
                         (q.rezim === "kazdy" && ostatni.length
                             ? '<br><span class="quickrad__splnil">' + esc(UI.quickStav(q)) +
                               "</span>" : "") +
+                        (vzatoMne
+                            ? '<br><span class="quickrad__vzato">beru na vědomí</span>' : "") +
                         (q.rezim !== "kazdy" && q.hotovo && q.hotovoKdo
                             ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatumKratke(new Date(q.hotovoMs)
@@ -2224,6 +2268,16 @@
                    rovnou na té poznámce (poznamky.html si ji samo otevře) */
                 (q.poznamka ? '<button type="button" class="btn btn--ghost btn--sm"' +
                     ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
+                /* Beru na vědomí – jen pro adresáta a jen dokud to není
+                   splněné. Zpátky se to vezme kliknutím na totéž. */
+                (jsemAdresat && !hotovoMne
+                    ? (vzatoMne
+                        ? '<button type="button" class="linkbtn" data-quick-vzal="' + esc(q.id) +
+                            '" data-zpet="1" title="Zrušit beru na vědomí">Beru ✓</button>'
+                        : '<button type="button" class="btn btn--ghost btn--sm" data-quick-vzal="' +
+                            esc(q.id) + '" title="Vím o tom – zůstane v seznamu, ale přestane ' +
+                            'svítit v odznaku">Beru na vědomí</button>')
+                    : "") +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
                 /* Zadavatel, který mezi adresáty není, nemá co odškrtávat –
                    splnění je na těch, komu vzkaz patří. */
@@ -2244,6 +2298,8 @@
         /* „Co nejdříve" nahoru, pak termíny od nejbližšího, nakonec vzkazy
            bez termínu. Bez řazení by ASAP zapadlo mezi ostatní. */
         const naporadi = (a, b) =>
+            // co mám vzaté na vědomí, spadne pod to, co po mně ještě někdo chce
+            (UI.quickVzal(a, uid) ? 1 : 0) - (UI.quickVzal(b, uid) ? 1 : 0) ||
             (b.asap ? 1 : 0) - (a.asap ? 1 : 0) ||
             (a.doKdy ? 0 : 1) - (b.doKdy ? 0 : 1) ||
             (a.doKdy || "").localeCompare(b.doKdy || "");
@@ -2289,7 +2345,8 @@
         });
 
         // odznak s počtem nesplněných na tlačítku v pásu
-        const kolik = proMe.filter(q => !UI.quickHotovoPro(q, uid)).length;
+        // vzaté na vědomí v odznaku nesvítí – vím o tom, nemusí mě to honit
+        const kolik = proMe.filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickVzal(q, uid)).length;
         document.querySelectorAll("[data-quick-pocet]").forEach(el => {
             el.textContent = kolik;
             el.hidden = !kolik;
@@ -2838,6 +2895,13 @@
             renderQuick();
             return;
         }
+        const vzalBtn = event.target.closest("[data-quick-vzal]");
+        if (vzalBtn && vzalBtn.tagName === "BUTTON") {
+            window.KB.quickVzetiNaVedomi(vzalBtn.dataset.quickVzal, !vzalBtn.dataset.zpet)
+                .catch(() => UI.toast("Uložení selhalo.", "error"));
+            return;
+        }
+
         // Splněno / Vrátit – tlačítkem, ne zaškrtávátkem
         const hotovoBtn = event.target.closest("[data-quick-hotovo]");
         if (hotovoBtn && hotovoBtn.tagName === "BUTTON") {
@@ -3016,7 +3080,7 @@
         const todoZbyva = mojeUkoly.reduce((s, u) =>
             s + (u.todo || []).filter(t => t.vypnuto !== true && (Number(t.pct) || 0) < 100).length, 0);
         const quickZbyva = (window.KB.quicktodo || [])
-            .filter(q => !UI.quickHotovoPro(q, uid) && q.proUid === uid).length;
+            .filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickVzal(q, uid) && q.proUid === uid).length;
 
         const cislo = (h) => Number(h || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
         const czDatum = (i) => { const [, m, d] = i.split("-"); return Number(d) + ". " + Number(m) + "."; };

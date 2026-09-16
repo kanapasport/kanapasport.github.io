@@ -31,7 +31,7 @@
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=225">
+    <link rel="stylesheet" href="assets/css/app.css?v=226">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -202,6 +202,19 @@
             <div class="tiny muted" style="margin-top:4px">Podle typu se dělí hodinové sazby i seznam lidí.</div>
         </div>
         <label class="row" style="gap:8px;cursor:pointer;align-items:flex-start">
+            <input type="checkbox" id="fNepracuje" style="width:18px;height:18px;margin-top:2px">
+            <span class="small">Momentálně nepracuje
+                <span class="tiny muted" style="display:block">přihlásit se může, ale v nabídkách lidí
+                    je až dole a výkazy se mu nehlídají</span>
+            </span>
+        </label>
+        <label class="row" style="gap:8px;cursor:pointer;align-items:flex-start">
+            <input type="checkbox" id="fBezHlidky" style="width:18px;height:18px;margin-top:2px">
+            <span class="small">Nepřipomínat nezapsaný výkaz
+                <span class="tiny muted" style="display:block">nebude mu chodit vzkaz „nemáš zapsaný výkaz"</span>
+            </span>
+        </label>
+        <label class="row" style="gap:8px;cursor:pointer;align-items:flex-start">
             <input type="checkbox" id="fPulhodiny" style="width:18px;height:18px;margin-top:2px">
             <span class="small">Výkaz po půlhodinách
                 <span class="tiny muted" style="display:block">místo příchodu a odchodu vybírá rovnou počet hodin</span>
@@ -230,10 +243,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=225"></script>
-<script src="assets/js/doc.js?v=225"></script>
-<script src="assets/js/ui.js?v=225"></script>
-<script type="module" src="assets/js/store.js?v=225"></script>
+<script src="assets/js/taxonomy.js?v=226"></script>
+<script src="assets/js/doc.js?v=226"></script>
+<script src="assets/js/ui.js?v=226"></script>
+<script type="module" src="assets/js/store.js?v=226"></script>
 
 <script>
 (function () {
@@ -456,6 +469,7 @@
                 '<div class="tiny muted">' + esc(user.email) + " · " + esc(role.title) +
                 (typ ? " · " + esc(typ.title) : "") +
                 (user.active === false ? " · pozastavený" : "") +
+                (user.nepracuje === true ? " · momentálně nepracuje" : "") +
                 "</div>" +
             "</div>" +
             '<div class="row" style="gap:6px">' +
@@ -625,6 +639,8 @@
         $("fEmail").disabled = !!user;   // e-mail je klíč záznamu, ten se nemění
         $("fActive").checked = user ? user.active !== false : true;
         $("fPulhodiny").checked = !!(user && user.vykazPulhodiny === true);
+        $("fNepracuje").checked = !!(user && user.nepracuje === true);
+        $("fBezHlidky").checked = !!(user && user.bezHlidky === true);
         // heslo se zadává jen při zakládání účtu – měnit ho pak jde už
         // jen odkazem na e-mail (Firebase cizí heslo přepsat nedovolí)
         $("fPass").value = "";
@@ -658,6 +674,8 @@
             role:  $("fRole").value,
             typ:   $("fTyp").value,
             vykazPulhodiny: $("fPulhodiny").checked,
+            nepracuje: $("fNepracuje").checked,
+            bezHlidky: $("fBezHlidky").checked,
             active: $("fActive").checked
         };
 

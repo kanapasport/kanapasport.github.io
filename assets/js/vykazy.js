@@ -129,7 +129,11 @@
         .sort((a, b) => {
             const pa = window.KBUI.PORADI_TYPU[window.KBUI.typUvazku(a)];
             const pb = window.KBUI.PORADI_TYPU[window.KBUI.typUvazku(b)];
-            return (pa === undefined ? 9 : pa) - (pb === undefined ? 9 : pb) ||
+            /* Kdo momentálně nepracuje, padá na konec každé nabídky. Nemizí
+               – přihlásit se může a ve starých zápisech zůstává – jen nikomu
+               neleze pod ruku (Michal 16. 9. 2026). */
+            return (a.nepracuje === true ? 1 : 0) - (b.nepracuje === true ? 1 : 0) ||
+                (pa === undefined ? 9 : pa) - (pb === undefined ? 9 : pb) ||
                 (a.last || "").localeCompare(b.last || "", "cs") ||
                 (a.first || "").localeCompare(b.first || "", "cs");
         });

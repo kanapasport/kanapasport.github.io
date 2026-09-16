@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=225">
+    <link rel="stylesheet" href="assets/css/app.css?v=226">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -184,6 +184,7 @@
         .qtrad--asap { background: #fde3e3; border-bottom-color: transparent;
             border-radius: var(--radius); padding: 6px 8px; color: var(--danger); }
         .qtrad--asap .muted { color: var(--danger); opacity: .8; }
+        .qtrad--vzato { opacity: .62; }
         .qt__meta { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
         /* prošlý termín červeně – stejný odstín jako přečerpaný rozpočet ve výkazech */
         .qt__meta--pozde { color: #b91c1c; font-weight: 700; }
@@ -366,11 +367,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=225"></script>
-<script src="assets/js/doc.js?v=225"></script>
-<script src="assets/js/ui.js?v=225"></script>
-<script src="assets/js/vykazy.js?v=225"></script>
-<script type="module" src="assets/js/store.js?v=225"></script>
+<script src="assets/js/taxonomy.js?v=226"></script>
+<script src="assets/js/doc.js?v=226"></script>
+<script src="assets/js/ui.js?v=226"></script>
+<script src="assets/js/vykazy.js?v=226"></script>
+<script type="module" src="assets/js/store.js?v=226"></script>
 
 <script>
 (function () {
@@ -678,6 +679,8 @@
         /* Stejné řazení jako v panelu: „co nejdříve" nahoru, pak termíny
            od nejbližšího, nakonec vzkazy bez termínu. */
         const naporadi = (a, b) =>
+            // vzaté na vědomí spadne pod to, co po mně ještě někdo chce
+            (window.KBUI.quickVzal(a, uid) ? 1 : 0) - (window.KBUI.quickVzal(b, uid) ? 1 : 0) ||
             (b.asap ? 1 : 0) - (a.asap ? 1 : 0) ||
             (a.doKdy ? 0 : 1) - (b.doKdy ? 0 : 1) ||
             (a.doKdy || "").localeCompare(b.doKdy || "");
@@ -707,7 +710,9 @@
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' +
                 (hotovoPro(q, mujVzkaz) ? " qtrad--hotovo"
-                    : (q.asap ? " qtrad--asap" : "")) + '">' +
+                    : (q.asap ? " qtrad--asap" : "")) +
+                (!hotovoPro(q, mujVzkaz) && window.KBUI.quickVzal(q, uid)
+                    ? " qtrad--vzato" : "") + '">' +
                 '<span class="grow" style="min-width:0;font-size:14.5px;line-height:1.5">' +
                     '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:12.5px">' +
@@ -744,6 +749,15 @@
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
                 /* Zadavatel, který mezi adresáty není, nemá u „každý sám" co
                    odškrtávat – splnění je na těch, komu vzkaz patří. */
+                /* Beru na vědomí: na připomínku akce se nedá říct „splněno",
+                   ale má přestat svítit (Michal 16. 9. 2026). */
+                (adresati(q).indexOf(uid) !== -1 && !hotovoPro(q, mujVzkaz)
+                    ? (window.KBUI.quickVzal(q, uid)
+                        ? '<button type="button" class="linkbtn" data-quick-vzal="' + esc(q.id) +
+                            '" data-zpet="1" title="Zrušit beru na vědomí">Beru ✓</button>'
+                        : '<button type="button" class="btn btn--ghost btn--sm" data-quick-vzal="' +
+                            esc(q.id) + '">Beru na vědomí</button>')
+                    : "") +
                 (mujVzkaz && q.rezim === "kazdy"
                     ? ""
                     : (hotovoPro(q, mujVzkaz)

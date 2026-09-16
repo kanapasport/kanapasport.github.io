@@ -728,6 +728,11 @@ KB.saveQuickTodo = async (id, data) => {
        (Michal 4. 9. 2026). */
     if ("nahled" in data) zapis.nahled = String(data.nahled || "").slice(0, 90000);
     if ("obrazku" in data) zapis.obrazku = Number(data.obrazku) || 0;
+    /* „Beru na vědomí" se stejně jako komentáře dopisuje zvlášť (arrayUnion),
+       aby ho odškrtnutí ze staršího okna nesmazalo. */
+    if ("vzaliUids" in data) {
+        zapis.vzaliUids = Array.isArray(data.vzaliUids) ? data.vzaliUids.slice(0, 40) : [];
+    }
 
     await setDoc(quickDoc(id), zapis, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
@@ -773,6 +778,22 @@ KB.nactiQuickObrazky = async (id) => {
     snap.forEach(d => ven.push({ id: d.id, ...d.data() }));
     ven.sort((a, b) => (a.ms || 0) - (b.ms || 0));
     return ven;
+};
+
+/**
+ * „Beru na vědomí" – vzkaz, který se neplní, jen se o něm ví. Zůstane
+ * v seznamu (na rozdíl od splněného), jen zešedne, spadne dolů a přestane
+ * svítit v odznaku. Hodí se na připomínky akcí: „vím o tom, uvidím to
+ * v kalendáři" (Michal 16. 9. 2026).
+ */
+KB.quickVzetiNaVedomi = async (id, vzal) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid) throw new Error("Není kdo bere na vědomí.");
+    await setDoc(quickDoc(id), {
+        vzaliUids: vzal ? arrayUnion(uid) : arrayRemove(uid)
+    }, { merge: true });
 };
 
 /** Komentář ke vzkazu – stejně jako u poznámek, ať se dá odpovědět na místě. */
@@ -1257,6 +1278,13 @@ KB.saveUser = async (data) => {
     /* Výkaz po půlhodinách: člověk místo příchodu a odchodu vybírá rovnou
        počet hodin (Petr Kyselka, Michal 14. 9. 2026). */
     if (data.vykazPulhodiny !== undefined) payload.vykazPulhodiny = data.vykazPulhodiny === true;
+    /* Momentálně nepracuje: účet zůstává živý (člověk se přihlásí a vidí
+       svoje), ale v nabídkách lidí padá dolů a hlídka výkazů ho nechá být
+       (Michal 16. 9. 2026). Pozastavení účtu je něco jiného – to je
+       `active: false` a to se s ním ani nepřihlásí. */
+    if (data.nepracuje !== undefined) payload.nepracuje = data.nepracuje === true;
+    // komu se nemá připomínat nezapsaný výkaz (majitelé, brigádníci…)
+    if (data.bezHlidky !== undefined) payload.bezHlidky = data.bezHlidky === true;
     /* HESLA SE NEUKLÁDAJÍ. Otisk (`hash`+`salt`) i šifrovaná podoba (`enc`)
        tu dřív ležely v `public/data/users`, kam vidí každý člen – kdokoliv
        si je mohl stáhnout a doma lámat. Heslo ověřuje Firebase Auth,
