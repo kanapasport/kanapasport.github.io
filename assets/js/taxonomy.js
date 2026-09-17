@@ -217,6 +217,8 @@ window.KB_NAV = [
     { title: 'POZNÁMKY', href: 'poznamky.html', barva: '#a8432a' },
     // podklady pater se společnými značkami – parta si značí naráz
     { title: 'PLÁNY', href: 'plany.html', icon: 'map', barva: '#a8432a' },
+    // kolik fotek je v BPH u které místnosti a technologie – podklad pro plánování focení
+    { title: 'FOTKY BPH', href: 'fotky-bph.html', barva: '#a8432a' },
     { title: 'TABULE', href: 'tabule.html', icon: 'board', barva: '#a8432a' },
     /* Roletka se naplní otevřenými projekty z databáze (viz projektyMenu
        v ui.js). Jen manažeři: zaměstnanec ani student nemá ve správě

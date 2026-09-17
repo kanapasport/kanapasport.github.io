@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Fotky BPH – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=227">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji. */
+
+        /* Zelená = fotky jsou (sytější odstín = víc), červená = ani jedna.
+           Zelené jsou ze stupnice rozpracovanosti, aby web držel jednu paletu. */
+        .fb { --ma1: var(--ok-tint); --ma2: #cdefdc; --ma3: var(--p100-bg); --ma-fg: var(--p100-fg);
+              --nic-bg: #fae2e0; --nic-fg: var(--danger); --nic-line: #e8b4b0;
+              --chybi-bg: var(--bg); --chybi-line: var(--line); }
+
+        .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+        .hlavicka__text { min-width: 0; }
+
+        /* ------------------------------------------------ dlaždice technologií */
+        .fb-tech { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 9px; }
+        .fb-tech button {
+            border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+            padding: 10px 12px; text-align: left; font: inherit; color: var(--text);
+            cursor: pointer; display: flex; flex-direction: column; gap: 1px;
+            transition: border-color .14s, background .14s;
+        }
+        .fb-tech button:hover { border-color: var(--accent-lt); }
+        .fb-tech button.je { border-color: var(--accent); background: var(--accent-tint); }
+        .fb-tech .t { font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+                      color: var(--muted); }
+        .fb-tech button.je .t { color: var(--accent); }
+        .fb-tech .f { font-size: 20px; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .fb-tech .m { font-size: 11px; color: var(--muted); }
+
+        /* ------------------------------------------------------------- matice */
+        .fb-leg { display: flex; flex-wrap: wrap; gap: 14px; }
+        .fb-leg span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+        .fb-leg i { width: 13px; height: 13px; border-radius: 3px; flex: none; border: 1px solid var(--line); }
+        .fb-leg i.ma { background: var(--ma2); border-color: var(--ma-fg); }
+        .fb-leg i.nic { background: var(--nic-bg); border-color: var(--nic-line); }
+        .fb-leg i.chybi { background: var(--chybi-bg); border-style: dashed; }
+
+        .fb-patro { border-top: 1px solid var(--line-soft); padding-top: 11px; margin-top: 13px; }
+        .fb-patro:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+        .fb-patro__hl { display: flex; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+        .fb-patro__hl b { font-size: 13.5px; font-weight: 900; }
+        .fb-patro__hl span { font-size: 11.5px; color: var(--muted); }
+        .fb-mrizka { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
+        .fb-radek { display: grid; gap: 4px; align-items: stretch; }
+        .fb-rl { font-size: 10px; color: var(--dim); align-self: center; text-align: right;
+                 padding-right: 4px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+        .fb-bunka { border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px;
+                    display: flex; flex-direction: column; min-width: 0; background: var(--bg-soft); }
+        .fb-bunka .kk { font-size: 10px; color: var(--muted); overflow: hidden;
+                        text-overflow: ellipsis; white-space: nowrap; }
+        .fb-bunka .nn { font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.2; }
+        .fb-bunka.ma { background: var(--ma1); border-color: var(--ma2); }
+        .fb-bunka.ma.v2 { background: var(--ma2); }
+        .fb-bunka.ma.v3 { background: var(--ma3); }
+        .fb-bunka.ma .nn { color: var(--ma-fg); }
+        .fb-bunka.nic { background: var(--nic-bg); border-color: var(--nic-line); }
+        .fb-bunka.nic .nn { color: var(--nic-fg); }
+        .fb-bunka.chybi { background: var(--chybi-bg); border-style: dashed; }
+        .fb-bunka.chybi .nn { color: var(--dim); }
+        .fb-bunka.negdb .kk::after { content: " ·"; color: var(--warn); font-weight: 900; }
+
+        /* ------------------------------------------------- porovnání s GDB */
+        .fb-kody { display: flex; flex-direction: column; gap: 7px; }
+        .fb-kp { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: baseline;
+                 border-top: 1px solid var(--line-soft); padding-top: 7px; }
+        .fb-kp:first-child { border-top: 0; padding-top: 0; }
+        .fb-kp__l { font-size: 11.5px; font-weight: 700; color: var(--text-soft); white-space: nowrap; }
+        .fb-kp__l i { color: var(--dim); font-style: normal; font-weight: 400; }
+        .fb-kp__v { display: flex; flex-wrap: wrap; gap: 5px; }
+        .fb-kod { font-size: 11.5px; padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+                  font-variant-numeric: tabular-nums; }
+        .fb-kod--nic { background: var(--nic-bg); color: var(--nic-fg); }
+        .fb-kod--navic { background: var(--p75-bg); color: var(--p75-fg); }
+        .fb-kod--zadne { background: var(--bg); color: var(--muted); }
+
+        /* ---------------------------------------------- tabulka místností */
+        .fb-scroll { overflow-x: auto; }
+        .fb-tab { border-collapse: collapse; width: 100%; font-size: 13px; }
+        .fb-tab thead th { text-align: left; font-size: 10.5px; font-weight: 900; letter-spacing: .08em;
+            text-transform: uppercase; color: var(--muted); padding: 0 10px 8px 0;
+            border-bottom: 1px solid var(--line); white-space: nowrap; }
+        .fb-tab tbody td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line-soft);
+            vertical-align: middle; }
+        .fb-tab tbody tr:hover td { background: var(--bg-soft); }
+        .fb-tab td.kod { font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .fb-tab td.pat { color: var(--muted); white-space: nowrap; }
+        .fb-tab td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+            font-weight: 700; }
+        .fb-tab td.tech { padding-right: 0; }
+
+        /* Stejně široká políčka, ať technologie sedí ve sloupcích pod sebou. */
+        .fb-tm { display: grid; grid-template-columns: repeat(13, 74px); gap: 3px; }
+        .fb-td { font-size: 10px; padding: 2px 5px; border-radius: 3px; white-space: nowrap;
+                 display: flex; justify-content: space-between; gap: 3px; overflow: hidden;
+                 background: var(--ma1); color: var(--ma-fg); }
+        .fb-td b { font-weight: 900; font-variant-numeric: tabular-nums; }
+        .fb-td--obec { background: var(--accent-tint); color: var(--accent); }
+        .fb-td--nula { background: var(--nic-bg); color: var(--nic-fg); }
+
+        .fb-znacka { font-size: 10px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase;
+                     border-radius: 3px; padding: 2px 6px; white-space: nowrap; }
+        .fb-znacka--negdb { background: var(--p75-bg); color: var(--p75-fg); }
+        .fb-znacka--bez { background: var(--nic-bg); color: var(--nic-fg); }
+
+        .fb-str { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        .fb-str .info { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        @media (max-width: 900px) {
+            .fb-tm { grid-template-columns: repeat(13, 68px); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap fb" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div class="hlavicka">
+        <div class="hlavicka__text">
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Fotky v BPH</h2>
+            <p class="small muted" style="margin-top:3px" id="fbLede">Načítám přehled…</p>
+        </div>
+        <!-- Data vznikají mimo web (sken složky s fotkami), proto se nahrávají
+             souborem. Vidí to jen manažer – ostatní přehled jen čtou. -->
+        <div class="hlavicka__akce" id="fbNahrat" hidden>
+            <label class="btn btn--ghost btn--sm" style="cursor:pointer">
+                Nahrát nový přehled
+                <input type="file" id="fbSoubor" accept=".json,application/json" hidden>
+            </label>
+        </div>
+    </div>
+
+    <div id="fbChyba" class="card center" style="padding:36px 22px" hidden>
+        <b style="font-size:16px" id="fbChybaText">Přehled se nepodařilo načíst.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6" id="fbChybaPopis"></p>
+    </div>
+
+    <div id="fbObsah" hidden style="display:flex;flex-direction:column;gap:16px">
+
+    <div class="card" style="padding:14px 16px">
+        <div class="fb-tech" id="fbDlazdice"></div>
+    </div>
+
+    <div class="card col" style="gap:12px;padding:14px 16px">
+        <div>
+            <b style="font-size:15px">Matice místností — <span id="fbMaticeTech">…</span></b>
+            <p class="small muted" style="margin-top:3px">
+                Každá buňka je jedna místnost a číslo v ní je počet fotek vybrané technologie.
+                Klikni nahoře na technologii a matice se přepne.
+            </p>
+        </div>
+        <div class="row row--wrap" style="gap:8px">
+            <input type="search" id="fbHledaniM" class="field" style="width:auto;max-width:240px"
+                   placeholder="Hledat kód místnosti" aria-label="Hledat kód místnosti v matici">
+            <select id="fbBudova" class="field" style="width:auto" aria-label="Budova">
+                <option value="">obě budovy</option>
+                <option value="G61">G61</option>
+                <option value="G62">G62</option>
+            </select>
+            <select id="fbPatro" class="field" style="width:auto" aria-label="Patro">
+                <option value="">všechna patra</option>
+            </select>
+            <button type="button" class="chip" id="fbJenNula">jen bez fotek</button>
+        </div>
+        <div class="fb-leg">
+            <span><i class="ma"></i>fotky jsou (sytější odstín = víc)</span>
+            <span><i class="nic"></i>ani jedna fotka</span>
+            <span><i class="chybi"></i>místnost v BPH nemá složku</span>
+            <span style="color:var(--warn)">· není v GDB</span>
+        </div>
+        <div id="fbMatice"></div>
+        <p class="small muted" id="fbMaticePrazdno" hidden>Nic neodpovídá filtru.</p>
+    </div>
+
+    <div class="card col" style="gap:12px;padding:14px 16px">
+        <div>
+            <b style="font-size:15px">Porovnání se seznamem místností z GDB</b>
+            <p class="small muted" style="margin-top:3px">
+                Seznam z GDB obsahuje <span id="fbGdbPocet">…</span> kódů. Rozdíl sám o sobě není chyba —
+                místnost, která ještě není nakreslená, v GDB chybí, a složka v BPH může být pozůstatek
+                po dřívějším členění.
+            </p>
+        </div>
+        <div>
+            <b class="small" style="display:block;margin-bottom:8px;color:var(--text-soft)">
+                V GDB je, ale složku v BPH nemá (<span id="fbP1">…</span>)</b>
+            <div class="fb-kody" id="fbKodyChybi"></div>
+        </div>
+        <div style="border-top:1px solid var(--line);padding-top:12px">
+            <b class="small" style="display:block;margin-bottom:8px;color:var(--text-soft)">
+                Složka v BPH je, ale v GDB kód není (<span id="fbP2">…</span>)</b>
+            <div class="fb-kody" id="fbKodyNavic"></div>
+        </div>
+    </div>
+
+    <div class="card col" style="gap:12px;padding:14px 16px">
+        <b style="font-size:15px">Všechny místnosti</b>
+        <div class="row row--wrap" style="gap:8px">
+            <input type="search" id="fbHledani" class="field" style="width:auto;max-width:240px"
+                   placeholder="Hledat kód místnosti" aria-label="Hledat kód místnosti">
+            <select id="fbTech" class="field" style="width:auto" aria-label="Technologie">
+                <option value="">všechny technologie</option>
+            </select>
+            <button type="button" class="chip" id="fbBezFotek">jen bez fotek</button>
+        </div>
+        <div class="fb-scroll">
+            <table class="fb-tab">
+                <thead><tr>
+                    <th>Kód</th><th>Bud.</th><th>Patro</th><th style="text-align:right">Fotek</th>
+                    <th style="padding-left:2px">Podle technologií</th><th></th>
+                </tr></thead>
+                <tbody id="fbTelo"></tbody>
+            </table>
+        </div>
+        <p class="small muted" id="fbPrazdno" hidden>Nic neodpovídá hledání.</p>
+        <div class="fb-str">
+            <button type="button" class="btn btn--ghost btn--sm" id="fbZpet">‹ zpět</button>
+            <span class="info" id="fbInfo"></span>
+            <button type="button" class="btn btn--ghost btn--sm" id="fbDal">dál ›</button>
+        </div>
+    </div>
+
+    <p class="small muted" id="fbPaticka"></p>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=227"></script>
+<script src="assets/js/ui.js?v=227"></script>
+<script type="module" src="assets/js/store.js?v=227"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const cislo = (n) => Number(n || 0).toLocaleString("cs-CZ");
+
+    let D = null;                 // data ze souboru
+    let TECH = [];
+    let vybrana = "";
+    let patra = [];
+
+    /* Patra se řadí jako ve skutečnosti: nejdřív podzemní od nejhlubšího,
+       pak nadzemní, střecha a nakonec šachty. */
+    function poradiPatra(budova, patro) {
+        const zaklad = budova === "G61" ? 0 : 1000;
+        let m = /^(\d+)\.?PP$/i.exec(patro);
+        if (m) return zaklad - 100 + Number(m[1]);
+        m = /^(\d+)\.?NP$/i.exec(patro);
+        if (m) return zaklad + Number(m[1]);
+        if (/střech/i.test(patro)) return zaklad + 400;
+        return zaklad + 500;
+    }
+
+    function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;
+        return e;
+    }
+
+    /* ------------------------------------------------ dlaždice technologií */
+    function vykresliDlazdice() {
+        const box = $("fbDlazdice");
+        box.textContent = "";
+        D.tech.forEach((x) => {
+            const b = el("button", x.t === vybrana ? "je" : "");
+            b.type = "button";
+            b.dataset.t = x.t;
+            b.appendChild(el("span", "t", x.t));
+            b.appendChild(el("span", "f", cislo(x.f)));
+            b.appendChild(el("span", "m", cislo(x.m) + " místností"));
+            b.addEventListener("click", () => {
+                vybrana = x.t;
+                Array.from(box.children).forEach((o) => {
+                    o.className = o.dataset.t === vybrana ? "je" : "";
+                });
+                vykresliMatici();
+            });
+            box.appendChild(b);
+        });
+    }
+
+    /* ------------------------------------------------------------ matice */
+    let mHledani = "", mBudova = "", mPatro = "", mJenNula = false;
+
+    function naRadek() {
+        const w = $("fbMatice").clientWidth || 1000;
+        const n = Math.floor((w - 70) / 54);
+        if (n >= 20) return 20;
+        if (n >= 15) return 15;
+        if (n >= 10) return 10;
+        return Math.max(5, n);
+    }
+
+    function vykresliMatici() {
+        $("fbMaticeTech").textContent = vybrana;
+        const box = $("fbMatice");
+        const naR = naRadek();
+        box.textContent = "";
+
+        const q = mHledani.trim().toLowerCase();
+        const vidi = D.mistnosti.filter((r) => {
+            if (q && r.k.toLowerCase().indexOf(q) === -1) return false;
+            if (mBudova && r.b !== mBudova) return false;
+            if (mPatro && (r.b + " " + r.p) !== mPatro) return false;
+            if (mJenNula && (r.m[vybrana] || 0) > 0) return false;
+            return true;
+        });
+
+        let maxv = 0;
+        vidi.forEach((r) => { maxv = Math.max(maxv, r.m[vybrana] || 0); });
+
+        const frag = document.createDocumentFragment();
+        patra.forEach((pp) => {
+            const vp = vidi.filter((r) => (r.b + " " + r.p) === pp);
+            if (!vp.length) return;
+            const bez = vp.filter((r) => !(r.m[vybrana] > 0)).length;
+
+            const blok = el("div", "fb-patro");
+            const hl = el("div", "fb-patro__hl");
+            hl.appendChild(el("b", null, pp));
+            hl.appendChild(el("span", null,
+                vp.length + " místností · " + (vp.length - bez) + " s fotkami · " + bez + " bez"));
+            blok.appendChild(hl);
+
+            const mrizka = el("div", "fb-mrizka");
+            for (let i = 0; i < vp.length; i += naR) {
+                const kus = vp.slice(i, i + naR);
+                const radek = el("div", "fb-radek");
+                radek.style.gridTemplateColumns = "62px repeat(" + naR + ", minmax(0, 1fr))";
+                const od = kus[0].k.replace(/^G6[12]-/, "");
+                const dokud = kus[kus.length - 1].k.replace(/^G6[12]-/, "");
+                radek.appendChild(el("div", "fb-rl", od + "–" + dokud));
+                kus.forEach((r) => {
+                    const n = r.m[vybrana] || 0;
+                    let cls = "fb-bunka " + (!r.s ? "chybi" : n > 0 ? "ma" : "nic");
+                    if (n > 0 && maxv > 0) {
+                        const pomer = n / maxv;
+                        if (pomer > 0.5) cls += " v3";
+                        else if (pomer > 0.2) cls += " v2";
+                    }
+                    if (!r.g) cls += " negdb";
+                    const d = el("div", cls);
+                    d.title = r.k + " · " + pp + " · " + vybrana + ": " + n + " fotek"
+                        + (!r.s ? " · složka v BPH není" : "") + (!r.g ? " · není v GDB" : "");
+                    d.appendChild(el("span", "kk", r.k.replace(/^G6[12]-/, "")));
+                    d.appendChild(el("span", "nn", !r.s ? "–" : cislo(n)));
+                    radek.appendChild(d);
+                });
+                mrizka.appendChild(radek);
+            }
+            blok.appendChild(mrizka);
+            frag.appendChild(blok);
+        });
+        box.appendChild(frag);
+        $("fbMaticePrazdno").hidden = vidi.length > 0;
+    }
+
+    /* --------------------------------------------------- porovnání s GDB */
+    function vypisPoPatrech(box, vyber, trida) {
+        box.textContent = "";
+        let pocet = 0;
+        patra.forEach((pp) => {
+            const kus = D.mistnosti.filter((r) => (r.b + " " + r.p) === pp && vyber(r));
+            if (!kus.length) return;
+            pocet += kus.length;
+            const blok = el("div", "fb-kp");
+            const lab = el("div", "fb-kp__l");
+            lab.appendChild(document.createTextNode(pp + " "));
+            lab.appendChild(el("i", null, "· " + kus.length));
+            blok.appendChild(lab);
+            const rada = el("div", "fb-kp__v");
+            kus.forEach((r) => rada.appendChild(el("span", "fb-kod " + trida, r.k)));
+            blok.appendChild(rada);
+            box.appendChild(blok);
+        });
+        if (!pocet) box.appendChild(el("span", "fb-kod fb-kod--zadne", "žádné"));
+        return pocet;
+    }
+
+    /* ----------------------------------------------- tabulka všech místností */
+    const NA_STRANU = 30;
+    let strana = 0, tHledani = "", tTech = "", tBez = false;
+
+    function filtrTabulky() {
+        const q = tHledani.trim().toLowerCase();
+        return D.mistnosti.filter((r) => {
+            if (q && r.k.toLowerCase().indexOf(q) === -1) return false;
+            if (tTech) {
+                const n = r.m[tTech] || 0;
+                if (tBez ? n > 0 : n === 0) return false;
+            } else if (tBez && Object.keys(r.m).length) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    function vykresliTabulku() {
+        const vidi = filtrTabulky();
+        const stran = Math.max(1, Math.ceil(vidi.length / NA_STRANU));
+        if (strana >= stran) strana = stran - 1;
+
+        const telo = $("fbTelo");
+        telo.textContent = "";
+        const frag = document.createDocumentFragment();
+
+        vidi.slice(strana * NA_STRANU, (strana + 1) * NA_STRANU).forEach((r) => {
+            const tr = document.createElement("tr");
+            tr.appendChild(el("td", "kod", r.k));
+            tr.appendChild(el("td", null, r.b));
+            tr.appendChild(el("td", "pat", r.p));
+
+            let suma = 0;
+            TECH.forEach((t) => { suma += r.m[t] || 0; });
+            tr.appendChild(el("td", "num", suma ? cislo(suma) : "—"));
+
+            const td = el("td", "tech");
+            const mrizka = el("div", "fb-tm");
+            TECH.forEach((t) => {
+                const n = r.m[t] || 0;
+                let cls = "fb-td";
+                if (!n) cls += " fb-td--nula";
+                else if (t === "Obecné") cls += " fb-td--obec";
+                const b = el("span", cls);
+                b.title = t + ": " + cislo(n) + " fotek";
+                b.appendChild(el("span", null, t));
+                b.appendChild(el("b", null, cislo(n)));
+                mrizka.appendChild(b);
+            });
+            td.appendChild(mrizka);
+            tr.appendChild(td);
+
+            const td2 = el("td");
+            if (!r.s) td2.appendChild(el("span", "fb-znacka fb-znacka--bez", "bez složky"));
+            else if (!r.g) td2.appendChild(el("span", "fb-znacka fb-znacka--negdb", "není v GDB"));
+            tr.appendChild(td2);
+
+            frag.appendChild(tr);
+        });
+        telo.appendChild(frag);
+
+        $("fbPrazdno").hidden = vidi.length > 0;
+        $("fbInfo").textContent = vidi.length
+            ? (strana * NA_STRANU + 1) + "–" + Math.min((strana + 1) * NA_STRANU, vidi.length)
+              + " z " + cislo(vidi.length) + " místností"
+            : "0 místností";
+        $("fbZpet").disabled = strana === 0;
+        $("fbDal").disabled = strana >= stran - 1;
+    }
+
+    /* ------------------------------------------------------------ spuštění */
+    function nastavOvladace() {
+        $("fbHledaniM").addEventListener("input", (e) => { mHledani = e.target.value; vykresliMatici(); });
+        $("fbBudova").addEventListener("change", (e) => { mBudova = e.target.value; vykresliMatici(); });
+        $("fbPatro").addEventListener("change", (e) => { mPatro = e.target.value; vykresliMatici(); });
+        $("fbJenNula").addEventListener("click", function () {
+            mJenNula = !mJenNula;
+            this.classList.toggle("chip--active", mJenNula);
+            vykresliMatici();
+        });
+
+        $("fbHledani").addEventListener("input", (e) => { tHledani = e.target.value; strana = 0; vykresliTabulku(); });
+        $("fbTech").addEventListener("change", (e) => { tTech = e.target.value; strana = 0; vykresliTabulku(); });
+        $("fbBezFotek").addEventListener("click", function () {
+            tBez = !tBez;
+            this.classList.toggle("chip--active", tBez);
+            strana = 0;
+            vykresliTabulku();
+        });
+        $("fbZpet").addEventListener("click", () => { if (strana > 0) { strana--; vykresliTabulku(); } });
+        $("fbDal").addEventListener("click", () => { strana++; vykresliTabulku(); });
+
+        let prekresli;
+        window.addEventListener("resize", () => {
+            clearTimeout(prekresli);
+            prekresli = setTimeout(vykresliMatici, 150);
+        });
+    }
+
+    function vykresliVse() {
+        TECH = D.tech.map((x) => x.t);
+        vybrana = TECH[0];
+
+        const fotekCelkem = D.tech.reduce((s, x) => s + x.f, 0);
+        const sFotkami = D.mistnosti.filter((r) => Object.keys(r.m).length > 0).length;
+        $("fbLede").textContent = "V BPH je " + cislo(fotekCelkem) + " fotek v "
+            + cislo(D.mistnosti.length) + " místnostech. Fotky má " + cislo(sFotkami)
+            + " z nich, " + cislo(D.mistnosti.length - sFotkami) + " zatím ani jednu.";
+
+        patra = [];
+        D.mistnosti.forEach((r) => {
+            const k = r.b + " " + r.p;
+            if (patra.indexOf(k) === -1) patra.push(k);
+        });
+        patra.sort((a, b) => {
+            const pa = a.split(" "), pb = b.split(" ");
+            return poradiPatra(pa[0], pa[1]) - poradiPatra(pb[0], pb[1]);
+        });
+        const sel = $("fbPatro");
+        patra.forEach((p) => {
+            const o = el("option", null, p);
+            o.value = p;
+            sel.appendChild(o);
+        });
+
+        const selT = $("fbTech");
+        TECH.forEach((t) => {
+            const o = el("option", null, t);
+            o.value = t;
+            selT.appendChild(o);
+        });
+
+        vykresliDlazdice();
+        vykresliMatici();
+
+        $("fbGdbPocet").textContent = cislo(D.gdb_celkem);
+        $("fbP1").textContent = vypisPoPatrech($("fbKodyChybi"), (r) => r.g && !r.s, "fb-kod--nic");
+        $("fbP2").textContent = vypisPoPatrech($("fbKodyNavic"), (r) => r.s && !r.g, "fb-kod--navic");
+
+        vykresliTabulku();
+
+        const nahrano = D.ms
+            ? " Na web nahráno " + new Date(D.ms).toLocaleDateString("cs-CZ")
+              + (D.kdo ? " (" + D.kdo + ")" : "") + "."
+            : "";
+        $("fbPaticka").textContent = "Podklad: sken složky BPH z " + (D.datum_skenu || D.datum)
+            + ", přehled sestaven " + D.datum + "." + nahrano + " Mimo místnosti a technologie leží "
+            + cislo(D.mimo.bez_kodu + D.mimo.mimo_tech) + " fotek — " + cislo(D.mimo.bez_kodu)
+            + " ve složkách bez kódu místnosti (prostupy, střechy, atrium) a "
+            + cislo(D.mimo.mimo_tech) + " v podsložkách, které nejsou technologií. "
+            + "Do přehledu nevstupují.";
+
+        // Šířka nemusí být při prvním běhu známá (písmo se ještě načítá).
+        let prvni = $("fbMatice").clientWidth;
+        const doladit = () => {
+            const w = $("fbMatice").clientWidth;
+            if (w && w !== prvni) { prvni = w; vykresliMatici(); }
+        };
+        requestAnimationFrame(doladit);
+        window.addEventListener("load", doladit);
+    }
+
+    function chyba(nadpis, popis) {
+        $("fbObsah").hidden = true;
+        $("fbChyba").hidden = false;
+        $("fbChybaText").textContent = nadpis;
+        $("fbChybaPopis").textContent = popis || "";
+        $("fbLede").textContent = "—";
+    }
+
+    let nacitam = false;
+    async function nacti() {
+        if (nacitam) return;
+        nacitam = true;
+        try {
+            D = await window.KB.nactiFotkyBph();
+        } catch (err) {
+            D = null;
+        }
+        nacitam = false;
+        if (!D) {
+            chyba("Zatím tu není žádný přehled.",
+                  "Data se sem nahrávají souborem – vyrobí ho skript k přehledu fotek. "
+                  + "Nahrát ho může manažer tlačítkem nahoře vpravo.");
+            return;
+        }
+        $("fbChyba").hidden = true;
+        $("fbObsah").hidden = false;
+        vykresliVse();
+    }
+
+    /* Nahrání nového přehledu. Soubor se nejdřív přebere, ať se do databáze
+       nedostane něco, co stránka neumí vykreslit. */
+    async function nahraj(soubor) {
+        let nova;
+        try {
+            nova = JSON.parse(await soubor.text());
+        } catch (err) {
+            return window.KBUI.toast("Tohle není platný JSON soubor.", "error");
+        }
+        if (!nova || !Array.isArray(nova.tech) || !Array.isArray(nova.mistnosti) || !nova.mistnosti.length) {
+            return window.KBUI.toast("Soubor nevypadá jako přehled fotek – chybí `tech` nebo `mistnosti`.", "error");
+        }
+        const kolik = nova.tech.reduce((s, x) => s + (x.f || 0), 0);
+        if (!window.confirm("Nahrát přehled z " + (nova.datum || "?") + "?\n\n"
+                + nova.mistnosti.length + " místností, " + cislo(kolik) + " fotek.\n"
+                + "Přepíše to ten, co je na webu teď.")) return;
+        try {
+            await window.KB.ulozFotkyBph(nova, (t) => window.KBUI.toast(t));
+            window.KBUI.toast("Přehled nahrán.");
+            D = null;
+            await nacti();
+        } catch (err) {
+            window.KBUI.toast("Uložení selhalo: " + (err && err.message ? err.message : "neznámá chyba"), "error");
+        }
+    }
+
+    function zobrazNahrani() {
+        $("fbNahrat").hidden = !window.KBUI.can("zakazky.manage");
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "fotky-bph.html" });
+        nastavOvladace();
+        zobrazNahrani();
+        $("fbSoubor").addEventListener("change", (e) => {
+            const soubor = e.target.files && e.target.files[0];
+            e.target.value = "";
+            if (soubor) nahraj(soubor);
+        });
+        document.addEventListener("kb-role", () => {
+            zobrazNahrani();
+            if (!D) nacti();
+        });
+        nacti();
+    });
+})();
+</script>
+</body>
+</html>

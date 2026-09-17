@@ -3163,6 +3163,79 @@ KB.ulozPlanPaletu = async (planId, paleta) => {
     }, { merge: true });
 };
 
+/* ----------------------------------------------------- fotky v BPH ---
+   Přehled, kolik fotek leží v BPH u které místnosti a technologie.
+   Data vznikají mimo web (sken složky s fotkami) a nahrávají se sem
+   hotová jedním souborem – nedá se to poskládat z toho, co web ví.
+
+   Uloží se jako JEDEN text, ne jako 1 073 dokumentů: nikdo se v tom
+   nedotazuje, stránka si vždycky vezme celý přehled a přebere si ho
+   sama. Dlouhý text se krájí na kousky stejně jako obrázky plánů.
+
+   Schválně pod `private/` – na webu je to za přihlášením a stejně tak
+   to má být i v databázi. Do veřejného repozitáře ta data nepatří.
+
+     private/fotkybph/meta/prehled     { kousku, ms, kdo, datum, datumSkenu }
+     private/fotkybph/kousky/{n}       { data }                              */
+
+const FOTKY_KOUSEK = 300000;     // znaků na dokument (limit dokumentu je 1 MB)
+const fotkyMetaDoc = () => doc(db, "artifacts", APP_ID, "private", "fotkybph", "meta", "prehled");
+const fotkyKouskyCol = () => collection(db, "artifacts", APP_ID, "private", "fotkybph", "kousky");
+const fotkyKousek = (n) => doc(db, "artifacts", APP_ID, "private", "fotkybph", "kousky", String(n));
+
+/** Celý přehled. Vrací `null`, když ještě nikdo nic nenahrál. */
+KB.nactiFotkyBph = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const meta = await getDoc(fotkyMetaDoc());
+    if (!meta.exists()) return null;
+    const hlavicka = meta.data() || {};
+    const snap = await getDocs(fotkyKouskyCol());
+    const kousky = [];
+    snap.forEach(d => { kousky[Number(d.id)] = (d.data() || {}).data || ""; });
+    const text = kousky.slice(0, Number(hlavicka.kousku) || kousky.length).join("");
+    if (!text) return null;
+    try {
+        const data = JSON.parse(text);
+        data.ms = hlavicka.ms || 0;
+        data.kdo = hlavicka.kdo || "";
+        return data;
+    } catch (err) {
+        return null;
+    }
+};
+
+/**
+ * Nahraje nový přehled. Starší kousky se musí smazat – kdyby byl nový
+ * přehled kratší, zbytek toho starého by se připojil na konec a JSON
+ * by se nerozebral.
+ */
+KB.ulozFotkyBph = async (data, hlaseni) => {
+    if (authReady) await authReady;
+    requireDb();
+    const text = JSON.stringify(data);
+    const kousku = Math.max(1, Math.ceil(text.length / FOTKY_KOUSEK));
+
+    const stare = await getDocs(fotkyKouskyCol());
+    for (const d of stare.docs) {
+        if (Number(d.id) >= kousku) await deleteDoc(d.ref);
+    }
+    for (let n = 0; n < kousku; n++) {
+        if (hlaseni) hlaseni("Ukládám část " + (n + 1) + "/" + kousku + "…");
+        await setDoc(fotkyKousek(n), { data: text.slice(n * FOTKY_KOUSEK, (n + 1) * FOTKY_KOUSEK) });
+    }
+    await setDoc(fotkyMetaDoc(), {
+        kousku: kousku,
+        znaku: text.length,
+        datum: String(data.datum || "").slice(0, 40),
+        datumSkenu: String(data.datum_skenu || "").slice(0, 40),
+        ms: Date.now(),
+        kdo: window.KB_USER || ""
+    });
+    KB.zapisAktivitu("navod", "nahrál přehled fotek v BPH");
+    return kousku;
+};
+
 /* --------------------------------------------------- POKLADNA ----------
    Hotovost v kanceláři: co přišlo, co se vydalo a komu. Vede ji asistentka,
    koukají do ní manažeři – proto sedí pod `private/`, kam pravidla pouštějí

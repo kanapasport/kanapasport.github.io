@@ -312,6 +312,18 @@ service cloud.firestore {
       allow delete: if clen() && resource.data.get('uid', '') == request.auth.uid;
     }
 
+    /* --- fotky v BPH (přehled po místnostech a technologiích) ------------
+       Podklad pro plánování focení: u které místnosti a technologie kolik
+       fotek leží. Čte ho celý tým – kdo jede fotit, musí vidět, kde je
+       díra. Nahrává ho manažer jedním souborem (spodní pravidlo pro
+       `private`), protože data vznikají mimo web, skenem složky s fotkami.
+
+       Schválně pod `private/`, ne v repozitáři: repozitář je veřejný,
+       a tohle jsou data ze zakázky. (17. 9. 2026.) */
+    match /artifacts/firemni-kb-app/private/fotkybph/{dokument=**} {
+      allow read: if clen();
+    }
+
     // --- postup dne (denní screenshoty práce) -----------------------------
     //
     //   private/postup/zaznamy/{uid_datum}            { uid, osoba, datum, text }
