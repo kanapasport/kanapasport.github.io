@@ -32,7 +32,8 @@ window.KB_ICONS = {
     cog:      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>',
     clock:    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>',
     calendar: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
-    chart:    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>'
+    chart:    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>',
+    pencil:   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>'
 };
 
 /* ------------------------------------------------------------- kategorie ---
@@ -112,12 +113,6 @@ window.KB_CATEGORIES = [
                 ]
             },
             {
-                id: 'autocad', title: 'AutoCAD', children: [
-                    { id: 'autocad-priprava', title: 'Příprava dat pro ArcGIS' },
-                    { id: 'autocad-zkratky',  title: 'Zkratky a rychlá práce' }
-                ]
-            },
-            {
                 id: 'revit', title: 'Revit', children: [
                     { id: 'revit-export', title: 'Export do ArcGIS' },
                     { id: 'revit-zaklady', title: 'Základy ovládání' }
@@ -125,6 +120,40 @@ window.KB_CATEGORIES = [
             },
             { id: 'archicad', title: 'ArchiCAD' },
             { id: 'archline',  title: 'ArchLine' }
+        ]
+    },
+    /* AutoCAD má vlastní sekci, ne položku v PROGRAMECH: kreslí se v něm denně
+       a návodů k němu bude přibývat (nastavení stanice, zkratky, LISPy,
+       příprava dat). Hlavní návod sekce je balíček nastavení – ten se otevře
+       rovnou, když se sekce jen rozklikne. */
+    {
+        id: 'autocad',
+        barva: '#1d556d',
+        title: 'AUTOCAD',
+        sub: 'Nastavení stanice, zkratky a práce s výkresem',
+        icon: 'pencil',
+        main: 'autocad-balicek',
+        children: [
+            {
+                id: 'autocad-start', title: 'NASTAVENÍ STANICE', children: [
+                    { id: 'autocad-instalace', title: 'Instalace a licence' },
+                    { id: 'autocad-balicek',   title: 'Balíček nastavení' },
+                    { id: 'autocad-prostor',   title: 'Pracovní prostor a palety' },
+                    { id: 'autocad-mys',       title: 'Myš a pravé tlačítko' }
+                ]
+            },
+            {
+                id: 'autocad-ovladani', title: 'OVLÁDÁNÍ', children: [
+                    { id: 'autocad-zkratky', title: 'Klávesové zkratky' },
+                    { id: 'autocad-lispy',   title: 'LISPy a doplňky' }
+                ]
+            },
+            {
+                id: 'autocad-vykres', title: 'PRÁCE S VÝKRESEM', children: [
+                    { id: 'autocad-xref',     title: 'Externí reference' },
+                    { id: 'autocad-priprava', title: 'Příprava dat pro ArcGIS' }
+                ]
+            }
         ]
     },
     {
