@@ -1871,6 +1871,9 @@
                nemá co odškrtávat – u „každý sám" už vůbec. */
             (jsemAdresat && !(mujVzkaz && q.rezim === "kazdy")
                 ? '<div class="row" style="gap:8px;margin-top:14px">' +
+                    (q.zadostZpetne && !hotovoMne
+                        ? '<a class="btn btn--sm btn--primary" href="vykazy.html#zpetne">Vyřídit ve Výkazech</a>'
+                        : "") +
                     (hotovoMne
                         ? '<button type="button" class="btn btn--sm btn--ghost"' +
                             ' data-quick-hotovo="' + esc(q.id) + '" data-zpet="1">Vrátit</button>'
@@ -2268,6 +2271,10 @@
                    rovnou na té poznámce (poznamky.html si ji samo otevře) */
                 (q.poznamka ? '<button type="button" class="btn btn--ghost btn--sm"' +
                     ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
+                /* žádost o zpětný zápis se vyřizuje ve Výkazech – jedním
+                   kliknutím povolit den, od dne, nebo odmítnout (22. 9. 2026) */
+                (q.zadostZpetne && jsemAdresat && !hotovoMne
+                    ? '<a class="btn btn--primary btn--sm" href="vykazy.html#zpetne">Vyřídit</a>' : "") +
                 /* Beru na vědomí – jen pro adresáta a jen dokud to není
                    splněné. Zpátky se to vezme kliknutím na totéž. */
                 (jsemAdresat && !hotovoMne

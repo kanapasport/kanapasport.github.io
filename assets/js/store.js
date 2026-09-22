@@ -435,10 +435,13 @@ try {
         /* Milníky leží v jednom dokumentu jako pole. Je jich pár desítek
            a hlavně: `meta/…` smí zapisovat jen správce, takže se tím rovnou
            řeší i to, kdo je může měnit – bez dalších pravidel v databázi. */
-        /* Povolení zpětného zápisu: { uid: "2026-09-15" } = do kdy smí
-           člověk zapisovat i do uzavřených týdnů. Leží v meta (čtou všichni
-           členové – zaměstnanec podle toho projde uzávěrkou), zapisuje
-           správce. Odebrání = prázdné datum (hluboký merge klíče nemaže). */
+        /* Povolení zpětného zápisu: { uid: { plati, od, dny, kdo, ms } }.
+           Platí jen v den `plati` (do půlnoci) a odemyká buď jednotlivé
+           `dny`, nebo všechno `od` zvoleného data (Michal 22. 9. 2026).
+           Starší podoba je jen datum „do kdy" – ta odemyká všechny dny.
+           Leží v meta (čtou všichni členové – zaměstnanec podle toho projde
+           uzávěrkou), zapisuje správce. Odebrání = prázdný řetězec (hluboký
+           merge klíče nemaže). Výklad je ve vykazy.html u `zpetneZaznam`. */
         odbery.push(onSnapshot(metaDoc("zpetne"), (snap) => {
             const data = snap.exists() ? (snap.data() || {}) : {};
             KB.zpetnePovoleni = (data.povoleni && typeof data.povoleni === "object")
@@ -732,6 +735,15 @@ KB.saveQuickTodo = async (id, data) => {
        aby ho odškrtnutí ze staršího okna nesmazalo. */
     if ("vzaliUids" in data) {
         zapis.vzaliUids = Array.isArray(data.vzaliUids) ? data.vzaliUids.slice(0, 40) : [];
+    }
+    /* Žádost o zpětný zápis (22. 9. 2026): vzkaz manažerům nese den, na
+       který chce člověk zapsat. Podle toho ji manažer najde v okně Zpětný
+       zápis a vyřídí jedním kliknutím. Kdo žádá, je `odKoho`. */
+    if (data.zadostZpetne && /^\d{4}-\d{2}-\d{2}$/.test(data.zadostZpetne.datum || "")) {
+        zapis.zadostZpetne = {
+            datum: data.zadostZpetne.datum,
+            duvod: String(data.zadostZpetne.duvod || "").slice(0, 160)
+        };
     }
 
     await setDoc(quickDoc(id), zapis, { merge: true });
@@ -2035,8 +2047,12 @@ KB.posliDoSheets = (id) => {
 
 KB.zpetnePovoleni = {};
 
-/** Povolení zpětného zápisu – celá mapa { uid: "do kdy" } najednou. */
-KB.ulozZpetnePovoleni = async (mapa) => {
+/**
+ * Povolení zpětného zápisu. Posílá se JEN to, co se mění – { uid: záznam }.
+ * Merge ostatní lidi nechá být, takže se dva manažeři, kteří povolují
+ * zároveň, navzájem nepřepíšou. Zrušení = { uid: "" }.
+ */
+KB.ulozZpetnePovoleni = async (mapa, popis) => {
     if (authReady) await authReady;
     requireDb();
     await setDoc(metaDoc("zpetne"), {
@@ -2044,7 +2060,7 @@ KB.ulozZpetnePovoleni = async (mapa) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
-    KB.zapisAktivitu("vykaz", "změnil povolení zpětného zápisu");
+    KB.zapisAktivitu("vykaz", popis || "změnil povolení zpětného zápisu");
 };
 
 KB.ulozGsyncUrl = async (url) => {

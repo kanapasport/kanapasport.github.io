@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=228">
+    <link rel="stylesheet" href="assets/css/app.css?v=229">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -22,6 +22,31 @@
         .hlavicka__text { min-width: 0; }
         /* tlačítko k pravému okraji obsahu, ať lícuje s tabulkou pod ním */
         .hlavicka__akce { margin-left: auto; }
+
+        /* Zpětný zápis (22. 9. 2026): počet čekajících žádostí na tlačítku
+           manažera, pruh s platným povolením a řádky žádostí v okně. */
+        .zp-odznak {
+            display: inline-block; min-width: 19px; margin-left: 7px; padding: 0 6px;
+            border-radius: 99px; background: var(--danger); color: #fff;
+            font-size: 11px; font-weight: 900; line-height: 19px; text-align: center;
+        }
+        .zp-odznak[hidden] { display: none; }
+        .zp-pruh {
+            padding: 10px 14px; border-radius: var(--radius);
+            background: var(--ok-tint); border: 1px solid var(--ok); color: var(--text);
+            font-size: 13.5px; line-height: 1.5;
+        }
+        .zp-pruh[hidden] { display: none; }
+        .zp-pruh b { color: var(--ok); }
+        .zp-nadpis { font-size: 12px; font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted); }
+        .zp-zadost {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+            padding: 10px 12px; border-radius: var(--radius);
+            background: var(--bg-soft); border: 1px solid var(--line-soft);
+        }
+        .zp-zadost__text { flex: 1 1 220px; min-width: 0; font-size: 13.5px; line-height: 1.45; }
+        .zp-zadost__akce { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
         /* ZAROVNÁNÍ FORMULÁŘE. Automatické sloupce (auto-fit) si šířku braly
            podle obsahu, takže pole na sousedních řádcích nelícovala. Pevné
@@ -116,11 +141,19 @@
             <!-- Firmy a sazby patří do Nastavení, ne sem: tahle stránka je
                  o zapisování a prohlížení, ne o číselnících. -->
             <div class="row hlavicka__akce" style="gap:8px">
+                <!-- manažer: žádosti a povolení; číslo = kolik žádostí čeká -->
                 <button id="btnZpetne" class="btn btn--ghost" data-need="vykaz.view" hidden
-                    title="Povolit někomu zápis do uzavřených týdnů">Zpětný zápis</button>
+                    title="Žádosti o zpětný zápis a povolení zápisu do uzavřených týdnů">Zpětný zápis<span
+                    id="zpOdznak" class="zp-odznak" hidden></span></button>
+                <!-- zaměstnanec: žádost o zápis do uzavřeného týdne (Michal 22. 9. 2026) -->
+                <button id="btnZadostZpetne" class="btn btn--ghost" hidden
+                    title="Požádat manažera o zápis výkazu do uzavřeného týdne">Požádat o zpětný zápis</button>
                 <button id="btnZapis" class="btn btn--primary">Přidat výkaz</button>
             </div>
         </div>
+
+        <!-- platné povolení zpětného zápisu – na co a do kdy -->
+        <div id="zpetneMoje" class="zp-pruh" hidden></div>
 
         <!-- ================================================== ZÁPIS DNE -->
         <section id="zapis" class="card col" style="padding:18px;gap:14px" hidden>
@@ -217,9 +250,10 @@
 
 <!-- ==================================================== ÚPRAVA POLOŽKY -->
 <!-- ============================================ ZPĚTNÝ ZÁPIS ==
-     Manažer povolí konkrétnímu člověku zápis do uzavřených týdnů, do
-     zvoleného dne. Do té doby člověku neprojde nic staršího než pondělí
-     půlnoc (viz uzávěrka). -->
+     Zaměstnanec požádá o konkrétní den, manažer povolí buď jen ten den,
+     nebo všechno od něj. Povolení platí jen v den, kdy ho manažer dal –
+     do půlnoci (Michal 22. 9. 2026). Bez něj neprojde nic staršího než
+     pondělí půlnoc (viz uzávěrka). -->
 <!-- ======================================== TÝDEN JE UZAVŘENÝ ==
      Zaměstnanci se místo tiché hlášky ukáže okno s vysvětlením a rovnou
      s tlačítkem, kterým o zpětný zápis požádá manažery (Quick TO-DO). -->
@@ -246,24 +280,74 @@
     </div>
 </div>
 
+<div id="zadostOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:135;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:500px;width:100%;gap:0;overflow:hidden">
+        <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Požádat o zpětný zápis
+        </div>
+        <div class="col" style="padding:16px 18px;gap:12px">
+            <p class="small muted" style="margin:0;line-height:1.6">
+                Vyber den v uzavřeném týdnu, na který potřebuješ zapsat výkaz.
+                Žádost dostanou manažeři do Quick TO-DO. Jakmile ji povolí, přijde
+                ti vzkaz – <b>povolení platí jen ten den do půlnoci</b>, tak si výkaz
+                zapiš hned.
+            </p>
+            <div class="row row--wrap" style="gap:10px;align-items:flex-end">
+                <div style="flex:0 0 170px"><label class="label" for="zdDatum">Den</label>
+                    <input type="date" id="zdDatum" class="field"></div>
+                <div style="flex:1 1 210px"><label class="label" for="zdDuvod">Důvod (nepovinné)</label>
+                    <input type="text" id="zdDuvod" class="field" maxlength="160"
+                        placeholder="např. byl jsem na stavbě bez notebooku"></div>
+            </div>
+            <div id="zdStav" class="col" style="gap:4px"></div>
+        </div>
+        <div class="row" style="gap:10px;padding:13px 18px;border-top:1px solid var(--line)">
+            <button type="button" id="zdPosli" class="btn btn--primary btn--sm">Poslat žádost</button>
+            <div class="grow"></div>
+            <button type="button" id="zdZavri" class="btn btn--ghost btn--sm">Zavřít</button>
+        </div>
+    </div>
+</div>
+
 <div id="zpetneOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:115;display:flex;align-items:center;justify-content:center;padding:18px">
     <div class="card col" style="padding:0;max-width:560px;width:100%;gap:0;overflow:hidden;max-height:88vh">
         <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
             Zpětný zápis výkazů
         </div>
-        <div class="col" style="padding:16px 18px;gap:12px;overflow-y:auto">
+        <div class="col" style="padding:16px 18px;gap:16px;overflow-y:auto">
             <p class="small muted" style="margin:0;line-height:1.6">
-                Vybraný člověk může do zvoleného dne zapisovat výkazy i do
-                uzavřených týdnů. Po tom dni platí zase běžná uzávěrka.
+                Povolení platí <b>jen dnes do půlnoci</b> – pak se uzavřené týdny
+                zase zavřou. Člověk o povolení dostane vzkaz do Quick TO-DO.
             </p>
-            <div class="row row--wrap" style="gap:8px;align-items:flex-end">
-                <label class="pole" style="flex:1 1 200px"><span class="popisek">Komu</span>
-                    <select id="zpKomu" class="field"></select></label>
-                <label class="pole" style="flex:0 0 150px"><span class="popisek">Povolit do</span>
-                    <input type="date" id="zpDoKdy" class="field"></label>
-                <button type="button" id="zpPovol" class="btn btn--sm btn--primary">Povolit</button>
+
+            <div class="col" style="gap:8px">
+                <b class="zp-nadpis">Žádosti</b>
+                <div id="zpZadosti" class="col" style="gap:8px"></div>
             </div>
-            <div id="zpSeznam"></div>
+
+            <div class="col" style="gap:8px">
+                <b class="zp-nadpis">Povolit bez žádosti</b>
+                <div class="row row--wrap" style="gap:8px;align-items:flex-end">
+                    <div style="flex:1 1 180px"><label class="label" for="zpKomu">Komu</label>
+                        <select id="zpKomu" class="field"></select></div>
+                    <div style="flex:0 0 150px"><label class="label" for="zpDatum">Den</label>
+                        <input type="date" id="zpDatum" class="field"></div>
+                    <div style="flex:0 0 160px"><label class="label" for="zpRezim">Rozsah</label>
+                        <select id="zpRezim" class="field">
+                            <option value="den">jen tento den</option>
+                            <option value="od">od tohoto dne</option>
+                        </select></div>
+                    <button type="button" id="zpPovol" class="btn btn--sm btn--primary">Povolit</button>
+                </div>
+                <p class="tiny muted" style="margin:0;line-height:1.5">
+                    „Od tohoto dne“ odemkne všechny uzavřené dny od zvoleného data až do dneška.
+                </p>
+            </div>
+
+            <div class="col" style="gap:8px">
+                <b class="zp-nadpis">Povoleno na dnešek</b>
+                <div id="zpSeznam" class="col" style="gap:8px"></div>
+            </div>
         </div>
         <div class="row" style="gap:10px;padding:13px 18px;border-top:1px solid var(--line)">
             <div class="grow"></div>
@@ -300,10 +384,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=228"></script>
-<script src="assets/js/ui.js?v=228"></script>
-<script src="assets/js/vykazy.js?v=228"></script>
-<script type="module" src="assets/js/store.js?v=228"></script>
+<script src="assets/js/taxonomy.js?v=229"></script>
+<script src="assets/js/ui.js?v=229"></script>
+<script src="assets/js/vykazy.js?v=229"></script>
+<script type="module" src="assets/js/store.js?v=229"></script>
 
 <script>
 (function () {
@@ -1161,7 +1245,7 @@
         const datum = (box.querySelector('[data-f="datum"]') || {}).value;
         const zakazka = zakazkaZaznamu(box);
         const zavreno = !!datum && !window.KBUI.can("vykaz.view") &&
-            !mamZpetnePovoleni() && poLhute(datum) && !bezUzaverky(zakazka);
+            !mamZpetnePovoleni(datum) && poLhute(datum) && !bezUzaverky(zakazka);
         pole.hidden = !zavreno;
     }
 
@@ -1185,7 +1269,8 @@
             ? '<div class="polozka__datum"><label class="label">Datum</label>' +
                   '<input type="date" class="field" data-f="datum" value="' + esc(d.datum || "") + '">' +
                   '<span class="hobox__pozor tiny" data-lhuta hidden style="display:block;margin-top:3px">' +
-                      "Tenhle den už je uzavřený — požádej o zpětný zápis.</span></div>" +
+                      'Tenhle den už je uzavřený — <button type="button" class="linkbtn" data-zadost-den>' +
+                      "požádej o zpětný zápis</button>.</span></div>" +
               '<div class="polozka__datum datumdo"><label class="label">Do dne (nepovinné)</label>' +
                   '<input type="date" class="field" data-f="datumDo" value="' + esc(d.datumDo || "") + '"></div>'
             : "";
@@ -1869,56 +1954,259 @@
         $("lhutaOverlay").hidden = false;
     }
 
-    async function posliZadostOZpetny() {
-        const jmeno = window.KB_USER || "";
+    /* ------------------------------------------------ zpětný zápis ----
+       Zaměstnanec požádá o konkrétní den, manažer povolí buď JEN TEN DEN,
+       nebo VŠECHNO OD NĚJ. Povolení platí jen v den, kdy ho manažer dal –
+       do půlnoci; pak se uzavřené týdny zase zavřou (Michal 22. 9. 2026).
+       V databázi (meta/zpetne):
+         povoleni.{uid} = { plati: "2026-09-22", od: "", dny: ["2026-09-15"],
+                            kdo: "Michal Kočiš", ms }
+       Starší podoba je jen datum „do kdy" a odemyká všechny dny – taková
+       povolení doběhnou, jak byla dána. */
+
+    const mojeUid = () => (window.KB.currentUid && window.KB.currentUid()) || "";
+
+    function jmenoUid(uid) {
+        const u = V.clovek(uid);
+        return (u && V.jmeno(u)) || "neznámý člověk";
+    }
+
+    /** Povolení v jednotné podobě, nebo null. */
+    function zpetneZaznam(hodnota) {
+        if (!hodnota) return null;
+        if (typeof hodnota === "string") return { plati: hodnota, od: "", dny: [], vse: true };
+        if (typeof hodnota !== "object" || !hodnota.plati) return null;
+        return {
+            plati: String(hodnota.plati),
+            od: String(hodnota.od || ""),
+            dny: Array.isArray(hodnota.dny) ? hodnota.dny.slice() : [],
+            vse: false
+        };
+    }
+
+    /** Povolení, které člověku platí dnes – jinak null. */
+    function zpetnePlatne(uid) {
+        const z = zpetneZaznam((window.KB.zpetnePovoleni || {})[uid]);
+        return z && z.plati >= V.dnesISO() ? z : null;
+    }
+
+    /** Odemyká povolení den `datum`? */
+    function zpetneOdemyka(z, datum) {
+        if (!z) return false;
+        if (z.vse) return true;
+        return !!datum && ((!!z.od && datum >= z.od) || z.dny.indexOf(datum) !== -1);
+    }
+
+    /** Smí přihlášený zapsat den `datum` do uzavřeného týdne? */
+    function mamZpetnePovoleni(datum) {
+        return zpetneOdemyka(zpetnePlatne(mojeUid()), datum);
+    }
+
+    /** Co povolení odemyká, lidsky: „15. 9. 2026, od 18. 9. 2026". */
+    function zpetnePopis(z) {
+        if (!z) return "";
+        if (z.vse) return "všechny uzavřené dny";
+        const casti = z.dny.filter(d => !z.od || d < z.od).sort().map(d => V.czDatum(d));
+        if (z.od) casti.push("vše od " + V.czDatum(z.od));
+        return casti.join(", ");
+    }
+
+    function zpetnePlatnost(z) {
+        return z.plati === V.dnesISO() ? "platí jen dnes do půlnoci" : "platí do " + V.czDatum(z.plati);
+    }
+
+    /** Nevyřízené žádosti: `mne` = ty, co čekají na mě (manažer),
+        jinak ty, které jsem poslal já. */
+    function zadostiZpetne(mne) {
+        const uid = mojeUid();
+        return (window.KB.quicktodo || []).filter(q =>
+            q.zadostZpetne && q.zadostZpetne.datum && !q.hotovo &&
+            (mne ? q.odKoho !== uid && window.KBUI.quickAdresati(q).indexOf(uid) !== -1
+                 : q.odKoho === uid));
+    }
+
+    /**
+     * Žádost jde manažerům jako Quick TO-DO – ten umí upozornit i e-mailem.
+     * Navíc nese `zadostZpetne` s dnem, podle kterého ji manažer najde
+     * v okně Zpětný zápis a vyřídí jedním kliknutím.
+     */
+    async function posliZadostOZpetny(datum, duvod) {
+        const uid = mojeUid();
         const manazeri = V.lide()
-            .filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1)
+            .filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1 && u.id !== uid)
             .map(u => u.id);
-        if (!manazeri.length) return window.KBUI.toast("Nenašel se žádný manažer.", "error");
+        if (!manazeri.length) {
+            window.KBUI.toast("Nenašel se žádný manažer.", "error");
+            return false;
+        }
         try {
-            await window.KB.saveQuickTodo("qt_" + Date.now() + "_" + Math.floor(Math.random() * 1000), {
-                text: "Zpětný zápis: povol mi prosím zapsat výkaz na " +
-                    (lhutaDatum ? V.czDatum(lhutaDatum) : "uzavřený týden") +
-                    " (Výkazy → Zpětný zápis).",
+            await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+                text: "Zpětný zápis: povol mi prosím zapsat výkaz na " + V.czDatum(datum) +
+                    " (" + V.denVTydnu(datum) + ")" + (duvod ? " – " + duvod : "") +
+                    ". Vyřídíš ve Výkazech → Zpětný zápis.",
                 proUids: manazeri,
-                asap: true
+                asap: true,
+                zadostZpetne: { datum: datum, duvod: duvod || "" }
             });
-            $("lhutaOverlay").hidden = true;
-            window.KBUI.toast("Žádost odešla manažerům do Quick TO-DO.");
+            window.KBUI.toast("Žádost odešla manažerům.");
+            return true;
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Žádost se nepodařilo poslat.", "error");
+            return false;
         }
     }
 
-    /** Osobní povolení od manažera: do vraceného dne (včetně) smí člověk
-        zapisovat i do uzavřených týdnů. */
-    function mamZpetnePovoleni() {
-        const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
-        const doKdy = (window.KB.zpetnePovoleni || {})[uid] || "";
-        return !!doKdy && doKdy >= V.dnesISO();
+    /** Okno žádosti – z tlačítka v hlavičce i z hlášky „týden je uzavřený". */
+    function otevriZadost(datum) {
+        $("zdDatum").max = V.dnesISO();
+        $("zdDatum").value = datum || "";
+        $("zdDuvod").value = "";
+        vykresliZadostStav();
+        $("zadostOverlay").hidden = false;
+        (datum ? $("zdDuvod") : $("zdDatum")).focus();
+    }
+
+    function vykresliZadostStav() {
+        const z = zpetnePlatne(mojeUid());
+        const cekaji = zadostiZpetne(false)
+            .map(q => q.zadostZpetne.datum).sort().map(d => V.czDatum(d));
+        $("zdStav").innerHTML =
+            (z ? '<p class="small" style="margin:0;color:var(--ok);font-weight:700">Teď máš povoleno: ' +
+                esc(zpetnePopis(z)) + " – " + esc(zpetnePlatnost(z)) + ".</p>" : "") +
+            (cekaji.length ? '<p class="small muted" style="margin:0">Čeká na manažera: ' +
+                esc(cekaji.join(", ")) + ".</p>" : "");
+    }
+
+    async function odesliZadost() {
+        const datum = $("zdDatum").value;
+        const duvod = $("zdDuvod").value.trim();
+        const pozor = (t) => window.KBUI.toast(t, "warn");
+        if (!datum) return pozor("Vyber den, na který potřebuješ zapsat.");
+        if (datum > V.dnesISO()) return pozor("Zpětně jde jen o dny, které už byly.");
+        if (!poLhute(datum)) return pozor("Tenhle den ještě uzavřený není – zapiš ho rovnou přes Přidat výkaz.");
+        if (mamZpetnePovoleni(datum)) return pozor("Na tenhle den už povolení máš – zapiš ho ještě dnes.");
+        if (zadostiZpetne(false).some(q => q.zadostZpetne.datum === datum)) {
+            return pozor("Žádost na tenhle den už čeká na manažera.");
+        }
+        $("zdPosli").disabled = true;
+        const ok = await posliZadostOZpetny(datum, duvod);
+        $("zdPosli").disabled = false;
+        if (ok) $("zadostOverlay").hidden = true;
+    }
+
+    /**
+     * Povolí člověku zpětný zápis – platí jen dnes, do půlnoci. Dnešní
+     * povolení se sčítají: dva vyřízené dny jsou dva dny, ne jen ten
+     * poslední. Vyřídí se tím i jeho čekající žádosti, které povolení
+     * pokrývá, a člověk dostane vzkaz, ať ví, že má dnes zapsat.
+     */
+    async function povolZpetne(uid, datum, rezim) {
+        const bylo = zpetnePlatne(uid);
+        const nove = { plati: V.dnesISO(), od: "", dny: [], kdo: window.KB_USER || "", ms: Date.now() };
+        if (bylo && !bylo.vse) { nove.od = bylo.od; nove.dny = bylo.dny.slice(); }
+        if (rezim === "od") {
+            nove.od = nove.od && nove.od < datum ? nove.od : datum;
+        } else if (nove.dny.indexOf(datum) === -1) {
+            nove.dny.push(datum);
+        }
+        // jednotlivé dny, které „od" už pokrývá, jsou navíc
+        nove.dny = nove.dny.filter(d => !nove.od || d < nove.od).sort();
+
+        const popis = (rezim === "od" ? "vše od " : "") + V.czDatum(datum);
+        await window.KB.ulozZpetnePovoleni({ [uid]: nove },
+            "povolil zpětný zápis: " + jmenoUid(uid) + " – " + popis);
+
+        const z = zpetneZaznam(nove);
+        for (const q of zadostiZpetne(true)) {
+            if (q.odKoho === uid && zpetneOdemyka(z, q.zadostZpetne.datum)) {
+                await window.KBUI.quickPrepni(q, true).catch(err => console.warn("Žádost se neodškrtla:", err));
+            }
+        }
+        await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+            text: "Zpětný zápis povolen: " + popis +
+                ". Zapiš výkaz ještě dnes – povolení platí jen do půlnoci.",
+            proUids: [uid],
+            asap: true
+        }).catch(err => console.warn("Vzkaz o povolení neodešel:", err));
+    }
+
+    /** Odmítnutí: žádost se odškrtne a člověk dostane vzkaz. */
+    async function odmitniZpetne(q) {
+        await window.KBUI.quickPrepni(q, true);
+        await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+            text: "Zpětný zápis na " + V.czDatum(q.zadostZpetne.datum) +
+                " povolen nebyl. Kdyžtak se ozvi.",
+            proUids: [q.odKoho]
+        }).catch(err => console.warn("Vzkaz o odmítnutí neodešel:", err));
+    }
+
+    /** Žádosti v okně manažera – každá se vyřídí jedním kliknutím. */
+    function vykresliZadosti() {
+        const zadosti = zadostiZpetne(true).sort((a, b) => (a.ms || 0) - (b.ms || 0));
+        $("zpZadosti").innerHTML = zadosti.length
+            ? zadosti.map(q => {
+                const d = q.zadostZpetne.datum;
+                const den = esc(V.czDatum(d));
+                const id = esc(q.id);
+                return '<div class="zp-zadost">' +
+                    '<div class="zp-zadost__text"><b>' + esc(q.odKohoJmeno || jmenoUid(q.odKoho)) +
+                        "</b> · " + den + " (" + esc(V.denVTydnu(d)) + ")" +
+                        (q.zadostZpetne.duvod
+                            ? '<br><span class="tiny muted">' + esc(q.zadostZpetne.duvod) + "</span>" : "") +
+                    "</div>" +
+                    '<div class="zp-zadost__akce">' +
+                        '<button type="button" class="btn btn--sm btn--primary" data-zp-vyrid="den" data-id="' +
+                            id + '">Povolit jen ' + den + "</button>" +
+                        '<button type="button" class="btn btn--sm btn--ghost" data-zp-vyrid="od" data-id="' +
+                            id + '">Povolit od ' + den + "</button>" +
+                        '<button type="button" class="linkbtn" data-zp-vyrid="ne" data-id="' +
+                            id + '" style="color:var(--danger)">odmítnout</button>' +
+                    "</div></div>";
+            }).join("")
+            : '<p class="tiny muted" style="margin:0">Žádná žádost nečeká.</p>';
     }
 
     function vykresliZpetne() {
         const mapa = window.KB.zpetnePovoleni || {};
-        $("zpKomu").innerHTML = osobyOptions(V.lide(), "");
-        const dnes = V.dnesISO();
+        const vybrany = $("zpKomu").value;
+        $("zpKomu").innerHTML = '<option value="">— vyber —</option>' + osobyOptions(V.lide(), vybrany);
+        vykresliZadosti();
         const radky = Object.keys(mapa)
-            .filter(uid => mapa[uid])
-            .map(uid => ({ uid: uid, doKdy: mapa[uid],
-                jmeno: V.jmeno(V.clovek(uid)) || uid }))
+            .map(uid => ({ uid: uid, z: zpetnePlatne(uid) }))
+            .filter(r => r.z)
+            .map(r => Object.assign(r, { jmeno: jmenoUid(r.uid) }))
             .sort((a, b) => a.jmeno.localeCompare(b.jmeno, "cs"));
+        // stejné kartičky jako žádosti – tabulka `pt` má styly jen ve Správě
         $("zpSeznam").innerHTML = radky.length
-            ? '<table class="pt pt--cist"><thead><tr><th>Kdo</th><th>Smí zpětně do</th>' +
-              "<th></th></tr></thead><tbody>" +
-              radky.map(r =>
-                "<tr><td><b>" + esc(r.jmeno) + "</b></td>" +
-                "<td>" + esc(V.czDatum(r.doKdy)) +
-                    (r.doKdy < dnes ? ' <span class="tiny muted">(prošlé)</span>' : "") + "</td>" +
-                '<td class="num"><button type="button" class="linkbtn" data-zp-zrus="' +
-                    esc(r.uid) + '" style="color:var(--danger)">zrušit</button></td></tr>').join("")
-              + "</tbody></table>"
-            : '<p class="tiny muted" style="margin:0">Teď nemá povolení nikdo.</p>';
+            ? radky.map(r =>
+                '<div class="zp-zadost">' +
+                    '<div class="zp-zadost__text"><b>' + esc(r.jmeno) + "</b> · " +
+                        esc(zpetnePopis(r.z)) + '<br><span class="tiny muted">' +
+                        esc(zpetnePlatnost(r.z)) + "</span></div>" +
+                    '<div class="zp-zadost__akce"><button type="button" class="linkbtn" data-zp-zrus="' +
+                        esc(r.uid) + '" style="color:var(--danger)">zrušit</button></div>' +
+                "</div>").join("")
+            : '<p class="tiny muted" style="margin:0">Dnes nemá povolení nikdo.</p>';
+    }
+
+    /** Tlačítka v hlavičce: žádost pro zaměstnance, číslo čekajících
+        žádostí pro manažera a pruh s platným povolením. */
+    function obnovZpetneHlavicku() {
+        const prihlasen = !!window.KB_USER;
+        const manazer = prihlasen && window.KBUI.can("vykaz.view");
+        $("btnZadostZpetne").hidden = !prihlasen || manazer || !window.KBUI.can("vykaz.otevrit");
+
+        const cekaji = manazer ? zadostiZpetne(true).length : 0;
+        $("zpOdznak").textContent = cekaji ? String(cekaji) : "";
+        $("zpOdznak").hidden = !cekaji;
+
+        const z = prihlasen && !manazer ? zpetnePlatne(mojeUid()) : null;
+        $("zpetneMoje").hidden = !z;
+        $("zpetneMoje").innerHTML = z
+            ? "<b>Máš povolený zpětný zápis:</b> " + esc(zpetnePopis(z)) +
+              " – " + esc(zpetnePlatnost(z)) + ". Zapiš ho přes Přidat výkaz."
+            : "";
     }
 
     /** Projekt s povoleným zpětným zápisem (2026-027) uzávěrku nemá –
@@ -2000,9 +2288,14 @@
             return window.KBUI.toast(chybny._popis +
                 ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
         }
-        const pozdni = !window.KBUI.can("vykaz.view") && !mamZpetnePovoleni() &&
-            polozky.find(p => poLhute(p.datum) && !bezUzaverky(p.zakazka));
-        if (pozdni) return otevriLhutu(pozdni.datum);
+        /* Povolení zpětného zápisu je na konkrétní dny, proto se ptá každý
+           den zvlášť – i každý den týdne dovolené zapsané jako rozsah. */
+        const pozdni = !window.KBUI.can("vykaz.view") && polozky.map(p => {
+            if (bezUzaverky(p.zakazka)) return "";
+            const dny = p.absence ? pracovniDny(p.datum, p.datumDo) : [p.datum];
+            return dny.find(d => poLhute(d) && !mamZpetnePovoleni(d)) || "";
+        }).find(Boolean);
+        if (pozdni) return otevriLhutu(pozdni);
         const bezDruhu = polozky.find(p => !p.absence && !p.rezie && !p.cinnost);
         if (bezDruhu) {
             return window.KBUI.toast(bezDruhu._popis +
@@ -2450,7 +2743,7 @@
                 return window.KBUI.toast("Záznam už je po uzávěrce – změnu" +
                     " domluv s manažerem.", "warn");
             }
-            if (poLhute(datum) && !bezUzaverky(p.zakazka) && !mamZpetnePovoleni()) {
+            if (poLhute(datum) && !bezUzaverky(p.zakazka) && !mamZpetnePovoleni(datum)) {
                 return otevriLhutu(datum);
             }
         }
@@ -2785,11 +3078,30 @@
         $("lhutaOverlay").addEventListener("click", (event) => {
             if (event.target === $("lhutaOverlay")) $("lhutaOverlay").hidden = true;
         });
-        $("lhutaZadost").addEventListener("click", posliZadostOZpetny);
+        // z hlášky „týden je uzavřený" rovnou do žádosti na ten den
+        $("lhutaZadost").addEventListener("click", () => {
+            $("lhutaOverlay").hidden = true;
+            otevriZadost(lhutaDatum);
+        });
+        document.addEventListener("click", (event) => {
+            const odkaz = event.target.closest("[data-zadost-den]");
+            if (!odkaz) return;
+            const box = odkaz.closest("[data-polozka]");
+            otevriZadost(box ? (box.querySelector('[data-f="datum"]') || {}).value : "");
+        });
+
+        $("btnZadostZpetne").addEventListener("click", () => otevriZadost(""));
+        $("zdPosli").addEventListener("click", odesliZadost);
+        $("zdZavri").addEventListener("click", () => { $("zadostOverlay").hidden = true; });
+        $("zadostOverlay").addEventListener("click", (event) => {
+            if (event.target === $("zadostOverlay")) $("zadostOverlay").hidden = true;
+        });
 
         $("btnZpetne").addEventListener("click", () => {
+            $("zpDatum").value = "";
+            $("zpDatum").max = V.dnesISO();
+            $("zpRezim").value = "den";
             vykresliZpetne();
-            $("zpDoKdy").value = "";
             $("zpetneOverlay").hidden = false;
         });
         $("zpZavri").addEventListener("click", () => { $("zpetneOverlay").hidden = true; });
@@ -2797,29 +3109,81 @@
             if (event.target === $("zpetneOverlay")) $("zpetneOverlay").hidden = true;
         });
         $("zpPovol").addEventListener("click", async () => {
-            const uid = $("zpKomu").value, doKdy = $("zpDoKdy").value;
-            if (!uid || !doKdy) return window.KBUI.toast("Vyber komu a do kdy.", "warn");
-            const mapa = Object.assign({}, window.KB.zpetnePovoleni);
-            mapa[uid] = doKdy;
+            const uid = $("zpKomu").value, datum = $("zpDatum").value, rezim = $("zpRezim").value;
+            if (!uid || !datum) return window.KBUI.toast("Vyber komu a který den.", "warn");
+            if (datum > V.dnesISO()) {
+                return window.KBUI.toast("Budoucí dny zavřené nejsou – povolení není potřeba.", "warn");
+            }
+            $("zpPovol").disabled = true;
             try {
-                await window.KB.ulozZpetnePovoleni(mapa);
-                window.KBUI.toast("Povoleno.");
-                vykresliZpetne();
+                await povolZpetne(uid, datum, rezim);
+                window.KBUI.toast("Povoleno – platí dnes do půlnoci.");
+                $("zpDatum").value = "";
             } catch (err) { console.error(err); window.KBUI.toast("Uložení selhalo.", "error"); }
+            $("zpPovol").disabled = false;
+        });
+        $("zpZadosti").addEventListener("click", async (event) => {
+            const btn = event.target.closest("[data-zp-vyrid]");
+            if (!btn || btn.disabled) return;
+            const q = (window.KB.quicktodo || []).find(x => x.id === btn.dataset.id);
+            if (!q || !q.zadostZpetne) return;
+            const akce = btn.dataset.zpVyrid;
+            if (akce === "ne" && !confirm("Odmítnout žádost – " + (q.odKohoJmeno || jmenoUid(q.odKoho)) +
+                ", " + V.czDatum(q.zadostZpetne.datum) + "? Dostane o tom vzkaz.")) return;
+            $("zpZadosti").querySelectorAll("button").forEach(b => { b.disabled = true; });
+            try {
+                if (akce === "ne") {
+                    await odmitniZpetne(q);
+                    window.KBUI.toast("Žádost odmítnuta.");
+                } else {
+                    await povolZpetne(q.odKoho, q.zadostZpetne.datum, akce);
+                    window.KBUI.toast("Povoleno – platí dnes do půlnoci.");
+                }
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Nepovedlo se uložit.", "error");
+            }
+            vykresliZpetne();
         });
         $("zpSeznam").addEventListener("click", async (event) => {
             const zrus = event.target.closest("[data-zp-zrus]");
             if (!zrus) return;
-            const mapa = Object.assign({}, window.KB.zpetnePovoleni);
-            mapa[zrus.dataset.zpZrus] = "";     // hluboký merge klíče nemaže
+            const uid = zrus.dataset.zpZrus;
             try {
-                await window.KB.ulozZpetnePovoleni(mapa);
+                // prázdný řetězec – hluboký merge klíče nemaže
+                await window.KB.ulozZpetnePovoleni({ [uid]: "" },
+                    "zrušil zpětný zápis: " + jmenoUid(uid));
                 vykresliZpetne();
             } catch (err) { console.error(err); window.KBUI.toast("Zrušení selhalo.", "error"); }
         });
         window.KB.on("zpetne", () => {
             if (!$("zpetneOverlay").hidden) vykresliZpetne();
+            if (!$("zadostOverlay").hidden) vykresliZadostStav();
+            obnovZpetneHlavicku();
         });
+        // žádosti chodí jako Quick TO-DO – s ním se mění číslo i okno
+        window.KB.on("quicktodo", () => {
+            if (!$("zpetneOverlay").hidden) vykresliZadosti();
+            if (!$("zadostOverlay").hidden) vykresliZadostStav();
+            obnovZpetneHlavicku();
+        });
+        document.addEventListener("kb-role", obnovZpetneHlavicku);
+        obnovZpetneHlavicku();
+
+        /* Proklik „Vyřídit" u žádosti v Quick TO-DO: `#zpetne` otevře okno
+           Zpětný zápis. Je jen pro manažera, proto se počká i na roli.
+           Adresa se hned uklidí, ať se okno neotvíralo po každém obnovení. */
+        const zpetneZAdresy = () => {
+            if (location.hash !== "#zpetne" || !window.KBUI.can("vykaz.view")) return;
+            history.replaceState(null, "", location.pathname + location.search);
+            // otevřený vzkaz by zůstal přes okno – zavře se jeho vlastním tlačítkem
+            const zavri = document.querySelector("#kbQuickOkno [data-quick-okno-zavri]");
+            if (zavri) zavri.click();
+            $("btnZpetne").click();
+        };
+        document.addEventListener("kb-role", zpetneZAdresy);
+        window.addEventListener("hashchange", zpetneZAdresy);
+        zpetneZAdresy();
 
         $("btnZapis").addEventListener("click", () => {
             $("zapis").hidden = false;
