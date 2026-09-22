@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=234">
+    <link rel="stylesheet" href="assets/css/app.css?v=235">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -523,10 +523,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=234"></script>
-<script src="assets/js/ui.js?v=234"></script>
-<script src="assets/js/vykazy.js?v=234"></script>
-<script type="module" src="assets/js/store.js?v=234"></script>
+<script src="assets/js/taxonomy.js?v=235"></script>
+<script src="assets/js/ui.js?v=235"></script>
+<script src="assets/js/vykazy.js?v=235"></script>
+<script type="module" src="assets/js/store.js?v=235"></script>
 
 <script>
 (function () {
@@ -689,6 +689,28 @@
 
     /* ------------------------------------------------------------- souhrn */
 
+    /* Celkové součty se neukazují samy – stejně jako u výkazů si je člověk
+       odkryje tlačítkem v rohu dlaždice (Michal 22. 9.). Částky u jednotlivých
+       faktur v seznamu zůstávají vidět, aby se nemuselo nic rozklikávat. */
+    let penizeVidet = false;
+
+    function penizeDlazdice(label, value, note, money) {
+        return '<div class="card vyktile vyktile--tajne' + (money ? " vyktile--money" : "") + '">' +
+            '<button type="button" class="vyktile__oko" data-penize-prepni></button>' +
+            '<div class="vyktile__label">' + esc(label) + "</div>" +
+            '<div class="vyktile__value"><span class="tajne">' + value + "</span>" +
+                '<span class="tajne__zastup">•••</span></div>' +
+            (note ? '<div class="vyktile__note">' + note + "</div>" : "") +
+        "</div>";
+    }
+
+    function pouzijSkryti() {
+        document.body.classList.toggle("penize-videt", penizeVidet);
+        document.querySelectorAll("[data-penize-prepni]").forEach(b => {
+            b.textContent = penizeVidet ? "skrýt" : "zobrazit";
+        });
+    }
+
     function vykresliSouhrn() {
         const vyber = filtrovane();
         const projekt = $("filtrProjekt").value;
@@ -704,9 +726,9 @@
             ["faktura", "faktury", "faktur"]);
 
         let dlazdice =
-            V.dlazdice("Vydané (bez DPH)", V.kc(vydaneBez), kolik("vydana"), true) +
-            V.dlazdice("Přijaté (bez DPH)", V.kc(prijateBez), kolik("prijata") +
-                (bezKurzu ? " · " + bezKurzu + " v cizí měně bez kurzu nezapočteno" : ""), true);
+            penizeDlazdice("Vydané (bez DPH)", esc(V.kc(vydaneBez)), esc(kolik("vydana")), true) +
+            penizeDlazdice("Přijaté (bez DPH)", esc(V.kc(prijateBez)), esc(kolik("prijata") +
+                (bezKurzu ? " · " + bezKurzu + " v cizí měně bez kurzu nezapočteno" : "")), true);
 
         // záznamy z inboxu čekají na člověka – dlaždice je zároveň filtr
         const cekaji = (window.KB.faktury || []).filter(keKontrole).length;
@@ -723,19 +745,17 @@
             const rozpocet = Number((rozpocty[projekt] || {}).kc) || 0;
             if (rozpocet) {
                 const c = V.cerpani(vydaneBez, rozpocet);
-                dlazdice += V.dlazdice("Rozpočet projektu", V.kc(rozpocet), "", true) +
-                    '<div class="card vyktile vyktile--money">' +
-                        '<div class="vyktile__label">Vyfakturováno</div>' +
-                        '<div class="vyktile__value" style="color:' + c.barva + '">' +
-                            Math.round(c.pct) + " %</div>" +
-                        '<div class="vyktile__note">zbývá ' + esc(V.kc(c.zbyva)) + "</div>" +
-                    "</div>";
+                dlazdice += penizeDlazdice("Rozpočet projektu", esc(V.kc(rozpocet)), "", true) +
+                    penizeDlazdice("Vyfakturováno", '<span style="color:' + c.barva + '">' +
+                        Math.round(c.pct) + " %</span>", 'zbývá <span class="tajne">' + esc(V.kc(c.zbyva)) +
+                        '</span><span class="tajne__zastup">•••</span>', true);
             } else {
                 dlazdice += V.dlazdice("Rozpočet projektu", "—",
                     "vyplň ho ve Správě projektů", true);
             }
         }
         $("souhrn").innerHTML = dlazdice;
+        pouzijSkryti();
     }
 
     /* ------------------------------------------------------------- seznam */
@@ -1942,6 +1962,12 @@
             $("filtrStav").value = "__kontrola";
             vykresliSouhrn();
             vykresliSeznam();
+        });
+        // odkrytí součtů platí pro všechny dlaždice naráz
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest("[data-penize-prepni]")) return;
+            penizeVidet = !penizeVidet;
+            pouzijSkryti();
         });
 
         $("seznamVypis").addEventListener("click", (event) => {

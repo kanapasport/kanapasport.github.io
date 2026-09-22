@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=234">
+    <link rel="stylesheet" href="assets/css/app.css?v=235">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -325,6 +325,8 @@
             <div class="card nastenka__karta nastenka__karta--man" id="wFakturyPlatby" data-need="vykaz.view" hidden>
                 <div class="nastenka__hlava" data-otevri="faktury.html?filtr=kzaplaceni" title="Otevřít faktury k zaplacení">
                     <b>Faktury k zaplacení — do týdne</b>
+                    <!-- součet se ukáže až na klik, jako u výkazů -->
+                    <span class="nastenka__prep"><button type="button" class="chip" data-penize-prepni>zobrazit</button></span>
                 </div>
                 <div id="fakturyPlatbySeznam" class="nastenka__telo col" style="gap:6px"></div>
                 <div class="nastenka__pata" id="fakturyPlatbyPata"></div>
@@ -332,6 +334,7 @@
             <div class="card nastenka__karta nastenka__karta--man" id="wFakturyNove" data-need="vykaz.view" hidden>
                 <div class="nastenka__hlava" data-otevri="faktury.html" title="Otevřít faktury">
                     <b>Nové faktury</b>
+                    <span class="nastenka__prep"><button type="button" class="chip" data-penize-prepni>zobrazit</button></span>
                 </div>
                 <div id="fakturyNoveSeznam" class="nastenka__telo col" style="gap:6px"></div>
             </div>
@@ -381,11 +384,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=234"></script>
-<script src="assets/js/doc.js?v=234"></script>
-<script src="assets/js/ui.js?v=234"></script>
-<script src="assets/js/vykazy.js?v=234"></script>
-<script type="module" src="assets/js/store.js?v=234"></script>
+<script src="assets/js/taxonomy.js?v=235"></script>
+<script src="assets/js/doc.js?v=235"></script>
+<script src="assets/js/ui.js?v=235"></script>
+<script src="assets/js/vykazy.js?v=235"></script>
+<script type="module" src="assets/js/store.js?v=235"></script>
 
 <script>
 (function () {
@@ -1148,11 +1151,28 @@
             const soucet = kPlaceni.reduce((x, f) => x + fakturaKc(f), 0);
             const poSplatnosti = kPlaceni.filter(f => f.splatnost < dnes).length;
             pata.innerHTML = kPlaceni.length
-                ? '<span class="tiny muted">Celkem k zaplacení <b>' + esc(V.kc(soucet)) + "</b>" +
+                ? '<span class="tiny muted">Celkem k zaplacení <b><span class="tajne">' + esc(V.kc(soucet)) +
+                  '</span><span class="tajne__zastup">•••</span></b>' +
                   (poSplatnosti ? " · po splatnosti " + esc(String(poSplatnosti)) : "") + "</span>"
                 : "";
         }
+        pouzijSkrytiFaktur();
     }
+
+    /* Celkové součty za faktury jsou za tečkami, dokud si je manažer neodkryje
+       (stejně jako sazby u výkazů) – částky jednotlivých faktur zůstávají vidět. */
+    let penizeFakturVidet = false;
+    function pouzijSkrytiFaktur() {
+        document.body.classList.toggle("penize-videt", penizeFakturVidet);
+        document.querySelectorAll("[data-penize-prepni]").forEach(b => {
+            b.textContent = penizeFakturVidet ? "skrýt" : "zobrazit";
+        });
+    }
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest("[data-penize-prepni]")) return;
+        penizeFakturVidet = !penizeFakturVidet;
+        pouzijSkrytiFaktur();
+    });
 
     function renderFakturyNove() {
         const box = document.getElementById("fakturyNoveSeznam");
@@ -1170,7 +1190,8 @@
                 '<a class="kontrola__odkaz" href="faktury.html?filtr=kontrola" title="Otevřít doklady ke kontrole">' +
                     '<span class="kontrola__datum" style="color:#9a3412">Ke kontrole</span>' +
                     "<span><b>" + esc(V.pocet(cekaji.length, ["doklad", "doklady", "dokladů"])) + "</b>" +
-                        " z inboxu · " + esc(V.kc(cekaji.reduce((x, f) => x + fakturaKc(f), 0))) + "</span>" +
+                        ' z inboxu · <span class="tajne">' + esc(V.kc(cekaji.reduce((x, f) => x + fakturaKc(f), 0))) +
+                        '</span><span class="tajne__zastup">•••</span></span>' +
                 "</a></div>";
         }
         html += zarazene.length
@@ -1191,6 +1212,7 @@
             : (cekaji.length ? "" : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
               "Za posledních 14 dní se žádná faktura nezařadila.</div>");
         box.innerHTML = html;
+        pouzijSkrytiFaktur();
     }
 
     const renderFaktury = () => { renderFakturyPlatby(); renderFakturyNove(); };
