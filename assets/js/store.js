@@ -2417,11 +2417,44 @@ KB.deleteProjekt = async (id) => {
      private/faktury/meta/nastaveni    naše fakturační údaje pro tisk
 
    Faktura: { typ:"prijata|vydana", cislo, protistrana, ico, dic, adresa,
-              projekt (název – stejně jako u výkazů), castkaBez, dphSazba,
-              castkaDph, castkaCelkem, vs, vystaveno:"2026-08-21", duzp,
-              splatnost, uhrazeno:"", stav:"nova|zarazena|schvalena|zaplacena",
-              polozky:[{ popis, mnozstvi, mj, cena, dph }], cesta (kde na
-              disku leží PDF), poznamka }                                   */
+              projekt (název – stejně jako u výkazů; "" = administrativní
+              činnost), castkaBez, dphSazba, castkaDph, castkaCelkem,
+              mena:"CZK", kurz (Kč za 1 jednotku cizí měny), vs,
+              vystaveno:"2026-08-21", duzp, splatnost, uhrazeno:"",
+              stav:"nova|zarazena|schvalena|zaplacena", kategorie (jen přijaté),
+              druhDokladu:"faktura|uctenka|zalohova|dobropis|jine",
+              zpusobUhrady:"prevod|karta|hotove|dobirka|jine",
+              polozky:[{ popis, mnozstvi, mj, cena, dph }], cesta (cesta na
+              disku nebo odkaz na soubor), poznamka,
+              rozpisDph:[{ sazba, zaklad, dph }] – každá sazba DPH zvlášť
+              (přijaté), poplatky + poplatkyPopis (mimo DPH, např. recyklační
+              poplatek), zaokrouhleni; celkem = základy + DPH + poplatky
+              + zaokrouhlení,
+              zdroj:"inbox" + kontroly:[{ uroven, text }] – záznam připravil
+              program z inboxu a čeká na kontrolu člověkem (stav "nova");
+              otisk (SHA-256 PDF – import ho nezaloží dvakrát), navrhSlozka
+              + navrhSoubor (kam PDF po potvrzení patří),
+              potvrdil + potvrzenoMs – kdo ho zkontroloval a zařadil,
+              uhradil + uhrazenoMs – kdo označil zaplaceno (dlaždice) }
+
+     meta/nastaveni nese navíc `kategorie` – seznam kategorií výdajů, který
+     si asistentka rozšiřuje sama.                                         */
+
+const DRUHY_DOKLADU = ["faktura", "uctenka", "zalohova", "dobropis", "jine"];
+const ZPUSOBY_UHRADY = ["prevod", "karta", "hotove", "dobirka", "jine"];
+
+/** Kontroly z inboxu – jen krátké texty a úroveň, nic dalšího se neuloží. */
+const cistiKontroly = (seznam) => (Array.isArray(seznam) ? seznam : []).slice(0, 30).map(k => ({
+    uroven: ["chyba", "varovani", "info"].indexOf(k && k.uroven) !== -1 ? k.uroven : "info",
+    text: String((k && k.text) || "").slice(0, 300)
+}));
+
+/** Rozpis DPH – nejvýš pár sazeb, jen čísla. */
+const cistiRozpis = (seznam) => (Array.isArray(seznam) ? seznam : []).slice(0, 6).map(r => ({
+    sazba: Number(r && r.sazba) || 0,
+    zaklad: Math.round((Number(r && r.zaklad) || 0) * 100) / 100,
+    dph: Math.round((Number(r && r.dph) || 0) * 100) / 100
+})).filter(r => r.zaklad || r.dph);
 
 const fakturyCol = () => collection(db, "artifacts", APP_ID, "private", "faktury", "seznam");
 const fakturaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "faktury", "seznam", id);
@@ -2446,10 +2479,12 @@ KB.watchFaktury = async () => {
 
 KB.newFakturaId = () => "fak_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
 
-KB.saveFaktura = async (id, data) => {
+KB.saveFaktura = async (id, data, volby) => {
     if (authReady) await authReady;
     requireDb();
-    await setDoc(fakturaDoc(id), {
+    const mena = /^[A-Z]{3}$/.test(String(data.mena || "").toUpperCase())
+        ? String(data.mena).toUpperCase() : "CZK";
+    const zaznam = {
         typ:          data.typ === "vydana" ? "vydana" : "prijata",
         cislo:        data.cislo || "",
         protistrana:  data.protistrana || "",
@@ -2461,12 +2496,21 @@ KB.saveFaktura = async (id, data) => {
         dphSazba:     Number(data.dphSazba) || 0,
         castkaDph:    Number(data.castkaDph) || 0,
         castkaCelkem: Number(data.castkaCelkem) || 0,
+        rozpisDph:    cistiRozpis(data.rozpisDph),
+        poplatky:     Number(data.poplatky) || 0,
+        poplatkyPopis: String(data.poplatkyPopis || "").slice(0, 120),
+        zaokrouhleni: Number(data.zaokrouhleni) || 0,
+        mena:         mena,
+        kurz:         mena === "CZK" ? 0 : (Number(data.kurz) || 0),
         vs:           data.vs || "",
         vystaveno:    data.vystaveno || "",
         duzp:         data.duzp || "",
         splatnost:    data.splatnost || "",
         uhrazeno:     data.uhrazeno || "",
         stav:         data.stav || "nova",
+        kategorie:    String(data.kategorie || "").slice(0, 60),
+        druhDokladu:  DRUHY_DOKLADU.indexOf(data.druhDokladu) !== -1 ? data.druhDokladu : "faktura",
+        zpusobUhrady: ZPUSOBY_UHRADY.indexOf(data.zpusobUhrady) !== -1 ? data.zpusobUhrady : "",
         polozky:      Array.isArray(data.polozky) ? data.polozky : [],
         cesta:        data.cesta || "",
         poznamka:     data.poznamka || "",
@@ -2474,11 +2518,44 @@ KB.saveFaktura = async (id, data) => {
         createdBy:    data.createdBy || window.KB_USER || "",
         updatedMs:    Date.now(),
         updatedBy:    window.KB_USER || ""
-    }, { merge: true });
-    // do aktivit schválně bez částek – stačí, co se stalo a k čemu
-    KB.zapisAktivitu("faktura", "uložil fakturu " + (data.cislo || "(bez čísla)") +
-        (data.projekt ? " k projektu " + data.projekt : ""));
+    };
+    /* Stopy po inboxu se posílají, jen když je stránka opravdu mění –
+       běžné uložení formuláře je díky merge nechá, jak je. */
+    if (data.zdroj !== undefined) zaznam.zdroj = String(data.zdroj || "").slice(0, 20);
+    if (data.kontroly !== undefined) zaznam.kontroly = cistiKontroly(data.kontroly);
+    ["otisk", "navrhSlozka", "navrhSoubor"].forEach(k => {
+        if (data[k] !== undefined) zaznam[k] = String(data[k] || "").slice(0, 200);
+    });
+    if (data.potvrdit === true) {
+        zaznam.potvrdil = window.KB_USER || "";
+        zaznam.potvrzenoMs = Date.now();
+    }
+    await setDoc(fakturaDoc(id), zaznam, { merge: true });
+    // do aktivit schválně bez částek – stačí, co se stalo a k čemu;
+    // hromadné načtení z inboxu zapíše jeden souhrnný řádek samo
+    if (!(volby && volby.bezAktivity)) {
+        KB.zapisAktivitu("faktura", (data.potvrdit ? "zkontroloval a zařadil fakturu " : "uložil fakturu ") +
+            (data.cislo || "(bez čísla)") + (data.projekt ? " k projektu " + data.projekt : ""));
+    }
     return id;
+};
+
+/** Označení zaplacené faktury z nástěnky – mění JEN úhradu, zbytek faktury
+    nechává (plné saveFaktura by prázdnými poli přepsalo ostatní údaje). */
+KB.uhradFakturu = async (id, datum) => {
+    if (authReady) await authReady;
+    requireDb();
+    const f = (KB.faktury || []).find(x => x.id === id) || {};
+    await setDoc(fakturaDoc(id), {
+        uhrazeno: String(datum || "").slice(0, 10),
+        stav: "zaplacena",
+        uhradil: window.KB_USER || "",
+        uhrazenoMs: Date.now(),
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    KB.zapisAktivitu("faktura", "označil fakturu " + (f.cislo || "(bez čísla)") +
+        (f.protistrana ? " od " + f.protistrana : "") + " jako zaplacenou");
 };
 
 KB.deleteFaktura = async (id, cislo) => {
@@ -2503,6 +2580,13 @@ KB.saveFakturaNastaveni = async (data) => {
         if (data[klic] !== undefined) payload[klic] = String(data[klic] || "");
     });
     if (data.ostry !== undefined) payload.ostry = data.ostry === true;
+    if (Array.isArray(data.kategorie)) {
+        // bez prázdných a bez opakování; pořadí drží, jak ho asistentka zapsala
+        const videne = new Set();
+        payload.kategorie = data.kategorie.map(k => String(k || "").trim().slice(0, 60))
+            .filter(k => k && !videne.has(k.toLowerCase()) && videne.add(k.toLowerCase()))
+            .slice(0, 40);
+    }
     await setDoc(fakturyNastaveniDoc(), payload, { merge: true });
 };
 

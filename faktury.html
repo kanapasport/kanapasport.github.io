@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=230">
+    <link rel="stylesheet" href="assets/css/app.css?v=231">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -29,6 +29,7 @@
 
         .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
             text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .menatag { text-transform: none; letter-spacing: 0; }
 
         .sblok { border: 1px solid var(--accent); border-radius: var(--radius-lg);
             background: var(--accent-tint); overflow: hidden; }
@@ -46,10 +47,36 @@
         .st-zarazena  { background: #dbeafe; color: #1d4ed8; }
         .st-schvalena { background: #fef3c7; color: #92400e; }
         .st-zaplacena { background: #dcfce7; color: #15803d; }
+        .st-kontrola  { background: #ffedd5; color: #9a3412; }
         .typ-prijata  { background: #ffe4e6; color: #9f1239; }
         .typ-vydana   { background: #d1fae5; color: #065f46; }
 
         .souhrnrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        /* dlaždice „Ke kontrole“ je zároveň filtr – proto tlačítko */
+        .vyktile--akce { text-align: left; font: inherit; color: inherit; cursor: pointer;
+            border: 1px solid #f59e0b; }
+        .vyktile--akce:hover { background: #fffbeb; }
+
+        /* záznam připravený programem z inboxu – co našly kontroly */
+        .inbox { border: 1px solid #f59e0b; border-radius: var(--radius-lg); background: #fffbeb;
+            padding: 12px 14px; }
+        .inbox__nadpis { font-weight: 800; color: #9a3412; }
+        .inbox ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+        .inbox li { font-size: 13px; line-height: 1.45; padding: 4px 9px; border-radius: 6px; background: #fff; }
+        .inbox li.k-chyba { color: #b91c1c; background: #fef2f2; }
+        .inbox li.k-varovani { color: #92400e; background: #fef3c7; }
+        .inbox li.k-info { color: var(--muted); }
+
+        /* součet částek u přijaté: základy + DPH + poplatky + zaokrouhlení = celkem */
+        .soucet { margin: 0; font-size: 13px; line-height: 1.5; padding: 6px 10px; border-radius: 8px; }
+        .soucet--ok { background: #f0fdf4; color: #15803d; }
+        .soucet--ne { background: #fef2f2; color: #b91c1c; font-weight: 700; }
+        .pol .field[readonly], .field[readonly] { background: var(--bg-soft); color: var(--muted); }
+
+        /* Uhrazeno: zaškrtnutí otevře okno s datem (přání asistentky) */
+        .uhr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .uhr__chk { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; cursor: pointer; }
+        .uhr__chk input { width: 18px; height: 18px; accent-color: var(--accent); }
 
         /* položky vydané faktury */
         .pol { width: 100%; border-collapse: collapse; }
@@ -87,6 +114,10 @@
                     </p>
                 </div>
                 <div class="row" style="gap:8px;flex:none">
+                    <!-- výsledek nástroje vytezeni.py (D:\FAKTURY\_program\vytezeni.json) -->
+                    <button type="button" id="btnImport" class="btn btn--ghost btn--sm"
+                            title="Načíst faktury přečtené z inboxu (soubor vytezeni.json)">Načíst z inboxu</button>
+                    <input type="file" id="importSoubor" accept=".json,application/json" hidden>
                     <button type="button" id="btnNastaveni" class="btn btn--ghost btn--sm">Naše údaje</button>
                     <button type="button" id="btnNovaPrijata" class="btn btn--primary btn--sm">+ Přijatá faktura</button>
                     <button type="button" id="btnNovaVydana" class="btn btn--primary btn--sm">+ Vydaná faktura</button>
@@ -116,6 +147,8 @@
                     <label class="pole fmr__cely"><span class="popisek">Zápis v rejstříku (tiskne se v patičce)</span>
                         <input type="text" id="nRegistrace" class="field"
                                placeholder="Společnost zapsaná v obchodním rejstříku…"></label>
+                    <label class="pole fmr__cely"><span class="popisek">Kategorie výdajů (každá na samostatném řádku)</span>
+                        <textarea id="nKategorie" rows="5" class="field"></textarea></label>
                 </div>
                 <label class="row" style="gap:8px;align-items:center">
                     <input type="checkbox" id="nOstry">
@@ -145,7 +178,7 @@
                 <label class="pole"><span class="popisek">Projekt</span>
                     <select id="filtrProjekt" class="field"></select></label>
                 <label class="pole"><span class="popisek">Hledat</span>
-                    <input type="search" id="hledat" class="field" placeholder="Číslo, firma, VS…"></label>
+                    <input type="search" id="hledat" class="field" placeholder="Číslo, firma, VS, kategorie…"></label>
             </div>
         </div>
 
@@ -177,6 +210,17 @@
                         </div>
                     </section>
 
+                    <!-- záznam připravený programem z inboxu, dokud ho někdo nezkontroluje -->
+                    <section class="inbox" id="boxInbox" hidden>
+                        <div class="inbox__nadpis">Připravil program z inboxu – zkontroluj údaje proti PDF</div>
+                        <p class="small" style="margin:4px 0 0;line-height:1.55">
+                            Doplň kategorii a projekt (nebo nech administrativní činnost) a klikni
+                            na <b>Potvrdit zařazení</b>. Teprve pak se PDF přesune z inboxu na své místo.
+                        </p>
+                        <p class="small muted" id="inboxCil" style="margin:4px 0 0"></p>
+                        <ul id="inboxNalezy"></ul>
+                    </section>
+
                     <section class="sblok">
                         <div class="sblok__hlava"><span class="sblok__stitek">Základ</span></div>
                         <div class="sblok__telo">
@@ -186,7 +230,9 @@
                                     <option value="prijata">Přijatá (došla nám)</option>
                                     <option value="vydana">Vydaná (my fakturujeme)</option>
                                 </select></label>
-                            <label class="pole"><span class="popisek">Číslo faktury</span>
+                            <label class="pole"><span class="popisek">Druh dokladu</span>
+                                <select id="fDruh" class="field"></select></label>
+                            <label class="pole"><span class="popisek">Číslo dokladu</span>
                                 <input type="text" id="fCislo" class="field"></label>
                             <label class="pole"><span class="popisek">Variabilní symbol</span>
                                 <input type="text" id="fVs" class="field"></label>
@@ -213,11 +259,18 @@
                         <div class="fmr">
                             <label class="pole"><span class="popisek">Projekt</span>
                                 <select id="fProjekt" class="field"></select></label>
+                            <label class="pole" id="poleKategorie"><span class="popisek">Kategorie</span>
+                                <select id="fKategorie" class="field"></select></label>
                             <label class="pole"><span class="popisek">Stav</span>
                                 <select id="fStav" class="field"></select></label>
-                            <label class="pole fmr__cely"><span class="popisek">Kde na disku leží PDF</span>
-                                <input type="text" id="fCesta" class="field"
-                                       placeholder="\\NAS\FAKTURY\2026\…"></label>
+                            <label class="pole fmr__cely"><span class="popisek">Soubor – cesta na disku nebo odkaz</span>
+                                <span class="row" style="gap:6px">
+                                    <input type="text" id="fCesta" class="field" style="flex:1;min-width:0"
+                                           placeholder="D:\FAKTURY\prijate\2026\… nebo https://…">
+                                    <button type="button" id="btnOtevrit" class="btn btn--ghost btn--sm" hidden>Otevřít</button>
+                                    <button type="button" id="btnKopirovat" class="btn btn--ghost btn--sm" hidden
+                                            title="Zkopíruje cestu – vlož ji do Průzkumníka souborů">Kopírovat</button>
+                                </span></label>
                         </div>
                         </div>
                     </section>
@@ -242,26 +295,63 @@
                     </section>
 
                     <section class="sblok">
-                        <div class="sblok__hlava"><span class="sblok__stitek">Částky</span></div>
+                        <div class="sblok__hlava"><span class="sblok__stitek">Částky a úhrada</span></div>
                         <div class="sblok__telo">
+                        <div class="fmr" id="poleMenaRadek">
+                            <label class="pole" id="poleMena"><span class="popisek">Měna</span>
+                                <select id="fMena" class="field"></select></label>
+                            <label class="pole" id="poleKurz" hidden><span class="popisek" id="popisKurz">Kurz</span>
+                                <input type="text" id="fKurz" class="field" inputmode="decimal"
+                                       placeholder="např. 24,35"></label>
+                        </div>
+
+                        <!-- přijatá faktura: každá sazba DPH zvlášť + poplatky mimo DPH -->
+                        <div id="blokRozpis" hidden style="display:flex;flex-direction:column;gap:8px">
+                            <span class="popisek" style="margin:0">Rozpis DPH – každá sazba zvlášť</span>
+                            <div style="overflow-x:auto">
+                            <table class="pol">
+                                <thead><tr>
+                                    <th style="width:120px">Sazba</th><th>Základ bez DPH</th><th>DPH</th>
+                                    <th>S DPH</th><th></th>
+                                </tr></thead>
+                                <tbody id="rozpisTelo"></tbody>
+                            </table>
+                            </div>
+                            <div><button type="button" id="btnSazba" class="btn btn--ghost btn--sm">+ Další sazba DPH</button></div>
+                            <div class="fmr">
+                                <label class="pole"><span class="popisek">Poplatky mimo DPH <span class="menatag"></span></span>
+                                    <input type="text" id="fPoplatky" class="field" inputmode="decimal" placeholder="0"></label>
+                                <label class="pole"><span class="popisek">Za co (poplatek)</span>
+                                    <input type="text" id="fPoplatkyPopis" class="field"
+                                           placeholder="např. recyklační poplatek"></label>
+                                <label class="pole"><span class="popisek">Zaokrouhlení <span class="menatag"></span></span>
+                                    <input type="text" id="fZaokrouhleni" class="field" inputmode="decimal" placeholder="0"></label>
+                            </div>
+                        </div>
+
                         <div class="fmr">
-                            <label class="pole"><span class="popisek">Základ bez DPH (Kč)</span>
+                            <label class="pole"><span class="popisek">Základ bez DPH <span class="menatag"></span></span>
                                 <input type="text" id="fCastkaBez" class="field" inputmode="decimal"></label>
-                            <label class="pole"><span class="popisek">Sazba DPH</span>
+                            <label class="pole" id="poleSazba"><span class="popisek">Sazba DPH</span>
                                 <select id="fDphSazba" class="field">
                                     <option value="21">21 %</option>
                                     <option value="12">12 %</option>
                                     <option value="0">0 % / neplátce</option>
                                 </select></label>
-                            <label class="pole"><span class="popisek">DPH (Kč)</span>
+                            <label class="pole"><span class="popisek">DPH <span class="menatag"></span></span>
                                 <input type="text" id="fCastkaDph" class="field" inputmode="decimal"></label>
-                            <label class="pole"><span class="popisek">Celkem s DPH (Kč)</span>
+                            <label class="pole"><span class="popisek">Celkem k úhradě <span class="menatag"></span></span>
                                 <input type="text" id="fCastkaCelkem" class="field" inputmode="decimal"></label>
+                            <label class="pole"><span class="popisek">Způsob úhrady</span>
+                                <select id="fZpusob" class="field"></select></label>
                         </div>
-                        <p class="tiny muted" style="margin:0">
-                            DPH a celkem se dopočítají ze základu a sazby; vyplněné položky
-                            výš je přepíšou. Ručně jde celkem opravit vždycky.
-                        </p>
+                        <p class="soucet" id="kontrolaSouctu" hidden></p>
+                        <div class="uhr">
+                            <label class="uhr__chk"><input type="checkbox" id="fUhrazenoChk"> Uhrazeno</label>
+                            <span class="small" id="fUhrazenoText"></span>
+                            <input type="hidden" id="fUhrazeno">
+                        </div>
+                        <p class="tiny muted" style="margin:0" id="castkyNapoveda"></p>
                         </div>
                     </section>
 
@@ -275,8 +365,6 @@
                                 <input type="date" id="fDuzp" class="field"></label>
                             <label class="pole"><span class="popisek">Splatnost</span>
                                 <input type="date" id="fSplatnost" class="field"></label>
-                            <label class="pole"><span class="popisek">Uhrazeno dne</span>
-                                <input type="date" id="fUhrazeno" class="field"></label>
                         </div>
                         </div>
                     </section>
@@ -293,7 +381,9 @@
                         <span id="stav" class="small muted" style="margin-right:auto"></span>
                         <button type="button" id="btnTisk" class="btn btn--ghost" hidden>Tisk faktury</button>
                         <button type="button" id="btnSmaz" class="btn btn--ghost" style="color:var(--danger)">Smazat fakturu</button>
-                        <button type="button" id="btnUloz" class="btn btn--primary">Uložit fakturu</button>
+                        <button type="button" id="btnUloz" class="btn btn--ghost">Uložit fakturu</button>
+                        <button type="button" id="btnPotvrdit" class="btn btn--primary" hidden
+                                title="Údaje jsou zkontrolované – faktura se zařadí a PDF se může přesunout z inboxu">Potvrdit zařazení</button>
                     </div>
                 </div>
             </div>
@@ -301,10 +391,26 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=230"></script>
-<script src="assets/js/ui.js?v=230"></script>
-<script src="assets/js/vykazy.js?v=230"></script>
-<script type="module" src="assets/js/store.js?v=230"></script>
+<!-- okno s datem úhrady – otevře ho zaškrtnutí „Uhrazeno“ -->
+<div class="hookno no-print" id="oknoUhrazeno" hidden>
+    <div class="hookno__deska card" style="max-width:400px">
+        <div class="hookno__hlava"><span>Datum úhrady</span>
+            <button type="button" class="linkbtn linkbtn--tmavy" data-uhr-zrus>Zavřít</button></div>
+        <div class="hookno__telo" style="display:flex;flex-direction:column;gap:12px">
+            <label class="pole"><span class="popisek">Kdy se faktura zaplatila</span>
+                <input type="date" id="uhrDatum" class="field"></label>
+            <div class="row" style="gap:8px;justify-content:flex-end">
+                <button type="button" class="btn btn--ghost btn--sm" data-uhr-zrus>Zrušit</button>
+                <button type="button" class="btn btn--primary btn--sm" id="uhrOk">Potvrdit úhradu</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=231"></script>
+<script src="assets/js/ui.js?v=231"></script>
+<script src="assets/js/vykazy.js?v=231"></script>
+<script type="module" src="assets/js/store.js?v=231"></script>
 
 <script>
 (function () {
@@ -323,12 +429,48 @@
     ];
     const stavTitle = (id) => (STAVY.find(s => s.id === id) || STAVY[0]).title;
 
+    /* Druh dokladu – asistentka pojmenovává záznam „FIRMA - Faktura č. 123“,
+       u účtenky „FIRMA - Účtenka č. …“. */
+    const DRUHY = [
+        { id: "faktura",  title: "Faktura" },
+        { id: "uctenka",  title: "Účtenka" },
+        { id: "zalohova", title: "Zálohová faktura" },
+        { id: "dobropis", title: "Dobropis" },
+        { id: "jine",     title: "Doklad" }
+    ];
+    const druhTitle = (id) => (DRUHY.find(d => d.id === id) || DRUHY[0]).title;
+
+    const ZPUSOBY = [
+        { id: "",        title: "—" },
+        { id: "prevod",  title: "Převodem" },
+        { id: "karta",   title: "Kartou" },
+        { id: "hotove",  title: "Hotově" },
+        { id: "dobirka", title: "Dobírka" },
+        { id: "jine",    title: "Jinak" }
+    ];
+    const MENY = ["CZK", "EUR", "USD", "GBP", "PLN", "CHF"];
+
+    /* Výchozí kategorie výdajů podle zadání asistentky (14. 9.) a dotazníku
+       (22. 9. 2026). Jakmile si seznam upraví v „Naše údaje“ nebo přidá
+       vlastní, platí uložený. Stejný seznam zná i vytezeni.py. */
+    const KATEGORIE_VYCHOZI = ["Platby partnerům", "Nákup materiálu", "Náklady na provoz",
+        "Auta", "Vybavení", "Jídlo a drogerie", "Daně a odvody", "Dary", "Kancelářské potřeby",
+        "Licence", "Pracovní oblečení", "Restaurace", "Školení"];
+    const SAZBY = [21, 12, 0];
+    /* Přijatá faktura bez projektu je administrativní činnost (zadání asistentky). */
+    const ADMIN = "Administrativní činnost";
+
     let vybrana = "";        // id vybrané faktury ("" = nic)
     let nova = "";           // "prijata" | "vydana" – zakládá se nová
     let dotknuto = false;    // rozepsaná změna se nepřepisuje daty z databáze
     let spusteno = false;    // odběry se startují jednou, až je jisté právo
     let rozpocty = {};       // rozpočty zakázek pro souhrn čerpání
     let nastaveni = null;    // naše fakturační údaje (null = ještě nenačteno)
+    let posledniStav = "";   // stav před otevřením okna úhrady – Zrušit ho vrátí
+    let kategoriePred = "";  // kategorie před volbou „+ Nová kategorie…“
+    let fakturyPrisly = false;  // první přenos z databáze dorazil – import podle něj hlídá dvojí zápis
+    let pozadovanyFiltr = "";   // ?filtr=kontrola|kzaplaceni z odkazu na nástěnce
+    let celkemRucne = false;    // celkem u přijaté přepsané ručně – přepočet rozpisu ho nechá
 
     const doklad = (id) => (window.KB.faktury || []).find(f => f.id === id) || null;
 
@@ -338,6 +480,41 @@
         return isFinite(n) ? n : 0;
     };
     const na2 = (n) => Math.round(n * 100) / 100;
+
+    const kategorie = () => (nastaveni && Array.isArray(nastaveni.kategorie) && nastaveni.kategorie.length)
+        ? nastaveni.kategorie : KATEGORIE_VYCHOZI;
+    /** Záznam z inboxu, který ještě nikdo nezkontroloval. */
+    const keKontrole = (f) => f.zdroj === "inbox" && (f.stav || "nova") === "nova";
+    /** Název záznamu podle asistentky: „FIRMA - Faktura č. 123“. */
+    const nazevZaznamu = (f) => (f.protistrana || "?") + " - " + druhTitle(f.druhDokladu) +
+        (f.cislo ? " č. " + f.cislo : "");
+    const projektText = (f) => f.projekt || (f.typ === "vydana" ? "bez projektu" : ADMIN.toLowerCase());
+    const ciziMena = (f) => !!f.mena && f.mena !== "CZK";
+    /** Částka v Kč pro souhrny; cizí měna bez kurzu vrací null (nezapočte se). */
+    const naKc = (f, pole) => {
+        const n = Number(f[pole]) || 0;
+        if (!ciziMena(f)) return n;
+        return Number(f.kurz) ? n * Number(f.kurz) : null;
+    };
+    const castkaText = (n, mena) => (!mena || mena === "CZK") ? V.kc(n)
+        : (Number(n) || 0).toLocaleString("cs-CZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+          " " + mena;
+    /** Na haléře – pro kontrolu součtu, kde celé koruny nestačí. */
+    const penize2 = (n, mena) => (Number(n) || 0).toLocaleString("cs-CZ",
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + (!mena || mena === "CZK" ? "Kč" : mena);
+    const isoZaDni = (dni) => {
+        const d = new Date();
+        d.setDate(d.getDate() + dni);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" +
+            String(d.getDate()).padStart(2, "0");
+    };
+    /** Nezaplacená přijatá faktura se splatností do 7 dní (i ta po splatnosti). */
+    const kZaplaceni = (f) => f.typ === "prijata" && !f.uhrazeno && (f.stav || "nova") !== "zaplacena" &&
+        !!f.splatnost && f.splatnost <= isoZaDni(7);
+    const stitekStavu = (f) => keKontrole(f)
+        ? '<span class="stbadge st-kontrola" style="flex:none">Ke kontrole</span>'
+        : '<span class="stbadge st-' + esc(f.stav || "nova") + '" style="flex:none">' +
+              esc(stavTitle(f.stav || "nova")) + "</span>";
 
     /* ------------------------------------------------------------- filtry */
 
@@ -349,12 +526,14 @@
 
         return (window.KB.faktury || []).filter(f => {
             if (typ && f.typ !== typ) return false;
-            if (stav && (f.stav || "nova") !== stav) return false;
+            if (stav === "__kontrola" && !keKontrole(f)) return false;
+            if (stav === "__kzaplaceni" && !kZaplaceni(f)) return false;
+            if (stav && stav.indexOf("__") !== 0 && (f.stav || "nova") !== stav) return false;
             if (projekt === "__bez" && f.projekt) return false;
             if (projekt && projekt !== "__bez" && f.projekt !== projekt) return false;
             if (hledane) {
-                const kupa = [f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka]
-                    .join(" ").toLowerCase();
+                const kupa = [f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka, f.kategorie,
+                    druhTitle(f.druhDokladu), f.mena, f.poplatkyPopis].join(" ").toLowerCase();
                 if (kupa.indexOf(hledane) === -1) return false;
             }
             return true;
@@ -366,18 +545,31 @@
     function vykresliSouhrn() {
         const vyber = filtrovane();
         const projekt = $("filtrProjekt").value;
-        const vydaneBez = vyber.filter(f => f.typ === "vydana")
-            .reduce((sum, f) => sum + (Number(f.castkaBez) || 0), 0);
-        const prijateBez = vyber.filter(f => f.typ === "prijata")
-            .reduce((sum, f) => sum + (Number(f.castkaBez) || 0), 0);
+        let bezKurzu = 0;
+        const soucet = (typ) => vyber.filter(f => f.typ === typ).reduce((sum, f) => {
+            const kc = naKc(f, "castkaBez");
+            if (kc === null) { bezKurzu += 1; return sum; }
+            return sum + kc;
+        }, 0);
+        const vydaneBez = soucet("vydana");
+        const prijateBez = soucet("prijata");
+        const kolik = (typ) => V.pocet(vyber.filter(f => f.typ === typ).length,
+            ["faktura", "faktury", "faktur"]);
 
         let dlazdice =
-            V.dlazdice("Vydané (bez DPH)", V.kc(vydaneBez),
-                V.pocet(vyber.filter(f => f.typ === "vydana").length,
-                    ["faktura", "faktury", "faktur"]), true) +
-            V.dlazdice("Přijaté (bez DPH)", V.kc(prijateBez),
-                V.pocet(vyber.filter(f => f.typ === "prijata").length,
-                    ["faktura", "faktury", "faktur"]), true);
+            V.dlazdice("Vydané (bez DPH)", V.kc(vydaneBez), kolik("vydana"), true) +
+            V.dlazdice("Přijaté (bez DPH)", V.kc(prijateBez), kolik("prijata") +
+                (bezKurzu ? " · " + bezKurzu + " v cizí měně bez kurzu nezapočteno" : ""), true);
+
+        // záznamy z inboxu čekají na člověka – dlaždice je zároveň filtr
+        const cekaji = (window.KB.faktury || []).filter(keKontrole).length;
+        if (cekaji) {
+            dlazdice = '<button type="button" class="card vyktile vyktile--akce" id="dlazdiceKontrola">' +
+                '<div class="vyktile__label">Ke kontrole</div>' +
+                '<div class="vyktile__value">' + esc(String(cekaji)) + "</div>" +
+                '<div class="vyktile__note">' + esc(V.pocet(cekaji, ["doklad", "doklady", "dokladů"]) +
+                    " z inboxu – zobrazit") + "</div></button>" + dlazdice;
+        }
 
         // s vybraným projektem se ukáže i čerpání jeho rozpočtu
         if (projekt && projekt !== "__bez") {
@@ -405,18 +597,15 @@
         const vyber = filtrovane();
 
         $("seznamVypis").innerHTML = vyber.map(f => {
-            const stav = f.stav || "nova";
             const pod = [
                 f.vystaveno ? V.czDatum(f.vystaveno) : "",
-                f.projekt || "bez projektu",
-                V.kc(f.castkaCelkem)
+                projektText(f),
+                castkaText(f.castkaCelkem, f.mena)
             ].filter(Boolean).join(" · ");
             return '<button type="button" class="prjbtn' + (f.id === vybrana ? " je-vybrany" : "") +
                 '" data-id="' + esc(f.id) + '">' +
                 '<span class="row" style="gap:6px;justify-content:space-between;align-items:center">' +
-                    "<b style=\"min-width:0\">" + esc((f.cislo || "bez čísla") + " · " + (f.protistrana || "?")) + "</b>" +
-                    '<span class="stbadge st-' + esc(stav) + '" style="flex:none">' +
-                        esc(stavTitle(stav)) + "</span>" +
+                    '<b style="min-width:0">' + esc(nazevZaznamu(f)) + "</b>" + stitekStavu(f) +
                 "</span>" +
                 "<span>" + esc(pod) +
                     ' &nbsp;<span class="stbadge typ-' + esc(f.typ) + '">' +
@@ -429,13 +618,37 @@
 
     /* -------------------------------------------------------------- panel */
 
-    function moznostiProjektu(vybrano) {
-        return '<option value="">— bez projektu (režie)</option>' +
+    function moznostiProjektu(vybrano, typ) {
+        return '<option value="">' + esc(typ === "vydana" ? "— bez projektu" : ADMIN) + "</option>" +
             V.zakazky().map(z => '<option value="' + esc(z) + '"' +
                 (z === vybrano ? " selected" : "") + ">" + esc(z) + "</option>").join("");
     }
 
+    function moznostiKategorie(vybrano) {
+        const seznam = kategorie().slice();
+        // kategorie, která mezitím ze seznamu zmizela, u staré faktury zůstane
+        if (vybrano && seznam.indexOf(vybrano) === -1) seznam.push(vybrano);
+        return '<option value="">— vyber kategorii</option>' +
+            seznam.map(k => '<option value="' + esc(k) + '"' + (k === vybrano ? " selected" : "") + ">" +
+                esc(k) + "</option>").join("") +
+            '<option value="__nova">+ Nová kategorie…</option>';
+    }
+
+    function moznostiMeny(vybrano) {
+        const seznam = MENY.slice();
+        if (vybrano && seznam.indexOf(vybrano) === -1) seznam.push(vybrano);
+        return seznam.map(m => '<option value="' + esc(m) + '"' + (m === vybrano ? " selected" : "") + ">" +
+            esc(m) + "</option>").join("");
+    }
+
     function vykresliPanel() {
+        // odkaz z nástěnky (?id=) může přijít dřív než data, nebo na smazanou fakturu
+        if (vybrana && !nova && !doklad(vybrana)) {
+            if (fakturyPrisly) vybrana = "";
+            $("panel").hidden = true;
+            $("prazdno").hidden = false;
+            return;
+        }
         const je = !!vybrana || !!nova;
         $("panel").hidden = !je;
         $("prazdno").hidden = je;
@@ -446,46 +659,255 @@
 
         $("fNadpis").textContent = nova
             ? (nova === "vydana" ? "Nová vydaná faktura" : "Nová přijatá faktura")
-            : ((f.cislo || "bez čísla") + " · " + (f.protistrana || ""));
-        $("fPodtitul").textContent = nova ? "Vyplň údaje a ulož."
-            : [(f.typ === "vydana" ? "vydaná" : "přijatá"), f.projekt || "bez projektu"].join(" · ");
-        $("fStitky").innerHTML = nova ? "" :
-            '<span class="stbadge st-' + esc(f.stav || "nova") + '">' +
-                esc(stavTitle(f.stav || "nova")) + "</span>";
+            : nazevZaznamu(f);
+        const podtitul = nova ? ["Vyplň údaje a ulož."] : [
+            f.typ === "vydana" ? "vydaná" : "přijatá", projektText(f), f.kategorie || ""];
+        if (!nova && f.zdroj === "inbox") {
+            podtitul.push(f.potvrdil ? "z inboxu, zkontroloval(a) " + f.potvrdil : "z inboxu");
+        }
+        $("fPodtitul").textContent = podtitul.filter(Boolean).join(" · ");
+        $("fStitky").innerHTML = nova ? "" : stitekStavu(f);
+
+        // nálezy programu – jen dokud záznam z inboxu nikdo nezkontroloval
+        const inbox = !nova && keKontrole(f);
+        $("boxInbox").hidden = !inbox;
+        $("btnPotvrdit").hidden = !inbox;
+        $("btnUloz").className = "btn " + (inbox ? "btn--ghost" : "btn--primary");
+        if (inbox) {
+            const nalezy = Array.isArray(f.kontroly) ? f.kontroly : [];
+            $("inboxNalezy").innerHTML = nalezy.length
+                ? nalezy.map(k => '<li class="k-' + esc(k.uroven || "info") + '">' + esc(k.text || "") + "</li>").join("")
+                : '<li class="k-info">Kontroly nic podezřelého nenašly.</li>';
+            $("inboxCil").textContent = f.navrhSoubor
+                ? "Po potvrzení patří do: " + (f.navrhSlozka ? f.navrhSlozka + "\\" : "") + f.navrhSoubor : "";
+        }
 
         $("popisProtistrana").textContent = typ === "vydana" ? "Odběratel" : "Dodavatel";
         $("blokPolozky").hidden = typ !== "vydana";
+        $("poleKategorie").hidden = typ === "vydana";
+        $("poleMena").hidden = typ === "vydana";
         $("btnTisk").hidden = typ !== "vydana" || !!nova;
         $("btnSmaz").hidden = !!nova;
 
-        if (dotknuto) return;
+        if (dotknuto) { nastavTypCastek(typ); vykresliMenu(); return; }
 
         $("fTyp").value = typ;
+        $("fDruh").innerHTML = DRUHY.map(d => '<option value="' + d.id + '"' +
+            (d.id === (f.druhDokladu || "faktura") ? " selected" : "") + ">" + esc(d.title) + "</option>").join("");
         $("fCislo").value = f.cislo || "";
         $("fVs").value = f.vs || "";
         $("fProtistrana").value = f.protistrana || "";
         $("fIco").value = f.ico || "";
         $("fDic").value = f.dic || "";
         $("fAdresa").value = f.adresa || "";
-        $("fProjekt").innerHTML = moznostiProjektu(f.projekt || "");
+        $("fProjekt").innerHTML = moznostiProjektu(f.projekt || "", typ);
+        $("fKategorie").innerHTML = moznostiKategorie(f.kategorie || "");
         $("fStav").innerHTML = STAVY.map(s => '<option value="' + s.id + '"' +
             (s.id === (f.stav || "nova") ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
+        posledniStav = f.stav || "nova";
         $("fCesta").value = f.cesta || "";
+        $("fMena").innerHTML = moznostiMeny(f.mena || "CZK");
+        $("fKurz").value = f.kurz ? String(f.kurz) : "";
         $("fCastkaBez").value = f.castkaBez ? String(f.castkaBez) : "";
         $("fDphSazba").value = String(f.dphSazba !== undefined ? f.dphSazba : 21);
         $("fCastkaDph").value = f.castkaDph ? String(f.castkaDph) : "";
         $("fCastkaCelkem").value = f.castkaCelkem ? String(f.castkaCelkem) : "";
+        $("fZpusob").innerHTML = ZPUSOBY.map(z => '<option value="' + z.id + '"' +
+            (z.id === (f.zpusobUhrady || "") ? " selected" : "") + ">" + esc(z.title) + "</option>").join("");
+        $("fUhrazeno").value = f.uhrazeno || "";
         $("fVystaveno").value = f.vystaveno || (nova ? V.dnesISO() : "");
         $("fDuzp").value = f.duzp || "";
         $("fSplatnost").value = f.splatnost || "";
-        $("fUhrazeno").value = f.uhrazeno || "";
         $("fPoznamka").value = f.poznamka || "";
+        $("fPoplatky").value = f.poplatky ? String(f.poplatky) : "";
+        $("fPoplatkyPopis").value = f.poplatkyPopis || "";
+        $("fZaokrouhleni").value = f.zaokrouhleni ? String(f.zaokrouhleni) : "";
         vykresliPolozky(Array.isArray(f.polozky) ? f.polozky : []);
+        /* Uložené celkem platí – přepočet rozpisu ho nepřepíše, jen ukáže,
+           jestli sedí. U nové faktury se celkem skládá samo. */
+        celkemRucne = !!f.castkaCelkem;
+        nastavTypCastek(typ);
+        vykresliRozpis(typ === "vydana" ? [] : rozpisZFaktury(f));
+        vykresliMenu();
+        vykresliUhrazeno();
+        vykresliSoubor();
 
         // našeptávač firem se plní při vykreslení – prohlížeč si obsah
         // datalistu zamyká při mousedown, tou dobou už tam možnosti jsou
         $("firmySeznam").innerHTML = V.firmy().map(x =>
             '<option value="' + esc(x) + '"></option>').join("");
+    }
+
+    /** Popisky částek nesou měnu; kurz je vidět jen u cizí měny. */
+    function vykresliMenu() {
+        const prijata = !$("poleMena").hidden;
+        const mena = prijata ? ($("fMena").value || "CZK") : "CZK";
+        $("poleKurz").hidden = mena === "CZK";
+        $("popisKurz").textContent = "Kurz (Kč za 1 " + mena + ")";
+        document.querySelectorAll(".menatag").forEach(el => {
+            el.textContent = "(" + (mena === "CZK" ? "Kč" : mena) + ")";
+        });
+    }
+
+    function vykresliUhrazeno() {
+        const datum = $("fUhrazeno").value;
+        $("fUhrazenoChk").checked = !!datum;
+        $("fUhrazenoText").innerHTML = datum
+            ? "dne <b>" + esc(V.czDatum(datum)) + '</b> · <button type="button" class="linkbtn"' +
+              ' data-uhr-zmen style="color:var(--accent)">změnit datum</button>'
+            : '<span class="muted">zatím nezaplaceno</span>';
+    }
+
+    function vykresliSoubor() {
+        const cesta = $("fCesta").value.trim();
+        $("btnOtevrit").hidden = !/^https?:\/\//i.test(cesta);
+        $("btnKopirovat").hidden = !cesta;
+    }
+
+    /* -------------------------------------------------- rozpis DPH ----
+       Přijatá faktura má každou sazbu DPH zvlášť (restaurace 12 % + 21 %),
+       k tomu poplatky mimo DPH (recyklační poplatek) a zaokrouhlení.
+       Musí platit: základy + DPH + poplatky + zaokrouhlení = celkem.
+       Vydaná zůstává po staru – částky skládají položky. */
+
+    const menaFormulare = () => ($("poleMena").hidden ? "CZK" : ($("fMena").value || "CZK"));
+
+    function nastavTypCastek(typ) {
+        const prijata = typ !== "vydana";
+        $("blokRozpis").hidden = !prijata;
+        $("poleSazba").hidden = prijata;
+        $("fCastkaBez").readOnly = prijata;
+        $("fCastkaDph").readOnly = prijata;
+        $("castkyNapoveda").textContent = prijata
+            ? "Základ a DPH se sečtou z rozpisu po sazbách. Celkem k úhradě = základy + DPH + poplatky " +
+              "+ zaokrouhlení; jde přepsat ručně a kontrola nad úhradou ukáže, jestli sedí."
+            : "DPH a celkem se dopočítají ze základu a sazby; vyplněné položky výš je přepíšou. " +
+              "Ručně jde celkem opravit vždycky.";
+        vykresliSoucet();
+    }
+
+    /** Rozpis z uložené faktury; starší faktura má jen jednu sazbu v hlavních polích. */
+    function rozpisZFaktury(f) {
+        if (Array.isArray(f.rozpisDph) && f.rozpisDph.length) return f.rozpisDph;
+        if (f.castkaBez || f.castkaDph) {
+            return [{ sazba: f.dphSazba !== undefined ? f.dphSazba : 21, zaklad: f.castkaBez || 0, dph: f.castkaDph || 0 }];
+        }
+        return [{ sazba: 21, zaklad: "", dph: "" }];
+    }
+
+    function radekRozpisu(r) {
+        const hodnota = (v) => (v === "" || v === undefined || v === null) ? "" : String(v);
+        return "<tr>" +
+            '<td><select class="field roz-sazba">' + SAZBY.map(s => '<option value="' + s + '"' +
+                (Number(r.sazba) === s ? " selected" : "") + ">" + s + " %</option>").join("") + "</select></td>" +
+            '<td><input type="text" class="field roz-zaklad" inputmode="decimal" value="' + esc(hodnota(r.zaklad)) + '"></td>' +
+            '<td><input type="text" class="field roz-dph" inputmode="decimal" value="' + esc(hodnota(r.dph)) + '"></td>' +
+            '<td class="small roz-sdph" style="white-space:nowrap"></td>' +
+            '<td style="width:34px"><button type="button" class="pol__smaz roz-smaz" title="Odebrat sazbu">✕</button></td>' +
+        "</tr>";
+    }
+
+    function vykresliRozpis(rozpis) {
+        $("rozpisTelo").innerHTML = (rozpis || []).map(radekRozpisu).join("");
+        prepoctiRozpis();
+    }
+
+    function sesbirejRozpis() {
+        return Array.from($("rozpisTelo").querySelectorAll("tr")).map(tr => ({
+            sazba: Number(tr.querySelector(".roz-sazba").value) || 0,
+            zaklad: na2(naCislo(tr.querySelector(".roz-zaklad").value)),
+            dph: na2(naCislo(tr.querySelector(".roz-dph").value))
+        })).filter(r => r.zaklad || r.dph);
+    }
+
+    /** Sazba s největším základem – kvůli starším stránkám, které znají jen jednu. */
+    const hlavniSazba = (rozpis) => rozpis.length
+        ? rozpis.slice().sort((a, b) => Math.abs(b.zaklad) - Math.abs(a.zaklad))[0].sazba : 0;
+
+    function prepoctiDphRadku(tr) {
+        const zaklad = naCislo(tr.querySelector(".roz-zaklad").value);
+        const sazba = Number(tr.querySelector(".roz-sazba").value) || 0;
+        tr.querySelector(".roz-dph").value = zaklad ? String(na2(zaklad * sazba / 100)) : "";
+    }
+
+    /** Součty z rozpisu do hlavních polí; celkem jen dokud ho nikdo nepřepsal. */
+    function prepoctiRozpis() {
+        if ($("blokRozpis").hidden) return;
+        const mena = menaFormulare();
+        $("rozpisTelo").querySelectorAll("tr").forEach(tr => {
+            const s = na2(naCislo(tr.querySelector(".roz-zaklad").value) + naCislo(tr.querySelector(".roz-dph").value));
+            tr.querySelector(".roz-sdph").textContent = s ? penize2(s, mena) : "";
+        });
+        const rozpis = sesbirejRozpis();
+        const bez = na2(rozpis.reduce((x, r) => x + r.zaklad, 0));
+        const dph = na2(rozpis.reduce((x, r) => x + r.dph, 0));
+        $("fCastkaBez").value = String(bez);
+        $("fCastkaDph").value = String(dph);
+        if (!celkemRucne) {
+            $("fCastkaCelkem").value = String(na2(bez + dph + naCislo($("fPoplatky").value) +
+                naCislo($("fZaokrouhleni").value)));
+        }
+        vykresliSoucet();
+    }
+
+    /** Kontrola u přijaté: základy + DPH + poplatky + zaokrouhlení = celkem, DPH < základ. */
+    function stavSouctu() {
+        const bez = naCislo($("fCastkaBez").value), dph = naCislo($("fCastkaDph").value);
+        const poplatky = naCislo($("fPoplatky").value), zaokr = naCislo($("fZaokrouhleni").value);
+        const celkem = naCislo($("fCastkaCelkem").value);
+        const soucet = na2(bez + dph + poplatky + zaokr);
+        return { soucet: soucet, celkem: celkem, rozdil: na2(celkem - soucet),
+                 poplatky: poplatky, zaokr: zaokr, prazdne: !celkem && !bez && !dph,
+                 dphVetsi: sesbirejRozpis().some(r => Math.abs(r.dph) > Math.abs(r.zaklad)) };
+    }
+
+    function vykresliSoucet() {
+        const box = $("kontrolaSouctu");
+        const s = stavSouctu();
+        if ($("blokRozpis").hidden || s.prazdne) { box.hidden = true; return; }
+        const mena = menaFormulare();
+        const ok = Math.abs(s.rozdil) <= 1 && !s.dphVetsi;
+        box.hidden = false;
+        box.className = "soucet " + (ok ? "soucet--ok" : "soucet--ne");
+        box.textContent = s.dphVetsi
+            ? "✗ DPH nemůže být větší než základ – zkontroluj rozpis DPH."
+            : ok
+                ? "✓ Základ + DPH" + (s.poplatky ? " + poplatky" : "") + (s.zaokr ? " + zaokrouhlení" : "") +
+                  " = " + penize2(s.soucet, mena) + " – sedí s celkem k úhradě."
+                : "✗ Základ + DPH + poplatky + zaokrouhlení = " + penize2(s.soucet, mena) +
+                  ", ale celkem k úhradě je " + penize2(s.celkem, mena) + " (rozdíl " + penize2(s.rozdil, mena) + ").";
+    }
+
+    /* ---------------------------------------------------- okno úhrady ----
+       Zaškrtnutí „Uhrazeno“ (nebo stav Zaplacená) otevře okno s datem.
+       Účtenka zaplacená kartou či hotově dostane jako návrh den nákupu,
+       převod dnešek. Zrušit vrátí zaškrtnutí i stav, jak byly. */
+
+    function otevriUhrazeno() {
+        const zpusob = $("fZpusob").value;
+        const naMiste = zpusob === "karta" || zpusob === "hotove";
+        $("uhrDatum").value = $("fUhrazeno").value ||
+            (naMiste ? ($("fDuzp").value || $("fVystaveno").value) : "") || V.dnesISO();
+        $("oknoUhrazeno").hidden = false;
+        $("uhrDatum").focus();
+    }
+
+    function potvrdUhrazeno() {
+        const datum = $("uhrDatum").value;
+        if (!datum) return void toast("Vyplň datum úhrady.", "warn");
+        $("fUhrazeno").value = datum;
+        $("fStav").value = "zaplacena";
+        posledniStav = "zaplacena";
+        dotknuto = true;
+        $("oknoUhrazeno").hidden = true;
+        vykresliUhrazeno();
+    }
+
+    function zrusUhrazeno() {
+        if ($("oknoUhrazeno").hidden) return;
+        $("oknoUhrazeno").hidden = true;
+        if (!$("fUhrazeno").value) $("fStav").value = posledniStav === "zaplacena" ? "schvalena" : posledniStav;
+        vykresliUhrazeno();
     }
 
     /* ------------------------------------------------------------ položky */
@@ -604,52 +1026,85 @@
 
     /* ------------------------------------------------------------ uložení */
 
-    async function uloz() {
+    async function uloz(potvrdit) {
         const typ = $("fTyp").value;
         const protistrana = $("fProtistrana").value.trim();
         if (!protistrana) {
             return void toast(typ === "vydana" ? "Vyplň odběratele." : "Vyplň dodavatele.", "warn");
         }
+        const kategorieVyber = typ === "vydana" ? "" : ($("fKategorie").value === "__nova" ? "" : $("fKategorie").value);
+        if (potvrdit && typ === "prijata" && !kategorieVyber) {
+            return void toast("Před potvrzením vyber kategorii.", "warn");
+        }
+
+        // přijatá: součet musí sedět – když nesedí, rozhodne člověk
+        const prijata = typ !== "vydana";
+        const rozpis = prijata ? sesbirejRozpis() : [];
+        if (prijata) {
+            prepoctiRozpis();
+            const s = stavSouctu();
+            if (s.dphVetsi && !confirm("U některé sazby je DPH větší než základ. Uložit i tak?")) return;
+            if (!s.prazdne && Math.abs(s.rozdil) > 1 && !confirm("Základ + DPH + poplatky + zaokrouhlení (" +
+                    penize2(s.soucet, menaFormulare()) + ") nedává celkem k úhradě (" +
+                    penize2(s.celkem, menaFormulare()) + ").\n\nUložit i tak?")) return;
+        }
 
         const stary = doklad(vybrana) || {};
         const vystaveno = $("fVystaveno").value;
+        const mena = typ === "vydana" ? "CZK" : ($("fMena").value || "CZK");
         const data = {
             typ: typ,
+            druhDokladu: $("fDruh").value,
             cislo: $("fCislo").value.trim(),
             protistrana: protistrana,
             ico: $("fIco").value.trim(),
             dic: $("fDic").value.trim(),
             adresa: $("fAdresa").value.trim(),
             projekt: $("fProjekt").value,
+            kategorie: kategorieVyber,
             castkaBez: naCislo($("fCastkaBez").value),
-            dphSazba: Number($("fDphSazba").value) || 0,
+            dphSazba: prijata ? hlavniSazba(rozpis) : (Number($("fDphSazba").value) || 0),
             castkaDph: naCislo($("fCastkaDph").value),
             castkaCelkem: naCislo($("fCastkaCelkem").value),
+            rozpisDph: rozpis,
+            poplatky: prijata ? naCislo($("fPoplatky").value) : 0,
+            poplatkyPopis: prijata ? $("fPoplatkyPopis").value.trim() : "",
+            zaokrouhleni: prijata ? naCislo($("fZaokrouhleni").value) : 0,
+            mena: mena,
+            kurz: mena === "CZK" ? 0 : naCislo($("fKurz").value),
+            zpusobUhrady: $("fZpusob").value,
             vs: $("fVs").value.trim(),
             vystaveno: vystaveno,
             duzp: $("fDuzp").value || vystaveno,
             splatnost: $("fSplatnost").value,
             uhrazeno: $("fUhrazeno").value,
-            stav: $("fStav").value,
+            // potvrzení: zaplacená účtenka rovnou „zaplacená“, ostatní „zařazená“
+            stav: potvrdit && $("fStav").value === "nova"
+                ? ($("fUhrazeno").value ? "zaplacena" : "zarazena") : $("fStav").value,
             polozky: typ === "vydana" ? sesbirejPolozky() : [],
             cesta: $("fCesta").value.trim(),
             poznamka: $("fPoznamka").value.trim(),
             createdMs: stary.createdMs,
             createdBy: stary.createdBy
         };
+        if (potvrdit) data.potvrdit = true;
         // zaplacená faktura bez data úhrady dostane dnešek
         if (data.stav === "zaplacena" && !data.uhrazeno) data.uhrazeno = V.dnesISO();
 
         const id = vybrana || window.KB.newFakturaId();
         $("btnUloz").disabled = true;
+        $("btnPotvrdit").disabled = true;
         $("stav").textContent = "Ukládám…";
         try {
             await window.KB.saveFaktura(id, data);
             vybrana = id;
             nova = "";
             dotknuto = false;
-            $("stav").textContent = "Uloženo.";
-            toast("Faktura uložena.");
+            $("stav").textContent = potvrdit ? "Zkontrolováno a zařazeno." : "Uloženo.";
+            toast(potvrdit ? "Zkontrolováno a zařazeno." : "Faktura uložena.");
+            if (mena !== "CZK" && !data.kurz) {
+                toast("Doklad v " + mena + " nemá kurz – do souhrnů v Kč se nezapočte.", "warn");
+            }
             vykresli();
         } catch (err) {
             console.error(err);
@@ -657,14 +1112,14 @@
             toast("Uložení selhalo – faktury ukládá jen manažer.", "error");
         } finally {
             $("btnUloz").disabled = false;
+            $("btnPotvrdit").disabled = false;
         }
     }
 
     async function smaz() {
         const f = doklad(vybrana);
         if (!f) return;
-        if (!confirm("Smazat fakturu „" + (f.cislo || "bez čísla") + " · " +
-                (f.protistrana || "") + "“?\n\nEvidence zmizí, PDF na disku zůstává.")) return;
+        if (!confirm("Smazat „" + nazevZaznamu(f) + "“?\n\nEvidence zmizí, PDF na disku zůstává.")) return;
         try {
             await window.KB.deleteFaktura(vybrana, f.cislo || "");
             vybrana = "";
@@ -698,6 +1153,7 @@
         $("nUcet").value = n.ucet || "";
         $("nRada").value = n.rada || "";
         $("nRegistrace").value = n.registrace || "";
+        $("nKategorie").value = kategorie().join("\n");
         $("nOstry").checked = n.ostry === true;
         blok.hidden = false;
     }
@@ -712,6 +1168,7 @@
             ucet: $("nUcet").value.trim(),
             rada: $("nRada").value.trim(),
             registrace: $("nRegistrace").value.trim(),
+            kategorie: $("nKategorie").value.split("\n").map(k => k.trim()).filter(Boolean),
             ostry: $("nOstry").checked
         };
         try {
@@ -719,9 +1176,86 @@
             nastaveni = Object.assign({}, nastaveni, data);
             toast("Fakturační údaje uloženy.");
             $("blokNastaveni").hidden = true;
+            obnovKategorie();
         } catch (err) {
             console.error(err);
             toast("Uložení selhalo.", "error");
+        }
+    }
+
+    /** Překreslí nabídku kategorií a nechá v ní vybranou hodnotu. */
+    function obnovKategorie(vybrat) {
+        const aktualni = vybrat !== undefined ? vybrat : $("fKategorie").value;
+        $("fKategorie").innerHTML = moznostiKategorie(aktualni === "__nova" ? "" : aktualni);
+    }
+
+    /** „+ Nová kategorie…“ – přidá kategorii do seznamu a rovnou ji vybere. */
+    async function novaKategorie() {
+        const nazev = (prompt("Název nové kategorie výdajů:") || "").trim().slice(0, 60);
+        if (!nazev) { obnovKategorie(kategoriePred); return; }
+        await nactiNastaveni();            // ať se neuloží seznam nad nenačtenými údaji
+        const seznam = kategorie().slice();
+        if (!seznam.some(k => k.toLowerCase() === nazev.toLowerCase())) seznam.push(nazev);
+        try {
+            await window.KB.saveFakturaNastaveni({ kategorie: seznam });
+            nastaveni = Object.assign({}, nastaveni, { kategorie: seznam });
+            toast("Kategorie „" + nazev + "“ přidána.");
+        } catch (err) {
+            console.error(err);
+            toast("Kategorii se nepodařilo uložit.", "error");
+        }
+        const existujici = seznam.find(k => k.toLowerCase() === nazev.toLowerCase()) || nazev;
+        obnovKategorie(existujici);
+        kategoriePred = existujici;
+        dotknuto = true;
+    }
+
+    /* ------------------------------------------------- načtení z inboxu ----
+       Nástroj vytezeni.py přečte PDF v D:\FAKTURY\_inbox a zapíše výsledek
+       do D:\FAKTURY\_program\vytezeni.json – každý doklad tam má hotový
+       záznam `pro_web`. Tady se z něj založí koncepty „Ke kontrole“.
+       Stejné PDF (otisk) se podruhé nezaloží, takže načítat jde opakovaně. */
+
+    async function importuj(soubor) {
+        if (!fakturyPrisly) {
+            return void toast("Počkej chvilku, až se načtou faktury z databáze, a zkus to znovu.", "warn");
+        }
+        let data;
+        try { data = JSON.parse(await soubor.text()); }
+        catch (err) {
+            return void toast("Soubor se nedá přečíst – vyber vytezeni.json ze složky D:\\FAKTURY\\_program.", "error");
+        }
+        const zaznamy = (Array.isArray(data) ? data : []).map(z => z && z.pro_web).filter(Boolean);
+        if (!zaznamy.length) return void toast("V souboru nejsou faktury k načtení (čekám vytezeni.json).", "warn");
+
+        const zname = new Set((window.KB.faktury || []).map(f => f.otisk).filter(Boolean));
+        let pridano = 0, preskoceno = 0;
+        $("btnImport").disabled = true;
+        try {
+            for (let i = 0; i < zaznamy.length; i++) {
+                const z = zaznamy[i];
+                if (z.otisk && zname.has(z.otisk)) { preskoceno += 1; continue; }
+                await window.KB.saveFaktura(window.KB.newFakturaId() + "_" + i, z, { bezAktivity: true });
+                if (z.otisk) zname.add(z.otisk);
+                pridano += 1;
+            }
+            if (pridano) {
+                window.KB.zapisAktivitu("faktura", "načetl z inboxu " +
+                    V.pocet(pridano, ["fakturu", "faktury", "faktur"]) + " ke kontrole");
+            }
+            toast(pridano
+                ? "Načteno " + V.pocet(pridano, ["doklad", "doklady", "dokladů"]) + " ke kontrole" +
+                  (preskoceno ? ", " + preskoceno + " už na webu bylo." : ".")
+                : "Nic nového – všechny doklady už na webu jsou.");
+            $("filtrStav").value = "__kontrola";
+            vykresliSouhrn();
+            vykresliSeznam();
+        } catch (err) {
+            console.error(err);
+            toast("Načítání se přerušilo (načteno " + pridano + "). Zkus to znovu – hotové se nezdvojí.", "error");
+        } finally {
+            $("btnImport").disabled = false;
+            $("importSoubor").value = "";
         }
     }
 
@@ -737,20 +1271,25 @@
         if (!spusteno) {
             spusteno = true;
             window.KB.watchFaktury();
-        window.KB.watchFirmyDetail();
+            window.KB.watchFirmyDetail();
             window.KB.loadRozpocty().then(r => { rozpocty = r; vykresliSouhrn(); });
-            nactiNastaveni();
+            nactiNastaveni().then(() => { if (!dotknuto) obnovKategorie(); });
         }
 
         // filtry drží vybranou hodnotu i po překreslení možností
-        const drzStav = $("filtrStav").value;
+        const drzStav = pozadovanyFiltr || $("filtrStav").value;
+        pozadovanyFiltr = "";
         $("filtrStav").innerHTML = '<option value="">Všechny stavy</option>' +
+            '<option value="__kontrola"' + (drzStav === "__kontrola" ? " selected" : "") +
+                ">Ke kontrole (z inboxu)</option>" +
+            '<option value="__kzaplaceni"' + (drzStav === "__kzaplaceni" ? " selected" : "") +
+                ">K zaplacení do 7 dní</option>" +
             STAVY.map(s => '<option value="' + s.id + '"' +
                 (s.id === drzStav ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
         const drzProjekt = $("filtrProjekt").value;
         $("filtrProjekt").innerHTML = '<option value="">Všechny projekty</option>' +
             '<option value="__bez"' + (drzProjekt === "__bez" ? " selected" : "") +
-                ">— bez projektu</option>" +
+                ">— " + esc(ADMIN.toLowerCase()) + " / bez projektu</option>" +
             V.zakazky().map(z => '<option value="' + esc(z) + '"' +
                 (z === drzProjekt ? " selected" : "") + ">" + esc(z) + "</option>").join("");
 
@@ -776,9 +1315,57 @@
         window.KBUI.mountNav({ active: "sprava.html", subbar: true });
         window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "faktury.html");
 
+        // odkazy z nástěnky: ?id=<faktura>, ?filtr=kontrola | kzaplaceni
+        const odkaz = new URLSearchParams(location.search);
+        if (odkaz.get("id")) vybrana = odkaz.get("id");
+        pozadovanyFiltr = { kontrola: "__kontrola", kzaplaceni: "__kzaplaceni" }[odkaz.get("filtr")] || "";
+
+        $("btnImport").addEventListener("click", () => $("importSoubor").click());
+        $("importSoubor").addEventListener("change", () => {
+            const soubor = $("importSoubor").files && $("importSoubor").files[0];
+            if (soubor) importuj(soubor);
+        });
+
+        // rozpis DPH: základ nebo sazba přepočte DPH řádku, pak se sečte celek
+        $("rozpisTelo").addEventListener("input", (event) => {
+            const tr = event.target.closest("tr");
+            if (tr && event.target.classList.contains("roz-zaklad")) prepoctiDphRadku(tr);
+            prepoctiRozpis();
+        });
+        $("rozpisTelo").addEventListener("change", (event) => {
+            const tr = event.target.closest("tr");
+            if (tr && event.target.classList.contains("roz-sazba")) prepoctiDphRadku(tr);
+            prepoctiRozpis();
+        });
+        $("rozpisTelo").addEventListener("click", (event) => {
+            const smazatko = event.target.closest(".roz-smaz");
+            if (!smazatko) return;
+            smazatko.closest("tr").remove();
+            if (!$("rozpisTelo").querySelector("tr")) vykresliRozpis([{ sazba: 21, zaklad: "", dph: "" }]);
+            dotknuto = true;
+            prepoctiRozpis();
+        });
+        $("btnSazba").addEventListener("click", () => {
+            $("rozpisTelo").insertAdjacentHTML("beforeend", radekRozpisu({ sazba: 12, zaklad: "", dph: "" }));
+            dotknuto = true;
+        });
+        ["fPoplatky", "fZaokrouhleni"].forEach(id => $(id).addEventListener("input", prepoctiRozpis));
+        $("fCastkaCelkem").addEventListener("input", () => {
+            if (!$("blokRozpis").hidden) celkemRucne = true;
+            vykresliSoucet();
+        });
+
         ["filtrTyp", "filtrStav", "filtrProjekt"].forEach(id =>
             $(id).addEventListener("change", () => { vykresliSouhrn(); vykresliSeznam(); }));
         $("hledat").addEventListener("input", () => { vykresliSouhrn(); vykresliSeznam(); });
+
+        // dlaždice „Ke kontrole“ přepne filtr na záznamy z inboxu
+        $("souhrn").addEventListener("click", (event) => {
+            if (!event.target.closest("#dlazdiceKontrola")) return;
+            $("filtrStav").value = "__kontrola";
+            vykresliSouhrn();
+            vykresliSeznam();
+        });
 
         $("seznamVypis").addEventListener("click", (event) => {
             const tlacitko = event.target.closest("[data-id]");
@@ -799,9 +1386,20 @@
         $("panel").addEventListener("input", () => { dotknuto = true; });
 
         $("fTyp").addEventListener("change", () => {
-            $("popisProtistrana").textContent = $("fTyp").value === "vydana" ? "Odběratel" : "Dodavatel";
-            $("blokPolozky").hidden = $("fTyp").value !== "vydana";
+            const typ = $("fTyp").value;
+            $("popisProtistrana").textContent = typ === "vydana" ? "Odběratel" : "Dodavatel";
+            $("blokPolozky").hidden = typ !== "vydana";
+            $("poleKategorie").hidden = typ === "vydana";
+            $("poleMena").hidden = typ === "vydana";
+            $("fProjekt").innerHTML = moznostiProjektu($("fProjekt").value, typ);
+            nastavTypCastek(typ);
+            if (typ !== "vydana" && !$("rozpisTelo").querySelector("tr")) {
+                vykresliRozpis([{ sazba: Number($("fDphSazba").value) || 21,
+                    zaklad: $("fCastkaBez").value, dph: $("fCastkaDph").value }]);
+            }
+            vykresliMenu();
         });
+        $("fMena").addEventListener("change", () => { vykresliMenu(); prepoctiRozpis(); });
         $("fCastkaBez").addEventListener("input", prepoctiCastky);
         $("fDphSazba").addEventListener("change", () => { dotknuto = true; prepoctiCastky(); });
         $("fVystaveno").addEventListener("change", () => {
@@ -816,6 +1414,59 @@
         });
         $("fProtistrana").addEventListener("change", doplnZFirem);
         $("btnAres").addEventListener("click", doplnZAres);
+
+        $("fKategorie").addEventListener("focus", () => { kategoriePred = $("fKategorie").value; });
+        $("fKategorie").addEventListener("change", () => {
+            if ($("fKategorie").value === "__nova") novaKategorie();
+            else kategoriePred = $("fKategorie").value;
+        });
+
+        // stav a zaškrtnutí „Uhrazeno“ drží spolu
+        $("fStav").addEventListener("change", () => {
+            const stav = $("fStav").value;
+            if (stav === "zaplacena" && !$("fUhrazeno").value) { otevriUhrazeno(); return; }
+            if (stav !== "zaplacena" && $("fUhrazeno").value) {
+                $("fUhrazeno").value = "";
+                vykresliUhrazeno();
+            }
+            posledniStav = stav;
+        });
+        $("fUhrazenoChk").addEventListener("change", () => {
+            if ($("fUhrazenoChk").checked) { otevriUhrazeno(); return; }
+            // odškrtnutí = nezaplaceno: datum pryč, stav o krok zpátky
+            $("fUhrazeno").value = "";
+            if ($("fStav").value === "zaplacena") $("fStav").value = "schvalena";
+            posledniStav = $("fStav").value;
+            dotknuto = true;
+            vykresliUhrazeno();
+        });
+        $("fUhrazenoText").addEventListener("click", (event) => {
+            if (event.target.closest("[data-uhr-zmen]")) otevriUhrazeno();
+        });
+        $("uhrOk").addEventListener("click", potvrdUhrazeno);
+        $("uhrDatum").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") potvrdUhrazeno();
+        });
+        $("oknoUhrazeno").addEventListener("click", (event) => {
+            if (event.target === $("oknoUhrazeno") || event.target.closest("[data-uhr-zrus]")) zrusUhrazeno();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") zrusUhrazeno();
+        });
+
+        $("fCesta").addEventListener("input", vykresliSoubor);
+        $("btnOtevrit").addEventListener("click", () => {
+            const cesta = $("fCesta").value.trim();
+            if (/^https?:\/\//i.test(cesta)) window.open(cesta, "_blank", "noopener");
+        });
+        $("btnKopirovat").addEventListener("click", () => {
+            const cesta = $("fCesta").value.trim();
+            if (!cesta) return;
+            // web nesmí otevřít soubor z disku sám – cesta se vloží do Průzkumníka
+            (navigator.clipboard ? navigator.clipboard.writeText(cesta) : Promise.reject())
+                .then(() => toast("Cesta zkopírovaná – vlož ji do Průzkumníka souborů."))
+                .catch(() => { $("fCesta").select(); toast("Zkopíruj cestu ručně (Ctrl+C).", "warn"); });
+        });
 
         $("btnPolozka").addEventListener("click", () => {
             $("polozkyTelo").insertAdjacentHTML("beforeend", radekPolozky({}));
@@ -835,7 +1486,8 @@
             if (!vybrana) return;
             window.open("faktura-tisk.html?id=" + encodeURIComponent(vybrana));
         });
-        $("btnUloz").addEventListener("click", uloz);
+        $("btnUloz").addEventListener("click", () => uloz(false));
+        $("btnPotvrdit").addEventListener("click", () => uloz(true));
         $("btnSmaz").addEventListener("click", smaz);
 
         /* Podlišta se překresluje s rolí – při načtení stránky ještě z databáze
@@ -844,7 +1496,7 @@
             window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "faktury.html");
             vykresli();
         });
-        window.KB.on("faktury", vykresli);
+        window.KB.on("faktury", () => { fakturyPrisly = true; vykresli(); });
         window.KB.on("zakazky", vykresli);
         window.KB.on("users", vykresli);
         vykresli();

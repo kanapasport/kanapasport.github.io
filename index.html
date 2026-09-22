@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=230">
+    <link rel="stylesheet" href="assets/css/app.css?v=231">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -321,6 +321,20 @@
                 </div>
                 <div id="dovoleneSeznam" class="nastenka__telo col" style="gap:6px"></div>
             </div>
+            <!-- faktury (dotazník 22. 9. 2026): co zaplatit do týdne a co nově přibylo -->
+            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyPlatby" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="faktury.html?filtr=kzaplaceni" title="Otevřít faktury k zaplacení">
+                    <b>Faktury k zaplacení — do týdne</b>
+                </div>
+                <div id="fakturyPlatbySeznam" class="nastenka__telo col" style="gap:6px"></div>
+                <div class="nastenka__pata" id="fakturyPlatbyPata"></div>
+            </div>
+            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyNove" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="faktury.html" title="Otevřít faktury">
+                    <b>Nové faktury</b>
+                </div>
+                <div id="fakturyNoveSeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
             <!-- kontrola výkazů: většinou prázdná, ale když někde něco nesedí,
                  manažer to vidí hned a nemusí to dohledávat na konci měsíce -->
             <div class="card nastenka__karta nastenka__karta--man" id="wKontrola" data-need="vykaz.view" hidden>
@@ -367,11 +381,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=230"></script>
-<script src="assets/js/doc.js?v=230"></script>
-<script src="assets/js/ui.js?v=230"></script>
-<script src="assets/js/vykazy.js?v=230"></script>
-<script type="module" src="assets/js/store.js?v=230"></script>
+<script src="assets/js/taxonomy.js?v=231"></script>
+<script src="assets/js/doc.js?v=231"></script>
+<script src="assets/js/ui.js?v=231"></script>
+<script src="assets/js/vykazy.js?v=231"></script>
+<script type="module" src="assets/js/store.js?v=231"></script>
 
 <script>
 (function () {
@@ -406,6 +420,7 @@
             window.KB.watchAktivity();
             window.KB.watchGsync();     // hlášení ručních řádků z Tabulek
             window.KB.watchVykazy();   // dlaždice Upozornění pro kontrolu
+            window.KB.watchFaktury();  // dlaždice Faktury k zaplacení a Nové faktury
         } else {
             window.KB.watchMojeUkoly();
             window.KB.watchMojeProjekty();
@@ -610,7 +625,8 @@
        přepínání nevidí – mají jen základ. */
 
     const REZIM_KLIC = "kb-nastenka-rezim";
-    const MANAZERSKE_DLAZDICE = ["wDovolene", "wRychly", "wKontrola", "wAktivita"];
+    const MANAZERSKE_DLAZDICE = ["wDovolene", "wRychly", "wFakturyPlatby", "wFakturyNove",
+        "wKontrola", "wAktivita"];
 
     function rezimNastenky() {
         try { return localStorage.getItem(REZIM_KLIC) || "zakladni"; }
@@ -1058,6 +1074,180 @@
               "Žádná dovolená nečeká na potvrzení.</div>");
     }
 
+    /* ------------------------------------------------------ faktury -----
+       Dvě manažerské dlaždice podle dotazníku (22. 9. 2026). Faktury platí
+       majitel: první dlaždice ukazuje, co je splatné do týdne (a co už je po
+       splatnosti), a jde tu rovnou odškrtnout „Zaplaceno“ s datem úhrady.
+       Druhá je přehled nového: kolik dokladů z inboxu čeká na kontrolu
+       a co se za posledních 14 dní zařadilo. */
+
+    const DRUH_FAKTURY = { faktura: "Faktura", uctenka: "Účtenka", zalohova: "Zálohová faktura",
+        dobropis: "Dobropis", jine: "Doklad" };
+    const isoZaDni = (dni) => {
+        const d = new Date();
+        d.setDate(d.getDate() + dni);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" +
+            String(d.getDate()).padStart(2, "0");
+    };
+    const fakturaCastka = (f) => (!f.mena || f.mena === "CZK") ? V.kc(f.castkaCelkem)
+        : (Number(f.castkaCelkem) || 0).toLocaleString("cs-CZ",
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + f.mena;
+    /** Celkem v Kč pro součty – cizí měna jen s kurzem. */
+    const fakturaKc = (f) => (!f.mena || f.mena === "CZK") ? (Number(f.castkaCelkem) || 0)
+        : (Number(f.kurz) ? (Number(f.castkaCelkem) || 0) * Number(f.kurz) : 0);
+    const fakturaNazev = (f) => (f.protistrana || "?") + " - " +
+        (DRUH_FAKTURY[f.druhDokladu] || "Faktura") + (f.cislo ? " č. " + f.cislo : "");
+    const fakturaCeka = (f) => f.zdroj === "inbox" && (f.stav || "nova") === "nova";
+
+    function renderFakturyPlatby() {
+        const box = document.getElementById("fakturyPlatbySeznam");
+        if (!box || !window.KBUI.can("vykaz.view")) return;
+        const dnes = V.dnesISO();
+        const hranice = isoZaDni(7);
+        const kPlaceni = (window.KB.faktury || [])
+            .filter(f => f.typ === "prijata" && !f.uhrazeno && f.stav !== "zaplacena" &&
+                f.splatnost && f.splatnost <= hranice)
+            .sort((a, b) => a.splatnost.localeCompare(b.splatnost));
+
+        // po splatnosti červeně (výchozí barva řádku), ostatní klidně šedě
+        box.innerHTML = kPlaceni.length
+            ? kPlaceni.map(f => {
+                const po = f.splatnost < dnes;
+                return '<div class="kontrola__radek"' +
+                        (po ? "" : ' style="background:var(--bg-soft);border-color:var(--line)"') + ">" +
+                    '<a class="kontrola__odkaz" href="faktury.html?id=' + encodeURIComponent(f.id) +
+                        '" title="Otevřít fakturu">' +
+                        '<span class="kontrola__datum"' + (po ? "" : ' style="color:var(--text)"') + ">" +
+                            esc(czDatum(f.splatnost)) + "</span>" +
+                        '<span class="truncate"><b>' + esc(fakturaNazev(f)) + "</b> · " + esc(fakturaCastka(f)) +
+                            (po ? ' · <span style="color:var(--danger);font-weight:700">po splatnosti</span>' : "") +
+                            (fakturaCeka(f) ? ' · <span class="muted">ke kontrole</span>' : "") + "</span>" +
+                    "</a>" +
+                    '<button type="button" class="btn btn--sm btn--primary" data-zaplaceno="' + esc(f.id) +
+                        '">Zaplaceno</button>' +
+                "</div>";
+            }).join("")
+            : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+              "Do týdne není nic k zaplacení.</div>";
+
+        const pata = document.getElementById("fakturyPlatbyPata");
+        if (pata) {
+            const soucet = kPlaceni.reduce((x, f) => x + fakturaKc(f), 0);
+            const poSplatnosti = kPlaceni.filter(f => f.splatnost < dnes).length;
+            pata.innerHTML = kPlaceni.length
+                ? '<span class="tiny muted">Celkem k zaplacení <b>' + esc(V.kc(soucet)) + "</b>" +
+                  (poSplatnosti ? " · po splatnosti " + esc(String(poSplatnosti)) : "") + "</span>"
+                : "";
+        }
+    }
+
+    function renderFakturyNove() {
+        const box = document.getElementById("fakturyNoveSeznam");
+        if (!box || !window.KBUI.can("vykaz.view")) return;
+        const vse = window.KB.faktury || [];
+        const cekaji = vse.filter(fakturaCeka);
+        const od = Date.now() - 14 * 24 * 3600 * 1000;
+        const kdy = (f) => f.potvrzenoMs || f.createdMs || 0;
+        const zarazene = vse.filter(f => (f.stav || "nova") !== "nova" && kdy(f) >= od)
+            .sort((a, b) => kdy(b) - kdy(a)).slice(0, 12);
+
+        let html = "";
+        if (cekaji.length) {
+            html += '<div class="kontrola__radek" style="background:#fff7ed;border-color:#fdba74">' +
+                '<a class="kontrola__odkaz" href="faktury.html?filtr=kontrola" title="Otevřít doklady ke kontrole">' +
+                    '<span class="kontrola__datum" style="color:#9a3412">Ke kontrole</span>' +
+                    "<span><b>" + esc(V.pocet(cekaji.length, ["doklad", "doklady", "dokladů"])) + "</b>" +
+                        " z inboxu · " + esc(V.kc(cekaji.reduce((x, f) => x + fakturaKc(f), 0))) + "</span>" +
+                "</a></div>";
+        }
+        html += zarazene.length
+            ? '<div class="tiny muted" style="margin:6px 2px 2px">Zařazené za posledních 14 dní</div>' +
+              zarazene.map(f => {
+                  const d = new Date(kdy(f));
+                  const zarazeni = f.typ === "vydana" ? "vydaná"
+                      : (f.kategorie || "bez kategorie") + " · " + (f.projekt || "administrativa");
+                  return '<a class="row" href="faktury.html?id=' + encodeURIComponent(f.id) + '" style="gap:8px;' +
+                          "padding:5px 2px;border-bottom:1px dashed var(--line-soft);font-size:13px;" +
+                          'text-decoration:none;color:inherit">' +
+                      '<b style="flex:none;min-width:46px">' + esc(d.getDate() + ". " + (d.getMonth() + 1) + ".") + "</b>" +
+                      '<span class="grow truncate">' + esc(fakturaNazev(f)) +
+                          ' <span class="muted">· ' + esc(zarazeni) + "</span></span>" +
+                      '<span style="flex:none;font-weight:700">' + esc(fakturaCastka(f)) + "</span>" +
+                  "</a>";
+              }).join("")
+            : (cekaji.length ? "" : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+              "Za posledních 14 dní se žádná faktura nezařadila.</div>");
+        box.innerHTML = html;
+    }
+
+    const renderFaktury = () => { renderFakturyPlatby(); renderFakturyNove(); };
+
+    /* Okno „Zaplaceno“: datum úhrady (výchozí dnešek) → KB.uhradFakturu,
+       které mění jen úhradu – zbytek faktury zůstane, jak je. */
+    let uhradaId = "";
+
+    function oknoUhrady() {
+        let okno = document.getElementById("oknoUhrady");
+        if (okno) return okno;
+        okno = document.createElement("div");
+        okno.id = "oknoUhrady";
+        okno.className = "hookno no-print";
+        okno.hidden = true;
+        okno.innerHTML =
+            '<div class="hookno__deska card" style="max-width:420px">' +
+                '<div class="hookno__hlava"><span>Zaplaceno</span>' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy" data-uhr-zrus>Zavřít</button></div>' +
+                '<div class="hookno__telo" style="display:flex;flex-direction:column;gap:12px">' +
+                    '<div class="small" data-uhr-co style="line-height:1.5"></div>' +
+                    '<label style="display:flex;flex-direction:column;gap:4px">' +
+                        '<span class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.05em">' +
+                            "Datum úhrady</span>" +
+                        '<input type="date" class="field" data-uhr-datum></label>' +
+                    '<div class="row" style="gap:8px;justify-content:flex-end">' +
+                        '<button type="button" class="btn btn--ghost btn--sm" data-uhr-zrus>Zrušit</button>' +
+                        '<button type="button" class="btn btn--primary btn--sm" data-uhr-ok>Potvrdit úhradu</button>' +
+                    "</div>" +
+                "</div>" +
+            "</div>";
+        document.body.appendChild(okno);
+        okno.addEventListener("click", async (event) => {
+            if (event.target === okno || event.target.closest("[data-uhr-zrus]")) { okno.hidden = true; return; }
+            const ok = event.target.closest("[data-uhr-ok]");
+            if (!ok) return;
+            const datum = okno.querySelector("[data-uhr-datum]").value;
+            if (!datum) return void window.KBUI.toast("Vyplň datum úhrady.", "warn");
+            ok.disabled = true;
+            try {
+                await window.KB.uhradFakturu(uhradaId, datum);
+                okno.hidden = true;
+                window.KBUI.toast("Označeno jako zaplacené.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Uložení se nepovedlo.", "error");
+            } finally {
+                ok.disabled = false;
+            }
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") okno.hidden = true;
+        });
+        return okno;
+    }
+
+    document.addEventListener("click", (event) => {
+        const tlacitko = event.target.closest("[data-zaplaceno]");
+        if (!tlacitko) return;
+        const f = (window.KB.faktury || []).find(x => x.id === tlacitko.dataset.zaplaceno);
+        if (!f) return;
+        uhradaId = f.id;
+        const okno = oknoUhrady();
+        okno.querySelector("[data-uhr-co]").innerHTML = "<b>" + esc(fakturaNazev(f)) + "</b><br>" +
+            esc(fakturaCastka(f)) + " · splatnost " + esc(czDatum(f.splatnost));
+        okno.querySelector("[data-uhr-datum]").value = V.dnesISO();
+        okno.hidden = false;
+        okno.querySelector("[data-uhr-datum]").focus();
+    });
+
     /* --------------------------------- přehled rychlého zápisu ----------
        Vlastní manažerská dlaždice: kdo si na příštích 14 dní zaklikl HO,
        volno nebo dovolenou. U potvrzené dovolené je zkratka toho, kdo ji
@@ -1452,7 +1642,7 @@
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
             renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola();
-            renderDovolene(); renderRychly(); nactiKontrolaOk(); };
+            renderDovolene(); renderRychly(); renderFaktury(); nactiKontrolaOk(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         pripravRezimy();
@@ -1479,6 +1669,7 @@
         window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky();
             renderKontrola(); });   // potvrzování splněných milníků
         window.KB.on("vykazy", renderKontrola);
+        window.KB.on("faktury", renderFaktury);
 
         // okno „Co je nového" – až když dorazí úkoly i vzkazy, ne dřív
         window.KB.on("ukoly", () => { prisloUkoly = true; novinkyZkus(); });
