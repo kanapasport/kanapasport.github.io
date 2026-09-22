@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=229">
+    <link rel="stylesheet" href="assets/css/app.css?v=230">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -384,10 +384,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=229"></script>
-<script src="assets/js/ui.js?v=229"></script>
-<script src="assets/js/vykazy.js?v=229"></script>
-<script type="module" src="assets/js/store.js?v=229"></script>
+<script src="assets/js/taxonomy.js?v=230"></script>
+<script src="assets/js/ui.js?v=230"></script>
+<script src="assets/js/vykazy.js?v=230"></script>
+<script type="module" src="assets/js/store.js?v=230"></script>
 
 <script>
 (function () {
@@ -2217,9 +2217,18 @@
         return !!(p && p.zpetne === true);
     }
 
-    /** Smí přihlášený tenhle záznam ještě upravit? */
+    /**
+     * Smí přihlášený tenhle záznam ještě upravit? Manažer kdykoli. Vlastní
+     * záznam do půlnoci dne, kdy vznikl – a záznam na den, který ještě
+     * NENASTAL, kdykoli předtím. Dovolená zapsaná dva měsíce dopředu se
+     * musí dát posunout nebo zrušit; zamykat má smysl až odpracované dny
+     * (Michal 22. 9. 2026).
+     */
     function smimUpravit(z) {
         if (window.KBUI.can("vykaz.view")) return true;       // manažer kdykoli
+        if (!z) return false;
+        const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
+        if (z.uid === uid && (z.datum || "") > V.dnesISO()) return true;
         const vznik = new Date(Number(z.createdMs) || 0);
         const ted = new Date();
         return vznik.getFullYear() === ted.getFullYear() &&
@@ -2232,7 +2241,8 @@
      * databáze, jinak tlačítko slíbí něco, co zápis odmítne.
      *
      * Od 4. 9. 2026 smí každý smazat SVŮJ záznam, dokud ho může upravovat –
-     * tedy do půlnoci dne, kdy ho zapsal. Kdo si všimne, že si den zapsal
+     * tedy do půlnoci dne, kdy ho zapsal, a u dne, který ještě nenastal,
+     * kdykoli předtím (od 22. 9. 2026). Kdo si všimne, že si den zapsal
      * špatně, si ho má umět zahodit, ne o to prosit manažera (Michal).
      * Dřív to šlo jen u záznamů z Rychlého zápisu. Manažer kdykoliv.
      * (V náhledu „prohlížím jako zaměstnanec" se to řídí náhledem – jinak
@@ -2675,8 +2685,9 @@
                       '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
                     : "") +
                 '<td class="vyk__akce">' +
-                    /* vlastní záznam jde opravit jen v den zápisu – potom
-                       tlačítko zmizí a opravy dělá manažer */
+                    /* vlastní záznam jde opravit v den zápisu a u budoucích
+                       dnů až do jejich příchodu – potom tlačítko zmizí
+                       a opravy dělá manažer */
                     (smimUpravit(z)
                         ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>'
                         : "") +
@@ -2691,8 +2702,8 @@
         const z = (window.KB.vykazy || []).find(v => v.id === id);
         if (!z) return;
         if (!smimUpravit(z)) {
-            return window.KBUI.toast("Vlastní záznam jde opravit jen do půlnoci" +
-                " dne zápisu – změnu domluv s manažerem.", "warn");
+            return window.KBUI.toast("Vlastní záznam jde opravit do půlnoci dne zápisu" +
+                " (budoucí dny kdykoli předem) – změnu domluv s manažerem.", "warn");
         }
 
         editId = id;
@@ -2762,7 +2773,30 @@
                 createdMs: puvodni.createdMs,
                 createdBy: puvodni.createdBy
             }));
-            await srovnejKalendar(Object.assign({}, p, { datum: datum }), uid, jmeno, puvodni);
+            /* Absence z formuláře (ne z Rychlého zápisu): kalendář se srovná
+               podle dnů ve výkazech – u vícedenní dovolené by jinak úprava
+               jednoho dne přepsala celou událost na ten jeden den. Když se
+               záznam přepsal jinému člověku, srovná se u obou; zapisuje se,
+               až když jde naplánovat obojí. */
+            const absence = [puvodni.zakazka, p.zakazka].filter(x => jeAbsence(x || ""));
+            let plany = null;
+            if (absence.length && puvodni.zdroj !== "panel") {
+                const novy = Object.assign({}, puvodni, p, {
+                    id: editId, uid: uid, osoba: jmeno, datum: datum, zdroj: puvodni.zdroj || ""
+                });
+                plany = [puvodni.uid || uid, uid]
+                    .filter((x, i, a) => a.indexOf(x) === i)
+                    .map(kdo => planKalendareAbsenci(kdo, absence, [puvodni.datum, datum], editId,
+                        kdo === uid ? novy : null));
+                if (plany.some(x => x === null)) plany = null;
+            }
+            if (plany) {
+                for (const krok of [].concat(...plany)) {
+                    await krok().catch(err => console.warn("Kalendář:", err));
+                }
+            } else {
+                await srovnejKalendar(Object.assign({}, p, { datum: datum }), uid, jmeno, puvodni);
+            }
             $("editOverlay").hidden = true;
             window.KBUI.toast("Záznam upraven.");
         } catch (err) {
@@ -2808,6 +2842,108 @@
             Object.assign(udalostZVykazu(p, uid, jmeno), { vykazId: editId }));
     }
 
+    /** Další pracovní den (po–pá) po `iso`. */
+    function dalsiPracovniDen(iso) {
+        const d = new Date(iso + "T00:00:00");
+        do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" +
+            String(d.getDate()).padStart(2, "0");
+    }
+
+    /**
+     * Kalendář absencí z výkazu po úpravě nebo smazání záznamu (22. 9. 2026).
+     *
+     * Dovolená na víc dní leží ve výkazech jako záznam za každý pracovní
+     * den, v kalendáři jako JEDNA událost přes celý rozsah. Když si člověk
+     * dovolenou zapsanou dopředu zkrátí, posune nebo z ní den zruší, srovná
+     * se kalendář podle toho, co ve výkazech opravdu zbylo: souvislé řady
+     * pracovních dnů = události. Dřív zrušení prvního dne smazalo z kalendáře
+     * celou dovolenou a zrušení dalších dnů v něm nechalo viset původní rozsah.
+     *
+     * Každé přeuložení události shodí potvrzení dovolené, proto se sahá jen
+     * na události, které se změnily. Zkrácená nebo rozdělená dovolená si
+     * potvrzení drží (manažer schválil víc), prodloužená nebo posunutá jde
+     * schválit znovu.
+     *
+     * `bez` = id záznamu, jehož původní podoba se nepočítá, `novy` = jeho
+     * nová podoba (nebo null po smazání) – nezáleží tak na tom, jestli už
+     * databáze stihla poslat čerstvý stav. Vrací seznam kroků k provedení,
+     * nebo null, když si netroufne: manažerovi se živě drží jen posledních
+     * pár měsíců výkazů a starší dovolenou by podle neúplných dat rozsekal.
+     * Pak se jede po staru.
+     */
+    function planKalendareAbsenci(uid, zakazky, dotcene, bez, novy) {
+        const okno = window.KB.vykazyOknoOd || "";
+        const zaznamy = (window.KB.vykazy || [])
+            .filter(z => z.id !== bez)
+            .concat(novy ? [novy] : [])
+            .filter(z => z.uid === uid && z.zdroj !== "panel" && z.datum);
+        const cele = (z) => z.od === CELY_DEN_OD && z.do === CELY_DEN_DO;
+        const dny = dotcene.filter(Boolean).sort();
+        if (!dny.length) return [];
+
+        const kroky = [];
+        for (const zakazka of zakazky.filter((x, i, a) => TYP_ABSENCE[x] && a.indexOf(x) === i)) {
+            const typ = TYP_ABSENCE[zakazka];
+            const udalosti = (window.KB.kalendar || []).filter(k =>
+                k.uid === uid && k.zdroj === "vykaz" && k.typ === typ && k.od);
+            const konec = (k) => k.do || k.od;
+
+            // okno = dotčené dny + celé události, které do něj zasahují
+            let od = dny[0], doKdy = dny[dny.length - 1];
+            for (let zmena = true; zmena;) {
+                zmena = false;
+                udalosti.forEach(k => {
+                    if (k.od <= doKdy && konec(k) >= od) {
+                        if (k.od < od) { od = k.od; zmena = true; }
+                        if (konec(k) > doKdy) { doKdy = konec(k); zmena = true; }
+                    }
+                });
+            }
+            if (okno && od < okno) return null;
+
+            // souvislé řady pracovních dnů s touhle absencí
+            const rady = [];
+            zaznamy.filter(z => z.zakazka === zakazka && z.datum >= od && z.datum <= doKdy)
+                .sort((a, b) => a.datum.localeCompare(b.datum))
+                .forEach(z => {
+                    const r = rady[rady.length - 1];
+                    if (r && (z.datum === r.do || z.datum === dalsiPracovniDen(r.do))) r.do = z.datum;
+                    else rady.push({ od: z.datum, do: z.datum, prvni: z });
+                });
+
+            // řada dostane nejdřív starou událost, do které se celá vejde
+            const stare = udalosti.filter(k => k.od <= doKdy && konec(k) >= od)
+                .sort((a, b) => a.od.localeCompare(b.od));
+            const pouzite = new Set();
+            rady.forEach(r => {
+                const k = stare.find(x => !pouzite.has(x.id) && x.od <= r.od && r.do <= konec(x)) ||
+                          stare.find(x => !pouzite.has(x.id) && x.od <= r.do && konec(x) >= r.od) ||
+                          null;
+                if (k) pouzite.add(k.id);
+                /* Potvrzení se nese z kterékoli potvrzené události, do které
+                   se řada celá vejde – i u druhé půlky rozdělené dovolené. */
+                const potvrzena = stare.find(x => x.potvrzeno === true && x.od <= r.od && r.do <= konec(x));
+                const bezeZmeny = !!k && k.od === r.od && konec(k) === r.do &&
+                    k.vykazId === r.prvni.id && !!k.celyDen === cele(r.prvni);
+                if (bezeZmeny) return;
+                const p = Object.assign({}, r.prvni, { datum: r.od, datumDo: r.do, celyden: cele(r.prvni) });
+                kroky.push(() => window.KB.saveUdalost(k ? k.id : window.KB.newUdalostId(),
+                    Object.assign(udalostZVykazu(p, uid, r.prvni.osoba || jmenoUid(uid)), {
+                        vykazId: r.prvni.id,
+                        createdMs: k ? k.createdMs : 0,
+                        potvrzeno: !!potvrzena,
+                        potvrdil: potvrzena ? (potvrzena.potvrdil || "") : "",
+                        potvrzenoMs: potvrzena ? (potvrzena.potvrzenoMs || 0) : 0
+                    })));
+            });
+            // stará událost, na kterou už žádná řada nezbyla, jde pryč
+            stare.filter(k => !pouzite.has(k.id))
+                .forEach(k => kroky.push(() => window.KB.deleteUdalost(k.id)));
+        }
+        return kroky;
+    }
+
     async function smazZapis() {
         const z = (window.KB.vykazy || []).find(v => v.id === editId);
         if (!z) return;
@@ -2816,8 +2952,17 @@
         try {
             // s absencí zmizí i její událost, ať v kalendáři nezůstane viset
             const udalost = udalostZapisu(editId, z);
+            /* Den z vícedenní dovolené: kalendář se srovná podle dnů, které
+               zbyly. Rychlý zápis a starší období jako dřív. Plán se dělá
+               PŘED smazáním, dokud je záznam ještě v seznamu. */
+            const plan = jeAbsence(z.zakazka || "") && z.zdroj !== "panel"
+                ? planKalendareAbsenci(z.uid, [z.zakazka], [z.datum], z.id, null) : null;
             await window.KB.deleteVykaz(editId);
-            if (udalost) await window.KB.deleteUdalost(udalost.id).catch(() => {});
+            if (plan) {
+                for (const krok of plan) await krok().catch(err => console.warn("Kalendář:", err));
+            } else if (udalost) {
+                await window.KB.deleteUdalost(udalost.id).catch(() => {});
+            }
             $("editOverlay").hidden = true;
             window.KBUI.toast("Záznam smazán.");
         } catch (err) {

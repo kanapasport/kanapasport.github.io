@@ -2786,6 +2786,10 @@ KB.saveUdalost = async (id, data) => {
            datum znamená schvalovat znovu) začíná nepotvrzená; potvrzuje
            KB.potvrdDovolenou z dlaždice na nástěnce. */
         potvrzeno: data.potvrzeno === true,
+        /* Zkrácená dovolená si potvrzení nese dál – u nově založené části
+           (rozdělená dovolená) i s tím, kdo ji potvrdil (22. 9. 2026). */
+        ...(data.potvrzeno === true && data.potvrdil
+            ? { potvrdil: data.potvrdil, potvrzenoMs: data.potvrzenoMs || Date.now() } : {}),
         createdMs: data.createdMs || Date.now(),
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
