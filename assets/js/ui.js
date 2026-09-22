@@ -973,6 +973,50 @@
        nabídne „Instalovat aplikaci" (a udělá skutečnou ikonu, ne jen
        zástupce) až když stránka má service worker. Ten náš nic necachuje,
        je tam jen kvůli téhle podmínce. (Michal 2. 9. 2026.) */
+    /* Červená lišta, když web nedostane data z databáze (22. 9. 2026).
+       Nese i prohlížeč a zařízení – z fotky hlášky se pak dá poznat, kde
+       je problém, i když u toho nikdo nemá konzoli. */
+    function popisProhlizece() {
+        const ua = navigator.userAgent || "";
+        const verze = (ua.match(/Version\/([\d.]+)/) || [])[1] || "";
+        const prohlizec = /Edg\//.test(ua) ? "Edge"
+            : /CriOS|Chrome\//.test(ua) ? "Chrome"
+            : /FxiOS|Firefox\//.test(ua) ? "Firefox"
+            : /Safari\//.test(ua) ? "Safari" + (verze ? " " + verze : "") : "prohlížeč";
+        const zarizeni = /iPhone/.test(ua) ? "iPhone"
+            : (/iPad/.test(ua) || (navigator.maxTouchPoints > 1 && /Mac/.test(ua))) ? "iPad"
+            : /Mac/.test(ua) ? "Mac" : /Android/.test(ua) ? "Android"
+            : /Windows/.test(ua) ? "Windows" : "";
+        return [prohlizec, zarizeni, window.KB && window.KB.webkitObchvat ? "režim WebKit" : ""]
+            .filter(Boolean).join(" · ");
+    }
+
+    function ukazChybuDat(zprava) {
+        let lista = document.getElementById("kbDataChyba");
+        if (!zprava) { if (lista) lista.hidden = true; return; }
+        if (!lista) {
+            lista = document.createElement("div");
+            lista.id = "kbDataChyba";
+            lista.className = "datachyba no-print";
+            lista.setAttribute("role", "alert");
+            document.body.appendChild(lista);
+            lista.addEventListener("click", (event) => {
+                if (event.target.closest("[data-datachyba-zavri]")) lista.hidden = true;
+            });
+        }
+        lista.innerHTML = "<b>Web nedostal data z databáze.</b> " + esc(zprava) +
+            " Zkus stránku obnovit; když to nepomůže, pošli správci fotku téhle lišty." +
+            '<span class="datachyba__info">' + esc(popisProhlizece()) + "</span>" +
+            '<button type="button" class="linkbtn datachyba__zavri" data-datachyba-zavri>Skrýt</button>';
+        lista.hidden = false;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!window.KB || !window.KB.on) return;
+        window.KB.on("data-chyba", (event) => ukazChybuDat(event.detail));
+        if (window.KB.dataChyba) ukazChybuDat(window.KB.dataChyba);
+    });
+
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {
             navigator.serviceWorker.register("sw.js")

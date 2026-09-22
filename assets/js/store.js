@@ -298,6 +298,16 @@ let ukolyChteno = "";
 let vykazyRezim = "";           // "" | "moje" | "vse"
 let projektyRezim = "";
 let ukolyRezim = "";
+/* Hlídač dat (22. 9. 2026): když po přihlášení nedorazí seznam lidí, řekne
+   to web nahlas. Dřív člověk viděl jen holou stránku bez projektů a výkazů
+   a chyba byla jen v konzoli, kterou na iPhonu nikdo neotevře. */
+let hlidacDat = null;
+function chybaDat(zprava) {
+    KB.dataChyba = zprava || "";
+    emit("data-chyba", KB.dataChyba);
+}
+const popisChyby = (err) => (err && (err.code || err.message)) || String(err || "");
+
 const zrusProjektyUkoly = () => {
     if (projektyOdber) { try { projektyOdber(); } catch (e) {} projektyOdber = null; }
     if (ukolyOdber) { try { ukolyOdber(); } catch (e) {} ukolyOdber = null; }
@@ -307,17 +317,24 @@ const zrusProjektyUkoly = () => {
 try {
     const app = initializeApp(FIREBASE_CONFIG);
 
-    /* iPad a iPhone (WebKit): IndexedDB tam umí potichu VISET a je na ní
-       postavená jak mezipaměť dat, tak ukládání přihlášení. Bez tohohle
-       obcházení na iPadu 29. 8. napřed nechodila data, a po odhlášení
-       nešlo ani přihlásit (session se neměla kam zapsat). iPad se hlásí
-       jako „MacIntel", pozná se podle dotykových bodů. */
-    const appleDotyk = navigator.maxTouchPoints > 1 &&
-        /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
+    /* WebKit (Safari): IndexedDB tam umí potichu VISET a je na ní postavená
+       jak mezipaměť dat, tak ukládání přihlášení. Bez tohohle obcházení na
+       iPadu 29. 8. napřed nechodila data, a po odhlášení nešlo ani přihlásit
+       (session se neměla kam zapsat). iPad se hlásí jako „MacIntel", pozná
+       se podle dotykových bodů.
+       Do 22. 9. 2026 se obchvat zapínal JEN na dotyku – Safari na Macu je
+       ale stejné jádro, zůstal na IndexedDB a lidem v něm nešly výkazy ani
+       projekty. Safari se pozná podle výrobce prohlížeče: hlásí „Apple
+       Computer, Inc." (na iOS i Chrome a Firefox, protože tam jiné jádro
+       být nesmí), Chrome „Google Inc.", Firefox nic. */
+    const webkitApple = navigator.vendor === "Apple Computer, Inc." ||
+        (navigator.maxTouchPoints > 1 &&
+            /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent));
+    KB.webkitObchvat = webkitApple;
 
-    /* na jablečném dotyku se přihlášení ukládá do localStorage (spolehlivé),
+    /* ve WebKitu se přihlášení ukládá do localStorage (spolehlivé),
        jinde zůstává výchozí IndexedDB */
-    auth = appleDotyk
+    auth = webkitApple
         ? initializeAuth(app, { persistence: browserLocalPersistence })
         : getAuth(app);
     /* Trvalá mezipaměť v prohlížeči (IndexedDB). Web je několik
@@ -330,11 +347,12 @@ try {
        `persistentMultipleTabManager` hlídá víc otevřených záložek naráz;
        kde IndexedDB není (anonymní okno, starý prohlížeč), se tiše
        spadne zpátky na paměťovou mezipaměť. */
-    /* Data na jablečném dotyku (viz `appleDotyk` výš): bez trvalé
-       mezipaměti a přes long-polling, se kterým má WebKit menší potíže
-       než se streamováním. */
+    /* Data ve WebKitu (viz `webkitApple` výš): bez trvalé mezipaměti a přes
+       long-polling, se kterým má WebKit menší potíže než se streamováním.
+       Stojí to víc čtení (každé otevření stránky čte znovu), ale Safari
+       používá jen pár lidí. */
     try {
-        db = appleDotyk
+        db = webkitApple
             ? initializeFirestore(app, { experimentalForceLongPolling: true })
             : initializeFirestore(app, {
                 localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
@@ -379,12 +397,18 @@ try {
             KB.zustatky = {}; KB.poradyKomentare = []; KB.upozorneni = null;
             KB.pokladna = [];
             KB.ready = true;
+            clearTimeout(hlidacDat);
+            if (KB.dataChyba) chybaDat("");
             setStatus("odhlasen");
             emit("guides", KB.guides);
             emit("users", KB.users);
             return;
         }
         zrusOdbery();
+        clearTimeout(hlidacDat);
+        hlidacDat = setTimeout(() => {
+            if (!KB.users.length) chybaDat("Databáze do 20 sekund neposlala data.");
+        }, 20000);
         odbery.push(onSnapshot(guidesCol(), (snapshot) => {
             KB.guides = [];
             snapshot.forEach(d => KB.guides.push({ id: d.id, ...d.data() }));
@@ -395,6 +419,7 @@ try {
         }, (err) => {
             console.error("Chyba čtení databáze:", err);
             setStatus("offline");
+            chybaDat("Návody se nenačetly (" + popisChyby(err) + ").");
         }));
 
 
@@ -411,6 +436,8 @@ try {
 
 
         odbery.push(onSnapshot(usersCol(), (snapshot) => {
+            clearTimeout(hlidacDat);
+            if (KB.dataChyba) chybaDat("");          // data dorazila – lišta pryč
             KB.users = [];
             snapshot.forEach(d => KB.users.push({ id: d.id, ...d.data() }));
             KB.users.sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
@@ -430,7 +457,10 @@ try {
             /* Teprve teď je jasné, jestli si člověk fakturuje sám – když
                ano a výkazy už poslouchá, přidají se k nim i jeho částky. */
             sledujMojeCastky();
-        }, (err) => console.error("Chyba čtení uživatelů:", err)));
+        }, (err) => {
+            console.error("Chyba čtení uživatelů:", err);
+            chybaDat("Seznam lidí se nenačetl (" + popisChyby(err) + ").");
+        }));
 
         /* Milníky leží v jednom dokumentu jako pole. Je jich pár desítek
            a hlavně: `meta/…` smí zapisovat jen správce, takže se tím rovnou
