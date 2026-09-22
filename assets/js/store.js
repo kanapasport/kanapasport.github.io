@@ -2593,6 +2593,9 @@ KB.saveFaktura = async (id, data, volby) => {
         zaznam.potvrdil = window.KB_USER || "";
         zaznam.potvrzenoMs = Date.now();
     }
+    // „sáhl na to člověk“ – formulář ano, načtení ze souboru ne; podle toho
+    // smí opakované načtení záznam obnovit novým čtením programu
+    zaznam.rucne = !(volby && volby.bezAktivity);
     await setDoc(fakturaDoc(id), zaznam, { merge: true });
     // do aktivit schválně bez částek – stačí, co se stalo a k čemu;
     // hromadné načtení z inboxu zapíše jeden souhrnný řádek samo
@@ -2628,6 +2631,7 @@ KB.uhradFakturu = async (id, datum) => {
         stav: "zaplacena",
         uhradil: window.KB_USER || "",
         uhrazenoMs: Date.now(),
+        rucne: true,
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
