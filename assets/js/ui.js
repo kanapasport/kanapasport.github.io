@@ -917,9 +917,10 @@
     UI.PODLISTA_PROJEKTY = [
         { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" },
         { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view" },
-        { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view" },
-        { title: "FAKTURY", href: "faktury.html", need: "vykaz.view" }
+        { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view" }
     ];
+    /* FAKTURY byly v podliště projektů – od 22. 9. 2026 jsou v levém pásu
+       vedle Pokladny (přání Michala: mimo projekty, jen manažeři a asistentka). */
 
     /** Nástroje vpravo nad lištou – vidět je ikona, popis vyjede po najetí. */
     function toolsHtml() {
@@ -1173,6 +1174,10 @@
                proto stejné právo jako na výkazy ostatních. */
             '<a class="siderail__btn" href="pokladna.html" data-need="vykaz.view" hidden>' +
                 icon("building") + "<span>Pokladna</span></a>" +
+            /* Faktury: přijaté i vydané, QR k zaplacení – stejný okruh lidí
+               jako pokladna (manažeři + asistentka). */
+            '<a class="siderail__btn" href="faktury.html" data-need="vykaz.view" hidden>' +
+                icon("receipt") + "<span>Faktury</span></a>" +
             '<div class="siderail__spodek">' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +

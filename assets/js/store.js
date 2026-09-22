@@ -2466,7 +2466,10 @@ KB.deleteProjekt = async (id) => {
               otisk (SHA-256 PDF – import ho nezaloží dvakrát), navrhSlozka
               + navrhSoubor (kam PDF po potvrzení patří),
               potvrdil + potvrzenoMs – kdo ho zkontroloval a zařadil,
-              uhradil + uhrazenoMs – kdo označil zaplaceno (dlaždice) }
+              uhradil + uhrazenoMs – kdo označil zaplaceno (dlaždice),
+              qrPlatba (text platebního QR z dokladu, SPAYD) + qr { iban,
+              castka, mena, vs, zprava, prijemce }, nahled { strany, celkem }
+              – stránky samotné jsou v private/faktury/nahledy (viz níž) }
 
      meta/nastaveni nese navíc `kategorie` – seznam kategorií výdajů, který
      si asistentka rozšiřuje sama.                                         */
@@ -2479,6 +2482,16 @@ const cistiKontroly = (seznam) => (Array.isArray(seznam) ? seznam : []).slice(0,
     uroven: ["chyba", "varovani", "info"].indexOf(k && k.uroven) !== -1 ? k.uroven : "info",
     text: String((k && k.text) || "").slice(0, 300)
 }));
+
+/** Údaje z QR platby (SPAYD) – jen to, co web ukazuje; celý text je v `qrPlatba`. */
+const cistiQr = (q) => (q && typeof q === "object") ? {
+    iban: String(q.iban || "").slice(0, 40),
+    castka: Number(q.castka) || 0,
+    mena: String(q.mena || "CZK").slice(0, 3),
+    vs: String(q.vs || "").slice(0, 10),
+    zprava: String(q.zprava || "").slice(0, 60),
+    prijemce: String(q.prijemce || "").slice(0, 60)
+} : {};
 
 /** Rozpis DPH – nejvýš pár sazeb, jen čísla. */
 const cistiRozpis = (seznam) => (Array.isArray(seznam) ? seznam : []).slice(0, 6).map(r => ({
@@ -2558,6 +2571,11 @@ KB.saveFaktura = async (id, data, volby) => {
     ["otisk", "navrhSlozka", "navrhSoubor"].forEach(k => {
         if (data[k] !== undefined) zaznam[k] = String(data[k] || "").slice(0, 200);
     });
+    // QR k platbě přichází jen z načtení ze souboru; formulář ho nechává, jak je
+    if (data.qrPlatba !== undefined) {
+        zaznam.qrPlatba = String(data.qrPlatba || "").slice(0, 600);
+        zaznam.qr = zaznam.qrPlatba ? cistiQr(data.qr) : {};
+    }
     if (data.potvrdit === true) {
         zaznam.potvrdil = window.KB_USER || "";
         zaznam.potvrzenoMs = Date.now();
@@ -2593,8 +2611,46 @@ KB.uhradFakturu = async (id, datum) => {
 KB.deleteFaktura = async (id, cislo) => {
     if (authReady) await authReady;
     requireDb();
+    const f = (KB.faktury || []).find(x => x.id === id) || {};
+    const stran = Math.min((f.nahled && f.nahled.strany) || 0, 5);
+    for (let s = 1; s <= stran; s++) await deleteDoc(fakturaNahledDoc(id, s)).catch(() => {});
     await deleteDoc(fakturaDoc(id));
     KB.zapisAktivitu("faktura", "smazal fakturu " + (cislo || ""));
+};
+
+/* Náhledy stránek dokladu (JPEG) – každá strana vlastní dokument pod 1 MB,
+   aby je živý přenos seznamu faktur netahal; stránka si je vyžádá až při
+   otevření faktury. Ukládá je „Načíst ze souboru“ (vytezeni.py je vyrobí z PDF).
+     private/faktury/nahledy/{id}       strana 1  { b64, strana, strany, celkem, ms }
+     private/faktury/nahledy/{id}_p2    strana 2 …  (nejvýš 5 stran)
+   Na faktuře samotné zůstává jen `nahled: { strany, celkem, ms }` + QR platba. */
+const fakturaNahledDoc = (id, strana) => doc(db, "artifacts", APP_ID, "private", "faktury", "nahledy",
+    strana > 1 ? id + "_p" + strana : id);
+
+KB.ulozNahledFaktury = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const strany = (Array.isArray(data.nahledy) ? data.nahledy : [])
+        .filter(b => typeof b === "string" && b.length > 0 && b.length < 1000000).slice(0, 5);
+    const celkem = Number(data.celkem) || strany.length;
+    for (let i = 0; i < strany.length; i++) {
+        await setDoc(fakturaNahledDoc(id, i + 1),
+            { b64: strany[i], strana: i + 1, strany: strany.length, celkem: celkem, ms: Date.now() });
+    }
+    const meta = { updatedMs: Date.now() };
+    if (strany.length) meta.nahled = { strany: strany.length, celkem: celkem, ms: Date.now() };
+    if (data.qrPlatba) {
+        meta.qrPlatba = String(data.qrPlatba).slice(0, 600);
+        meta.qr = cistiQr(data.qr);
+    }
+    await setDoc(fakturaDoc(id), meta, { merge: true });
+};
+
+KB.nactiNahledFaktury = async (id, strana) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(fakturaNahledDoc(id, strana || 1));
+    return snap.exists() ? snap.data() : null;
 };
 
 KB.loadFakturaNastaveni = async () => {
