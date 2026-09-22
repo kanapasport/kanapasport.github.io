@@ -2469,7 +2469,10 @@ KB.deleteProjekt = async (id) => {
               uhradil + uhrazenoMs – kdo označil zaplaceno (dlaždice),
               qrPlatba (text platebního QR z dokladu, SPAYD) + qr { iban,
               castka, mena, vs, zprava, prijemce }, nahled { strany, celkem }
-              – stránky samotné jsou v private/faktury/nahledy (viz níž) }
+              – stránky samotné jsou v private/faktury/nahledy (viz níž),
+              caflouKlic (stálý klíč záznamu z exportu Caflou) + caflou { stav:
+              souhlasi|lisi|chybi|duplicita, text, nazev } – porovnání zapisuje
+              načtení ze souboru; zdroj "archiv" = PDF z Google Disku bez Caflou }
 
      meta/nastaveni nese navíc `kategorie` – seznam kategorií výdajů, který
      si asistentka rozšiřuje sama.                                         */
@@ -2492,6 +2495,14 @@ const cistiQr = (q) => (q && typeof q === "object") ? {
     zprava: String(q.zprava || "").slice(0, 60),
     prijemce: String(q.prijemce || "").slice(0, 60)
 } : {};
+
+/** Porovnání s Caflou (zapisuje načtení ze souboru): souhlasí / liší se / chybí / duplicita. */
+const cistiCaflou = (c) => (c && typeof c === "object") ? {
+    stav: ["souhlasi", "lisi", "chybi", "duplicita"].indexOf(c.stav) !== -1 ? c.stav : "souhlasi",
+    text: String(c.text || "").slice(0, 400),
+    nazev: String(c.nazev || "").slice(0, 150),
+    ms: Date.now()
+} : null;
 
 /** Rozpis DPH – nejvýš pár sazeb, jen čísla. */
 const cistiRozpis = (seznam) => (Array.isArray(seznam) ? seznam : []).slice(0, 6).map(r => ({
@@ -2576,6 +2587,8 @@ KB.saveFaktura = async (id, data, volby) => {
         zaznam.qrPlatba = String(data.qrPlatba || "").slice(0, 600);
         zaznam.qr = zaznam.qrPlatba ? cistiQr(data.qr) : {};
     }
+    if (data.caflouKlic !== undefined) zaznam.caflouKlic = String(data.caflouKlic || "").slice(0, 60);
+    if (data.caflou && typeof data.caflou === "object") zaznam.caflou = cistiCaflou(data.caflou);
     if (data.potvrdit === true) {
         zaznam.potvrdil = window.KB_USER || "";
         zaznam.potvrzenoMs = Date.now();
@@ -2588,6 +2601,20 @@ KB.saveFaktura = async (id, data, volby) => {
             (data.cislo || "(bez čísla)") + (data.projekt ? " k projektu " + data.projekt : ""));
     }
     return id;
+};
+
+/** Doplnění jednotlivých polí faktury (porovnání s Caflou, otisk a údaje z nově
+    spárovaného PDF) – mění jen to, co přijde, zbytek nechává. */
+KB.doplnFakturu = async (id, pole) => {
+    if (authReady) await authReady;
+    requireDb();
+    const zaznam = { updatedMs: Date.now() };
+    ["caflouKlic", "otisk", "cesta", "navrhSlozka", "navrhSoubor", "ico", "dic", "adresa", "cislo", "vs",
+        "vystaveno", "duzp"].forEach(k => {
+        if (pole[k] !== undefined) zaznam[k] = String(pole[k] || "").slice(0, 300);
+    });
+    if (pole.caflou && typeof pole.caflou === "object") zaznam.caflou = cistiCaflou(pole.caflou);
+    await setDoc(fakturaDoc(id), zaznam, { merge: true });
 };
 
 /** Označení zaplacené faktury z nástěnky – mění JEN úhradu, zbytek faktury

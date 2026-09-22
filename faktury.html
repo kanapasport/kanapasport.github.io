@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=233">
+    <link rel="stylesheet" href="assets/css/app.css?v=234">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -48,6 +48,19 @@
             color: var(--muted); margin: 0 4px 0 8px; }
         .filtry__popisek:first-child { margin-left: 0; }
         .chip--mesic { text-transform: capitalize; }
+
+        /* předěl měsíců v seznamu – čárkovaná čára s názvem měsíce */
+        .fkt__mesic { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; font-size: 11px;
+            font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .fkt__mesic::before, .fkt__mesic::after { content: ""; flex: 1; border-top: 2px dashed var(--line); }
+        /* porovnání s Caflou: značka na dlaždici + pruh v detailu */
+        .fkt__caflou { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 10px;
+            font-weight: 900; background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .45); }
+        .cafloupruh { font-size: 13px; line-height: 1.45; padding: 8px 12px; border-radius: 8px;
+            border: 1px solid var(--line); background: var(--bg-soft); }
+        .cafloupruh--souhlasi { background: var(--ok-tint); border-color: var(--ok); color: var(--ok); }
+        .cafloupruh--lisi { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        .cafloupruh--chybi, .cafloupruh--duplicita { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
 
         .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
             text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
@@ -109,14 +122,19 @@
         .pol__smaz { border: none; background: none; cursor: pointer; color: var(--danger);
             font-size: 15px; line-height: 1; padding: 6px; }
 
-        /* náhled dokladu (stránky z Firestore) a QR k platbě */
-        .nahled { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
-        .nahled__obr { width: 150px; max-height: 210px; object-fit: cover; object-position: top;
+        /* Zařazení a stav: vlevo pole a QR, vpravo náhled dokladu (Michal 22. 9.) */
+        .zarazeni { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 14px; align-items: start; }
+        @media (max-width: 760px) { .zarazeni { grid-template-columns: 1fr; } }
+        .zarazeni__levy { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        .nahled { display: flex; flex-direction: column; gap: 8px; }
+        .nahled__obr { width: 100%; max-height: 280px; object-fit: cover; object-position: top;
             border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: zoom-in; }
-        .nahled__text { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 8px; }
+        .nahled__prazdno { display: flex; align-items: center; justify-content: center; min-height: 120px;
+            border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 12px;
+            text-align: center; padding: 10px; line-height: 1.5; }
         .nahledokno__strany { display: flex; flex-direction: column; gap: 12px; align-items: center; }
         .nahledokno__strany img { max-width: 100%; border: 1px solid var(--line); background: #fff; }
-        .qrblok { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 10px 12px;
+        .qrblok { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px;
             border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); }
         .qrblok--ano { border-color: var(--ok); background: var(--ok-tint); }
         .qrblok__mini svg { width: 84px; height: 84px; display: block; background: #fff; padding: 4px;
@@ -224,8 +242,14 @@
                     <input type="date" id="filtrDo" class="field"></label>
                 <label class="pole"><span class="popisek">Stav</span>
                     <select id="filtrStav" class="field"></select></label>
+                <label class="pole"><span class="popisek">Kategorie</span>
+                    <select id="filtrKategorie" class="field"></select></label>
                 <label class="pole"><span class="popisek">Projekt</span>
                     <select id="filtrProjekt" class="field"></select></label>
+                <label class="pole"><span class="popisek">Částka od (Kč)</span>
+                    <input type="text" id="filtrCastkaOd" class="field" inputmode="decimal" placeholder="např. 1000"></label>
+                <label class="pole"><span class="popisek">Částka do (Kč)</span>
+                    <input type="text" id="filtrCastkaDo" class="field" inputmode="decimal"></label>
                 <label class="pole"><span class="popisek">Hledat</span>
                     <input type="search" id="hledat" class="field" placeholder="Číslo, firma, VS, kategorie…"></label>
             </div>
@@ -271,16 +295,6 @@
                         <ul id="inboxNalezy"></ul>
                     </section>
 
-                    <!-- náhled dokladu – stránky uložené při načtení ze souboru -->
-                    <section class="sblok" id="blokNahled" hidden>
-                        <div class="sblok__hlava"><span class="sblok__stitek">Doklad</span>
-                            <button type="button" class="btn btn--primary btn--sm" id="btnNahledCely">Otevřít náhled</button></div>
-                        <div class="sblok__telo"><div class="nahled">
-                            <img id="nahledObr" class="nahled__obr" alt="Náhled dokladu" hidden>
-                            <div class="nahled__text"><span class="small" id="nahledText"></span></div>
-                        </div></div>
-                    </section>
-
                     <section class="sblok">
                         <div class="sblok__hlava"><span class="sblok__stitek">Základ</span></div>
                         <div class="sblok__telo">
@@ -318,26 +332,39 @@
                     </section>
 
                     <section class="sblok">
-                        <div class="sblok__hlava"><span class="sblok__stitek">Zařazení a stav</span></div>
+                        <div class="sblok__hlava"><span class="sblok__stitek">Zařazení a stav</span>
+                            <button type="button" class="btn btn--primary btn--sm" id="btnNahledCely" hidden>Otevřít náhled</button></div>
                         <div class="sblok__telo">
-                        <div class="fmr">
-                            <label class="pole"><span class="popisek">Projekt</span>
-                                <select id="fProjekt" class="field"></select></label>
-                            <label class="pole" id="poleKategorie"><span class="popisek">Kategorie</span>
-                                <select id="fKategorie" class="field"></select></label>
-                            <label class="pole"><span class="popisek">Stav</span>
-                                <select id="fStav" class="field"></select></label>
-                            <label class="pole fmr__cely"><span class="popisek">Soubor – cesta na disku nebo odkaz</span>
-                                <span class="row" style="gap:6px">
-                                    <input type="text" id="fCesta" class="field" style="flex:1;min-width:0"
-                                           placeholder="D:\FAKTURY\prijate\2026\… nebo https://…">
-                                    <button type="button" id="btnOtevrit" class="btn btn--ghost btn--sm" hidden>Otevřít</button>
-                                    <button type="button" id="btnKopirovat" class="btn btn--ghost btn--sm" hidden
-                                            title="Zkopíruje cestu – vlož ji do Průzkumníka souborů">Kopírovat</button>
-                                </span></label>
+                        <div class="zarazeni">
+                            <div class="zarazeni__levy">
+                                <!-- porovnání s Caflou – zapisuje načtení ze souboru -->
+                                <div id="cafloupruh" class="cafloupruh" hidden></div>
+                                <div class="fmr">
+                                    <label class="pole"><span class="popisek">Projekt</span>
+                                        <select id="fProjekt" class="field"></select></label>
+                                    <label class="pole" id="poleKategorie"><span class="popisek">Kategorie</span>
+                                        <select id="fKategorie" class="field"></select></label>
+                                    <label class="pole"><span class="popisek">Stav</span>
+                                        <select id="fStav" class="field"></select></label>
+                                    <label class="pole"><span class="popisek">Soubor – cesta nebo odkaz</span>
+                                        <span class="row" style="gap:6px">
+                                            <input type="text" id="fCesta" class="field" style="flex:1;min-width:0"
+                                                   placeholder="D:\FAKTURY\… nebo https://…">
+                                            <button type="button" id="btnOtevrit" class="btn btn--ghost btn--sm" hidden>Otevřít</button>
+                                            <button type="button" id="btnKopirovat" class="btn btn--ghost btn--sm" hidden
+                                                    title="Zkopíruje cestu – vlož ji do Průzkumníka souborů">Kopírovat</button>
+                                        </span></label>
+                                </div>
+                                <!-- QR k platbě z dokladu – šéf ho naskenuje a zaplatí (Michal 22. 9.) -->
+                                <div id="qrBlok" class="qrblok" hidden></div>
+                            </div>
+                            <!-- náhled dokladu vpravo – stránky uložené při načtení ze souboru -->
+                            <div class="nahled" id="blokNahled">
+                                <img id="nahledObr" class="nahled__obr" alt="Náhled dokladu" hidden>
+                                <div class="nahled__prazdno" id="nahledPrazdno">Náhled dokladu se uloží při načtení ze souboru.</div>
+                                <span class="tiny muted" id="nahledText"></span>
+                            </div>
                         </div>
-                        <!-- QR k platbě z dokladu – šéf ho naskenuje a zaplatí (Michal 22. 9.) -->
-                        <div id="qrBlok" class="qrblok" hidden></div>
                         </div>
                     </section>
 
@@ -496,10 +523,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=233"></script>
-<script src="assets/js/ui.js?v=233"></script>
-<script src="assets/js/vykazy.js?v=233"></script>
-<script type="module" src="assets/js/store.js?v=233"></script>
+<script src="assets/js/taxonomy.js?v=234"></script>
+<script src="assets/js/ui.js?v=234"></script>
+<script src="assets/js/vykazy.js?v=234"></script>
+<script type="module" src="assets/js/store.js?v=234"></script>
 
 <script>
 (function () {
@@ -629,6 +656,8 @@
         const stav = $("filtrStav").value;
         const projekt = $("filtrProjekt").value;
         const od = $("filtrOd").value, doDne = $("filtrDo").value;
+        const kat = $("filtrKategorie").value;
+        const castkaOd = naCislo($("filtrCastkaOd").value), castkaDo = naCislo($("filtrCastkaDo").value);
         const hledane = ($("hledat").value || "").trim().toLowerCase();
 
         return (window.KB.faktury || []).filter(f => {
@@ -636,8 +665,16 @@
             const den = datumDokladu(f);
             if (od && (!den || den < od)) return false;
             if (doDne && (!den || den > doDne)) return false;
+            if (kat === "__bez" && f.kategorie) return false;
+            if (kat && kat !== "__bez" && f.kategorie !== kat) return false;
+            const celkem = Math.abs(Number(f.castkaCelkem) || 0);
+            if (castkaOd && celkem < castkaOd) return false;
+            if (castkaDo && celkem > castkaDo) return false;
             if (stav === "__kontrola" && !keKontrole(f)) return false;
             if (stav === "__kzaplaceni" && !kZaplaceni(f)) return false;
+            if (stav === "__caflou_lisi" && !(f.caflou && f.caflou.stav === "lisi")) return false;
+            if (stav === "__caflou_chybi" && !(f.caflou && f.caflou.stav === "chybi")) return false;
+            if (stav === "__duplicita" && !(f.caflou && f.caflou.stav === "duplicita")) return false;
             if (stav && stav.indexOf("__") !== 0 && (f.stav || "nova") !== stav) return false;
             if (projekt === "__bez" && f.projekt) return false;
             if (projekt && projekt !== "__bez" && f.projekt !== projekt) return false;
@@ -703,11 +740,25 @@
 
     /* ------------------------------------------------------------- seznam */
 
+    /** Značka porovnání s Caflou na dlaždici. */
+    const CAFLOU_ZNACKA = { souhlasi: "✓ Caflou", lisi: "≠ Caflou", chybi: "Caflou –", duplicita: "2× duplicita" };
+    const caflouZnacka = (f) => (f.caflou && CAFLOU_ZNACKA[f.caflou.stav])
+        ? '<span class="fkt__caflou">' + esc(CAFLOU_ZNACKA[f.caflou.stav]) + "</span>" : "";
+
     function vykresliSeznam() {
-        const vyber = filtrovane();
+        // nejnovější nahoře podle data dokladu; předěl vždy, když se změní měsíc
+        const vyber = filtrovane().slice().sort((a, b) => datumDokladu(b).localeCompare(datumDokladu(a)));
         const dnes = V.dnesISO();
+        let mesicPred = null;
 
         $("seznamVypis").innerHTML = vyber.map(f => {
+            const mesic = datumDokladu(f).slice(0, 7);
+            let predel = "";
+            if (mesic !== mesicPred) {
+                mesicPred = mesic;
+                predel = '<div class="fkt__mesic"><span>' + esc(mesic
+                    ? MESICE[Number(mesic.slice(5, 7)) - 1] + " " + mesic.slice(0, 4) : "bez data") + "</span></div>";
+            }
             const stav = stavDlazdice(f);
             let stavText;
             if (stav === "kontrola") stavText = "ke kontrole";
@@ -716,12 +767,12 @@
             else stavText = f.splatnost ? "splatnost " + V.czDatum(f.splatnost) : "nezaplaceno";
             const den = datumDokladu(f);
             const pod = [den ? V.czDatum(den) : "", projektText(f), f.kategorie || ""].filter(Boolean).join(" · ");
-            return '<button type="button" class="fkt fkt--' + stav + (f.id === vybrana ? " je-vybrany" : "") +
+            return predel + '<button type="button" class="fkt fkt--' + stav + (f.id === vybrana ? " je-vybrany" : "") +
                 '" data-id="' + esc(f.id) + '">' +
                 '<span class="fkt__radek"><span class="fkt__nazev">' + esc(nazevZaznamu(f)) + "</span>" +
                     '<span class="fkt__castka">' + esc(castkaText(f.castkaCelkem, f.mena)) + "</span></span>" +
                 '<span class="fkt__radek fkt__pod"><span style="min-width:0">' + esc(pod) +
-                    '<span class="fkt__typ">' + (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span></span>" +
+                    '<span class="fkt__typ">' + (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span>" + caflouZnacka(f) + "</span>" +
                     '<span class="fkt__stav">' + esc(stavText) + (f.qrPlatba ? " · QR" : "") + "</span></span>" +
                 "</button>";
         }).join("") || '<div class="tiny muted" style="padding:8px 10px">Žádná faktura neodpovídá filtrům.</div>';
@@ -814,6 +865,16 @@
             podtitul.push(f.potvrdil ? "z inboxu, zkontroloval(a) " + f.potvrdil : "z inboxu");
         }
         if (!nova && f.zdroj === "caflou") podtitul.push("převzato z Caflou");
+        if (!nova && f.zdroj === "archiv") podtitul.push("z archivu (Google Disk)");
+        // pruh porovnání s Caflou – zapisuje načtení ze souboru
+        const pruh = $("cafloupruh");
+        const c = !nova && f.caflou && CAFLOU_ZNACKA[f.caflou.stav] ? f.caflou : null;
+        pruh.hidden = !c;
+        if (c) {
+            pruh.className = "cafloupruh cafloupruh--" + c.stav;
+            pruh.textContent = { souhlasi: "Caflou: souhlasí", lisi: "Caflou: liší se", chybi: "Caflou",
+                duplicita: "Duplicita" }[c.stav] + " – " + (c.text || "");
+        }
         $("fPodtitul").textContent = podtitul.filter(Boolean).join(" · ");
         $("fStitky").innerHTML = nova ? "" : stitekStavu(f);
 
@@ -937,10 +998,11 @@
 
     async function vykresliNahled(f, nova) {
         const stran = !nova && f.nahled && f.nahled.strany ? f.nahled.strany : 0;
-        $("blokNahled").hidden = !stran;
-        if (!stran) { nahledPro = ""; return; }
-        $("nahledText").textContent = V.pocet(stran, ["strana", "strany", "stran"]) +
-            (f.nahled.celkem > stran ? " (doklad má " + f.nahled.celkem + ")" : "") + " · klikni pro zvětšení";
+        $("btnNahledCely").hidden = !stran;
+        $("nahledPrazdno").hidden = !!stran;
+        $("nahledText").textContent = stran ? V.pocet(stran, ["strana", "strany", "stran"]) +
+            (f.nahled.celkem > stran ? " (doklad má " + f.nahled.celkem + ")" : "") + " · klikni pro zvětšení" : "";
+        if (!stran) { nahledPro = ""; $("nahledObr").hidden = true; return; }
         if (nahledPro === f.id) return;
         nahledPro = f.id;
         $("nahledObr").hidden = true;
@@ -1491,11 +1553,70 @@
         dotknuto = true;
     }
 
+    /* ---------------------------------------------- porovnání s Caflou ----
+       Záznam z exportu Caflou (na-web-RRRR-MM.json) se hledá mezi fakturami
+       na webu: podle otisku PDF, podle stálého klíče z Caflou (splatnost +
+       název + částka – přežije i přejmenování PDF) a nakonec podle částky,
+       data a jména. Výsledek se zapíše k faktuře jako `caflou`: souhlasí /
+       liší se (v čem) / v Caflou chybí / duplicita – a jde podle něj filtrovat,
+       aby na webu bylo všechno, co v Caflou je, a bylo vidět, co nesedí. */
+
+    const dnyRozdil = (a, b) => (a && b) ? Math.abs((new Date(a) - new Date(b)) / 864e5) : Infinity;
+    const slovaFirmy = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .split(/[^a-z0-9]+/).filter(s => s.length >= 3 && !/^(faktura|sro|spol|doklad|uctenka|platba|cesk|czech|republic)/.test(s));
+
+    function najdiPodleUdaju(z, seznam, pouzite) {
+        const castka = Number(z.castkaCelkem) || 0;
+        const datumy = [z.splatnost, z.uhrazeno, z.duzp].filter(Boolean);
+        const slova = slovaFirmy(z.nazev + " " + z.protistrana);
+        const cisla = String(z.nazev || "").match(/\d{4,}/g) || [];
+        let nej = null, nejSkore = 0;
+        seznam.forEach(f => {
+            if (pouzite.has(f.id) || f.typ !== "prijata") return;
+            const fc = Number(f.castkaCelkem) || 0;
+            let s = 0;
+            if (Math.abs(fc - castka) <= 1) s += 5;
+            else if (castka && Math.abs(fc - castka) / castka <= 0.02) s += 2;
+            else return;
+            const fd = [f.splatnost, f.uhrazeno, f.duzp, f.vystaveno].filter(Boolean);
+            let min = Infinity;
+            datumy.forEach(a => fd.forEach(b => { min = Math.min(min, dnyRozdil(a, b)); }));
+            if (min <= 3) s += 3; else if (min <= 10) s += 1; else if (min !== Infinity && min > 45) s -= 3;
+            const fs = slovaFirmy(f.nazev + " " + f.protistrana);
+            if (slova.some(w => fs.indexOf(w) !== -1)) s += 3;
+            if (cisla.some(c => c === f.cislo || c === f.vs || (f.cislo && String(f.cislo).indexOf(c) !== -1))) s += 4;
+            if (s > nejSkore) { nejSkore = s; nej = f; }
+        });
+        return nejSkore >= 8 ? nej : null;
+    }
+
+    /** V čem se faktura na webu liší od záznamu v Caflou (prázdné = souhlasí). */
+    function porovnejSCaflou(f, z) {
+        const rozdily = [];
+        const fc = Number(f.castkaCelkem) || 0, zc = Number(z.castkaCelkem) || 0;
+        if (Math.abs(fc - zc) > 1) rozdily.push("celkem v Caflou " + penize2(zc, z.mena) + ", tady " + penize2(fc, f.mena));
+        if (z.kategorie && f.kategorie && z.kategorie !== f.kategorie) {
+            rozdily.push("kategorie v Caflou „" + z.kategorie + "“, tady „" + f.kategorie + "“");
+        } else if (z.kategorie && !f.kategorie) {
+            rozdily.push("kategorie v Caflou „" + z.kategorie + "“, tady žádná");
+        }
+        if ((z.projekt || "") !== (f.projekt || "")) {
+            rozdily.push("projekt v Caflou „" + (z.projekt || "administrativa") + "“, tady „" + (f.projekt || "administrativa") + "“");
+        }
+        if (z.uhrazeno && f.uhrazeno && dnyRozdil(z.uhrazeno, f.uhrazeno) > 0) {
+            rozdily.push("uhrazeno v Caflou " + V.czDatum(z.uhrazeno) + ", tady " + V.czDatum(f.uhrazeno));
+        } else if (z.uhrazeno && !f.uhrazeno && (f.stav || "nova") !== "zaplacena") {
+            rozdily.push("v Caflou zaplaceno " + V.czDatum(z.uhrazeno) + ", tady nezaplaceno");
+        }
+        return rozdily;
+    }
+
     /* ------------------------------------------------- načtení z inboxu ----
        Nástroj vytezeni.py přečte PDF v D:\FAKTURY\_inbox a zapíše výsledek
        do D:\FAKTURY\_program\vytezeni.json – každý doklad tam má hotový
        záznam `pro_web`. Tady se z něj založí koncepty „Ke kontrole“.
-       Stejné PDF (otisk) se podruhé nezaloží, takže načítat jde opakovaně. */
+       Stejné PDF (otisk) se podruhé nezaloží, takže načítat jde opakovaně.
+       Soubory na-web-RRRR-MM.json (z Caflou + archiv) navíc porovnávají. */
 
     async function importuj(soubor) {
         if (!fakturyPrisly) {
@@ -1512,11 +1633,20 @@
         }
         // koncepty z inboxu čekají na kontrolu, převod z Caflou je hotová historie
         const zInboxu = zaznamy.some(z => z.zdroj === "inbox");
+        const zCaflou = zaznamy.some(z => z.zdroj === "caflou");
 
-        const podleOtisku = {};
-        (window.KB.faktury || []).forEach(f => { if (f.otisk) podleOtisku[f.otisk] = f; });
+        const faktury = window.KB.faktury || [];
+        // při stejném otisku/klíči platí nejstarší záznam – mladší je duplikát
+        const podleOtisku = {}, podleKlice = {};
+        const starsi = (a, b) => !a || (b.createdMs || 0) < (a.createdMs || 0) ? b : a;
+        faktury.forEach(f => {
+            if (f.otisk) podleOtisku[f.otisk] = starsi(podleOtisku[f.otisk], f);
+            if (f.caflouKlic) podleKlice[f.caflouKlic] = starsi(podleKlice[f.caflouKlic], f);
+        });
+        const pouzite = new Set();          // faktury na webu, které už dostaly svůj záznam z Caflou
         const prilohy = (z) => ({ nahledy: z.nahledy || [], celkem: z.nahledStran, qrPlatba: z.qrPlatba, qr: z.qr });
         let pridano = 0, obnoveno = 0, doplneno = 0, preskoceno = 0;
+        let souhlasi = 0, lisi = 0, chybi = 0, duplicit = 0;
         const stavEl = $("importStav");
         $("btnImport").disabled = true;
         try {
@@ -1524,7 +1654,37 @@
                 stavEl.hidden = false;
                 stavEl.textContent = "Načítám " + (i + 1) + " / " + zaznamy.length + "…";
                 const z = zaznamy[i];
-                const stara = z.otisk ? podleOtisku[z.otisk] : null;
+                let stara = (z.otisk && podleOtisku[z.otisk]) || (z.caflouKlic && podleKlice[z.caflouKlic]) || null;
+                if (!stara && z.zdroj === "caflou") stara = najdiPodleUdaju(z, faktury, pouzite);
+                if (stara && z.zdroj === "caflou") {
+                    /* Záznam z Caflou už na webu je (z inboxu, z dřívějšího převodu…):
+                       porovnat, poznamenat, doplnit co chybělo – nikdy nepřepsat, co
+                       si člověk vyplnil. */
+                    pouzite.add(stara.id);
+                    const rozdily = porovnejSCaflou(stara, z);
+                    const doplneni = {
+                        caflouKlic: z.caflouKlic || "",
+                        caflou: { stav: rozdily.length ? "lisi" : "souhlasi", nazev: z.nazev,
+                            text: rozdily.length ? rozdily.join("; ") : "shodná částka i zařazení („" + z.nazev + "“)" }
+                    };
+                    if (rozdily.length) lisi += 1; else souhlasi += 1;
+                    // Caflou záznam nově spárovaný s PDF → doplní se otisk, cesta a údaje z dokladu
+                    if (z.otisk && z.otisk.indexOf("caflou:") !== 0 && (!stara.otisk || stara.otisk.indexOf("caflou:") === 0)) {
+                        doplneni.otisk = z.otisk;
+                        podleOtisku[z.otisk] = stara;
+                    }
+                    ["cesta", "ico", "dic", "adresa", "cislo", "vs", "vystaveno", "duzp", "navrhSoubor", "navrhSlozka"]
+                        .forEach(k => { if (!stara[k] && z[k]) doplneni[k] = z[k]; });
+                    await window.KB.doplnFakturu(stara.id, doplneni);
+                    const chybiNahled = !!(z.nahledy && z.nahledy.length) && !(stara.nahled && stara.nahled.strany);
+                    const chybiQr = !!z.qrPlatba && !stara.qrPlatba;
+                    if (chybiNahled || chybiQr) {
+                        await window.KB.ulozNahledFaktury(stara.id, Object.assign(prilohy(z),
+                            { nahledy: chybiNahled ? z.nahledy : [] }));
+                        doplneno += 1;
+                    }
+                    continue;
+                }
                 if (stara) {
                     /* Koncept z inboxu, na který nikdo nesáhl (uložený jen při
                        načtení), se obnoví novým čtením; zkontrolovaný nebo
@@ -1549,24 +1709,70 @@
                     continue;
                 }
                 const id = window.KB.newFakturaId() + "_" + i;
-                await window.KB.saveFaktura(id, z, { bezAktivity: true });
+                const novy = Object.assign({}, z);
+                if (z.zdroj === "caflou") {
+                    novy.caflou = { stav: "souhlasi", nazev: z.nazev, text: "založeno z Caflou („" + z.nazev + "“)" };
+                    souhlasi += 1;
+                } else if (z.caflou && z.caflou.stav === "chybi") {
+                    chybi += 1;
+                }
+                await window.KB.saveFaktura(id, novy, { bezAktivity: true });
                 if ((z.nahledy && z.nahledy.length) || z.qrPlatba) {
                     await window.KB.ulozNahledFaktury(id, prilohy(z));
                 }
-                if (z.otisk) {
-                    podleOtisku[z.otisk] = { id: id, otisk: z.otisk, qrPlatba: z.qrPlatba || "",
-                        nahled: { strany: (z.nahledy || []).length } };
-                }
+                const zapis = { id: id, otisk: z.otisk || "", caflouKlic: z.caflouKlic || "", typ: z.typ,
+                    qrPlatba: z.qrPlatba || "", nahled: { strany: (z.nahledy || []).length },
+                    castkaCelkem: z.castkaCelkem, splatnost: z.splatnost, uhrazeno: z.uhrazeno, duzp: z.duzp,
+                    vystaveno: z.vystaveno, nazev: z.nazev, protistrana: z.protistrana, cislo: z.cislo, vs: z.vs };
+                if (z.otisk) podleOtisku[z.otisk] = zapis;
+                if (z.caflouKlic) podleKlice[z.caflouKlic] = zapis;
+                pouzite.add(id);
                 pridano += 1;
             }
+
+            if (zCaflou) {
+                /* Faktury na webu ze stejných měsíců, ke kterým žádný záznam z Caflou
+                   nepatří → „v Caflou chybí“. Jen přijaté, jen měsíce z tohoto souboru. */
+                const mesice = new Set(zaznamy.filter(z => z.zdroj === "caflou")
+                    .map(z => (z.splatnost || z.uhrazeno || "").slice(0, 7)).filter(Boolean));
+                const rozsah = (zaznamy.find(z => z.caflouRozsah) || {}).caflouRozsah || [];
+                for (const f of faktury) {
+                    if (pouzite.has(f.id) || f.typ !== "prijata" || f.zdroj === "caflou") continue;
+                    if (!mesice.has(datumDokladu(f).slice(0, 7))) continue;
+                    if (f.caflou && (f.caflou.stav === "chybi" || f.caflou.stav === "duplicita")) continue;
+                    await window.KB.doplnFakturu(f.id, { caflou: { stav: "chybi", nazev: "",
+                        text: "V Caflou není" + (rozsah.length ? " (export " + V.czDatum(rozsah[0]) + " – " + V.czDatum(rozsah[1]) + ")" : "") } });
+                    chybi += 1;
+                }
+                // stejný doklad dvakrát (stejné PDF nebo stejný klíč z Caflou) – označit ten mladší
+                const skupiny = {};
+                faktury.forEach(f => {
+                    [f.otisk && f.otisk.indexOf("caflou:") !== 0 ? "o:" + f.otisk : "", f.caflouKlic ? "k:" + f.caflouKlic : ""]
+                        .filter(Boolean).forEach(k => { (skupiny[k] = skupiny[k] || []).push(f); });
+                });
+                const oznacene = new Set();
+                for (const k of Object.keys(skupiny)) {
+                    const sk = skupiny[k].slice().sort((a, b) => (a.createdMs || 0) - (b.createdMs || 0));
+                    for (const f of sk.slice(1)) {
+                        if (oznacene.has(f.id) || (f.caflou && f.caflou.stav === "duplicita")) continue;
+                        oznacene.add(f.id);
+                        await window.KB.doplnFakturu(f.id, { caflou: { stav: "duplicita", nazev: "",
+                            text: "stejný doklad je na webu vícekrát – zkontroluj a jeden smaž" } });
+                        duplicit += 1;
+                    }
+                }
+            }
+
             if (pridano || obnoveno) {
-                window.KB.zapisAktivitu("faktura", (zInboxu ? "načetl z inboxu " : "převedl z Caflou ") +
+                window.KB.zapisAktivitu("faktura", (zInboxu ? "načetl z inboxu " : "převedl z Caflou / archivu ") +
                     V.pocet(pridano + obnoveno, ["fakturu", "faktury", "faktur"]) + (zInboxu ? " ke kontrole" : ""));
             }
             const casti = [];
             if (pridano) casti.push("nově " + V.pocet(pridano, ["doklad", "doklady", "dokladů"]));
             if (obnoveno) casti.push(obnoveno + " ke kontrole obnoveno novým čtením");
             if (doplneno) casti.push(doplneno + "× doplněn náhled nebo QR");
+            if (zCaflou) casti.push("Caflou: souhlasí " + souhlasi + ", liší se " + lisi + ", v Caflou chybí " + chybi +
+                (duplicit ? ", duplicit " + duplicit : ""));
             if (preskoceno) casti.push(preskoceno + " už na webu bylo");
             toast(casti.length ? "Načteno: " + casti.join(", ") + "." : "Nic nového – všechny doklady už na webu jsou.");
             $("filtrStav").value = zInboxu ? "__kontrola" : "";
@@ -1608,8 +1814,22 @@
                 ">Ke kontrole (z inboxu)</option>" +
             '<option value="__kzaplaceni"' + (drzStav === "__kzaplaceni" ? " selected" : "") +
                 ">K zaplacení do 7 dní</option>" +
+            '<option value="__caflou_lisi"' + (drzStav === "__caflou_lisi" ? " selected" : "") +
+                ">Liší se od Caflou</option>" +
+            '<option value="__caflou_chybi"' + (drzStav === "__caflou_chybi" ? " selected" : "") +
+                ">V Caflou chybí</option>" +
+            '<option value="__duplicita"' + (drzStav === "__duplicita" ? " selected" : "") +
+                ">Duplicity</option>" +
             STAVY.map(s => '<option value="' + s.id + '"' +
                 (s.id === drzStav ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
+        // kategorie: číselník + to, co je v datech (starší nebo smazané kategorie)
+        const drzKat = $("filtrKategorie").value;
+        const katVData = new Set(kategorie());
+        (window.KB.faktury || []).forEach(f => { if (f.kategorie) katVData.add(f.kategorie); });
+        $("filtrKategorie").innerHTML = '<option value="">Všechny kategorie</option>' +
+            '<option value="__bez"' + (drzKat === "__bez" ? " selected" : "") + ">— bez kategorie</option>" +
+            Array.from(katVData).map(k => '<option value="' + esc(k) + '"' + (k === drzKat ? " selected" : "") + ">" +
+                esc(k) + "</option>").join("");
         const drzProjekt = $("filtrProjekt").value;
         $("filtrProjekt").innerHTML = '<option value="">Všechny projekty</option>' +
             '<option value="__bez"' + (drzProjekt === "__bez" ? " selected" : "") +
@@ -1660,6 +1880,10 @@
         });
         ["filtrOd", "filtrDo"].forEach(id => $(id).addEventListener("change", () => {
             vykresliChipy(); vykresliSouhrn(); vykresliSeznam();
+        }));
+        $("filtrKategorie").addEventListener("change", () => { vykresliSouhrn(); vykresliSeznam(); });
+        ["filtrCastkaOd", "filtrCastkaDo"].forEach(id => $(id).addEventListener("input", () => {
+            vykresliSouhrn(); vykresliSeznam();
         }));
 
         // náhled dokladu a QR k platbě
