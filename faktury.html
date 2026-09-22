@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=231">
+    <link rel="stylesheet" href="assets/css/app.css?v=232">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -116,7 +116,7 @@
                 <div class="row" style="gap:8px;flex:none">
                     <!-- výsledek nástroje vytezeni.py (D:\FAKTURY\_program\vytezeni.json) -->
                     <button type="button" id="btnImport" class="btn btn--ghost btn--sm"
-                            title="Načíst faktury přečtené z inboxu (soubor vytezeni.json)">Načíst z inboxu</button>
+                            title="Načíst faktury ze souboru: vytezeni.json (přečtené z inboxu, ke kontrole) nebo caflou-na-web.json (převod z Caflou) – ze složky D:\FAKTURY\_program">Načíst ze souboru</button>
                     <input type="file" id="importSoubor" accept=".json,application/json" hidden>
                     <button type="button" id="btnNastaveni" class="btn btn--ghost btn--sm">Naše údaje</button>
                     <button type="button" id="btnNovaPrijata" class="btn btn--primary btn--sm">+ Přijatá faktura</button>
@@ -225,6 +225,10 @@
                         <div class="sblok__hlava"><span class="sblok__stitek">Základ</span></div>
                         <div class="sblok__telo">
                         <div class="fmr">
+                            <!-- název jako v Caflou („Firma - Faktura 123“, „Firma-Co“);
+                                 prázdný = složí se sám z dodavatele a čísla -->
+                            <label class="pole fmr__cely"><span class="popisek">Název záznamu</span>
+                                <input type="text" id="fNazev" class="field" maxlength="150"></label>
                             <label class="pole"><span class="popisek">Typ</span>
                                 <select id="fTyp" class="field">
                                     <option value="prijata">Přijatá (došla nám)</option>
@@ -407,10 +411,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=231"></script>
-<script src="assets/js/ui.js?v=231"></script>
-<script src="assets/js/vykazy.js?v=231"></script>
-<script type="module" src="assets/js/store.js?v=231"></script>
+<script src="assets/js/taxonomy.js?v=232"></script>
+<script src="assets/js/ui.js?v=232"></script>
+<script src="assets/js/vykazy.js?v=232"></script>
+<script type="module" src="assets/js/store.js?v=232"></script>
 
 <script>
 (function () {
@@ -485,9 +489,17 @@
         ? nastaveni.kategorie : KATEGORIE_VYCHOZI;
     /** Záznam z inboxu, který ještě nikdo nezkontroloval. */
     const keKontrole = (f) => f.zdroj === "inbox" && (f.stav || "nova") === "nova";
-    /** Název záznamu podle asistentky: „FIRMA - Faktura č. 123“. */
-    const nazevZaznamu = (f) => (f.protistrana || "?") + " - " + druhTitle(f.druhDokladu) +
-        (f.cislo ? " č. " + f.cislo : "");
+    /* Název záznamu jako v Caflou: faktura „Firma - Faktura 123“, ostatní
+       doklady jen „Firma“ (zálohová a dobropis s druhem). Vlastní název
+       (pole Název záznamu, převod z Caflou) má přednost. */
+    const autoNazev = (f) => {
+        const firma = f.protistrana || "?";
+        const druh = f.druhDokladu || "faktura";
+        if (druh === "faktura") return firma + " - Faktura" + (f.cislo ? " " + f.cislo : "");
+        if (druh === "zalohova" || druh === "dobropis") return firma + " - " + druhTitle(druh) + (f.cislo ? " " + f.cislo : "");
+        return firma;
+    };
+    const nazevZaznamu = (f) => f.nazev || autoNazev(f);
     const projektText = (f) => f.projekt || (f.typ === "vydana" ? "bez projektu" : ADMIN.toLowerCase());
     const ciziMena = (f) => !!f.mena && f.mena !== "CZK";
     /** Částka v Kč pro souhrny; cizí měna bez kurzu vrací null (nezapočte se). */
@@ -532,7 +544,7 @@
             if (projekt === "__bez" && f.projekt) return false;
             if (projekt && projekt !== "__bez" && f.projekt !== projekt) return false;
             if (hledane) {
-                const kupa = [f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka, f.kategorie,
+                const kupa = [f.nazev, f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka, f.kategorie,
                     druhTitle(f.druhDokladu), f.mena, f.poplatkyPopis].join(" ").toLowerCase();
                 if (kupa.indexOf(hledane) === -1) return false;
             }
@@ -619,8 +631,12 @@
     /* -------------------------------------------------------------- panel */
 
     function moznostiProjektu(vybrano, typ) {
+        // projekt, který v seznamu zakázek není (převod z Caflou, uzavřená
+        // zakázka), musí v nabídce zůstat – jinak by ho uložení smazalo
+        const zakazky = V.zakazky().slice();
+        if (vybrano && zakazky.indexOf(vybrano) === -1) zakazky.push(vybrano);
         return '<option value="">' + esc(typ === "vydana" ? "— bez projektu" : ADMIN) + "</option>" +
-            V.zakazky().map(z => '<option value="' + esc(z) + '"' +
+            zakazky.map(z => '<option value="' + esc(z) + '"' +
                 (z === vybrano ? " selected" : "") + ">" + esc(z) + "</option>").join("");
     }
 
@@ -665,6 +681,7 @@
         if (!nova && f.zdroj === "inbox") {
             podtitul.push(f.potvrdil ? "z inboxu, zkontroloval(a) " + f.potvrdil : "z inboxu");
         }
+        if (!nova && f.zdroj === "caflou") podtitul.push("převzato z Caflou");
         $("fPodtitul").textContent = podtitul.filter(Boolean).join(" · ");
         $("fStitky").innerHTML = nova ? "" : stitekStavu(f);
 
@@ -697,6 +714,7 @@
         $("fCislo").value = f.cislo || "";
         $("fVs").value = f.vs || "";
         $("fProtistrana").value = f.protistrana || "";
+        $("fNazev").value = f.nazev || "";
         $("fIco").value = f.ico || "";
         $("fDic").value = f.dic || "";
         $("fAdresa").value = f.adresa || "";
@@ -731,6 +749,7 @@
         vykresliMenu();
         vykresliUhrazeno();
         vykresliSoubor();
+        vykresliNazevNapovedu();
 
         // našeptávač firem se plní při vykreslení – prohlížeč si obsah
         // datalistu zamyká při mousedown, tou dobou už tam možnosti jsou
@@ -756,6 +775,13 @@
             ? "dne <b>" + esc(V.czDatum(datum)) + '</b> · <button type="button" class="linkbtn"' +
               ' data-uhr-zmen style="color:var(--accent)">změnit datum</button>'
             : '<span class="muted">zatím nezaplaceno</span>';
+    }
+
+    /** Prázdný název = automatický; ukáže se jako nápověda v poli. */
+    function vykresliNazevNapovedu() {
+        $("fNazev").placeholder = autoNazev({ protistrana: $("fProtistrana").value.trim(),
+            druhDokladu: $("fDruh").value, cislo: $("fCislo").value.trim() }) +
+            "  (nech prázdné = složí se samo)";
     }
 
     function vykresliSoubor() {
@@ -1055,6 +1081,7 @@
         const data = {
             typ: typ,
             druhDokladu: $("fDruh").value,
+            nazev: $("fNazev").value.trim(),
             cislo: $("fCislo").value.trim(),
             protistrana: protistrana,
             ico: $("fIco").value.trim(),
@@ -1226,7 +1253,11 @@
             return void toast("Soubor se nedá přečíst – vyber vytezeni.json ze složky D:\\FAKTURY\\_program.", "error");
         }
         const zaznamy = (Array.isArray(data) ? data : []).map(z => z && z.pro_web).filter(Boolean);
-        if (!zaznamy.length) return void toast("V souboru nejsou faktury k načtení (čekám vytezeni.json).", "warn");
+        if (!zaznamy.length) {
+            return void toast("V souboru nejsou faktury k načtení (čekám vytezeni.json nebo caflou-na-web.json).", "warn");
+        }
+        // koncepty z inboxu čekají na kontrolu, převod z Caflou je hotová historie
+        const zInboxu = zaznamy.some(z => z.zdroj === "inbox");
 
         const zname = new Set((window.KB.faktury || []).map(f => f.otisk).filter(Boolean));
         let pridano = 0, preskoceno = 0;
@@ -1240,14 +1271,14 @@
                 pridano += 1;
             }
             if (pridano) {
-                window.KB.zapisAktivitu("faktura", "načetl z inboxu " +
-                    V.pocet(pridano, ["fakturu", "faktury", "faktur"]) + " ke kontrole");
+                window.KB.zapisAktivitu("faktura", (zInboxu ? "načetl z inboxu " : "převedl z Caflou ") +
+                    V.pocet(pridano, ["fakturu", "faktury", "faktur"]) + (zInboxu ? " ke kontrole" : ""));
             }
             toast(pridano
-                ? "Načteno " + V.pocet(pridano, ["doklad", "doklady", "dokladů"]) + " ke kontrole" +
+                ? "Načteno " + V.pocet(pridano, ["doklad", "doklady", "dokladů"]) + (zInboxu ? " ke kontrole" : "") +
                   (preskoceno ? ", " + preskoceno + " už na webu bylo." : ".")
                 : "Nic nového – všechny doklady už na webu jsou.");
-            $("filtrStav").value = "__kontrola";
+            $("filtrStav").value = zInboxu ? "__kontrola" : "";
             vykresliSouhrn();
             vykresliSeznam();
         } catch (err) {
@@ -1413,6 +1444,8 @@
             }
         });
         $("fProtistrana").addEventListener("change", doplnZFirem);
+        ["fProtistrana", "fCislo"].forEach(id => $(id).addEventListener("input", vykresliNazevNapovedu));
+        $("fDruh").addEventListener("change", vykresliNazevNapovedu);
         $("btnAres").addEventListener("click", doplnZAres);
 
         $("fKategorie").addEventListener("focus", () => { kategoriePred = $("fKategorie").value; });

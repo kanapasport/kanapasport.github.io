@@ -2416,7 +2416,8 @@ KB.deleteProjekt = async (id) => {
      private/faktury/seznam/{id}       faktura (přijatá i vydaná) vč. částek
      private/faktury/meta/nastaveni    naše fakturační údaje pro tisk
 
-   Faktura: { typ:"prijata|vydana", cislo, protistrana, ico, dic, adresa,
+   Faktura: { typ:"prijata|vydana", nazev (vlastní název jako v Caflou;
+              prázdný = složí se z dodavatele a čísla), cislo, protistrana, ico, dic, adresa,
               projekt (název – stejně jako u výkazů; "" = administrativní
               činnost), castkaBez, dphSazba, castkaDph, castkaCelkem,
               mena:"CZK", kurz (Kč za 1 jednotku cizí měny), vs,
@@ -2486,6 +2487,7 @@ KB.saveFaktura = async (id, data, volby) => {
         ? String(data.mena).toUpperCase() : "CZK";
     const zaznam = {
         typ:          data.typ === "vydana" ? "vydana" : "prijata",
+        nazev:        String(data.nazev || "").slice(0, 150),
         cislo:        data.cislo || "",
         protistrana:  data.protistrana || "",
         ico:          data.ico || "",
