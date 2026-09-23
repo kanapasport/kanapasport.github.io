@@ -2144,6 +2144,13 @@
        Michal chce označit všechny měsíce najednou (23. 9.): soubory se
        načtou v pořadí podle názvu (od nejstaršího měsíce), jeden souhrn na konci. */
 
+    let importBezi = false;          // odchod ze stránky uprostřed načítání by ho přerušil
+    window.addEventListener("beforeunload", (event) => {
+        if (!importBezi) return;
+        event.preventDefault();
+        event.returnValue = "";          // prohlížeč se zeptá, jestli opravdu odejít
+    });
+
     async function importujVse(soubory) {
         if (!fakturyPrisly) {
             return void toast("Počkej chvilku, až se načtou faktury z databáze, a zkus to znovu.", "warn");
@@ -2152,6 +2159,7 @@
         const celkem = { pridano: 0, obnoveno: 0, doplneno: 0, preskoceno: 0, souhlasi: 0, lisi: 0, chybi: 0,
                          duplicit: 0, zInboxu: false, zCaflou: false, chyby: [] };
         $("btnImport").disabled = true;
+        importBezi = true;
         try {
             for (let i = 0; i < soubory.length; i++) {
                 const predpona = soubory.length > 1 ? "Soubor " + (i + 1) + "/" + soubory.length + " (" + soubory[i].name + ") · " : "";
@@ -2163,6 +2171,7 @@
                 });
             }
         } finally {
+            importBezi = false;
             $("btnImport").disabled = false;
             $("importStav").hidden = true;
             $("importSoubor").value = "";
