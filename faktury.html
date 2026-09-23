@@ -1990,6 +1990,22 @@
                         duplicit += 1;
                     }
                 }
+                if (stara && z.zdroj === "caflou" && stara.zdroj === "caflou" && stara.rucne === false) {
+                    /* Záznam z Caflou, na který nikdo nesáhl, obnoví nové čtení celý – částky,
+                       rozpis DPH i náhled (oprava čtení „4.846,28“, Michal 23. 9.). Porovnání
+                       s Caflou zůstává, jak bylo. */
+                    pouzite.add(stara.id);
+                    await window.KB.saveFaktura(stara.id, Object.assign({}, z, {
+                        caflou: stara.caflou || { stav: "souhlasi", nazev: z.nazev, text: "založeno z Caflou („" + z.nazev + "“)" },
+                        createdMs: stara.createdMs, createdBy: stara.createdBy }), { bezAktivity: true });
+                    if ((z.nahledy && z.nahledy.length) || z.qrPlatba) {
+                        await window.KB.ulozNahledFaktury(stara.id, prilohy(z));
+                    }
+                    if (z.otisk) podleOtisku[z.otisk] = stara;
+                    obnoveno += 1;
+                    souhlasi += 1;
+                    continue;
+                }
                 if (stara && z.zdroj === "caflou" && staryKoncept(stara)) {
                     // nepotvrzený koncept z inboxu → nahradí ho hotový záznam z Caflou (s náhledem a QR)
                     pouzite.add(stara.id);
