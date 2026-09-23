@@ -101,7 +101,11 @@
                     <a href="faktury.html">Fakturách</a>.
                 </p>
             </div>
-            <button type="button" class="oko" data-penize-prepni>zobrazit částky</button>
+            <span class="row" style="gap:8px">
+                <button type="button" class="btn btn--ghost btn--sm" id="btnCsv"
+                        title="Stáhne vyfiltrované doklady jako CSV pro Excel (uložit třeba do D:\FAKTURY\_program)">Stáhnout CSV</button>
+                <button type="button" class="oko" data-penize-prepni>zobrazit částky</button>
+            </span>
         </div>
 
         <div class="card filtry">
@@ -255,6 +259,43 @@
         });
     }
 
+    /** Projekty ze Správy projektů + to, co je u faktur v datech (převod z Caflou). */
+    function projektyNabidka() {
+        const docs = window.KB.projektyDocs || [];
+        const seznam = docs.filter(p => p.uzavreno !== true).map(p => p.nazev || p.cislo || "").filter(Boolean)
+            .concat(docs.filter(p => p.uzavreno === true).map(p => p.nazev || p.cislo || "").filter(Boolean));
+        (window.KB.faktury || []).forEach(f => { if (f.projekt && seznam.indexOf(f.projekt) === -1) seznam.push(f.projekt); });
+        return seznam;
+    }
+
+    /** Hledání nebo filtr = rozbalit všechno, ať se nemusí klikat po měsících (Michal 23. 9.). */
+    const filtrAktivni = () => !!(($("hledat").value || "").trim() || $("filtrStav").value || $("filtrKategorie").value ||
+        $("filtrProjekt").value || naCislo($("filtrCastkaOd").value) || naCislo($("filtrCastkaDo").value));
+
+    /** CSV pro Excel / účetní – to, co je právě vyfiltrované (středníky, UTF-8 s BOM). */
+    function stahniCsv() {
+        const dnes = V.dnesISO();
+        const radky = filtrovane(dnes).slice().sort((a, b) => datumDokladu(a).localeCompare(datumDokladu(b)));
+        const STAV = { kontrola: "ke kontrole", kzaplaceni: "k zaplacení", posplatnosti: "po splatnosti", zaplaceno: "zaplaceno" };
+        const b = (v) => '"' + String(v === undefined || v === null ? "" : v).replace(/"/g, '""') + '"';
+        const c = (n) => String(Number(n) || 0).replace(".", ",");
+        const hlava = ["Datum (DÚZP)", "Typ", "Doklad", "Firma", "IČO", "Číslo", "VS", "Projekt", "Kategorie", "Vystaveno",
+            "Splatnost", "Uhrazeno", "Základ", "DPH", "Celkem", "Měna", "Stav", "Caflou", "Poznámka", "Soubor"];
+        const data = radky.map(f => [datumDokladu(f), f.typ === "vydana" ? "vydaná" : "přijatá", nazevZaznamu(f), f.protistrana,
+            f.ico, f.cislo, f.vs, projektText(f), f.kategorie, f.vystaveno, f.splatnost, f.uhrazeno,
+            c(f.castkaBez), c(f.castkaDph), c(f.castkaCelkem), f.mena || "CZK", STAV[sloupecFaktury(f, dnes)],
+            f.caflou ? (CAFLOU_ZNACKA[f.caflou.stav] || "") + (f.caflou.text ? " – " + f.caflou.text : "") : "",
+            f.poznamka, f.cesta].map(b).join(";"));
+        const blob = new Blob(["\ufeff" + [hlava.map(b).join(";")].concat(data).join("\r\n")], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "faktury-" + rok + (filtrAktivni() ? "-vyber" : "") + ".csv";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        toast("Staženo: " + V.pocet(radky.length, ["doklad", "doklady", "dokladů"]) + " do " + a.download + ".");
+    }
+
     function naplnFiltry() {
         const drzStav = $("filtrStav").value;
         $("filtrStav").innerHTML = [["", "Všechny stavy"], ["__kontrola", "Ke kontrole"], ["__kzaplaceni", "K zaplacení"],
@@ -270,7 +311,7 @@
         const drzProjekt = $("filtrProjekt").value;
         $("filtrProjekt").innerHTML = '<option value="">Všechny projekty</option>' +
             '<option value="__bez"' + (drzProjekt === "__bez" ? " selected" : "") + ">— " + esc(ADMIN.toLowerCase()) + " / bez projektu</option>" +
-            V.zakazky().map(z => '<option value="' + esc(z) + '"' + (z === drzProjekt ? " selected" : "") + ">" + esc(z) + "</option>").join("");
+            projektyNabidka().map(z => '<option value="' + esc(z) + '"' + (z === drzProjekt ? " selected" : "") + ">" + esc(z) + "</option>").join("");
         document.querySelectorAll("[data-ftyp]").forEach(b => b.classList.toggle("chip--active", b.dataset.ftyp === filtrTyp));
         $("rokText").textContent = String(rok);
     }
@@ -315,7 +356,7 @@
             const podil = (k) => (suma(vse.filter(f => sloupecFaktury(f, dnes) === k)) / celkem * 100).toFixed(1);
             const pozde = vse.filter(f => sloupecFaktury(f, dnes) === "posplatnosti").length;
             const kontrola = vse.filter(f => sloupecFaktury(f, dnes) === "kontrola").length;
-            const open = otevrene.has(m);
+            const open = otevrene.has(m) || filtrAktivni();
             const skupina = (a, nazev, barva) => a.length
                 ? '<tr class="gh"><td colspan="9"><span style="color:' + barva + '">' + nazev + "</span> · " +
                   esc(V.pocet(a.length, ["doklad", "doklady", "dokladů"])) + " · <b>" + tajne(V.kc(suma(a))) + "</b></td></tr>" +
@@ -368,6 +409,7 @@
         if (!spusteno) {
             spusteno = true;
             window.KB.watchFaktury();
+            window.KB.watchProjekty();
         }
         naplnFiltry();
         vykresliMesice();
@@ -418,6 +460,8 @@
         document.addEventListener("kb-role", vykresli);
         window.KB.on("faktury", vykresli);
         window.KB.on("zakazky", vykresli);
+        window.KB.on("projekty-docs", vykresli);
+        $("btnCsv").addEventListener("click", stahniCsv);
         window.KB.on("users", vykresli);
         vykresli();
     });

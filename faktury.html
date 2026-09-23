@@ -415,8 +415,15 @@
                                 <!-- porovnání s Caflou – zapisuje načtení ze souboru -->
                                 <div id="cafloupruh" class="cafloupruh" hidden></div>
                                 <div class="fmr">
-                                    <label class="pole"><span class="popisek">Projekt</span>
-                                        <select id="fProjekt" class="field"></select></label>
+                                    <!-- projekt se k faktuře většinou nepřipojuje → napřed jen text,
+                                         výběr ze všech projektů webu až po kliknutí (Michal 23. 9.) -->
+                                    <div class="pole"><span class="popisek">Projekt</span>
+                                        <div id="projektSouhrn" class="row" style="gap:8px;align-items:center;min-height:38px;flex-wrap:wrap">
+                                            <span id="projektText"></span>
+                                            <button type="button" class="linkbtn" id="btnProjektZmen" style="color:var(--accent)">přiřadit k projektu</button>
+                                            <button type="button" class="linkbtn" id="btnProjektZrus" style="color:var(--danger)" hidden>zrušit</button>
+                                        </div>
+                                        <select id="fProjekt" class="field" hidden></select></div>
                                     <label class="pole" id="poleKategorie"><span class="popisek">Kategorie</span>
                                         <select id="fKategorie" class="field"></select></label>
                                     <label class="pole"><span class="popisek">Stav</span>
@@ -1085,14 +1092,35 @@
     }
     /* -------------------------------------------------------------- panel */
 
+    /** Projekty ze Správy projektů: otevřené první, uzavřené ve své skupině. */
+    function projektyWebu() {
+        const docs = window.KB.projektyDocs || [];
+        const jmeno = (p) => p.nazev || p.cislo || "";
+        return { otevrene: docs.filter(p => p.uzavreno !== true && jmeno(p)).map(jmeno),
+                 uzavrene: docs.filter(p => p.uzavreno === true && jmeno(p)).map(jmeno) };
+    }
+
     function moznostiProjektu(vybrano, typ) {
-        // projekt, který v seznamu zakázek není (převod z Caflou, uzavřená
-        // zakázka), musí v nabídce zůstat – jinak by ho uložení smazalo
-        const zakazky = V.zakazky().slice();
-        if (vybrano && zakazky.indexOf(vybrano) === -1) zakazky.push(vybrano);
+        const pr = projektyWebu();
+        // projekt, který na webu už není (převod z Caflou, smazaný), musí
+        // v nabídce zůstat – jinak by ho uložení smazalo
+        const vse = pr.otevrene.concat(pr.uzavrene);
+        const opt = (z) => '<option value="' + esc(z) + '"' + (z === vybrano ? " selected" : "") + ">" + esc(z) + "</option>";
         return '<option value="">' + esc(typ === "vydana" ? "— bez projektu" : ADMIN) + "</option>" +
-            zakazky.map(z => '<option value="' + esc(z) + '"' +
-                (z === vybrano ? " selected" : "") + ">" + esc(z) + "</option>").join("");
+            pr.otevrene.map(opt).join("") +
+            (pr.uzavrene.length ? '<optgroup label="Uzavřené">' + pr.uzavrene.map(opt).join("") + "</optgroup>" : "") +
+            (vybrano && vse.indexOf(vybrano) === -1 ? opt(vybrano) : "");
+    }
+
+    /** Sbalené pole Projekt: text + „přiřadit k projektu“; výběr se ukáže až na klik. */
+    function vykresliProjektPole(rozbalit) {
+        const hodnota = $("fProjekt").value;
+        const vydana = $("fTyp").value === "vydana";
+        $("projektText").textContent = hodnota || (vydana ? "bez projektu" : ADMIN);
+        $("projektText").style.fontWeight = hodnota ? "800" : "400";
+        $("btnProjektZmen").textContent = hodnota ? "změnit" : "přiřadit k projektu";
+        $("btnProjektZrus").hidden = !hodnota;
+        $("fProjekt").hidden = !rozbalit;
     }
 
     function moznostiKategorie(vybrano) {
@@ -1205,6 +1233,7 @@
         $("fDic").value = f.dic || "";
         $("fAdresa").value = f.adresa || "";
         $("fProjekt").innerHTML = moznostiProjektu(f.projekt || "", typ);
+        vykresliProjektPole(false);
         $("fKategorie").innerHTML = moznostiKategorie(f.kategorie || "");
         $("fStav").innerHTML = STAVY.map(s => '<option value="' + s.id + '"' +
             (s.id === (f.stav || "nova") ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
@@ -2217,6 +2246,7 @@
             spusteno = true;
             window.KB.watchFaktury();
             window.KB.watchFirmyDetail();
+            window.KB.watchProjekty();
             nactiNastaveni().then(() => { if (!dotknuto) obnovKategorie(); });
         }
         vykresliChipy();
@@ -2391,6 +2421,7 @@
             $("poleKategorie").hidden = typ === "vydana";
             $("poleMena").hidden = typ === "vydana";
             $("fProjekt").innerHTML = moznostiProjektu($("fProjekt").value, typ);
+            vykresliProjektPole(false);
             nastavTypCastek(typ);
             if (typ !== "vydana" && !$("rozpisTelo").querySelector("tr")) {
                 vykresliRozpis([{ sazba: Number($("fDphSazba").value) || 21,
@@ -2516,6 +2547,11 @@
             }
         });
         window.KB.on("zakazky", vykresli);
+        // nabídka projektů dorazí později než formulář – doplní se, dokud do něj nikdo nesáhl
+        window.KB.on("projekty-docs", () => { if (!$("oknoDoklad").hidden && !dotknuto) vykresliPanel(); });
+        $("btnProjektZmen").addEventListener("click", () => { vykresliProjektPole(true); $("fProjekt").focus(); });
+        $("btnProjektZrus").addEventListener("click", () => { $("fProjekt").value = ""; dotknuto = true; vykresliProjektPole(false); });
+        $("fProjekt").addEventListener("change", () => { dotknuto = true; vykresliProjektPole(false); });
         window.KB.on("users", vykresli);
         vykresli();
     });
