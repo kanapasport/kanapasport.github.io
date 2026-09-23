@@ -2596,6 +2596,13 @@ KB.saveFaktura = async (id, data, volby) => {
     // „sáhl na to člověk“ – formulář ano, načtení ze souboru ne; podle toho
     // smí opakované načtení záznam obnovit novým čtením programu
     zaznam.rucne = !(volby && volby.bezAktivity);
+    /* Prohlédnuto: člověk viděl rozdíl proti Caflou (nebo duplicitu) a rozhodl,
+       že na webu je to správně. Pamatuje si, k jakému textu rozdílu se to
+       vztahuje – když příští načtení najde jiný rozdíl, jde doklad ke kontrole znovu. */
+    if (data.prohlednuto && typeof data.prohlednuto === "object") {
+        zaznam.prohlednuto = { kdo: window.KB_USER || "", ms: Date.now(),
+            caflouText: String(data.prohlednuto.caflouText || "").slice(0, 400) };
+    }
     await setDoc(fakturaDoc(id), zaznam, { merge: true });
     // do aktivit schválně bez částek – stačí, co se stalo a k čemu;
     // hromadné načtení z inboxu zapíše jeden souhrnný řádek samo
@@ -2637,6 +2644,38 @@ KB.uhradFakturu = async (id, datum) => {
     }, { merge: true });
     KB.zapisAktivitu("faktura", "označil fakturu " + (f.cislo || "(bez čísla)") +
         (f.protistrana ? " od " + f.protistrana : "") + " jako zaplacenou");
+};
+
+/** Vrácení úhrady z nástěnky (karta přetažená zpět mezi nezaplacené) – jen úhrada a stav. */
+KB.zrusUhraduFaktury = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const f = (KB.faktury || []).find(x => x.id === id) || {};
+    await setDoc(fakturaDoc(id), {
+        uhrazeno: "",
+        stav: "zarazena",
+        rucne: true,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    KB.zapisAktivitu("faktura", "vrátil fakturu " + (f.cislo || "(bez čísla)") +
+        (f.protistrana ? " od " + f.protistrana : "") + " mezi nezaplacené");
+};
+
+/** „Zkontrolováno – na webu je to správně“: rozdíl proti Caflou (nebo duplicita)
+    je prohlédnutý člověkem, doklad odchází z Ke kontrole. Zbytek faktury se nemění. */
+KB.prohlednutoFaktura = async (id, caflouText) => {
+    if (authReady) await authReady;
+    requireDb();
+    const f = (KB.faktury || []).find(x => x.id === id) || {};
+    await setDoc(fakturaDoc(id), {
+        prohlednuto: { kdo: window.KB_USER || "", ms: Date.now(), caflouText: String(caflouText || "").slice(0, 400) },
+        rucne: true,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    KB.zapisAktivitu("faktura", "zkontroloval fakturu " + (f.cislo || "(bez čísla)") +
+        (f.protistrana ? " od " + f.protistrana : "") + " – na webu je správně");
 };
 
 KB.deleteFaktura = async (id, cislo) => {

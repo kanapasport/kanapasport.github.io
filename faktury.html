@@ -7,64 +7,137 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=236">
+    <link rel="stylesheet" href="assets/css/app.css?v=237">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* Rozvržení je schválně stejné jako Správa firem a Správa projektů –
-           vlevo seznam, vpravo údaje vybrané faktury. Kdo umí jednu stránku,
-           umí i tuhle. */
-        .sprava { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; }
-        @media (max-width: 980px) { .sprava { grid-template-columns: 1fr; } }
+        /* Stránka podle Michalova návrhu (23. 9. 2026): nahoře řádek „na co se dnes
+           podívat“, pás roku po měsících, pod ním nástěnka podle stavu. Doklad
+           se otevírá v okně přes stránku – formulář s náhledem, QR a kontrolami
+           zůstal, jak byl. Seznam po měsících s tabulkou je na faktury-prehled.html. */
 
-        .seznam { padding: 12px; gap: 10px; }
-        .seznam__vypis { display: flex; flex-direction: column; gap: 6px; max-height: 760px; overflow: auto; }
+        /* řádek pozornosti – každá položka je zároveň skok na sloupec nástěnky */
+        .pozor { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pozor__btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13px;
+            cursor: pointer; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+            border-radius: 10px; padding: 8px 13px; text-align: left; }
+        .pozor__btn:hover { border-color: var(--accent); background: var(--accent-tint); }
+        .pozor__btn b { font-variant-numeric: tabular-nums; }
+        .pozor__tecka { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 
-        /* Dlaždice faktury: barva celé dlaždice = stav (Michal 22. 9. 2026) –
-           zelená zaplaceno, důrazná červená nezaplaceno, oranžová ke kontrole.
-           Typ (přijatá/vydaná) je jen štítek, ne barva. */
-        .fkt { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer; color: #fff;
-            background: #64748b; border: 1px solid transparent; border-radius: var(--radius); padding: 9px 11px; }
-        .fkt--zaplaceno { background: var(--ok); }
-        .fkt--nezaplaceno { background: var(--danger); }
-        .fkt--kontrola { background: #ea580c; }
-        .fkt:hover { filter: brightness(1.08); }
-        .fkt.je-vybrany { box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--accent); }
-        .fkt__radek { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; min-width: 0; }
-        .fkt__nazev { font-size: 13.5px; font-weight: 800; line-height: 1.3; min-width: 0; overflow: hidden;
-            text-overflow: ellipsis; white-space: nowrap; }
-        .fkt__castka { flex: none; font-weight: 900; font-variant-numeric: tabular-nums; }
-        .fkt__pod { font-size: 11.5px; opacity: .92; margin-top: 2px; }
-        /* 2. řádek: datum + stav; 3. řádek: projekt · kategorie a vpravo dole štítek
-           přijatá/vydaná (+ značka Caflou) – Michal 22. 9. */
-        .fkt__zarazeni { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
-        .fkt__stitky { flex: none; display: flex; gap: 6px; align-items: center; align-self: flex-end; }
-        .fkt__typ { display: inline-block; font-size: 10px; font-weight: 900; letter-spacing: .06em;
-            text-transform: uppercase; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .22);
-            border: 1px solid rgba(255, 255, 255, .45); vertical-align: 1px; }
-        .fkt__stav { flex: none; font-weight: 800; white-space: nowrap; }
+        /* pás roku: 12 měsíců + součet roku; sloupce = vydané nahoru, přijaté dolů,
+           barva dílu = stav; čísla jsou za tečkami, dokud je člověk neodkryje */
+        .pas { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .pas__rok { display: inline-flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 900; }
+        .pas__rok button { font: inherit; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 6px;
+            background: var(--surface); color: var(--muted); cursor: pointer; }
+        .pas__rok button:hover { color: var(--accent); border-color: var(--accent); }
+        .pas__legenda { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); align-items: center; }
+        .pas__legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+        .pas__mriz-obal { overflow-x: auto; padding-bottom: 2px; }
+        .pas__mriz { display: grid; grid-template-columns: repeat(12, minmax(66px, 1fr)) minmax(150px, 1.4fr); gap: 6px; min-width: 980px; }
+        .mes { font: inherit; color: inherit; text-align: center; cursor: pointer; border: 1px solid var(--line); border-radius: 9px;
+            background: var(--surface); padding: 7px 5px 8px; display: flex; flex-direction: column; gap: 5px; position: relative; }
+        .mes:hover { border-color: var(--accent); }
+        .mes--on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-tint); }
+        .mes--prazdny { background: var(--bg-soft); border-style: dashed; color: var(--muted); cursor: default; }
+        .mes__h { display: flex; justify-content: center; align-items: center; gap: 5px; font-weight: 800; font-size: 12.5px; min-height: 20px; }
+        .mes__ted { font-size: 9.5px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: #fff;
+            background: var(--accent); border-radius: 4px; padding: 0 4px; }
+        .mes__pozde { min-width: 17px; height: 17px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 10.5px;
+            font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
+        .mes__graf { height: 112px; display: flex; flex-direction: column; }
+        .mes__pul { flex: 1; display: flex; justify-content: center; min-height: 0; }
+        .mes__osa { height: 1px; background: var(--line); margin: 0 -5px; }
+        .mes__sloupec { width: 56%; max-width: 30px; display: flex; }
+        .mes__pul--nahoru { align-items: flex-end; }
+        .mes__pul--nahoru .mes__sloupec { flex-direction: column-reverse; }
+        .mes__pul--dolu .mes__sloupec { flex-direction: column; }
+        .mes__sloupec span { display: block; width: 100%; flex: none; }
+        .mes__pul--nahoru .mes__sloupec span:last-child { border-radius: 3px 3px 0 0; }
+        .mes__pul--dolu .mes__sloupec span:last-child { border-radius: 0 0 3px 3px; }
+        .mes__pul--ztlum .mes__sloupec { opacity: .18; }
+        .d-zaplaceno { background: var(--ok); }
+        .d-kzaplaceni { background: #1d4ed8; }
+        .d-posplatnosti { background: var(--danger); }
+        .d-kontrola { background: #ea580c; }
+        .mes__cisla { font-size: 11px; line-height: 1.35; font-variant-numeric: tabular-nums; display: grid; }
+        .mes__cisla .v { color: #1d4ed8; }
+        .mes__cisla .p { color: var(--muted); }
+        .mes__cisla .r { color: var(--text); border-top: 1px dashed var(--line); margin-top: 3px; padding-top: 3px; font-weight: 700; }
+        .mes--rok { text-align: left; padding: 10px 12px; background: var(--bg-soft); gap: 7px; justify-content: space-between; cursor: default; }
+        .mes--rok:hover { border-color: var(--line); }
+        .mes--rok .k { font-size: 11px; color: var(--muted); display: block; }
+        .mes--rok .n { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .uhrpruh { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); margin-top: 4px; }
+        .uhrpruh span { display: block; height: 100%; }
+        .oko { font: inherit; font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 99px; cursor: pointer;
+            border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+        .oko:hover { color: var(--accent); border-color: var(--accent-lt); background: var(--accent-tint); }
 
-        /* filtry: typ a období jako klikací štítky, zbytek v polích */
-        .filtry { display: flex; flex-direction: column; gap: 10px; }
-        .filtry__radek { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-        .filtry__popisek { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-            color: var(--muted); margin: 0 4px 0 8px; }
-        .filtry__popisek:first-child { margin-left: 0; }
-        .chip--mesic { text-transform: capitalize; }
+        /* nástěnka podle stavu: 4 sloupce, karty jdou tahat do Zaplaceno a zpět */
+        .tabule { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
+        @media (max-width: 1100px) { .tabule { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 600px) { .tabule { grid-template-columns: 1fr; } }
+        .sloupec { background: var(--bg-soft); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 7px;
+            max-height: 560px; overflow-y: auto; outline: 2px dashed transparent; outline-offset: -2px; transition: outline-color .12s, background .12s; }
+        .sloupec--nad { outline-color: var(--accent); background: var(--accent-tint); }
+        .sloupec--ne { outline-color: var(--danger); }
+        .sloupec__h { position: sticky; top: -8px; z-index: 1; margin: -8px -8px 2px; padding: 10px 12px 7px; border-radius: 10px 10px 0 0;
+            background: var(--bg-soft); border-bottom: 3px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+        .sloupec__h b { font-size: 14px; }
+        .sloupec__h .num { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+        .sloupec__h small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+        .sloupec__vic { font-size: 12px; color: var(--muted); text-align: center; padding: 4px; }
+        .sloupec__vic a { color: var(--accent); font-weight: 700; }
+        .karta { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 8px 10px;
+            display: grid; gap: 3px; cursor: pointer; }
+        .karta:hover { border-color: var(--accent); border-left-color: var(--accent); }
+        .karta[draggable="true"] { cursor: grab; }
+        .karta--tazena { opacity: .4; }
+        .karta--kontrola { border-left-color: #ea580c; }
+        .karta--kzaplaceni { border-left-color: #1d4ed8; }
+        .karta--posplatnosti { border-left-color: var(--danger); }
+        .karta--zaplaceno { border-left-color: var(--ok); }
+        .karta__r { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+        .karta__nazev { font-weight: 800; font-size: 13px; line-height: 1.3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .karta__castka { flex: none; font-weight: 900; font-variant-numeric: tabular-nums; font-size: 13px; }
+        .karta__pod { font-size: 11.5px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .karta__stitky { display: flex; gap: 5px; align-items: center; flex: none; }
+        .karta__akce { display: flex; justify-content: flex-end; gap: 6px; margin-top: 3px; }
+        .karta__btn { font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+            border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+        .karta__btn:hover { color: var(--accent); border-color: var(--accent); }
+        .karta__btn--hlavni { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .karta__btn--hlavni:hover { background: var(--accent-dark); color: #fff; }
+        .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+        .pill--kontrola { background: #ffedd5; color: #9a3412; }
+        .pill--kzaplaceni { background: #dbeafe; color: #1d4ed8; }
+        .pill--posplatnosti { background: #fee2e2; color: #b91c1c; }
+        .pill--zaplaceno { background: #dcfce7; color: #15803d; }
+        .pill--caflou { background: var(--bg-soft); color: var(--muted); border: 1px solid var(--line); }
+        .pill--caflou-souhlasi { background: var(--ok-tint); color: var(--ok); border-color: var(--ok); }
+        .pill--caflou-lisi { background: #fef3c7; color: #92400e; border-color: #f59e0b; }
+        .pill--caflou-chybi, .pill--caflou-duplicita { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+        .pill--typ { background: #e2e8f0; color: #334155; text-transform: uppercase; font-size: 9.5px; letter-spacing: .06em; }
+        .pill--typ-vydana { background: #dbeafe; color: #1d4ed8; }
 
-        /* předěl měsíců v seznamu – čárkovaná čára s názvem měsíce */
-        .fkt__mesic { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; font-size: 11px;
-            font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-        .fkt__mesic::before, .fkt__mesic::after { content: ""; flex: 1; border-top: 2px dashed var(--line); }
-        /* porovnání s Caflou: značka na dlaždici + pruh v detailu */
-        .fkt__caflou { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 10px;
-            font-weight: 900; background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .45); }
-        .cafloupruh { font-size: 13px; line-height: 1.45; padding: 8px 12px; border-radius: 8px;
-            border: 1px solid var(--line); background: var(--bg-soft); }
-        .cafloupruh--souhlasi { background: var(--ok-tint); border-color: var(--ok); color: var(--ok); }
-        .cafloupruh--lisi { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-        .cafloupruh--chybi, .cafloupruh--duplicita { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+        /* lišta „Zpět“ po přesunu karty – místo potvrzovacího okna */
+        .zpet { position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px; z-index: 150; background: var(--text); color: #fff;
+            border-radius: 9px; padding: 9px 12px 9px 16px; display: flex; gap: 14px; align-items: center; font-size: 13px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, .28); max-width: calc(100% - 32px); }
+        .zpet button { font: inherit; background: none; border: 1px solid rgba(255, 255, 255, .5); color: #fff; border-radius: 6px;
+            padding: 3px 10px; cursor: pointer; font-weight: 700; }
+        .zpet button:hover { background: rgba(255, 255, 255, .15); }
+
+        /* okno dokladu – formulář, jak byl, jen přes stránku */
+        .hookno__deska--doklad { max-width: 1180px; max-height: 94vh; }
+        #panel { display: flex; flex-direction: column; gap: 14px; background: var(--bg); }
+        /* stránka vložená do rámu na faktury-prehled.html (?okno=1): jen okno, bez lišt */
+        body.jen-okno .appbar, body.jen-okno .siderail, body.jen-okno main.wrap, body.jen-okno .zpet { display: none !important; }
+        body.jen-okno #oknoDoklad { padding: 0; background: transparent; }
+        body.jen-okno #oknoDoklad .hookno__deska { max-width: none; max-height: 100vh; height: 100vh; border-radius: 0; border: 0; }
 
         .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
             text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
@@ -90,13 +163,7 @@
         .typ-prijata  { background: #e2e8f0; color: #334155; }
         .typ-vydana   { background: #dbeafe; color: #1d4ed8; }
 
-        .souhrnrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-        /* dlaždice „Ke kontrole“ je zároveň filtr – proto tlačítko */
-        .vyktile--akce { text-align: left; font: inherit; color: inherit; cursor: pointer;
-            border: 1px solid #f59e0b; }
-        .vyktile--akce:hover { background: #fffbeb; }
-
-        /* záznam připravený programem z inboxu – co našly kontroly */
+        /* proč je doklad ke kontrole: nálezy programu, rozdíl proti Caflou, duplicita */
         .inbox { border: 1px solid #f59e0b; border-radius: var(--radius-lg); background: #fffbeb;
             padding: 12px 14px; }
         .inbox__nadpis { font-weight: 800; color: #9a3412; }
@@ -105,6 +172,14 @@
         .inbox li.k-chyba { color: #b91c1c; background: #fef2f2; }
         .inbox li.k-varovani { color: #92400e; background: #fef3c7; }
         .inbox li.k-info { color: var(--muted); }
+        .inbox li.k-caflou { color: #92400e; background: #fef3c7; font-weight: 700; }
+        .inbox__akce { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+        .cafloupruh { font-size: 13px; line-height: 1.45; padding: 8px 12px; border-radius: 8px;
+            border: 1px solid var(--line); background: var(--bg-soft); }
+        .cafloupruh--souhlasi { background: var(--ok-tint); border-color: var(--ok); color: var(--ok); }
+        .cafloupruh--lisi { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        .cafloupruh--chybi, .cafloupruh--duplicita { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+        .cafloupruh--prohlednuto { background: var(--ok-tint); border-color: var(--ok); color: #166534; }
 
         /* součet částek u přijaté: základy + DPH + poplatky + zaokrouhlení = celkem */
         .soucet { margin: 0; font-size: 13px; line-height: 1.5; padding: 6px 10px; border-radius: 8px; }
@@ -169,23 +244,22 @@
                 <div style="min-width:0">
                     <h2 style="font-size:20px;font-weight:900;line-height:1.2">Faktury</h2>
                     <p class="small muted" style="margin-top:3px;line-height:1.6">
-                        Přijaté i vydané faktury přiřazené k projektům. Originály (PDF)
-                        zůstávají na disku – tady se eviduje, co na nich je.
+                        Co se má dnes udělat: zkontrolovat, zaplatit, pohlídat splatnost.
+                        Originály (PDF) zůstávají na disku – tady se eviduje, co na nich je.
                     </p>
                     <p class="small" id="importStav" style="margin:4px 0 0;color:var(--accent);font-weight:700" hidden></p>
                 </div>
                 <div class="row" style="gap:8px;flex:none">
-                    <!-- výsledek nástroje vytezeni.py (D:\FAKTURY\_program\vytezeni.json) -->
+                    <!-- výsledky nástrojů vytezeni.py a porovnani_caflou.py (D:\FAKTURY\_program) – jde vybrat víc souborů naráz -->
                     <button type="button" id="btnImport" class="btn btn--ghost btn--sm"
-                            title="Načíst faktury ze souboru: vytezeni.json (přečtené z inboxu, ke kontrole) nebo caflou-na-web.json (převod z Caflou) – ze složky D:\FAKTURY\_program">Načíst ze souboru</button>
-                    <input type="file" id="importSoubor" accept=".json,application/json" hidden>
+                            title="Načíst faktury ze souborů: na-web-RRRR-MM.json (převod z Caflou a archivu) nebo vytezeni.json (inbox) – ze složky D:\FAKTURY\_program; jde označit víc souborů naráz">Načíst ze souboru</button>
+                    <input type="file" id="importSoubor" accept=".json,application/json" multiple hidden>
                     <button type="button" id="btnNastaveni" class="btn btn--ghost btn--sm">Naše údaje</button>
                     <button type="button" id="btnNovaPrijata" class="btn btn--primary btn--sm">+ Přijatá faktura</button>
                     <button type="button" id="btnNovaVydana" class="btn btn--primary btn--sm">+ Vydaná faktura</button>
                 </div>
             </div>
         </div>
-
         <!-- naše fakturační údaje – tisknou se na vydané faktury -->
         <section class="sblok" id="blokNastaveni" hidden>
             <div class="sblok__hlava"><span class="sblok__stitek">Naše fakturační údaje</span></div>
@@ -222,62 +296,56 @@
             </div>
         </section>
 
-        <!-- souhrn nad seznamem – řídí se filtry níž -->
-        <div id="souhrn" class="souhrnrow"></div>
+        <!-- na co se dnes podívat – počty a součty (součty za tečkami), klik skočí na sloupec -->
+        <div id="pozor" class="pozor"></div>
 
-        <!-- filtry: typ a období jedním klikem (Michal 22. 9.), k tomu od–do a zbytek v polích -->
-        <div class="card filtry" style="padding:12px 14px">
-            <div class="filtry__radek" id="filtryChipy">
-                <span class="filtry__popisek">Typ</span>
-                <button type="button" class="chip" data-ftyp="">Vše</button>
-                <button type="button" class="chip" data-ftyp="prijata">Přijaté</button>
-                <button type="button" class="chip" data-ftyp="vydana">Vydané</button>
-                <span class="filtry__popisek">Období</span>
-                <button type="button" class="chip" data-obdobi="vse">Vše</button>
-                <button type="button" class="chip" data-obdobi="tyden">Poslední týden</button>
-                <button type="button" class="chip" data-obdobi="mesic">Posledních 30 dní</button>
-                <!-- měsíce, které v datech opravdu jsou – doplní se z faktur -->
-                <span id="mesiceChipy" style="display:contents"></span>
-            </div>
-            <div class="fmr">
-                <label class="pole"><span class="popisek">Od</span>
-                    <input type="date" id="filtrOd" class="field"></label>
-                <label class="pole"><span class="popisek">Do</span>
-                    <input type="date" id="filtrDo" class="field"></label>
-                <label class="pole"><span class="popisek">Stav</span>
-                    <select id="filtrStav" class="field"></select></label>
-                <label class="pole"><span class="popisek">Kategorie</span>
-                    <select id="filtrKategorie" class="field"></select></label>
-                <label class="pole"><span class="popisek">Projekt</span>
-                    <select id="filtrProjekt" class="field"></select></label>
-                <label class="pole"><span class="popisek">Částka od (Kč)</span>
-                    <input type="text" id="filtrCastkaOd" class="field" inputmode="decimal" placeholder="např. 1000"></label>
-                <label class="pole"><span class="popisek">Částka do (Kč)</span>
-                    <input type="text" id="filtrCastkaDo" class="field" inputmode="decimal"></label>
-                <label class="pole"><span class="popisek">Hledat</span>
-                    <input type="search" id="hledat" class="field" placeholder="Číslo, firma, VS, kategorie…"></label>
-            </div>
-            <input type="hidden" id="filtrTyp" value="">
-        </div>
-
-        <div class="sprava">
-            <!-- ------------------------------------------------ seznam faktur -->
-            <aside class="card col seznam">
-                <div id="seznamVypis" class="seznam__vypis"></div>
-                <span class="tiny muted" id="pocet"></span>
-            </aside>
-
-            <!-- ------------------------------------------------ detail faktury -->
-            <div>
-                <div id="prazdno" class="card center" style="padding:34px 22px" hidden>
-                    <b>Vyber vlevo fakturu</b>
-                    <p class="small muted" style="margin-top:6px;line-height:1.6">
-                        Nebo založ novou tlačítkem vpravo nahoře.
-                    </p>
+        <!-- pás roku po měsících: sloupce vydané ▲ / přijaté ▼ podle stavu, klik = měsíc jako filtr nástěnky -->
+        <section class="card pas">
+            <div class="spread">
+                <div class="row" style="gap:10px;flex-wrap:wrap">
+                    <span class="pas__rok"><button type="button" id="btnRokZpet" aria-label="Předchozí rok">‹</button>
+                        <span id="rokText"></span>
+                        <button type="button" id="btnRokDal" aria-label="Další rok">›</button></span>
+                    <span id="filtryChipy" class="row" style="gap:6px;flex-wrap:wrap">
+                        <button type="button" class="chip" data-ftyp="">Vše</button>
+                        <button type="button" class="chip" data-ftyp="prijata">Přijaté</button>
+                        <button type="button" class="chip" data-ftyp="vydana">Vydané</button>
+                        <button type="button" class="chip" id="chipCelyRok">Celý rok</button>
+                    </span>
                 </div>
+                <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+                    <span class="pas__legenda">
+                        <span><i class="d-zaplaceno"></i>zaplaceno</span>
+                        <span><i class="d-kzaplaceni"></i>k zaplacení</span>
+                        <span><i class="d-posplatnosti"></i>po splatnosti</span>
+                        <span><i class="d-kontrola"></i>ke kontrole</span>
+                        <span>▲ vydané · ▼ přijaté</span>
+                    </span>
+                    <input type="search" id="hledat" class="field" style="width:220px;max-width:100%"
+                           placeholder="Hledat firmu, číslo, VS, projekt…">
+                    <button type="button" class="oko" data-penize-prepni>zobrazit částky</button>
+                </div>
+            </div>
+            <div class="pas__mriz-obal"><div class="pas__mriz" id="pas"></div></div>
+        </section>
 
-                <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+        <!-- nástěnka podle stavu -->
+        <div>
+            <div class="spread" style="margin-bottom:8px">
+                <b style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)">Podle stavu</b>
+                <span class="tiny muted">Kartu přetáhni do Zaplaceno (zeptá se na datum) nebo zpět; ke kontrole jde jen přes okno dokladu.</span>
+            </div>
+            <div class="tabule" id="tabule"></div>
+        </div>
+    </div>
+</main>
 
+<!-- okno dokladu: formulář s náhledem, QR a kontrolami – přes celou stránku -->
+<div class="hookno no-print" id="oknoDoklad" hidden>
+    <div class="hookno__deska card hookno__deska--doklad">
+        <div class="hookno__hlava"><span id="oknoNadpis">Doklad</span>
+            <button type="button" class="linkbtn linkbtn--tmavy" data-doklad-zavri>Zavřít</button></div>
+        <div class="hookno__telo" id="panel">
                     <section class="card" style="padding:12px 14px">
                         <div class="spread">
                             <div style="min-width:0">
@@ -290,13 +358,14 @@
 
                     <!-- záznam připravený programem z inboxu, dokud ho někdo nezkontroluje -->
                     <section class="inbox" id="boxInbox" hidden>
-                        <div class="inbox__nadpis">Připravil program z inboxu – zkontroluj údaje proti PDF</div>
-                        <p class="small" style="margin:4px 0 0;line-height:1.55">
-                            Doplň kategorii a projekt (nebo nech administrativní činnost) a klikni
-                            na <b>Potvrdit zařazení</b>. Teprve pak se PDF přesune z inboxu na své místo.
-                        </p>
+                        <div class="inbox__nadpis" id="inboxNadpis">Ke kontrole</div>
+                        <p class="small" id="inboxText" style="margin:4px 0 0;line-height:1.55"></p>
                         <p class="small muted" id="inboxCil" style="margin:4px 0 0"></p>
                         <ul id="inboxNalezy"></ul>
+                        <div class="inbox__akce">
+                            <button type="button" class="btn btn--primary btn--sm" id="btnProhlednuto" hidden
+                                    title="Rozdíl proti Caflou je prohlédnutý – na webu je to správně, doklad odejde z Ke kontrole">Zkontrolováno – na webu je to správně</button>
+                        </div>
                     </section>
 
                     <section class="sblok">
@@ -483,12 +552,12 @@
                         <button type="button" id="btnPotvrdit" class="btn btn--primary" hidden
                                 title="Údaje jsou zkontrolované – faktura se zařadí a PDF se může přesunout z inboxu">Potvrdit zařazení</button>
                     </div>
-                </div>
-            </div>
         </div>
     </div>
-</main>
+</div>
 
+<!-- lišta Zpět po přesunu karty na nástěnce -->
+<div class="zpet no-print" id="zpetLista" hidden><span id="zpetText"></span><button type="button" id="zpetBtn">Zpět</button></div>
 <!-- okno s datem úhrady – otevře ho zaškrtnutí „Uhrazeno“ -->
 <div class="hookno no-print" id="oknoUhrazeno" hidden>
     <div class="hookno__deska card" style="max-width:400px">
@@ -528,11 +597,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=236"></script>
-<script src="assets/js/ui.js?v=236"></script>
-<script src="assets/js/vykazy.js?v=236"></script>
-<script type="module" src="assets/js/store.js?v=236"></script>
-
+<script src="assets/js/taxonomy.js?v=237"></script>
+<script src="assets/js/ui.js?v=237"></script>
+<script src="assets/js/vykazy.js?v=237"></script>
+<script type="module" src="assets/js/store.js?v=237"></script>
 <script>
 (function () {
     "use strict";
@@ -605,8 +673,13 @@
 
     const kategorie = () => (nastaveni && Array.isArray(nastaveni.kategorie) && nastaveni.kategorie.length)
         ? nastaveni.kategorie : KATEGORIE_VYCHOZI;
-    /** Záznam z inboxu, který ještě nikdo nezkontroloval. */
-    const keKontrole = (f) => f.zdroj === "inbox" && (f.stav || "nova") === "nova";
+    /* Ke kontrole (Michal 23. 9.): koncept z inboxu, který nikdo nepotvrdil, a každý
+       doklad, který se liší od Caflou nebo je duplicitní – dokud ho člověk neprohlédne
+       („Zkontrolováno – na webu je to správně“) nebo neuloží z formuláře. */
+    const zInboxuNezkontrolovana = (f) => f.zdroj === "inbox" && (f.stav || "nova") === "nova";
+    const caflouKeKontrole = (f) => !!f.caflou && (f.caflou.stav === "lisi" || f.caflou.stav === "duplicita") &&
+        !(f.prohlednuto && (f.prohlednuto.caflouText || "") === (f.caflou.text || ""));
+    const keKontrole = (f) => zInboxuNezkontrolovana(f) || caflouKeKontrole(f);
     /* Název záznamu jako v Caflou: faktura „Firma - Faktura 123“, ostatní
        doklady jen „Firma“ (zálohová a dobropis s druhem). Vlastní název
        (pole Název záznamu, převod z Caflou) má přednost. */
@@ -654,190 +727,360 @@
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen",
         "září", "říjen", "listopad", "prosinec"];
 
-    /* ------------------------------------------------------------- filtry */
 
-    function filtrovane() {
-        const typ = $("filtrTyp").value;
-        const stav = $("filtrStav").value;
-        const projekt = $("filtrProjekt").value;
-        const od = $("filtrOd").value, doDne = $("filtrDo").value;
-        const kat = $("filtrKategorie").value;
-        const castkaOd = naCislo($("filtrCastkaOd").value), castkaDo = naCislo($("filtrCastkaDo").value);
-        const hledane = ($("hledat").value || "").trim().toLowerCase();
+    /* ------------------------------------------------------ stav stránky ----
+       Nahoře pás roku (12 měsíců), pod ním nástěnka podle stavu. Měsíc z pásu
+       je filtr nástěnky; bez něj sloupce Ke kontrole / K zaplacení / Po
+       splatnosti ukazují všechno otevřené a Zaplaceno jen vybraný rok. */
 
-        return (window.KB.faktury || []).filter(f => {
-            if (typ && f.typ !== typ) return false;
-            const den = datumDokladu(f);
-            if (od && (!den || den < od)) return false;
-            if (doDne && (!den || den > doDne)) return false;
-            if (kat === "__bez" && f.kategorie) return false;
-            if (kat && kat !== "__bez" && f.kategorie !== kat) return false;
-            const celkem = Math.abs(Number(f.castkaCelkem) || 0);
-            if (castkaOd && celkem < castkaOd) return false;
-            if (castkaDo && celkem > castkaDo) return false;
-            if (stav === "__kontrola" && !keKontrole(f)) return false;
-            if (stav === "__kzaplaceni" && !kZaplaceni(f)) return false;
-            if (stav === "__caflou_lisi" && !(f.caflou && f.caflou.stav === "lisi")) return false;
-            if (stav === "__caflou_chybi" && !(f.caflou && f.caflou.stav === "chybi")) return false;
-            if (stav === "__duplicita" && !(f.caflou && f.caflou.stav === "duplicita")) return false;
-            if (stav && stav.indexOf("__") !== 0 && (f.stav || "nova") !== stav) return false;
-            if (projekt === "__bez" && f.projekt) return false;
-            if (projekt && projekt !== "__bez" && f.projekt !== projekt) return false;
-            if (hledane) {
-                const kupa = [f.nazev, f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka, f.kategorie,
-                    druhTitle(f.druhDokladu), f.mena, f.poplatkyPopis].join(" ").toLowerCase();
-                if (kupa.indexOf(hledane) === -1) return false;
-            }
-            return true;
-        });
-    }
+    let rok = new Date().getFullYear();
+    let mesicVyber = "";          // "RRRR-MM" z pásu, "" = celý rok
+    let filtrTyp = "";            // "" | "prijata" | "vydana"
+    let vRamu = false;            // ?okno=1 – stránka vložená do rámu na faktury-prehled.html
+    let skocitNa = "";            // ?filtr=kontrola|kzaplaceni → po vykreslení sjet na sloupec
 
-    /* ------------------------------------------------------------- souhrn */
+    const MESICE3 = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
+    const SLOUPCE = [
+        { id: "kontrola",     title: "Ke kontrole",   barva: "#ea580c",
+          popis: "z inboxu a co nesedí s Caflou – projde sekretářka" },
+        { id: "kzaplaceni",   title: "K zaplacení",   barva: "#1d4ed8",
+          popis: "zkontrolované, čekají na úhradu – nejbližší splatnost první" },
+        { id: "posplatnosti", title: "Po splatnosti", barva: "var(--danger)",
+          popis: "plní se samo podle data – sem se nic nepřetahuje" },
+        { id: "zaplaceno",    title: "Zaplaceno",     barva: "var(--ok)",
+          popis: "naposledy zaplacené; všechno je v Měsících" }
+    ];
+    const PORADI_DILU = ["zaplaceno", "kzaplaceni", "posplatnosti", "kontrola"];
+    /** Sloupec nástěnky = stav dokladu; po splatnosti se počítá z data, neukládá se. */
+    const sloupecFaktury = (f, dnes) => keKontrole(f) ? "kontrola" : zaplacena(f) ? "zaplaceno"
+        : (f.splatnost && f.splatnost < (dnes || V.dnesISO())) ? "posplatnosti" : "kzaplaceni";
+    const RAZENI = {
+        kontrola:     (a, b) => datumDokladu(a).localeCompare(datumDokladu(b)),
+        kzaplaceni:   (a, b) => (a.splatnost || "9999").localeCompare(b.splatnost || "9999"),
+        posplatnosti: (a, b) => (a.splatnost || "").localeCompare(b.splatnost || ""),
+        zaplaceno:    (a, b) => (b.uhrazeno || datumDokladu(b)).localeCompare(a.uhrazeno || datumDokladu(a))
+    };
 
-    /* Celkové součty se neukazují samy – stejně jako u výkazů si je člověk
-       odkryje tlačítkem v rohu dlaždice (Michal 22. 9.). Částky u jednotlivých
-       faktur v seznamu zůstávají vidět, aby se nemuselo nic rozklikávat. */
+    /** Krátká částka do pásu a součtů: 1,23 mil. · 930 tis. · 450. */
+    const kratce = (n) => {
+        const a = Math.abs(Number(n) || 0);
+        return (n < 0 ? "−" : "") + (a >= 1e6 ? (a / 1e6).toLocaleString("cs-CZ", { maximumFractionDigits: 2 }) + " mil."
+            : a >= 1000 ? Math.round(a / 1000) + " tis." : Math.round(a).toLocaleString("cs-CZ"));
+    };
+    /* Celkové součty jsou za tečkami jako u výkazů; odkryje je tlačítko nad pásem
+       (Michal 22.–23. 9.). Částky u jednotlivých dokladů zůstávají vidět. */
     let penizeVidet = false;
-
-    function penizeDlazdice(label, value, note, money) {
-        return '<div class="card vyktile vyktile--tajne' + (money ? " vyktile--money" : "") + '">' +
-            '<button type="button" class="vyktile__oko" data-penize-prepni></button>' +
-            '<div class="vyktile__label">' + esc(label) + "</div>" +
-            '<div class="vyktile__value"><span class="tajne">' + value + "</span>" +
-                '<span class="tajne__zastup">•••</span></div>' +
-            (note ? '<div class="vyktile__note">' + note + "</div>" : "") +
-        "</div>";
-    }
-
+    const tajne = (text) => '<span class="tajne">' + esc(text) + '</span><span class="tajne__zastup">•••</span>';
     function pouzijSkryti() {
         document.body.classList.toggle("penize-videt", penizeVidet);
         document.querySelectorAll("[data-penize-prepni]").forEach(b => {
-            b.textContent = penizeVidet ? "skrýt" : "zobrazit";
+            b.textContent = penizeVidet ? "skrýt částky" : "zobrazit částky";
         });
     }
 
-    function vykresliSouhrn() {
-        const vyber = filtrovane();
-        const projekt = $("filtrProjekt").value;
-        let bezKurzu = 0;
-        const soucet = (typ) => vyber.filter(f => f.typ === typ).reduce((sum, f) => {
-            const kc = naKc(f, "castkaBez");
-            if (kc === null) { bezKurzu += 1; return sum; }
-            return sum + kc;
-        }, 0);
-        const vydaneBez = soucet("vydana");
-        const prijateBez = soucet("prijata");
-        const kolik = (typ) => V.pocet(vyber.filter(f => f.typ === typ).length,
-            ["faktura", "faktury", "faktur"]);
+    const dniRozdil = (a, b) => Math.round((new Date(a + "T00:00:00") - new Date(b + "T00:00:00")) / 864e5);
+    const dny = (n) => n + " " + (n === 1 ? "den" : (n >= 2 && n <= 4) ? "dny" : "dní");
+    const vMesici = (f, m) => datumDokladu(f).slice(0, 7) === m;
+    const vRoce = (f, r) => datumDokladu(f).slice(0, 4) === String(r);
 
-        let dlazdice =
-            penizeDlazdice("Vydané (bez DPH)", esc(V.kc(vydaneBez)), esc(kolik("vydana")), true) +
-            penizeDlazdice("Přijaté (bez DPH)", esc(V.kc(prijateBez)), esc(kolik("prijata") +
-                (bezKurzu ? " · " + bezKurzu + " v cizí měně bez kurzu nezapočteno" : "")), true);
+    /* ------------------------------------------------------------- filtry */
 
-        // záznamy z inboxu čekají na člověka – dlaždice je zároveň filtr
-        const cekaji = (window.KB.faktury || []).filter(keKontrole).length;
-        if (cekaji) {
-            dlazdice = '<button type="button" class="card vyktile vyktile--akce" id="dlazdiceKontrola">' +
-                '<div class="vyktile__label">Ke kontrole</div>' +
-                '<div class="vyktile__value">' + esc(String(cekaji)) + "</div>" +
-                '<div class="vyktile__note">' + esc(V.pocet(cekaji, ["doklad", "doklady", "dokladů"]) +
-                    " z inboxu – zobrazit") + "</div></button>" + dlazdice;
+    function vyhovuje(f) {
+        if (filtrTyp && f.typ !== filtrTyp) return false;
+        const hledane = ($("hledat").value || "").trim().toLowerCase();
+        if (hledane) {
+            const kupa = [f.nazev, f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka, f.kategorie,
+                druhTitle(f.druhDokladu), f.mena, f.poplatkyPopis].join(" ").toLowerCase();
+            if (kupa.indexOf(hledane) === -1) return false;
         }
+        return true;
+    }
+    const zaklad = () => (window.KB.faktury || []).filter(vyhovuje);
 
-        // s vybraným projektem se ukáže i čerpání jeho rozpočtu
-        if (projekt && projekt !== "__bez") {
-            const rozpocet = Number((rozpocty[projekt] || {}).kc) || 0;
-            if (rozpocet) {
-                const c = V.cerpani(vydaneBez, rozpocet);
-                dlazdice += penizeDlazdice("Rozpočet projektu", esc(V.kc(rozpocet)), "", true) +
-                    penizeDlazdice("Vyfakturováno", '<span style="color:' + c.barva + '">' +
-                        Math.round(c.pct) + " %</span>", 'zbývá <span class="tajne">' + esc(V.kc(c.zbyva)) +
-                        '</span><span class="tajne__zastup">•••</span>', true);
-            } else {
-                dlazdice += V.dlazdice("Rozpočet projektu", "—",
-                    "vyplň ho ve Správě projektů", true);
-            }
-        }
-        $("souhrn").innerHTML = dlazdice;
+    function vykresliChipy() {
+        document.querySelectorAll("[data-ftyp]").forEach(b =>
+            b.classList.toggle("chip--active", b.dataset.ftyp === filtrTyp));
+        $("chipCelyRok").classList.toggle("chip--active", !mesicVyber);
+        $("chipCelyRok").textContent = mesicVyber ? "Celý rok " + rok : "Celý rok";
+    }
+
+    /* ------------------------------------------------- na co se dnes podívat */
+
+    function vykresliPozor() {
+        const dnes = V.dnesISO(), tyden = isoZaDni(7);
+        const vse = zaklad();
+        const kontrola = vse.filter(keKontrole);
+        const nesedi = vse.filter(caflouKeKontrole).length;
+        const pozde = vse.filter(f => sloupecFaktury(f, dnes) === "posplatnosti");
+        const brzy = vse.filter(f => sloupecFaktury(f, dnes) === "kzaplaceni" && f.splatnost && f.splatnost <= tyden);
+        const suma = (a, typ) => a.filter(f => f.typ === typ).reduce((s, f) => s + (naKc(f, "castkaCelkem") || 0), 0);
+        const dvojice = (a, popisP, popisV) => {
+            const p = suma(a, "prijata"), v = suma(a, "vydana");
+            return [p ? popisP + " " + tajne(kratce(p)) : "", v ? popisV + " " + tajne(kratce(v)) : ""].filter(Boolean).join(" · ");
+        };
+        const btn = (skok, tecka, text) => '<button type="button" class="pozor__btn" data-skok="' + skok + '">' +
+            '<i class="pozor__tecka d-' + tecka + '"></i><span>' + text + "</span></button>";
+        $("pozor").innerHTML =
+            btn("kontrola", "kontrola", "<b>" + kontrola.length + "</b> ke kontrole" +
+                (nesedi ? ' <span class="muted">(' + nesedi + "× nesedí s Caflou)</span>" : "")) +
+            btn("posplatnosti", "posplatnosti", "<b>" + pozde.length + "</b> po splatnosti" +
+                (pozde.length ? " · " + dvojice(pozde, "dlužíme", "dluží nám") : "")) +
+            btn("kzaplaceni", "kzaplaceni", "splatné do týdne <b>" + brzy.length + "</b>" +
+                (brzy.length ? " · " + dvojice(brzy, "zaplatit", "přijde") : ""));
         pouzijSkryti();
     }
 
-    /* ------------------------------------------------------------- seznam */
+    /* ------------------------------------------------------------ pás roku */
 
-    /** Značka porovnání s Caflou na dlaždici. */
+    function dilyStavu(fs, typ, dnes) {
+        const o = { celkem: 0, pocet: 0 };
+        PORADI_DILU.forEach(k => { o[k] = 0; });
+        fs.forEach(f => {
+            if (f.typ !== typ) return;
+            const kc = naKc(f, "castkaCelkem");
+            if (kc === null) return;
+            o[sloupecFaktury(f, dnes)] += Math.abs(kc);
+            o.celkem += Math.abs(kc);
+            o.pocet += 1;
+        });
+        return o;
+    }
+
+    function vykresliPas() {
+        $("rokText").textContent = String(rok);
+        const dnes = V.dnesISO(), tedMesic = dnes.slice(0, 7);
+        const vse = zaklad();
+        const mesice = [];
+        for (let i = 1; i <= 12; i++) mesice.push(rok + "-" + String(i).padStart(2, "0"));
+        const data = mesice.map(m => {
+            const fs = vse.filter(f => vMesici(f, m));
+            return { m: m, v: dilyStavu(fs, "vydana", dnes), p: dilyStavu(fs, "prijata", dnes),
+                     pozde: fs.filter(f => sloupecFaktury(f, dnes) === "posplatnosti").length };
+        });
+        const max = Math.max(1, ...data.map(d => Math.max(d.v.celkem, d.p.celkem)));
+        const sloupec = (o, smer, typ) => '<span class="mes__pul mes__pul--' + smer +
+            (filtrTyp && filtrTyp !== typ ? " mes__pul--ztlum" : "") + '"><span class="mes__sloupec" style="height:' +
+            (o.celkem / max * 100).toFixed(1) + '%">' +
+            PORADI_DILU.map(k => o[k] ? '<span class="d-' + k + '" style="height:' + (o[k] / o.celkem * 100).toFixed(1) + '%"></span>' : "").join("") +
+            "</span></span>";
+        const rozdil = (v, p) => tajne((v - p >= 0 ? "+" : "") + kratce(v - p));
+
+        let html = data.map((d, i) => {
+            const prazdny = !d.v.pocet && !d.p.pocet;
+            return '<button type="button" class="mes' + (mesicVyber === d.m ? " mes--on" : "") + (prazdny ? " mes--prazdny" : "") +
+                '" data-mesic="' + d.m + '" title="' + esc(MESICE[i] + " " + rok) + '">' +
+                '<span class="mes__h">' + esc(MESICE3[i]) + (d.m === tedMesic ? '<span class="mes__ted">teď</span>' : "") +
+                    (d.pozde ? '<span class="mes__pozde" title="po splatnosti">' + d.pozde + "</span>" : "") + "</span>" +
+                '<span class="mes__graf">' + sloupec(d.v, "nahoru", "vydana") + '<span class="mes__osa"></span>' +
+                    sloupec(d.p, "dolu", "prijata") + "</span>" +
+                '<span class="mes__cisla">' + (prazdny ? '<span class="p">—</span>'
+                    : '<span class="v">' + tajne(kratce(d.v.celkem)) + '</span><span class="p">' + tajne(kratce(d.p.celkem)) +
+                      '</span><span class="r">' + rozdil(d.v.celkem, d.p.celkem) + "</span>") + "</span>" +
+            "</button>";
+        }).join("");
+
+        // součet roku + pruh, kolik z toho je zaplacené
+        const rokFs = vse.filter(f => vRoce(f, rok));
+        const rv = dilyStavu(rokFs, "vydana", dnes), rp = dilyStavu(rokFs, "prijata", dnes);
+        const vsehoRok = (rv.celkem + rp.celkem) || 1;
+        const podil = (k) => ((rv[k] + rp[k]) / vsehoRok * 100).toFixed(1);
+        html += '<div class="mes mes--rok">' +
+            '<div><span class="k">Vydáno ' + rok + '</span><span class="n" style="color:#1d4ed8">' + tajne(kratce(rv.celkem)) + "</span></div>" +
+            '<div><span class="k">Přijato ' + rok + '</span><span class="n">' + tajne(kratce(rp.celkem)) + "</span></div>" +
+            '<div><span class="k">Rozdíl</span><span class="n">' + rozdil(rv.celkem, rp.celkem) + "</span></div>" +
+            '<div><span class="k">Zaplaceno ' + Math.round(Number(podil("zaplaceno"))) + ' %</span><div class="uhrpruh">' +
+                PORADI_DILU.map(k => '<span class="d-' + k + '" style="width:' + podil(k) + '%"></span>').join("") + "</div></div>" +
+        "</div>";
+        $("pas").innerHTML = html;
+        pouzijSkryti();
+    }
+
+    /* ------------------------------------------------------------ nástěnka */
+
     const CAFLOU_ZNACKA = { souhlasi: "✓ Caflou", lisi: "≠ Caflou", chybi: "Caflou –", duplicita: "2× duplicita" };
-    const caflouZnacka = (f) => (f.caflou && CAFLOU_ZNACKA[f.caflou.stav])
-        ? '<span class="fkt__caflou">' + esc(CAFLOU_ZNACKA[f.caflou.stav]) + "</span>" : "";
+    const caflouPill = (f) => (f.caflou && CAFLOU_ZNACKA[f.caflou.stav])
+        ? '<span class="pill pill--caflou pill--caflou-' + esc(f.caflou.stav) + '" title="' + esc(f.caflou.text || "") + '">' +
+          esc(CAFLOU_ZNACKA[f.caflou.stav]) + "</span>" : "";
 
-    function vykresliSeznam() {
-        // nejnovější nahoře podle data dokladu; předěl vždy, když se změní měsíc
-        const vyber = filtrovane().slice().sort((a, b) => datumDokladu(b).localeCompare(datumDokladu(a)));
-        const dnes = V.dnesISO();
-        let mesicPred = null;
-
-        $("seznamVypis").innerHTML = vyber.map(f => {
-            const mesic = datumDokladu(f).slice(0, 7);
-            let predel = "";
-            if (mesic !== mesicPred) {
-                mesicPred = mesic;
-                predel = '<div class="fkt__mesic"><span>' + esc(mesic
-                    ? MESICE[Number(mesic.slice(5, 7)) - 1] + " " + mesic.slice(0, 4) : "bez data") + "</span></div>";
-            }
-            const stav = stavDlazdice(f);
-            let stavText;
-            if (stav === "kontrola") stavText = "ke kontrole";
-            else if (stav === "zaplaceno") stavText = "zaplaceno" + (f.uhrazeno ? " " + V.czDatum(f.uhrazeno) : "");
-            else if (f.splatnost && f.splatnost < dnes) stavText = "po splatnosti " + V.czDatum(f.splatnost);
-            else stavText = f.splatnost ? "splatnost " + V.czDatum(f.splatnost) : "nezaplaceno";
-            const den = datumDokladu(f);
-            const zarazeni = [projektText(f), f.kategorie || ""].filter(Boolean).join(" · ");
-            return predel + '<button type="button" class="fkt fkt--' + stav + (f.id === vybrana ? " je-vybrany" : "") +
-                '" data-id="' + esc(f.id) + '">' +
-                '<span class="fkt__radek"><span class="fkt__nazev">' + esc(nazevZaznamu(f)) + "</span>" +
-                    '<span class="fkt__castka">' + esc(castkaText(f.castkaCelkem, f.mena)) + "</span></span>" +
-                '<span class="fkt__radek fkt__pod"><span style="min-width:0">' + esc(den ? V.czDatum(den) : "bez data") + "</span>" +
-                    '<span class="fkt__stav">' + esc(stavText) + (f.qrPlatba ? " · QR" : "") + "</span></span>" +
-                '<span class="fkt__radek fkt__pod"><span class="fkt__zarazeni">' + esc(zarazeni) + "</span>" +
-                    '<span class="fkt__stitky">' + caflouZnacka(f) +
-                    '<span class="fkt__typ">' + (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span></span></span>" +
-                "</button>";
-        }).join("") || '<div class="tiny muted" style="padding:8px 10px">Žádná faktura neodpovídá filtrům.</div>';
-
-        $("pocet").textContent = V.pocet(vyber.length, ["faktura", "faktury", "faktur"]);
-    }
-
-    /* Období: štítky jen nastaví Od/Do – filtr čte vždy ta dvě pole, takže
-       „Srpen 2026“ a ručně vyplněné 1.–31. 8. je totéž. */
-    function obdobiChipu(klic) {
-        const dnes = V.dnesISO();
-        if (klic === "tyden") return [isoZaDni(-7), dnes];
-        if (klic === "mesic") return [isoZaDni(-30), dnes];
-        const m = /^(\d{4})-(\d{2})$/.exec(klic);
-        if (m) {
-            const posledni = new Date(Number(m[1]), Number(m[2]), 0).getDate();
-            return [klic + "-01", klic + "-" + String(posledni).padStart(2, "0")];
+    /** Proč je doklad ke kontrole – krátce na kartu. */
+    function duvodKontroly(f) {
+        const d = [];
+        if (zInboxuNezkontrolovana(f)) {
+            const n = (Array.isArray(f.kontroly) ? f.kontroly : []).filter(k => k.uroven !== "info").length;
+            d.push("z inboxu" + (n ? " · " + V.pocet(n, ["nález", "nálezy", "nálezů"]) : ""));
         }
-        return ["", ""];
+        if (caflouKeKontrole(f)) d.push(f.caflou.stav === "duplicita" ? "duplicita" : "liší se od Caflou");
+        return d.join(" · ") || "ke kontrole";
     }
 
-    function vykresliChipy() {
-        const typ = $("filtrTyp").value;
-        document.querySelectorAll("[data-ftyp]").forEach(b =>
-            b.classList.toggle("chip--active", b.dataset.ftyp === typ));
-        // měsíce, které v datech opravdu jsou – nejnovější první
-        const mesice = new Set();
-        (window.KB.faktury || []).forEach(f => { const d = datumDokladu(f); if (d) mesice.add(d.slice(0, 7)); });
-        $("mesiceChipy").innerHTML = Array.from(mesice).sort().reverse().slice(0, 18).map(k =>
-            '<button type="button" class="chip chip--mesic" data-obdobi="' + esc(k) + '">' +
-                esc(MESICE[Number(k.slice(5, 7)) - 1] + " " + k.slice(0, 4)) + "</button>").join("");
-        const od = $("filtrOd").value, doDne = $("filtrDo").value;
-        document.querySelectorAll("[data-obdobi]").forEach(b => {
-            const [o, d] = obdobiChipu(b.dataset.obdobi);
-            b.classList.toggle("chip--active", o === od && d === doDne);
+    function pilulka(f, sloupec, dnes) {
+        if (sloupec === "kontrola") return '<span class="pill pill--kontrola">' + esc(duvodKontroly(f)) + "</span>";
+        if (sloupec === "zaplaceno") {
+            return '<span class="pill pill--zaplaceno">zaplaceno' + (f.uhrazeno ? " " + esc(V.czDatum(f.uhrazeno)) : "") + "</span>";
+        }
+        if (sloupec === "posplatnosti") {
+            return '<span class="pill pill--posplatnosti">' + esc(dny(dniRozdil(dnes, f.splatnost))) + " po splatnosti</span>";
+        }
+        const text = !f.splatnost ? "bez splatnosti" : f.splatnost === dnes ? "splatná dnes"
+            : "splatná za " + dny(dniRozdil(f.splatnost, dnes));
+        return '<span class="pill pill--kzaplaceni">' + esc(text) + "</span>";
+    }
+
+    function karta(f, sloupec, dnes) {
+        const den = datumDokladu(f);
+        let akce = "";
+        if (sloupec === "kontrola") {
+            akce = '<button type="button" class="karta__btn karta__btn--hlavni" data-otevri="' + esc(f.id) + '">Zkontrolovat →</button>';
+        } else if (sloupec !== "zaplaceno") {
+            akce = (f.qrPlatba ? '<button type="button" class="karta__btn" data-qr="' + esc(f.id) + '">QR</button>' : "") +
+                '<button type="button" class="karta__btn karta__btn--hlavni" data-zaplatit="' + esc(f.id) + '">Zaplaceno ✓</button>';
+        }
+        return '<div class="karta karta--' + sloupec + '" data-id="' + esc(f.id) + '" draggable="' + (sloupec === "kontrola" ? "false" : "true") + '">' +
+            '<div class="karta__r"><span class="karta__nazev">' + esc(nazevZaznamu(f)) + "</span>" +
+                '<span class="karta__castka">' + esc(castkaText(f.castkaCelkem, f.mena)) + "</span></div>" +
+            '<div class="karta__pod">' + esc([den ? V.czDatum(den) : "bez data", projektText(f), f.kategorie || ""]
+                .filter(Boolean).join(" · ")) + "</div>" +
+            '<div class="karta__r">' + pilulka(f, sloupec, dnes) +
+                '<span class="karta__stitky">' + caflouPill(f) +
+                '<span class="pill pill--typ' + (f.typ === "vydana" ? " pill--typ-vydana" : "") + '">' +
+                    (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span></span></div>" +
+            (akce ? '<div class="karta__akce">' + akce + "</div>" : "") +
+        "</div>";
+    }
+
+    function vykresliTabuli() {
+        const dnes = V.dnesISO();
+        const vse = zaklad();
+        const vybrane = mesicVyber ? vse.filter(f => vMesici(f, mesicVyber)) : vse;
+        $("tabule").innerHTML = SLOUPCE.map(S => {
+            let polozky = vybrane.filter(f => sloupecFaktury(f, dnes) === S.id);
+            if (S.id === "zaplaceno" && !mesicVyber) {
+                polozky = polozky.filter(f => vRoce(f, rok) || (f.uhrazeno || "").slice(0, 4) === String(rok));
+            }
+            polozky.sort(RAZENI[S.id]);
+            const ukazat = polozky.slice(0, S.id === "zaplaceno" && !mesicVyber ? 12 : 400);
+            const suma = polozky.reduce((s, f) => s + (naKc(f, "castkaCelkem") || 0), 0);
+            return '<div class="sloupec" id="sloupec-' + S.id + '" data-sloupec="' + S.id + '">' +
+                '<div class="sloupec__h" style="border-color:' + S.barva + '"><b>' + esc(S.title) + "</b>" +
+                    '<span class="num">' + polozky.length + " · " + tajne(kratce(suma)) + "</span>" +
+                    "<small>" + esc(S.popis) + "</small></div>" +
+                (ukazat.map(f => karta(f, S.id, dnes)).join("") || '<div class="sloupec__vic">nic tu není</div>') +
+                (polozky.length > ukazat.length
+                    ? '<div class="sloupec__vic">+ ' + (polozky.length - ukazat.length) + ' dalších · <a href="faktury-prehled.html">v Měsících</a></div>' : "") +
+            "</div>";
+        }).join("");
+        pouzijSkryti();
+        if (skocitNa) { skocNaSloupec(skocitNa); skocitNa = ""; }
+    }
+
+    function skocNaSloupec(id) {
+        const el = $("sloupec-" + id);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    /* ------------------------------------------- přesun karty, rychlá úhrada ----
+       Tahat jde jen do Zaplaceno (zeptá se na datum úhrady) a ze Zaplaceno zpět
+       do K zaplacení. Po splatnosti se počítá z data a Ke kontrole se řeší v okně
+       dokladu – tam se nic nepřetahuje (Michal 23. 9.). Místo potvrzovacího okna
+       je lišta Zpět. */
+
+    let tazeno = "";              // id tažené karty
+    let uhradaRychla = "";        // id z nástěnky – okno data úhrady bez formuláře
+    let zpetAkce = null, zpetCasovac = null;
+
+    const smiPresun = (f, cil) => {
+        const odkud = sloupecFaktury(f);
+        return (cil === "zaplaceno" && odkud !== "zaplaceno") || (cil === "kzaplaceni" && odkud === "zaplaceno");
+    };
+
+    function presunKarty(id, cil) {
+        const f = doklad(id);
+        if (!f || !smiPresun(f, cil)) return;
+        if (cil === "zaplaceno") otevriRychlouUhradu(id);
+        else vratMeziNezaplacene(f);
+    }
+
+    function otevriRychlouUhradu(id) {
+        const f = doklad(id);
+        if (!f) return;
+        uhradaRychla = id;
+        const naMiste = f.zpusobUhrady === "karta" || f.zpusobUhrady === "hotove";
+        $("uhrDatum").value = (naMiste ? (f.duzp || f.vystaveno) : "") || V.dnesISO();
+        $("oknoUhrazeno").hidden = false;
+        $("uhrDatum").focus();
+    }
+
+    async function zaplatRychle(id, datum) {
+        const f = doklad(id) || {};
+        try {
+            await window.KB.uhradFakturu(id, datum);
+            ukazZpet("„" + nazevZaznamu(f) + "“ → zaplaceno " + V.czDatum(datum),
+                () => window.KB.zrusUhraduFaktury(id));
+        } catch (err) {
+            console.error(err);
+            toast("Označení úhrady selhalo – platby označuje manažer.", "error");
+        }
+    }
+
+    async function vratMeziNezaplacene(f) {
+        const datum = f.uhrazeno;
+        try {
+            await window.KB.zrusUhraduFaktury(f.id);
+            ukazZpet("„" + nazevZaznamu(f) + "“ → k zaplacení",
+                () => window.KB.uhradFakturu(f.id, datum || V.dnesISO()));
+        } catch (err) {
+            console.error(err);
+            toast("Vrácení mezi nezaplacené selhalo.", "error");
+        }
+    }
+
+    function ukazZpet(text, akce) {
+        zpetAkce = akce;
+        $("zpetText").textContent = text;
+        $("zpetLista").hidden = false;
+        clearTimeout(zpetCasovac);
+        zpetCasovac = setTimeout(() => { $("zpetLista").hidden = true; zpetAkce = null; }, 8000);
+    }
+
+    async function zpet() {
+        const akce = zpetAkce;
+        $("zpetLista").hidden = true;
+        zpetAkce = null;
+        if (!akce) return;
+        try { await akce(); toast("Vráceno."); }
+        catch (err) { console.error(err); toast("Vrácení selhalo.", "error"); }
+    }
+
+    function zapojTazeni() {
+        const tabule = $("tabule");
+        tabule.addEventListener("dragstart", (event) => {
+            const k = event.target.closest(".karta[draggable=\"true\"]");
+            if (!k) return;
+            tazeno = k.dataset.id;
+            k.classList.add("karta--tazena");
+            event.dataTransfer.effectAllowed = "move";
+            try { event.dataTransfer.setData("text/plain", tazeno); } catch (_) { /* starší prohlížeč */ }
+        });
+        tabule.addEventListener("dragend", () => {
+            tazeno = "";
+            tabule.querySelectorAll(".karta--tazena").forEach(k => k.classList.remove("karta--tazena"));
+            tabule.querySelectorAll(".sloupec").forEach(s => s.classList.remove("sloupec--nad", "sloupec--ne"));
+        });
+        tabule.addEventListener("dragover", (event) => {
+            const s = event.target.closest(".sloupec");
+            tabule.querySelectorAll(".sloupec").forEach(x => { if (x !== s) x.classList.remove("sloupec--nad", "sloupec--ne"); });
+            if (!s || !tazeno) return;
+            const f = doklad(tazeno);
+            if (f && smiPresun(f, s.dataset.sloupec)) { event.preventDefault(); s.classList.add("sloupec--nad"); }
+            else s.classList.add("sloupec--ne");
+        });
+        tabule.addEventListener("drop", (event) => {
+            const s = event.target.closest(".sloupec");
+            if (!s || !tazeno) return;
+            event.preventDefault();
+            presunKarty(tazeno, s.dataset.sloupec);
         });
     }
-
     /* -------------------------------------------------------------- panel */
 
     function moznostiProjektu(vybrano, typ) {
@@ -870,14 +1113,15 @@
     function vykresliPanel() {
         // odkaz z nástěnky (?id=) může přijít dřív než data, nebo na smazanou fakturu
         if (vybrana && !nova && !doklad(vybrana)) {
-            if (fakturyPrisly) vybrana = "";
-            $("panel").hidden = true;
-            $("prazdno").hidden = false;
+            if (fakturyPrisly) {
+                vybrana = "";
+                $("oknoDoklad").hidden = true;
+                if (vRamu) toast("Doklad už na webu není.", "warn");
+            }
             return;
         }
         const je = !!vybrana || !!nova;
-        $("panel").hidden = !je;
-        $("prazdno").hidden = je;
+        $("oknoDoklad").hidden = !je;
         if (!je) return;
 
         const f = doklad(vybrana) || {};
@@ -886,6 +1130,7 @@
         $("fNadpis").textContent = nova
             ? (nova === "vydana" ? "Nová vydaná faktura" : "Nová přijatá faktura")
             : nazevZaznamu(f);
+        $("oknoNadpis").textContent = nova ? "Nový doklad" : (f.typ === "vydana" ? "Vydaná faktura" : "Přijatý doklad");
         const podtitul = nova ? ["Vyplň údaje a ulož."] : [
             f.typ === "vydana" ? "vydaná" : "přijatá", projektText(f), f.kategorie || ""];
         if (!nova && f.zdroj === "inbox") {
@@ -898,24 +1143,39 @@
         const c = !nova && f.caflou && CAFLOU_ZNACKA[f.caflou.stav] ? f.caflou : null;
         pruh.hidden = !c;
         if (c) {
-            pruh.className = "cafloupruh cafloupruh--" + c.stav;
+            const prohlednuty = (c.stav === "lisi" || c.stav === "duplicita") && !caflouKeKontrole(f);
+            pruh.className = "cafloupruh cafloupruh--" + (prohlednuty ? "prohlednuto" : c.stav);
             pruh.textContent = { souhlasi: "Caflou: souhlasí", lisi: "Caflou: liší se", chybi: "Caflou",
-                duplicita: "Duplicita" }[c.stav] + " – " + (c.text || "");
+                duplicita: "Duplicita" }[c.stav] + " – " + (c.text || "") +
+                (prohlednuty ? " · zkontrolováno" + (f.prohlednuto && f.prohlednuto.kdo ? " (" + f.prohlednuto.kdo + ")" : "") + ", na webu je to správně" : "");
         }
         $("fPodtitul").textContent = podtitul.filter(Boolean).join(" · ");
         $("fStitky").innerHTML = nova ? "" : stitekStavu(f);
 
-        // nálezy programu – jen dokud záznam z inboxu nikdo nezkontroloval
-        const inbox = !nova && keKontrole(f);
-        $("boxInbox").hidden = !inbox;
+        // proč je doklad ke kontrole: koncept z inboxu (nálezy programu), rozdíl proti Caflou, duplicita
+        const inbox = !nova && zInboxuNezkontrolovana(f);
+        const nesedi = !nova && caflouKeKontrole(f);
+        $("boxInbox").hidden = !(inbox || nesedi);
         $("btnPotvrdit").hidden = !inbox;
+        $("btnProhlednuto").hidden = !nesedi;
         $("btnUloz").className = "btn " + (inbox ? "btn--ghost" : "btn--primary");
-        if (inbox) {
-            const nalezy = Array.isArray(f.kontroly) ? f.kontroly : [];
-            $("inboxNalezy").innerHTML = nalezy.length
-                ? nalezy.map(k => '<li class="k-' + esc(k.uroven || "info") + '">' + esc(k.text || "") + "</li>").join("")
-                : '<li class="k-info">Kontroly nic podezřelého nenašly.</li>';
-            $("inboxCil").textContent = f.navrhSoubor
+        if (inbox || nesedi) {
+            $("inboxNadpis").textContent = inbox
+                ? "Připravil program z inboxu – zkontroluj údaje proti PDF"
+                : (f.caflou.stav === "duplicita" ? "Duplicita – zkontroluj, jestli je doklad na webu dvakrát"
+                    : "Liší se od Caflou – zkontroluj proti dokladu");
+            $("inboxText").innerHTML = inbox
+                ? "Doplň kategorii a projekt (nebo nech administrativní činnost) a klikni na <b>Potvrdit zařazení</b>. " +
+                  "Teprve pak se PDF přesune z inboxu na své místo."
+                : "Oprav, co je špatně, a dej <b>Uložit fakturu</b> – nebo když je na webu všechno správně a mýlí se Caflou, " +
+                  "klikni na <b>Zkontrolováno</b>. Doklad pak odejde z Ke kontrole.";
+            const nalezy = inbox ? (Array.isArray(f.kontroly) ? f.kontroly : []) : [];
+            $("inboxNalezy").innerHTML =
+                (nesedi ? '<li class="k-caflou">' + esc((f.caflou.stav === "duplicita" ? "Duplicita: " : "Caflou: ") + (f.caflou.text || "")) + "</li>" : "") +
+                (inbox ? (nalezy.length
+                    ? nalezy.map(k => '<li class="k-' + esc(k.uroven || "info") + '">' + esc(k.text || "") + "</li>").join("")
+                    : '<li class="k-info">Kontroly nic podezřelého nenašly.</li>') : "");
+            $("inboxCil").textContent = inbox && f.navrhSoubor
                 ? "Po potvrzení patří do: " + (f.navrhSlozka ? f.navrhSlozka + "\\" : "") + f.navrhSoubor : "";
         }
 
@@ -1102,8 +1362,8 @@
         }
     }
 
-    async function otevriQr() {
-        const f = doklad(vybrana);
+    async function otevriQr(id) {
+        const f = doklad(id || vybrana);
         if (!f || !f.qrPlatba) return;
         $("qrNadpis").textContent = nazevZaznamu(f);
         $("qrPopis").textContent = qrPopis(f);
@@ -1262,6 +1522,14 @@
     function potvrdUhrazeno() {
         const datum = $("uhrDatum").value;
         if (!datum) return void toast("Vyplň datum úhrady.", "warn");
+        // z nástěnky (karta, přetažení): rovnou do databáze, formulář se toho neúčastní
+        if (uhradaRychla) {
+            const id = uhradaRychla;
+            uhradaRychla = "";
+            $("oknoUhrazeno").hidden = true;
+            zaplatRychle(id, datum);
+            return;
+        }
         $("fUhrazeno").value = datum;
         $("fStav").value = "zaplacena";
         posledniStav = "zaplacena";
@@ -1273,6 +1541,7 @@
     function zrusUhrazeno() {
         if ($("oknoUhrazeno").hidden) return;
         $("oknoUhrazeno").hidden = true;
+        if (uhradaRychla) { uhradaRychla = ""; return; }
         if (!$("fUhrazeno").value) $("fStav").value = posledniStav === "zaplacena" ? "schvalena" : posledniStav;
         vykresliUhrazeno();
     }
@@ -1460,6 +1729,10 @@
         if (potvrdit) data.potvrdit = true;
         // zaplacená faktura bez data úhrady dostane dnešek
         if (data.stav === "zaplacena" && !data.uhrazeno) data.uhrazeno = V.dnesISO();
+        // uložení z formuláře = člověk rozdíl proti Caflou viděl a rozhodl → už ne ke kontrole
+        if (stary.caflou && (stary.caflou.stav === "lisi" || stary.caflou.stav === "duplicita")) {
+            data.prohlednuto = { caflouText: stary.caflou.text || "" };
+        }
 
         const id = vybrana || window.KB.newFakturaId();
         $("btnUloz").disabled = true;
@@ -1475,6 +1748,8 @@
             if (mena !== "CZK" && !data.kurz) {
                 toast("Doklad v " + mena + " nemá kurz – do souhrnů v Kč se nezapočte.", "warn");
             }
+            // po potvrzení se okno zavře – další doklad ke kontrole čeká na nástěnce
+            if (potvrdit) zavriDoklad(true);
             vykresli();
         } catch (err) {
             console.error(err);
@@ -1492,8 +1767,7 @@
         if (!confirm("Smazat „" + nazevZaznamu(f) + "“?\n\nEvidence zmizí, PDF na disku zůstává.")) return;
         try {
             await window.KB.deleteFaktura(vybrana, f.cislo || "");
-            vybrana = "";
-            dotknuto = false;
+            zavriDoklad(true);
             vykresli();
             toast("Faktura smazána.");
         } catch (err) {
@@ -1645,18 +1919,21 @@
        Stejné PDF (otisk) se podruhé nezaloží, takže načítat jde opakovaně.
        Soubory na-web-RRRR-MM.json (z Caflou + archiv) navíc porovnávají. */
 
-    async function importuj(soubor) {
+    async function importuj(soubor, predpona) {
         if (!fakturyPrisly) {
-            return void toast("Počkej chvilku, až se načtou faktury z databáze, a zkus to znovu.", "warn");
+            toast("Počkej chvilku, až se načtou faktury z databáze, a zkus to znovu.", "warn");
+            return null;
         }
         let data;
         try { data = JSON.parse(await soubor.text()); }
         catch (err) {
-            return void toast("Soubor se nedá přečíst – vyber vytezeni.json ze složky D:\\FAKTURY\\_program.", "error");
+            toast("Soubor " + soubor.name + " se nedá přečíst – čekám na-web-RRRR-MM.json nebo vytezeni.json ze složky D:\\FAKTURY\\_program.", "error");
+            return null;
         }
         const zaznamy = (Array.isArray(data) ? data : []).map(z => z && z.pro_web).filter(Boolean);
         if (!zaznamy.length) {
-            return void toast("V souboru nejsou faktury k načtení (čekám vytezeni.json nebo caflou-na-web.json).", "warn");
+            toast("V souboru " + soubor.name + " nejsou faktury k načtení.", "warn");
+            return null;
         }
         // koncepty z inboxu čekají na kontrolu, převod z Caflou je hotová historie
         const zInboxu = zaznamy.some(z => z.zdroj === "inbox");
@@ -1677,18 +1954,21 @@
            říká pole `rucne` (formulář a Zaplaceno = true); starší záznamy podle
            toho, že od založení nebyly uložené znovu. Z Caflou se nepřepisuje nic. */
         const nedotceny = (stara, z) => z.zdroj !== "caflou" && stara.zdroj !== "caflou" &&
-            (keKontrole(stara) || stara.zdroj === "archiv") &&
+            (zInboxuNezkontrolovana(stara) || stara.zdroj === "archiv") &&
             (stara.rucne === false || (stara.rucne === undefined &&
                 Math.abs((stara.updatedMs || 0) - (stara.createdMs || 0)) < 5000));
+        /* Koncept z inboxu, který nikdo nepotvrdil, nahradí záznam z Caflou celý –
+           jinak by na webu zůstal starý koncept vedle hotové historie (Michal 23. 9.:
+           „ať to tam není staré, nejspíš už v Caflou jsou“). Potvrzený zůstává. */
+        const staryKoncept = (stara) => zInboxuNezkontrolovana(stara) && stara.rucne !== true;
         const zakladOtisku = (o) => String(o || "").split("#")[0];
         let pridano = 0, obnoveno = 0, doplneno = 0, preskoceno = 0;
         let souhlasi = 0, lisi = 0, chybi = 0, duplicit = 0;
         const stavEl = $("importStav");
-        $("btnImport").disabled = true;
         try {
             for (let i = 0; i < zaznamy.length; i++) {
                 stavEl.hidden = false;
-                stavEl.textContent = "Načítám " + (i + 1) + " / " + zaznamy.length + "…";
+                stavEl.textContent = (predpona || "") + "Načítám " + (i + 1) + " / " + zaznamy.length + "…";
                 const z = zaznamy[i];
                 let stara = (z.otisk && podleOtisku[z.otisk]) || (z.caflouKlic && podleKlice[z.caflouKlic]) || null;
                 if (!stara && z.zdroj === "caflou") stara = najdiPodleUdaju(z, faktury, pouzite);
@@ -1707,6 +1987,21 @@
                         cely.caflou = { stav: "duplicita" };
                         duplicit += 1;
                     }
+                }
+                if (stara && z.zdroj === "caflou" && staryKoncept(stara)) {
+                    // nepotvrzený koncept z inboxu → nahradí ho hotový záznam z Caflou (s náhledem a QR)
+                    pouzite.add(stara.id);
+                    const nahrada = Object.assign({}, z, { caflou: { stav: "souhlasi", nazev: z.nazev,
+                        text: "založeno z Caflou („" + z.nazev + "“) místo staršího konceptu z inboxu" } });
+                    await window.KB.saveFaktura(stara.id, nahrada, { bezAktivity: true });
+                    if ((z.nahledy && z.nahledy.length) || z.qrPlatba) {
+                        await window.KB.ulozNahledFaktury(stara.id, prilohy(z));
+                    }
+                    if (z.otisk) podleOtisku[z.otisk] = stara;
+                    if (z.caflouKlic) podleKlice[z.caflouKlic] = stara;
+                    obnoveno += 1;
+                    souhlasi += 1;
+                    continue;
                 }
                 if (stara && z.zdroj === "caflou") {
                     /* Záznam z Caflou už na webu je (z inboxu, z dřívějšího převodu…):
@@ -1814,33 +2109,75 @@
                 }
             }
 
-            if (pridano || obnoveno) {
-                window.KB.zapisAktivitu("faktura", (zInboxu ? "načetl z inboxu " : "převedl z Caflou / archivu ") +
-                    V.pocet(pridano + obnoveno, ["fakturu", "faktury", "faktur"]) + (zInboxu ? " ke kontrole" : ""));
-            }
-            const casti = [];
-            if (pridano) casti.push("nově " + V.pocet(pridano, ["doklad", "doklady", "dokladů"]));
-            if (obnoveno) casti.push(obnoveno + "× obnoveno novým čtením");
-            if (doplneno) casti.push(doplneno + "× doplněn náhled nebo QR");
-            if (zCaflou) casti.push("Caflou: souhlasí " + souhlasi + ", liší se " + lisi + ", v Caflou chybí " + chybi +
-                (duplicit ? ", duplicit " + duplicit : ""));
-            if (preskoceno) casti.push(preskoceno + " už na webu bylo");
-            toast(casti.length ? "Načteno: " + casti.join(", ") + "." : "Nic nového – všechny doklady už na webu jsou.");
-            $("filtrStav").value = zInboxu ? "__kontrola" : "";
-            vykresliSouhrn();
-            vykresliSeznam();
+            // souhrn skládá importujVse – jeden za všechny soubory naráz
+            return { pridano: pridano, obnoveno: obnoveno, doplneno: doplneno, preskoceno: preskoceno,
+                     souhlasi: souhlasi, lisi: lisi, chybi: chybi, duplicit: duplicit, zInboxu: zInboxu, zCaflou: zCaflou };
         } catch (err) {
             console.error(err);
-            toast("Načítání se přerušilo (hotovo " + (pridano + obnoveno + doplneno) +
+            toast("Načítání souboru " + soubor.name + " se přerušilo (hotovo " + (pridano + obnoveno + doplneno) +
                 "). Zkus to znovu – hotové se nezdvojí.", "error");
+            return null;
         } finally {
             stavEl.hidden = true;
-            $("btnImport").disabled = false;
-            $("importSoubor").value = "";
         }
     }
 
+    /* ------------------------------------------------ víc souborů naráz ----
+       Michal chce označit všechny měsíce najednou (23. 9.): soubory se
+       načtou v pořadí podle názvu (od nejstaršího měsíce), jeden souhrn na konci. */
+
+    async function importujVse(soubory) {
+        if (!fakturyPrisly) {
+            return void toast("Počkej chvilku, až se načtou faktury z databáze, a zkus to znovu.", "warn");
+        }
+        soubory.sort((a, b) => a.name.localeCompare(b.name, "cs"));
+        const celkem = { pridano: 0, obnoveno: 0, doplneno: 0, preskoceno: 0, souhlasi: 0, lisi: 0, chybi: 0,
+                         duplicit: 0, zInboxu: false, zCaflou: false, chyby: [] };
+        $("btnImport").disabled = true;
+        try {
+            for (let i = 0; i < soubory.length; i++) {
+                const predpona = soubory.length > 1 ? "Soubor " + (i + 1) + "/" + soubory.length + " (" + soubory[i].name + ") · " : "";
+                const v = await importuj(soubory[i], predpona);
+                if (!v) { celkem.chyby.push(soubory[i].name); continue; }
+                Object.keys(v).forEach(k => {
+                    if (typeof v[k] === "number") celkem[k] += v[k];
+                    else if (v[k] === true) celkem[k] = true;
+                });
+            }
+        } finally {
+            $("btnImport").disabled = false;
+            $("importStav").hidden = true;
+            $("importSoubor").value = "";
+        }
+        oznamImport(celkem, soubory.length);
+    }
+
+    function oznamImport(c, souboru) {
+        if (c.pridano || c.obnoveno) {
+            window.KB.zapisAktivitu("faktura", (c.zInboxu ? "načetl z inboxu " : "převedl z Caflou / archivu ") +
+                V.pocet(c.pridano + c.obnoveno, ["fakturu", "faktury", "faktur"]) + (c.zInboxu ? " ke kontrole" : ""));
+        }
+        const casti = [];
+        if (souboru > 1) casti.push(V.pocet(souboru, ["soubor", "soubory", "souborů"]));
+        if (c.pridano) casti.push("nově " + V.pocet(c.pridano, ["doklad", "doklady", "dokladů"]));
+        if (c.obnoveno) casti.push(c.obnoveno + "× obnoveno novým čtením");
+        if (c.doplneno) casti.push(c.doplneno + "× doplněn náhled nebo QR");
+        if (c.zCaflou) casti.push("Caflou: souhlasí " + c.souhlasi + ", liší se " + c.lisi + ", v Caflou chybí " + c.chybi +
+            (c.duplicit ? ", duplicit " + c.duplicit : ""));
+        if (c.preskoceno) casti.push(c.preskoceno + " už na webu bylo");
+        if (c.chyby.length) casti.push("nešlo přečíst: " + c.chyby.join(", "));
+        toast(casti.length ? "Načteno: " + casti.join(", ") + "." : "Nic nového – všechny doklady už na webu jsou.",
+            c.chyby.length ? "warn" : undefined);
+        vykresli();
+        if (c.zInboxu || c.lisi) skocNaSloupec("kontrola");
+    }
+
     /* -------------------------------------------------------------- start */
+
+    const PODLISTA_FAKTURY = [
+        { title: "FAKTURY", href: "faktury.html", need: "vykaz.view" },
+        { title: "MĚSÍCE", href: "faktury-prehled.html", need: "vykaz.view" }
+    ];
 
     function vykresli() {
         const smi = window.KBUI.can("vykaz.view");
@@ -1853,52 +2190,21 @@
             spusteno = true;
             window.KB.watchFaktury();
             window.KB.watchFirmyDetail();
-            window.KB.loadRozpocty().then(r => { rozpocty = r; vykresliSouhrn(); });
             nactiNastaveni().then(() => { if (!dotknuto) obnovKategorie(); });
         }
-
-        // filtry drží vybranou hodnotu i po překreslení možností
-        const drzStav = pozadovanyFiltr || $("filtrStav").value;
-        pozadovanyFiltr = "";
-        $("filtrStav").innerHTML = '<option value="">Všechny stavy</option>' +
-            '<option value="__kontrola"' + (drzStav === "__kontrola" ? " selected" : "") +
-                ">Ke kontrole (z inboxu)</option>" +
-            '<option value="__kzaplaceni"' + (drzStav === "__kzaplaceni" ? " selected" : "") +
-                ">K zaplacení do 7 dní</option>" +
-            '<option value="__caflou_lisi"' + (drzStav === "__caflou_lisi" ? " selected" : "") +
-                ">Liší se od Caflou</option>" +
-            '<option value="__caflou_chybi"' + (drzStav === "__caflou_chybi" ? " selected" : "") +
-                ">V Caflou chybí</option>" +
-            '<option value="__duplicita"' + (drzStav === "__duplicita" ? " selected" : "") +
-                ">Duplicity</option>" +
-            STAVY.map(s => '<option value="' + s.id + '"' +
-                (s.id === drzStav ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
-        // kategorie: číselník + to, co je v datech (starší nebo smazané kategorie)
-        const drzKat = $("filtrKategorie").value;
-        const katVData = new Set(kategorie());
-        (window.KB.faktury || []).forEach(f => { if (f.kategorie) katVData.add(f.kategorie); });
-        $("filtrKategorie").innerHTML = '<option value="">Všechny kategorie</option>' +
-            '<option value="__bez"' + (drzKat === "__bez" ? " selected" : "") + ">— bez kategorie</option>" +
-            Array.from(katVData).map(k => '<option value="' + esc(k) + '"' + (k === drzKat ? " selected" : "") + ">" +
-                esc(k) + "</option>").join("");
-        const drzProjekt = $("filtrProjekt").value;
-        $("filtrProjekt").innerHTML = '<option value="">Všechny projekty</option>' +
-            '<option value="__bez"' + (drzProjekt === "__bez" ? " selected" : "") +
-                ">— " + esc(ADMIN.toLowerCase()) + " / bez projektu</option>" +
-            V.zakazky().map(z => '<option value="' + esc(z) + '"' +
-                (z === drzProjekt ? " selected" : "") + ">" + esc(z) + "</option>").join("");
-
         vykresliChipy();
-        vykresliSouhrn();
-        vykresliSeznam();
+        vykresliPozor();
+        vykresliPas();
+        vykresliTabuli();
         vykresliPanel();
     }
 
     function novaFaktura(typ) {
+        if (dotknuto && !confirm("Zahodit rozepsané změny?")) return;
         vybrana = "";
         nova = typ;
         dotknuto = false;
-        vykresli();
+        vykresliPanel();
         if (typ === "vydana") {
             nactiNastaveni().then(() => {
                 if (!$("fCislo").value) $("fCislo").value = navrhniCislo();
@@ -1907,35 +2213,95 @@
         $("fProtistrana").focus();
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-        // faktury jsou v levém pásu vedle Pokladny, ne v podliště projektů
-        window.KBUI.mountNav({ active: "faktury.html" });
+    /** Okno dokladu – z karty nástěnky, z odkazu ?id= i z rámu na stránce Měsíce. */
+    function otevriDoklad(id) {
+        if (dotknuto && !confirm("Zahodit rozepsané změny?")) return;
+        vybrana = id;
+        nova = "";
+        dotknuto = false;
+        vykresliPanel();
+    }
 
-        // odkazy z nástěnky: ?id=<faktura>, ?filtr=kontrola | kzaplaceni, &qr=1 = rovnou QR
+    function zavriDoklad(bezPtani) {
+        if (!bezPtani && dotknuto && !confirm("Zahodit rozepsané změny?")) return;
+        vybrana = "";
+        nova = "";
+        dotknuto = false;
+        $("oknoDoklad").hidden = true;
+        if (vRamu && window.parent !== window) window.parent.postMessage({ typ: "zavri-doklad" }, location.origin);
+        // adresa ?id=… by po obnovení stránky otevřela stejný doklad znovu
+        if (!vRamu && location.search) history.replaceState(null, "", location.pathname);
+    }
+
+    /** „Zkontrolováno – na webu je to správně“: rozdíl proti Caflou je prohlédnutý. */
+    async function prohlednuto() {
+        const f = doklad(vybrana);
+        if (!f || !f.caflou) return;
+        try {
+            await window.KB.prohlednutoFaktura(vybrana, f.caflou.text || "");
+            toast("Zkontrolováno – doklad odchází z Ke kontrole.");
+            zavriDoklad(true);
+        } catch (err) {
+            console.error(err);
+            toast("Uložení selhalo.", "error");
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // odkazy: ?id=<faktura>, ?filtr=kontrola | kzaplaceni, &qr=1 = rovnou QR, &okno=1 = jen okno v rámu
         const odkaz = new URLSearchParams(location.search);
+        vRamu = odkaz.get("okno") === "1";
+        document.body.classList.toggle("jen-okno", vRamu);
+        // faktury jsou v levém pásu vedle Pokladny; podlišta spojuje nástěnku a Měsíce
+        window.KBUI.mountNav({ active: "faktury.html", subbar: true });
+        window.KBUI.paintSubbar(PODLISTA_FAKTURY, "faktury.html");
         if (odkaz.get("id")) vybrana = odkaz.get("id");
-        pozadovanyFiltr = { kontrola: "__kontrola", kzaplaceni: "__kzaplaceni" }[odkaz.get("filtr")] || "";
+        skocitNa = { kontrola: "kontrola", kzaplaceni: "kzaplaceni" }[odkaz.get("filtr")] || "";
         otevritQrPoNacteni = odkaz.get("qr") === "1";
 
-        // typ a období jedním klikem; období jen naplní Od/Do
+        // pás roku, typ, měsíc, hledání
+        $("btnRokZpet").addEventListener("click", () => { rok -= 1; mesicVyber = ""; vykresli(); });
+        $("btnRokDal").addEventListener("click", () => { rok += 1; mesicVyber = ""; vykresli(); });
         $("filtryChipy").addEventListener("click", (event) => {
             const t = event.target.closest("[data-ftyp]");
-            const o = event.target.closest("[data-obdobi]");
-            if (t) $("filtrTyp").value = t.dataset.ftyp;
-            if (o) {
-                const rozsah = obdobiChipu(o.dataset.obdobi);
-                $("filtrOd").value = rozsah[0];
-                $("filtrDo").value = rozsah[1];
-            }
-            if (t || o) { vykresliChipy(); vykresliSouhrn(); vykresliSeznam(); }
+            if (t) { filtrTyp = t.dataset.ftyp; vykresli(); return; }
+            if (event.target.closest("#chipCelyRok")) { mesicVyber = ""; vykresli(); }
         });
-        ["filtrOd", "filtrDo"].forEach(id => $(id).addEventListener("change", () => {
-            vykresliChipy(); vykresliSouhrn(); vykresliSeznam();
-        }));
-        $("filtrKategorie").addEventListener("change", () => { vykresliSouhrn(); vykresliSeznam(); });
-        ["filtrCastkaOd", "filtrCastkaDo"].forEach(id => $(id).addEventListener("input", () => {
-            vykresliSouhrn(); vykresliSeznam();
-        }));
+        $("pas").addEventListener("click", (event) => {
+            const m = event.target.closest("[data-mesic]");
+            if (!m || m.classList.contains("mes--prazdny")) return;
+            mesicVyber = mesicVyber === m.dataset.mesic ? "" : m.dataset.mesic;
+            vykresli();
+        });
+        $("hledat").addEventListener("input", vykresli);
+        $("pozor").addEventListener("click", (event) => {
+            const b = event.target.closest("[data-skok]");
+            if (b) skocNaSloupec(b.dataset.skok);
+        });
+        // odkrytí součtů platí pro pás, řádek pozornosti i sloupce naráz
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest("[data-penize-prepni]")) return;
+            penizeVidet = !penizeVidet;
+            pouzijSkryti();
+        });
+
+        // nástěnka: karta otevře doklad; tlačítka QR / Zaplaceno / Zkontrolovat
+        $("tabule").addEventListener("click", (event) => {
+            const qr = event.target.closest("[data-qr]");
+            if (qr) return void otevriQr(qr.dataset.qr);
+            const zap = event.target.closest("[data-zaplatit]");
+            if (zap) return void otevriRychlouUhradu(zap.dataset.zaplatit);
+            const k = event.target.closest(".karta[data-id]");
+            if (k) otevriDoklad(k.dataset.id);
+        });
+        zapojTazeni();
+        $("zpetBtn").addEventListener("click", zpet);
+
+        // okno dokladu se zavírá jen tlačítkem (klik vedle by mohl zahodit rozepsané)
+        $("oknoDoklad").addEventListener("click", (event) => {
+            if (event.target.closest("[data-doklad-zavri]")) zavriDoklad();
+        });
+        $("btnProhlednuto").addEventListener("click", prohlednuto);
 
         // náhled dokladu a QR k platbě
         $("nahledObr").addEventListener("click", otevriNahled);
@@ -1950,8 +2316,8 @@
 
         $("btnImport").addEventListener("click", () => $("importSoubor").click());
         $("importSoubor").addEventListener("change", () => {
-            const soubor = $("importSoubor").files && $("importSoubor").files[0];
-            if (soubor) importuj(soubor);
+            const soubory = Array.from($("importSoubor").files || []);
+            if (soubory.length) importujVse(soubory);
         });
 
         // rozpis DPH: základ nebo sazba přepočte DPH řádku, pak se sečte celek
@@ -1981,34 +2347,6 @@
         $("fCastkaCelkem").addEventListener("input", () => {
             if (!$("blokRozpis").hidden) celkemRucne = true;
             vykresliSoucet();
-        });
-
-        ["filtrTyp", "filtrStav", "filtrProjekt"].forEach(id =>
-            $(id).addEventListener("change", () => { vykresliSouhrn(); vykresliSeznam(); }));
-        $("hledat").addEventListener("input", () => { vykresliSouhrn(); vykresliSeznam(); });
-
-        // dlaždice „Ke kontrole“ přepne filtr na záznamy z inboxu
-        $("souhrn").addEventListener("click", (event) => {
-            if (!event.target.closest("#dlazdiceKontrola")) return;
-            $("filtrStav").value = "__kontrola";
-            vykresliSouhrn();
-            vykresliSeznam();
-        });
-        // odkrytí součtů platí pro všechny dlaždice naráz
-        document.addEventListener("click", (event) => {
-            if (!event.target.closest("[data-penize-prepni]")) return;
-            penizeVidet = !penizeVidet;
-            pouzijSkryti();
-        });
-
-        $("seznamVypis").addEventListener("click", (event) => {
-            const tlacitko = event.target.closest("[data-id]");
-            if (!tlacitko) return;
-            if (dotknuto && !confirm("Zahodit rozepsané změny?")) return;
-            vybrana = tlacitko.dataset.id;
-            nova = "";
-            dotknuto = false;
-            vykresli();
         });
 
         $("btnNovaPrijata").addEventListener("click", () => novaFaktura("prijata"));
@@ -2094,9 +2432,13 @@
         });
         document.addEventListener("keydown", (event) => {
             if (event.key !== "Escape") return;
-            zrusUhrazeno();
-            $("oknoNahled").hidden = true;
-            $("oknoQr").hidden = true;
+            if (!$("oknoUhrazeno").hidden) return void zrusUhrazeno();
+            if (!$("oknoNahled").hidden || !$("oknoQr").hidden) {
+                $("oknoNahled").hidden = true;
+                $("oknoQr").hidden = true;
+                return;
+            }
+            if (!$("oknoDoklad").hidden) zavriDoklad();
         });
 
         $("fCesta").addEventListener("input", vykresliSoubor);
