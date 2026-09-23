@@ -136,9 +136,8 @@
 
 <!-- doklad v okně: faktury.html?id=…&okno=1 – jeden formulář pro obě stránky -->
 <div class="hookno no-print" id="oknoRam" hidden>
+    <!-- bez vlastní hlavičky: tu má okno uvnitř rámu (název dokladu + Zavřít); klik vedle okna zavře -->
     <div class="hookno__deska card hookno__deska--ram">
-        <div class="hookno__hlava"><span id="ramNadpis">Doklad</span>
-            <button type="button" class="linkbtn linkbtn--tmavy" data-ram-zavri>Zavřít</button></div>
         <iframe id="ram" class="ram" title="Doklad"></iframe>
     </div>
 </div>
@@ -350,8 +349,6 @@
     /* ------------------------------------------------------ okno dokladu */
 
     function otevriDoklad(id) {
-        const f = (window.KB.faktury || []).find(x => x.id === id);
-        $("ramNadpis").textContent = f ? nazevZaznamu(f) : "Doklad";
         $("ram").src = "faktury.html?id=" + encodeURIComponent(id) + "&okno=1";
         $("oknoRam").hidden = false;
     }
@@ -408,7 +405,7 @@
             if (r) otevriDoklad(r.dataset.id);
         });
         $("oknoRam").addEventListener("click", (event) => {
-            if (event.target.closest("[data-ram-zavri]")) zavriDoklad();
+            if (event.target === $("oknoRam")) zavriDoklad();
         });
         // okno v rámu hlásí zavření; Escape zavírá i odsud
         window.addEventListener("message", (event) => {
