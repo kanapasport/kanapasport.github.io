@@ -21,6 +21,16 @@
            --levy je šířka levé tabulky; drží ji CSS (i v media queries),
            aby stačilo skrýt sloupec a nemusel se sahat do skriptu. */
         .g-panel {
+            /* Šířky sloupců levé tabulky. Dají se přetáhnout za pravý okraj
+               hlavičky a uloží se do prohlížeče; `--levy` je jejich součet
+               a dopočítá ho skript, protože na úzkém okně se část sloupců
+               skrývá (Michal 24. 9. 2026). */
+            --w-nazev: 184px;
+            --w-firma: 120px;
+            --w-prio:  96px;
+            --w-zac:   86px;
+            --w-kon:   86px;
+            --w-trv:   68px;
             --levy: 640px;
             --dil: 24px;
             --vikend: rgba(22, 25, 29, .05);
@@ -91,13 +101,14 @@
             border-right: 1px solid var(--line); min-height: 38px;
         }
         .g-c { padding: 6px 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .g-c--nazev { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; padding-left: 10px; }
+        .g-c--nazev { flex: 0 0 var(--w-nazev); display: flex; align-items: center; gap: 4px; padding-left: 10px; }
         .g-c--nazev a { color: inherit; text-decoration: none; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .g-c--nazev a:hover { color: var(--accent); }
-        .g-c--firma { flex: 0 0 120px; color: var(--text-soft); }
-        .g-c--prio  { flex: 0 0 96px; }
-        .g-c--zac, .g-c--kon { flex: 0 0 86px; color: var(--text-soft); font-variant-numeric: tabular-nums; }
-        .g-c--trv { flex: 0 0 68px; text-align: right; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+        .g-c--firma { flex: 0 0 var(--w-firma); color: var(--text-soft); }
+        .g-c--prio  { flex: 0 0 var(--w-prio); }
+        .g-c--zac { flex: 0 0 var(--w-zac); color: var(--text-soft); font-variant-numeric: tabular-nums; }
+        .g-c--kon { flex: 0 0 var(--w-kon); color: var(--text-soft); font-variant-numeric: tabular-nums; }
+        .g-c--trv { flex: 0 0 var(--w-trv); text-align: right; color: var(--text-soft); font-variant-numeric: tabular-nums; }
 
         .g-sipka {
             flex: none; border: none; background: none; font: inherit; font-size: 10px;
@@ -118,8 +129,39 @@
         .g-radek--hlava { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
         .g-radek--hlava .g-levy { z-index: 1; align-items: flex-end; }
         .g-radek--hlava .g-c {
+            /* `overflow: visible` je tu kvůli úchytu šířky: buňka jinak
+               ořízne i hit plochu a na proužek na okraji se nedá myší
+               trefit. Text si hlídá samo tlačítko řazení. */
+            position: relative; overflow: visible;
             font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
             color: var(--muted); font-weight: 700; padding-bottom: 7px;
+        }
+
+        /* Klik na název sloupce řadí (A–Z, Z–A, zpět), tah za pravý okraj
+           mění jeho šířku. Šipka svítí jen u sloupce, podle kterého se řadí
+           – jinak by hlavička byla plná šipek. */
+        .g-sort {
+            border: none; background: none; font: inherit; color: inherit;
+            letter-spacing: inherit; text-transform: inherit; padding: 0;
+            max-width: 100%; display: inline-flex; align-items: center; gap: 3px;
+            cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .g-sort:hover { color: var(--accent); }
+        .g-sort__sip { flex: none; font-size: 8px; opacity: 0; }
+        .g-sort:hover .g-sort__sip { opacity: .45; }
+        .g-sort--on, .g-sort--on:hover { color: var(--accent); }
+        .g-sort--on .g-sort__sip { opacity: 1; }
+
+        .g-uchyt {
+            position: absolute; top: 0; bottom: 0; right: -4px; width: 9px;
+            z-index: 3; cursor: col-resize; touch-action: none;
+        }
+        .g-uchyt::after {
+            content: ""; position: absolute; top: 5px; bottom: 5px; left: 4px;
+            width: 1px; background: var(--line);
+        }
+        .g-uchyt:hover::after, .g-uchyt--tahne::after {
+            background: var(--accent); width: 2px; left: 3px;
         }
         .g-osa--hlava { height: 46px; }
         .g-pas { position: absolute; left: 0; right: 0; }
@@ -242,6 +284,8 @@
         </div>
 
         <p class="tiny muted" style="line-height:1.6">
+            Kliknutím na název sloupce se projekty seřadí (A–Z, znovu Z–A, potřetí zpátky podle priority);
+            šířku sloupce změníš tahem za jeho pravý okraj v hlavičce, dvojklik ji vrátí.
             Šipkou u názvu se rozbalí úkoly projektu; ◆ je termín úkolu a krátký pruh před ním náběh k termínu.
             Tmavá výplň pruhu = průměrná hotovost úkolů, čárkovaný pruh = projekt bez termínu,
             svislá modrá linka = dnešek.
@@ -284,12 +328,70 @@
     const DNU_ODHAD = 60;    // dokud projekt nemá konec, pruh dojede sem
     const DILKU_UKOLU = 5;   // délka náběhového pruhu úkolu (v dílcích, ať drží při zoomu)
 
+    /* Sloupce levé tabulky. Jeden seznam drží titulek, výchozí a nejmenší
+       šířku i to, jak se z projektu vytáhne hodnota k porovnání – hlavička
+       i řazení tak vždycky sedí na stejné sloupce. Prázdná hodnota padá
+       vždycky dolů, v obou směrech, jako v tabulkovém programu. */
+    const SLOUPCE = [
+        /* Řadí se podle NÁZVU, ne podle čísla projektu, které je v buňce
+           před ním – hlavička říká „Název" a A–Z má být abeceda, ne
+           číselná řada (Michal 24. 9. 2026). */
+        { klic: "nazev", titulek: "Název", vychozi: 184, min: 110, text: true,
+          hodnota: (p) => p.nazev || "" },
+        { klic: "firma", titulek: "Firma", vychozi: 120, min: 70, text: true,
+          hodnota: (p) => p.firma || "" },
+        // priorita se řadí podle naléhavosti, ne podle abecedy
+        { klic: "prio", titulek: "Priorita", vychozi: 96, min: 80,
+          hodnota: (p) => DULEZITOST[p.priorita] ?? 9 },
+        { klic: "zac", titulek: "Začátek", vychozi: 86, min: 70,
+          hodnota: (p) => zacatekDne(p) },
+        { klic: "kon", titulek: "Konec", vychozi: 86, min: 70,
+          hodnota: (p) => p.konec ? denZIso(p.konec) : null },
+        { klic: "trv", titulek: "Trvání", vychozi: 68, min: 62,
+          hodnota: (p) => p.konec ? konecDne(p) - zacatekDne(p) + 1 : null }
+    ];
+    const SIRKA_MAX = 600;
+    const KLIC_SIRKY = "kb-gantt-sirky";
+    const KLIC_RAZENI = "kb-gantt-razeni";
+
     let meritko = "den";
     let dil = MERITKA.den.vychozi;
     let okno = null;                  // { odDen, doDen } – doDen je výlučný
     let sledovaniZapnuto = false;
     let prvniSrovnani = true;
     const rozbalene = new Set();      // id projektů s rozbalenými úkoly
+
+    /* Řazení a šířky sloupců si pamatuje prohlížeč – je to volba člověka,
+       ne dat, a po přechodu na jinou stránku se nemá ztratit. */
+    let razeni = nactiRazeni();
+    let sirky = nactiSirky();
+
+    function nactiRazeni() {
+        try {
+            const u = JSON.parse(localStorage.getItem(KLIC_RAZENI) || "{}");
+            const zna = SLOUPCE.some(s => s.klic === u.sloupec);
+            return { sloupec: zna ? u.sloupec : "", smer: u.smer === -1 ? -1 : 1 };
+        } catch (err) { return { sloupec: "", smer: 1 }; }
+    }
+
+    function ulozRazeni() {
+        try { localStorage.setItem(KLIC_RAZENI, JSON.stringify(razeni)); } catch (err) { /* nevadí */ }
+    }
+
+    function nactiSirky() {
+        let ulozene = {};
+        try { ulozene = JSON.parse(localStorage.getItem(KLIC_SIRKY) || "{}"); } catch (err) { /* nevadí */ }
+        const out = {};
+        SLOUPCE.forEach(s => {
+            const v = Number(ulozene[s.klic]);
+            out[s.klic] = v >= s.min && v <= SIRKA_MAX ? v : s.vychozi;
+        });
+        return out;
+    }
+
+    function ulozSirky() {
+        try { localStorage.setItem(KLIC_SIRKY, JSON.stringify(sirky)); } catch (err) { /* nevadí */ }
+    }
 
     /* Stránka je jen pro manažery, tak se poslouchá všechno – zaměstnancům
        by pravidla databáze širší dotaz stejně odmítla, proto se watch bez
@@ -326,11 +428,32 @@
 
     /* ------------------------------------------------------------- projekty */
 
-    const otevrene = () => (window.KB.projektyDocs || [])
-        .filter(p => p.uzavreno !== true)
-        .sort((a, b) => (DULEZITOST[a.priorita] ?? 9) - (DULEZITOST[b.priorita] ?? 9)
-            || (a.cislo || "").localeCompare(b.cislo || "")
-            || (a.nazev || "").localeCompare(b.nazev || "", "cs"));
+    /* Výchozí pořadí: co hoří, je nahoře. Drží se i jako druhé kritérium
+       při vlastním řazení – dva projekty stejné firmy tak nepřeskakují. */
+    const vychoziPoradi = (a, b) =>
+        (DULEZITOST[a.priorita] ?? 9) - (DULEZITOST[b.priorita] ?? 9)
+        || (a.cislo || "").localeCompare(b.cislo || "")
+        || (a.nazev || "").localeCompare(b.nazev || "", "cs");
+
+    const prazdna = (v) => v === null || v === undefined || v === "";
+
+    const otevrene = () => {
+        const seznam = (window.KB.projektyDocs || []).filter(p => p.uzavreno !== true);
+        const sloupec = SLOUPCE.find(s => s.klic === razeni.sloupec);
+        if (!sloupec) return seznam.sort(vychoziPoradi);
+        return seznam.sort((a, b) => {
+            const x = sloupec.hodnota(a), y = sloupec.hodnota(b);
+            /* Projekt bez firmy nebo bez termínu patří dolů v OBOU směrech,
+               jako v tabulkovém programu – proto se tahle část směrem
+               neotáčí. */
+            if (prazdna(x) || prazdna(y)) {
+                if (prazdna(x) && prazdna(y)) return vychoziPoradi(a, b);
+                return prazdna(x) ? 1 : -1;
+            }
+            const rozdil = sloupec.text ? String(x).localeCompare(String(y), "cs") : x - y;
+            return rozdil * razeni.smer || vychoziPoradi(a, b);
+        });
+    };
 
     /* Bez začátku bereme den založení – projekt reálně běží od té chvíle.
        Bez konce se kreslí do „dnes + 60 dní", jen aby měl pruh kam dojet;
@@ -382,6 +505,50 @@
     function usek(odDen, doDen) {
         const a = Math.max(odDen, okno.odDen), b = Math.min(doDen, okno.doDen);
         return b <= a ? null : { l: a - okno.odDen, w: b - a };
+    }
+
+    /* --------------------------------------------------- hlavička tabulky */
+
+    /** Šířky do CSS proměnných; mřížka se kvůli nim nepřekresluje. */
+    function pouzijSirky() {
+        const panel = document.querySelector(".g-panel");
+        if (!panel) return;
+        SLOUPCE.forEach(s => panel.style.setProperty("--w-" + s.klic, sirky[s.klic] + "px"));
+        srovnejLevy();
+    }
+
+    /** `--levy` je součet VIDITELNÝCH sloupců. Na úzkém okně se některé
+        skrývají v media query, takže se sčítá naměřená šířka, ne zapsaná. */
+    function srovnejLevy() {
+        const hlava = document.querySelector(".g-radek--hlava .g-levy");
+        const panel = document.querySelector(".g-panel");
+        if (!hlava || !panel) return;
+        let soucet = 0;
+        Array.prototype.forEach.call(hlava.querySelectorAll(".g-c"), el => { soucet += el.offsetWidth; });
+        const nova = soucet + "px";
+        if (soucet > 0 && panel.style.getPropertyValue("--levy") !== nova) {
+            panel.style.setProperty("--levy", nova);
+        }
+    }
+
+    function popisRazeni(sloupec) {
+        if (razeni.sloupec !== sloupec.klic) return "Seřadit podle: " + sloupec.titulek + " (A–Z)";
+        return razeni.smer > 0 ? "Seřadit opačně (Z–A)" : "Zrušit řazení";
+    }
+
+    function hlavaSloupcu() {
+        return SLOUPCE.map(s => {
+            const aktivni = razeni.sloupec === s.klic;
+            return '<div class="g-c g-c--' + s.klic + '">' +
+                '<button type="button" class="g-sort' + (aktivni ? " g-sort--on" : "") +
+                    '" data-sort="' + s.klic + '" title="' + esc(popisRazeni(s)) + '">' +
+                    esc(s.titulek) +
+                    '<span class="g-sort__sip">' + (aktivni && razeni.smer < 0 ? "▼" : "▲") + "</span>" +
+                "</button>" +
+                '<span class="g-uchyt" data-uchyt="' + s.klic +
+                    '" title="Tahem změníš šířku sloupce, dvojklik vrátí původní"></span>' +
+            "</div>";
+        }).join("");
     }
 
     /* ------------------------------------------------------ hlavička osy */
@@ -568,18 +735,12 @@
         $("mriz").style.setProperty("--dilku", celkemDilku().toFixed(4));
         $("mriz").innerHTML = linkyHtml() +
             '<div class="g-radek g-radek--hlava">' +
-                '<div class="g-levy">' +
-                    '<div class="g-c g-c--nazev">Název</div>' +
-                    '<div class="g-c g-c--firma">Firma</div>' +
-                    '<div class="g-c g-c--prio">Priorita</div>' +
-                    '<div class="g-c g-c--zac">Začátek</div>' +
-                    '<div class="g-c g-c--kon">Konec</div>' +
-                    '<div class="g-c g-c--trv">Trvání</div>' +
-                "</div>" + hlavaOsy() +
+                '<div class="g-levy">' + hlavaSloupcu() + "</div>" + hlavaOsy() +
             "</div>" +
             (radky || '<div class="g-prazdno tiny muted">Žádné otevřené projekty.</div>') +
             linkaDnes;
 
+        pouzijSirky();
         $("okno").scrollLeft = posunX;
         $("okno").scrollTop = posunY;
 
@@ -656,6 +817,74 @@
         $("btnZpet").addEventListener("click", () => posun(-1));
         $("btnVpred").addEventListener("click", () => posun(1));
         $("btnDnes").addEventListener("click", najedNaDnes);
+
+        /* Řazení: první klik A–Z, druhý Z–A, třetí zpátky na výchozí pořadí
+           podle priority. Hlavička není řádek projektu, takže se tím nic
+           nerozbalí. */
+        $("mriz").addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-sort]");
+            if (!btn) return;
+            const klic = btn.dataset.sort;
+            if (razeni.sloupec !== klic) razeni = { sloupec: klic, smer: 1 };
+            else if (razeni.smer > 0) razeni.smer = -1;
+            else razeni = { sloupec: "", smer: 1 };
+            ulozRazeni();
+            vykresli();
+        });
+
+        /* Šířka sloupce tahem za pravý okraj hlavičky. Mění se jen CSS
+           proměnná, mřížka se nepřekresluje – tah je tak plynulý i u stovky
+           řádků a nepřijde se o rozbalené úkoly ani o posuv. */
+        $("mriz").addEventListener("pointerdown", (event) => {
+            const uchyt = event.target.closest("[data-uchyt]");
+            if (!uchyt || event.button !== 0) return;
+            const sloupec = SLOUPCE.find(s => s.klic === uchyt.dataset.uchyt);
+            if (!sloupec) return;
+            const zacX = event.clientX, zacSirka = sirky[sloupec.klic];
+            event.preventDefault();
+            uchyt.classList.add("g-uchyt--tahne");
+            try { uchyt.setPointerCapture(event.pointerId); } catch (err) { /* nevadí */ }
+
+            const tahni = (e) => {
+                sirky[sloupec.klic] = Math.max(sloupec.min,
+                    Math.min(SIRKA_MAX, Math.round(zacSirka + (e.clientX - zacX))));
+                pouzijSirky();
+            };
+            const konec = () => {
+                uchyt.classList.remove("g-uchyt--tahne");
+                window.removeEventListener("pointermove", tahni);
+                window.removeEventListener("pointerup", konec);
+                window.removeEventListener("pointercancel", konec);
+                ulozSirky();
+            };
+            /* Posluchače drží OKNO, ne úchyt: při rychlém tahu ukazatel
+               z devíti pixelů utíká a zachycení ukazatele se nedá slíbit
+               na každém zařízení. */
+            window.addEventListener("pointermove", tahni);
+            window.addEventListener("pointerup", konec);
+            window.addEventListener("pointercancel", konec);
+        });
+
+        // dvojklik na okraj vrátí sloupci původní šířku
+        $("mriz").addEventListener("dblclick", (event) => {
+            const uchyt = event.target.closest("[data-uchyt]");
+            if (!uchyt) return;
+            const sloupec = SLOUPCE.find(s => s.klic === uchyt.dataset.uchyt);
+            if (!sloupec) return;
+            sirky[sloupec.klic] = sloupec.vychozi;
+            pouzijSirky();
+            ulozSirky();
+        });
+
+        /* Při změně okna se mění, které sloupce jsou vidět – součet levé
+           tabulky se musí přepočítat, jinak by osa začínala jinde. Sleduje
+           se i velikost samotného panelu: při otevření postranního pásu se
+           okno nemění, a přesto se sloupce přeskládají. */
+        window.addEventListener("resize", srovnejLevy);
+        if (typeof ResizeObserver !== "undefined") {
+            const panel = document.querySelector(".g-panel");
+            if (panel) new ResizeObserver(srovnejLevy).observe(panel);
+        }
 
         // klik kdekoliv na řádku rozbalí úkoly; proklik na projekt musí zůstat odkazem
         $("mriz").addEventListener("click", (event) => {
