@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=237">
+    <link rel="stylesheet" href="assets/css/app.css?v=238">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -322,7 +322,7 @@
                 <div id="dovoleneSeznam" class="nastenka__telo col" style="gap:6px"></div>
             </div>
             <!-- faktury (dotazník 22. 9. 2026): co zaplatit do týdne a co nově přibylo -->
-            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyPlatby" data-need="vykaz.view" hidden>
+            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyPlatby" data-need="finance.view" hidden>
                 <div class="nastenka__hlava" data-otevri="faktury.html?filtr=kzaplaceni" title="Otevřít faktury k zaplacení">
                     <b>Faktury k zaplacení — do týdne</b>
                     <!-- součet se ukáže až na klik, jako u výkazů -->
@@ -331,7 +331,7 @@
                 <div id="fakturyPlatbySeznam" class="nastenka__telo col" style="gap:6px"></div>
                 <div class="nastenka__pata" id="fakturyPlatbyPata"></div>
             </div>
-            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyNove" data-need="vykaz.view" hidden>
+            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyNove" data-need="finance.view" hidden>
                 <div class="nastenka__hlava" data-otevri="faktury.html" title="Otevřít faktury">
                     <b>Nové faktury</b>
                     <span class="nastenka__prep"><button type="button" class="chip" data-penize-prepni>zobrazit</button></span>
@@ -384,11 +384,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=237"></script>
-<script src="assets/js/doc.js?v=237"></script>
-<script src="assets/js/ui.js?v=237"></script>
-<script src="assets/js/vykazy.js?v=237"></script>
-<script type="module" src="assets/js/store.js?v=237"></script>
+<script src="assets/js/taxonomy.js?v=238"></script>
+<script src="assets/js/doc.js?v=238"></script>
+<script src="assets/js/ui.js?v=238"></script>
+<script src="assets/js/vykazy.js?v=238"></script>
+<script type="module" src="assets/js/store.js?v=238"></script>
 
 <script>
 (function () {
@@ -423,7 +423,8 @@
             window.KB.watchAktivity();
             window.KB.watchGsync();     // hlášení ručních řádků z Tabulek
             window.KB.watchVykazy();   // dlaždice Upozornění pro kontrolu
-            window.KB.watchFaktury();  // dlaždice Faktury k zaplacení a Nové faktury
+            // faktury jen s právem finance.view – správci by databáze dotaz odmítla
+            if (window.KBUI.can("finance.view")) window.KB.watchFaktury();
         } else {
             window.KB.watchMojeUkoly();
             window.KB.watchMojeProjekty();
@@ -1114,7 +1115,7 @@
 
     function renderFakturyPlatby() {
         const box = document.getElementById("fakturyPlatbySeznam");
-        if (!box || !window.KBUI.can("vykaz.view")) return;
+        if (!box || !window.KBUI.can("finance.view")) return;
         const dnes = V.dnesISO();
         const hranice = isoZaDni(7);
         const kPlaceni = (window.KB.faktury || [])
@@ -1176,7 +1177,7 @@
 
     function renderFakturyNove() {
         const box = document.getElementById("fakturyNoveSeznam");
-        if (!box || !window.KBUI.can("vykaz.view")) return;
+        if (!box || !window.KBUI.can("finance.view")) return;
         const vse = window.KB.faktury || [];
         const cekaji = vse.filter(fakturaCeka);
         const od = Date.now() - 14 * 24 * 3600 * 1000;

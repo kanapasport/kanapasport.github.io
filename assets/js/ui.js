@@ -228,11 +228,16 @@
         "vykaz.otevrit", "vykaz.view", "vykaz.edit"
     ];
 
+    /* Peníze firmy (faktury, pokladna) vidí jen hlavní správce, majitel
+       a asistentka – běžný správce ne (Michal 24. 9. 2026). Hlídá to
+       i databáze (firestore.rules, funkce finance()). */
+    const FINANCE_PRAVA = MANAZER_PRAVA.concat(["finance.view"]);
+
     const PERMISSIONS = {
         "hlavni-spravce": ["*"],
-        "majitel":    MANAZER_PRAVA,
+        "majitel":    FINANCE_PRAVA,
         "spravce":    MANAZER_PRAVA,
-        "asistentka": MANAZER_PRAVA,
+        "asistentka": FINANCE_PRAVA,
         /* Zaměstnanec si výkazy otevře, ale vidí a zapisuje jen svoje – bez
            cizích zápisů, bez sazeb a bez exportu. Hlídá to i databáze
            (firestore.rules), ne jen schované tlačítko. */
@@ -254,6 +259,7 @@
         "navod.pdf":      "stahovat návody do PDF",
         "vykaz.otevrit":  "otevřít výkazy a zapisovat svoje",
         "vykaz.view":     "vidět výkazy všech lidí včetně peněz",
+        "finance.view":   "vidět faktury a pokladnu (peníze firmy)",
         "vykaz.edit":     "zapisovat výkazy za kohokoliv",
         "users.manage":   "spravovat uživatele",
         "web.design":     "měnit vzhled webu"
@@ -1170,13 +1176,13 @@
                a ne ve Správě (ta je manažerská). */
             '<a class="siderail__btn" href="upozorneni.html" data-jen-prihlaseny hidden>' +
                 icon("calendar") + "<span>Upozornění</span></a>" +
-            /* Hotovost v kanceláři vede asistentka, koukají manažeři –
-               proto stejné právo jako na výkazy ostatních. */
-            '<a class="siderail__btn" href="pokladna.html" data-need="vykaz.view" hidden>' +
+            /* Hotovost v kanceláři vede asistentka; koukat smí jen hlavní
+               správce, majitel a asistentka (právo finance.view, Michal 24. 9.). */
+            '<a class="siderail__btn" href="pokladna.html" data-need="finance.view" hidden>' +
                 icon("building") + "<span>Pokladna</span></a>" +
             /* Faktury: přijaté i vydané, QR k zaplacení – stejný okruh lidí
-               jako pokladna (manažeři + asistentka). */
-            '<a class="siderail__btn" href="faktury.html" data-need="vykaz.view" hidden>' +
+               jako pokladna (finance.view). */
+            '<a class="siderail__btn" href="faktury.html" data-need="finance.view" hidden>' +
                 icon("receipt") + "<span>Faktury</span></a>" +
             '<div class="siderail__spodek">' +
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +

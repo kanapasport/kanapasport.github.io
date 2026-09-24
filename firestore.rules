@@ -199,9 +199,19 @@ service cloud.firestore {
     //   private/faktury/seznam/{id}       faktura (přijatá i vydaná) vč. částek
     //   private/faktury/meta/nastaveni    naše fakturační údaje pro tisk
     //
-    // Faktura nese peníze, proto je celá jen pro manažery. Vlastní pravidlo
-    // nepotřebuje – kryje ji spodní zachytávací blok pro `private` (správce).
-    // Komentář tu je, aby kolekce nezapadla při příštím čtení pravidel.
+    // Faktura nese peníze firmy – vidí ji jen hlavní správce, majitel
+    // a asistentka (Michal 24. 9. 2026), běžný správce ne. Totéž pokladna
+    // (private/pokladna/zaznamy). Spodní zachytávací blok pro `private`
+    // je proto obě kolekce vynechává.
+    function finance() {
+      return clen() && role() in ['hlavni-spravce', 'majitel', 'asistentka'];
+    }
+    match /artifacts/firemni-kb-app/private/faktury/{document=**} {
+      allow read, write: if finance();
+    }
+    match /artifacts/firemni-kb-app/private/pokladna/{document=**} {
+      allow read, write: if finance();
+    }
 
     /* Zůstatky dovolené a přesčasů. SVŮJ vidí každý – je to jeho nárok
        a má si ho hlídat; cizí a zápis jen manažer (spodní pravidlo pro
@@ -248,9 +258,11 @@ service cloud.firestore {
     }
 
     // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
-    // projektů, zakládání úkolů…) jen správce
-    match /artifacts/firemni-kb-app/private/{document=**} {
-      allow read, write: if spravce();
+    // projektů, zakládání úkolů…) jen správce – kromě faktur a pokladny,
+    // které mají vlastní přísnější pravidlo výš (pravidla se sčítají, proto
+    // se tu musí vynechat výslovně)
+    match /artifacts/firemni-kb-app/private/{kolekce}/{document=**} {
+      allow read, write: if spravce() && kolekce != 'faktury' && kolekce != 'pokladna';
     }
 
     // --- návody: tvořit a upravovat může každý, mazat jen správce ---
