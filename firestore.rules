@@ -231,9 +231,16 @@ service cloud.firestore {
     /* --- porady ---------------------------------------------------------
        Zápis z porady čte celý tým: je to shrnutí toho, co se domluvilo,
        a lidé se na body odkazují. Psát a mazat je smí manažer – to už
-       drží spodní pravidlo pro `private`. */
+       drží spodní pravidlo pro `private`.
+
+       Rozepsaný zápis na PŘÍŠTÍ poradu ale ostatním nic neříká. Manažer ho
+       proto může skrýt (`skryto: true`) a web ho členům ani nenačte – ptá
+       se dotazem `skryto == false`. Tohle je ta tvrdá půlka: skrytý zápis
+       databáze členovi nevydá ani z konzole. Starší zápisy příznak dostaly
+       doplněním (KB.doplnSkrytiPorad), nové ho mají vždycky; chybějící
+       příznak se bere jako „zveřejněno", ať nic nezmizí (Michal 25. 9. 2026). */
     match /artifacts/firemni-kb-app/private/porady/zapisy/{id} {
-      allow read: if clen();
+      allow read: if spravce() || resource.data.get('skryto', false) != true;
     }
 
     /* Komentáře k bodům porad. Napsat je smí každý, kdo poradu čte – proto
