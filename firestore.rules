@@ -521,10 +521,11 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/zaznamy/$(id)).data;
     }
 
-    /* Majitel listu je jeho hospodář: do sdíleného listu mu kolegové píšou,
-       co se pokazilo, a on to má zavřít nebo uklidit. Proto smí cizí
-       poznámku ve SVÉM listu odškrtnout i smazat – autor sám samozřejmě
-       taky (Michal 25. 9. 2026). */
+    /* Kdo poznámku vidí, ten ji smí i vyřídit: autor, majitel listu
+       a každý, komu je přisdílená. Poznámka je hlášení „tohle se pokazilo" –
+       kdo to spraví, ten ji zavře, ať po ní nemusí chodit zpátky její autor
+       (Michal 25. 9. 2026). Text ale zůstává autorovi; ostatní smí jen
+       stav, komentář a přisdílení dalšího člověka. */
     function poznListVlastnik(lid) {
       return lid is string && lid != ''
         && exists(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/listy/$(lid))
@@ -540,23 +541,23 @@ service cloud.firestore {
       // a přisdílet dalšího (upozornění) – stav „splněno" patří autorovi
       allow update: if clen() && request.resource.data.uid == resource.data.uid
                        && (resource.data.uid == request.auth.uid
-                           // majitel listu smí jen zavřít/otevřít, ne přepsat text
-                           || (poznListVlastnik(resource.data.listId)
+                           // ostatní: stav, komentář a přisdílení – ne cizí text
+                           || ((poznListVlastnik(resource.data.listId)
+                                || request.auth.uid in resource.data.sdileni)
                                && request.resource.data.diff(resource.data).affectedKeys()
-                                    .hasOnly(['stav', 'ms']))
-                           || (request.auth.uid in resource.data.sdileni
-                               && request.resource.data.diff(resource.data).affectedKeys()
-                                    .hasOnly(['komentare', 'sdileni', 'ms'])));
+                                    .hasOnly(['stav', 'komentare', 'sdileni', 'ms'])));
       allow delete: if clen() && (resource.data.uid == request.auth.uid
-                                  || poznListVlastnik(resource.data.listId));
+                                  || poznListVlastnik(resource.data.listId)
+                                  || request.auth.uid in resource.data.sdileni);
 
       match /obrazky/{n} {
         // obrázek nenese uid – právo se bere z rodičovské poznámky
         allow read: if clen() && (poznData(id).uid == request.auth.uid
                                   || request.auth.uid in poznData(id).sdileni);
-        // s poznámkou mizí i obrázky – smí to autor i majitel listu
+        /* S poznámkou mizí i obrázky – smí to každý, kdo ji smí smazat. */
         allow write: if clen() && (poznData(id).uid == request.auth.uid
-                                   || poznListVlastnik(poznData(id).listId));
+                                   || poznListVlastnik(poznData(id).listId)
+                                   || request.auth.uid in poznData(id).sdileni);
       }
     }
 
