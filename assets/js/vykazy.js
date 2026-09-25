@@ -159,6 +159,11 @@
     V.REZIE = ["Administrativa", "Porada", "Web"];
     V.jeRezie = (nazev) => V.REZIE.indexOf(String(nazev || "").trim()) !== -1;
 
+    /* Absence – stejný důvod jako u režie: v zápisu je sice příznak
+       `absence`, ale přehledy pracují i s holými názvy zakázek. */
+    V.ABSENCE = ["Dovolená", "Volno", "Nemoc", "Doktor", "Školení"];
+    V.jeAbsence = (nazev) => V.ABSENCE.indexOf(String(nazev || "").trim()) !== -1;
+
     /* ---------------------------------------------- zůstatky člověka ----
        Kolik zbývá dovolené a kolik je naběháno přesčasů. Počítá se od data,
        které je u člověka nastavené (Nastavení → Dovolená a přesčasy) –

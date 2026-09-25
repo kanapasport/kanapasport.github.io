@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=245">
+    <link rel="stylesheet" href="assets/css/app.css?v=246">
     <style>
         /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
            a u stejné síly pravidla musí vyhrát to pozdější. */
@@ -144,10 +144,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=245"></script>
-<script src="assets/js/ui.js?v=245"></script>
-<script src="assets/js/vykazy.js?v=245"></script>
-<script type="module" src="assets/js/store.js?v=245"></script>
+<script src="assets/js/taxonomy.js?v=246"></script>
+<script src="assets/js/ui.js?v=246"></script>
+<script src="assets/js/vykazy.js?v=246"></script>
+<script type="module" src="assets/js/store.js?v=246"></script>
 
 <script>
 (function () {
@@ -214,10 +214,32 @@
         nastavObdobi("mesic");     // render si zavolá samo
     }
 
+    /**
+     * Seznam zakázek do filtru i do rozpočtů. Číselník `KB.zakazky` je starý
+     * a jsou v něm jen čtyři položky, kdežto do výkazů se píše na desítky
+     * projektů ze Správy projektů a rozpočty se zadávají tam. Nabídka se
+     * proto skládá z toho, co se opravdu používá: co je ve výkazech, co má
+     * rozpočet a co zbylo v číselníku. Režie a absence jdou na konec –
+     * nejsou to zakázky (Michal 25. 9. 2026).
+     */
+    function nabidkaZakazek() {
+        const jmena = new Set();
+        (window.KB.vykazy || []).forEach(z => {
+            const k = (z.zakazka || "").trim();
+            if (k) jmena.add(k);
+        });
+        Object.keys(window.KB.rozpocty || {}).forEach(k => { if (k) jmena.add(k); });
+        V.zakazky().forEach(k => { if (k) jmena.add(k); });
+
+        const poradi = (n) => V.jeAbsence(n) ? 2 : (V.jeRezie(n) ? 1 : 0);
+        return Array.from(jmena)
+            .sort((a, b) => poradi(a) - poradi(b) || a.localeCompare(b, "cs"));
+    }
+
     function naplnFiltry() {
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
-        $("fZakazka").innerHTML = V.options(V.zakazky(), filtr.zakazka, "Všechny zakázky");
+        $("fZakazka").innerHTML = V.options(nabidkaZakazek(), filtr.zakazka, "Všechny zakázky");
         // bez vybrané zakázky by seznam projektů byl směsice ze všech zakázek
         $("fProjekt").innerHTML = filtr.zakazka
             ? V.options(V.projekty(filtr.zakazka), filtr.projekt, "Všechny projekty")
@@ -298,7 +320,11 @@
      */
     function rozpoctyKarta() {
         const vsechno = window.KB.vykazy || [];
-        const sRozpoctem = V.zakazky().filter(zak => {
+        /* Rozpočty se zadávají ve Správě projektů ke KTERÉMUKOLIV projektu,
+           ne jen k tomu, co je ve starém číselníku zakázek – ten měl čtyři
+           položky a třináct rozpočtů se tak nikdy neukázalo (Michal
+           25. 9. 2026). Bere se proto rovnou seznam rozpočtů. */
+        const sRozpoctem = Object.keys(window.KB.rozpocty || {}).filter(zak => {
             const r = V.rozpocet(zak);
             return metrika === "hod" ? r.hodiny > 0 : r.kc > 0;
         });
@@ -309,6 +335,11 @@
             const rozpocet = metrika === "hod" ? V.rozpocet(zak).hodiny : V.rozpocet(zak).kc;
             const spotreba = metrika === "hod" ? soucty.hodiny : soucty.castka;
             const c = V.cerpani(spotreba, rozpocet);
+            return { zak: zak, rozpocet: rozpocet, spotreba: spotreba, c: c };
+        })
+        // nejvíc vyčerpané nahoru – tam se kouká první
+        .sort((a, b) => b.c.pct - a.c.pct)
+        .map(({ zak, rozpocet, spotreba, c }) => {
             const format = metrika === "hod" ? V.hod : V.kc;
 
             return '<div class="vykbar" style="align-items:flex-start;padding:7px 0">' +
@@ -329,7 +360,10 @@
             "</div>";
         }).join("");
 
-        return karta("Čerpání rozpočtů", "za celou dobu zakázky, ne za vybrané období", radky);
+        return karta("Čerpání rozpočtů",
+            V.pocet(sRozpoctem.length, ["rozpočet", "rozpočty", "rozpočtů"]) +
+                " · za celou dobu zakázky, ne za vybrané období",
+            radky);
     }
 
     /* Dvě písmena stačí (po, út, …) a je hned vidět, že se dělalo o víkendu. */
