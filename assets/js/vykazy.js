@@ -152,6 +152,13 @@
     V.firmy       = () => (window.KB.firmy || []);
     V.zakazky     = () => (window.KB.zakazky || []);
 
+    /* Režie: placený čas bez zakázky. V zápisu se příznak neukládá (počítá
+       se z názvu při psaní), takže přehledy, které zápisy jen čtou, musí
+       režii poznat podle jména – proto je seznam tady, ne jen ve formuláři
+       (Michal 25. 9. 2026). */
+    V.REZIE = ["Administrativa", "Porada", "Web"];
+    V.jeRezie = (nazev) => V.REZIE.indexOf(String(nazev || "").trim()) !== -1;
+
     /* ---------------------------------------------- zůstatky člověka ----
        Kolik zbývá dovolené a kolik je naběháno přesčasů. Počítá se od data,
        které je u člověka nastavené (Nastavení → Dovolená a přesčasy) –
