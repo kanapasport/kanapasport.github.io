@@ -3774,11 +3774,37 @@ const poradaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "porady", "zap
 KB.porady = [];
 let poradyOdber = null;
 
+/** Manažer vidí i nezveřejněné zápisy (stejné role jako u postupu dne). */
+function poradyManazer() {
+    const ja = (KB.users || []).find(u => u.id === ((auth && auth.currentUser) || {}).uid);
+    return !!ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"].indexOf(ja.role) !== -1;
+}
+
+/**
+ * Zápisy z porad. Manažer vidí všechny, ostatní jen zveřejněné.
+ *
+ * `skryto: true` = zápis se připravuje (body na příští poradu) a ostatním
+ * do něj není nic po tom, dokud porada neproběhne. Pravidla nejsou filtr,
+ * takže si člen musí o zveřejněné říct dotazem – a proto má KAŽDÝ zápis
+ * pole `skryto` (i starý; doplní ho `KB.doplnSkrytiPorad`), jinak by
+ * z dotazu vypadl (Michal 25. 9. 2026).
+ */
 KB.watchPorady = async () => {
     if (poradyOdber) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || poradyOdber) return;
-    poradyOdber = onSnapshot(poradyCol(), (snap) => {
+    /* Role se pozná ze seznamu lidí a ten chodí až po přihlášení. Kdyby se
+       odběr zapnul dřív, dostal by manažer dotaz pro členy a nezveřejněné
+       porady by mu celou relaci chyběly – proto se počká. */
+    if (!(KB.users || []).length) {
+        const az = () => { KB.off("users", az); KB.watchPorady(); };
+        KB.on("users", az);
+        return;
+    }
+    const dotaz = poradyManazer()
+        ? poradyCol()
+        : query(poradyCol(), where("skryto", "==", false));
+    poradyOdber = onSnapshot(dotaz, (snap) => {
         KB.porady = [];
         snap.forEach(d => KB.porady.push({ id: d.id, ...d.data() }));
         // nejnovější porada nahoře – tu člověk hledá
@@ -3814,6 +3840,9 @@ KB.ulozPoradu = async (id, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     };
+    /* Skrytí se přepisuje jen tehdy, když ho volající opravdu posílá –
+       úprava zápisu nesmí omylem zveřejnit rozdělanou poradu. */
+    if (!id || data.skryto !== undefined) zapis.skryto = data.skryto === true;
     if (!id) {
         zapis.kdo = window.KB_USER || "";
         zapis.uid = KB.currentUid();
@@ -3823,6 +3852,38 @@ KB.ulozPoradu = async (id, data) => {
         (zapis.datum || ""));
     await setDoc(poradaDoc(pid), zapis, { merge: true });
     return pid;
+};
+
+/** Skrýt / zveřejnit zápis z porady – sahá se jen na ten jeden příznak. */
+KB.nastavSkrytiPorady = async (id, skryto) => {
+    if (authReady) await authReady;
+    requireDb();
+    await setDoc(poradaDoc(id), {
+        skryto: skryto === true,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    }, { merge: true });
+    KB.zapisAktivitu("porada", (skryto ? "skryl" : "zveřejnil") + " zápis z porady");
+};
+
+/**
+ * Doplní `skryto: false` starým zápisům. Bez toho by po přepnutí odběru
+ * na dotaz `skryto == false` členům zmizely všechny porady zapsané dřív,
+ * než se skrývání zavedlo. Běží v prohlížeči manažera, jednou.
+ */
+KB.doplnSkrytiPorad = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!poradyManazer()) return 0;
+    const snap = await getDocs(poradyCol());
+    let doplneno = 0;
+    for (const d of snap.docs) {
+        if (d.data().skryto === undefined) {
+            await setDoc(poradaDoc(d.id), { skryto: false }, { merge: true });
+            doplneno++;
+        }
+    }
+    return doplneno;
 };
 
 /* Komentáře k bodům porad. Drží se všechny naráz – je jich řádově

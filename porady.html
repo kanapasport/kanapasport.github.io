@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Porady – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=248">
+    <link rel="stylesheet" href="assets/css/app.css?v=249">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -30,6 +30,10 @@
         .ppolozka.je-aktivni { border-color: var(--accent); background: var(--accent-tint); }
         .ppolozka__datum { font-size: 14px; font-weight: 900; }
         .ppolozka__meta { font-size: 11.5px; color: var(--muted); }
+        /* Zápis, který ostatní zatím nevidí – jen pro manažery. */
+        .pskryto { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 99px;
+            background: var(--p75-bg); color: var(--p75-fg);
+            font-size: 10px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
 
         /* --------------------------------------------------------- list A4
            Záhlaví i patička sedí v okrajích listu (position:absolute), aby
@@ -176,6 +180,8 @@
                         Uložit</button>
                     <button type="button" id="btnZahodit" class="btn btn--ghost btn--sm" hidden>
                         Zahodit změny</button>
+                    <button type="button" id="btnSkryt" class="btn btn--ghost btn--sm"
+                        data-need="vykaz.view" hidden></button>
                     <button type="button" id="btnPdf" class="btn btn--sm">Stáhnout PDF</button>
                     <button type="button" id="btnSmazat" class="btn btn--ghost btn--sm"
                         data-need="vykaz.view" hidden
@@ -211,11 +217,11 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=248"></script>
-<script src="assets/js/doc.js?v=248"></script>
-<script src="assets/js/ui.js?v=248"></script>
-<script src="assets/js/vykazy.js?v=248"></script>
-<script type="module" src="assets/js/store.js?v=248"></script>
+<script src="assets/js/taxonomy.js?v=249"></script>
+<script src="assets/js/doc.js?v=249"></script>
+<script src="assets/js/ui.js?v=249"></script>
+<script src="assets/js/vykazy.js?v=249"></script>
+<script type="module" src="assets/js/store.js?v=249"></script>
 
 <script>
 (function () {
@@ -245,6 +251,17 @@
         .filter(k => k.poradaId === poradaId && k.bodId === bId);
 
     const manazer = () => window.KBUI.can("vykaz.view");
+
+    const dnesISO = () => {
+        const d = new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+            "-" + String(d.getDate()).padStart(2, "0");
+    };
+
+    /* Skrytý zápis vidí jen manažeři. Ostatním se ukáže, až porada
+       proběhne – zveřejní ho hlídka níž, nebo manažer tlačítkem dřív
+       (Michal 25. 9. 2026). */
+    const jeSkryta = (p) => !!p && p.skryto === true;
 
     const czDatum = (iso) => {
         if (!iso) return "";
@@ -279,7 +296,9 @@
                 '<span class="ppolozka__meta">' +
                     esc(p.nazev || "Porada") + " · " +
                     esc(String((p.sekce || []).reduce((n, s) => n + (s.body || []).length, 0))) +
-                    " bodů</span>" +
+                    " bodů" +
+                    (jeSkryta(p) ? '<span class="pskryto">skryté</span>' : "") +
+                "</span>" +
             "</button>").join("");
     }
 
@@ -487,6 +506,15 @@
         if (!p && pohled !== "projekt") return;
 
         const vProjektu = pohled === "projekt";
+        /* Skrýt / zveřejnit: jen u konkrétního zápisu a jen manažerovi.
+           Text říká, co tlačítko udělá, ne v jakém je stavu. */
+        const skryta = jeSkryta(p);
+        $("btnSkryt").hidden = !manazer() || upravuji || pohled !== "zapis" || !p;
+        $("btnSkryt").textContent = skryta ? "Zveřejnit ostatním" : "Skrýt ostatním";
+        $("btnSkryt").title = skryta
+            ? "Teď to vidí jen manažeři. Samo se to zveřejní den po poradě."
+            : "Zápis uvidí jen manažeři, dokud porada neproběhne.";
+        $("btnSkryt").classList.toggle("btn--primary", skryta);
         $("btnUpravit").hidden = !manazer() || upravuji || vProjektu;
         $("btnSmazat").hidden = !manazer() || upravuji || pohled !== "zapis";
         $("btnUlozit").hidden = !upravuji;
@@ -732,6 +760,23 @@
             }
         });
 
+        $("btnSkryt").addEventListener("click", async () => {
+            const p = (window.KB.porady || []).find(x => x.id === otevreny);
+            if (!p) return;
+            const skryt = !jeSkryta(p);
+            $("btnSkryt").disabled = true;
+            try {
+                await window.KB.nastavSkrytiPorady(p.id, skryt);
+                window.KBUI.toast(skryt
+                    ? "Zápis vidí jen manažeři. Ostatním se ukáže den po poradě."
+                    : "Zápis je zveřejněný celému týmu.");
+            } catch (err) {
+                console.error(err);
+                window.KBUI.toast("Nepovedlo se uložit.", "error");
+            }
+            $("btnSkryt").disabled = false;
+        });
+
         $("btnPdf").addEventListener("click", async (e) => {
             const p = (window.KB.porady || []).find(x => x.id === otevreny);
             if (!p) return;
@@ -917,12 +962,30 @@
         });
         window.KB.watchPoradyKomentare();
 
+        /* Porada proběhla → zápis se zveřejní sám. Dělá to prohlížeč
+           manažera (ostatní na to nemají právo) a jen jednou za načtení
+           stránky, ať se zápis kvůli tomu nepřepisuje dokola. Skrytý
+           zápis se odemkne DEN PO poradě – v den porady se na ní ještě
+           domlouvá, co v něm bude (Michal 25. 9. 2026). */
+        let zverejnenoUz = false;
+        function zverejniProbehle() {
+            if (zverejnenoUz || !manazer()) return;
+            const dnes = dnesISO();
+            const zralé = (window.KB.porady || [])
+                .filter(p => jeSkryta(p) && p.datum && p.datum < dnes);
+            if (!zralé.length) return;
+            zverejnenoUz = true;
+            zralé.forEach(p => window.KB.nastavSkrytiPorady(p.id, false)
+                .catch(err => console.warn("Zveřejnění porady:", err)));
+        }
+
         window.KB.on("porady", () => {
             /* Bez otevřeného zápisu se rovnou ukáže nejnovější – seznam
                chodí seřazený od nejnovější porady. */
             if (!otevreny && (window.KB.porady || []).length) {
                 otevreny = window.KB.porady[0].id;
             }
+            zverejniProbehle();
             vykresliSeznam();
             if (!upravuji) vykresliDetail();
         });
@@ -931,6 +994,13 @@
         /* Okruhy porady se vybírají z projektů – manažer má všechny,
            ostatní ty svoje (víc jim pravidla stejně nevydají). */
         if (window.KBUI.can("vykaz.view")) window.KB.watchProjekty();
+
+        /* Jednou za načtení stránky: starým zápisům se doplní příznak
+           (jinak by členům z dotazu vypadly) a porady, které už proběhly,
+           se zveřejní samy. Obojí umí jen manažer. */
+        if (manazer()) {
+            window.KB.doplnSkrytiPorad().catch(err => console.warn("Doplnění skrytí:", err));
+        }
         else window.KB.watchMojeProjekty();
         window.KB.on("projekty-docs", () => { if (upravuji) vykresliEditor(); });
         vykresliSeznam();
