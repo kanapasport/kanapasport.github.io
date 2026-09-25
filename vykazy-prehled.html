@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=246">
+    <link rel="stylesheet" href="assets/css/app.css?v=247">
     <style>
         /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
            a u stejné síly pravidla musí vyhrát to pozdější. */
@@ -39,6 +39,36 @@
         /* Dovolená, nemoc a školení nejsou odpracovaný čas – řádek je proto
            utlumený, ať se opticky neplete s prací, za kterou se fakturuje. */
         .vyk__absence td { background: var(--bg-soft); color: var(--muted); }
+
+        /* Výběr zakázky: místo roletky se píše a hledá – zakázek jsou
+           desítky a roletka se v nich neprohledá. Domeček vrací celkový
+           přehled (Michal 25. 9. 2026). */
+        .zakvyber { position: relative; display: flex; align-items: center; gap: 6px;
+            flex: 1 1 340px; min-width: 240px; }
+        .zakvyber__pole { flex: 1 1 auto; min-width: 0; }
+        .zakvyber__domov { flex: none; font-size: 15px; line-height: 1; padding: 7px 10px; }
+        .zakvyber--doma .zakvyber__domov { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .zaknabidka {
+            position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+            max-height: 340px; overflow: auto; background: var(--surface);
+            border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-up);
+        }
+        .zaknabidka__nadpis {
+            position: sticky; top: 0; padding: 6px 10px; background: var(--bg-soft);
+            font-size: 10.5px; font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .zaknabidka__polozka {
+            display: flex; gap: 10px; align-items: baseline; width: 100%; font: inherit;
+            text-align: left; padding: 7px 10px; border: none; background: none; cursor: pointer;
+        }
+        .zaknabidka__polozka:hover { background: var(--accent-tint); }
+        .zaknabidka__nazev { flex: 1 1 auto; min-width: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .zaknabidka__cislo { flex: none; font-size: 11.5px; color: var(--muted);
+            font-variant-numeric: tabular-nums; }
+        /* Zakázka, do které se zatím nic nenapsalo – je vidět, ale nepřekáží. */
+        .zaknabidka__polozka--bez .zaknabidka__nazev { color: var(--dim); }
 
         /* Úplný seznam zakázek pod kruhem. Do šesti výsečí se dvacet zakázek
            nevejde, ale vidět musí být všechno, do čeho se píše – proto pod
@@ -119,7 +149,13 @@
 
             <div class="row row--wrap" style="gap:10px">
                 <select id="fOsoba" class="field" style="width:auto;min-width:170px"></select>
-                <select id="fZakazka" class="field" style="width:auto;min-width:170px"></select>
+                <div class="zakvyber" id="zakVyber">
+                    <button type="button" id="btnDomov" class="btn btn--ghost btn--sm zakvyber__domov"
+                        title="Zpět na celkový přehled" aria-label="Celkový přehled">⌂</button>
+                    <input type="text" id="fZakazka" class="field zakvyber__pole" autocomplete="off"
+                        placeholder="Celkový přehled – piš část názvu zakázky" aria-label="Zakázka">
+                    <div id="zakNabidka" class="zaknabidka" hidden></div>
+                </div>
                 <select id="fProjekt" class="field" style="width:auto;min-width:150px"></select>
                 <select id="fFirma" class="field" style="width:auto;min-width:170px"></select>
                 <select id="fCinnost" class="field" style="width:auto;min-width:150px"></select>
@@ -144,10 +180,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=246"></script>
-<script src="assets/js/ui.js?v=246"></script>
-<script src="assets/js/vykazy.js?v=246"></script>
-<script type="module" src="assets/js/store.js?v=246"></script>
+<script src="assets/js/taxonomy.js?v=247"></script>
+<script src="assets/js/ui.js?v=247"></script>
+<script src="assets/js/vykazy.js?v=247"></script>
+<script type="module" src="assets/js/store.js?v=247"></script>
 
 <script>
 (function () {
@@ -206,8 +242,11 @@
     }
 
     /** Zruší všechna zúžení naráz – po pár filtrech se to jinak rozklikává. */
+    /** Reset = domov: zpátky na celkový přehled bez zúžení. */
     function resetFiltru() {
         ["uid", "zakazka", "projekt", "firma", "cinnost", "tech", "text"].forEach(k => { filtr[k] = ""; });
+        $("fZakazka").value = "";
+        zavriNabidku();
         window.KBUI.setSearch("");
         document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
         document.querySelector('[data-obdobi="mesic"]').classList.add("chip--active");
@@ -236,10 +275,80 @@
             .sort((a, b) => poradi(a) - poradi(b) || a.localeCompare(b, "cs"));
     }
 
+    /* ------------------------------------------------ výběr zakázky ----
+       Zakázky se nevybírají z roletky, ale píšou – je jich přes třicet.
+       Napřed ty, do kterých se opravdu píše (s počtem zápisů), pod nimi
+       šedě ty, které zatím zápis nemají (Michal 25. 9. 2026). */
+
+    function zakazkyProVyber() {
+        const pocty = new Map();
+        (window.KB.vykazy || []).forEach(z => {
+            const k = (z.zakazka || "").trim();
+            if (!k) return;
+            if (!pocty.has(k)) pocty.set(k, { nazev: k, zapisu: 0, hodiny: 0, castka: 0 });
+            const r = pocty.get(k);
+            r.zapisu += 1;
+            r.hodiny += Number(z.hodiny) || 0;
+            r.castka += Number(z.castka) || 0;
+        });
+        return {
+            sZapisem: Array.from(pocty.values())
+                .sort((a, b) => b.zapisu - a.zapisu || a.nazev.localeCompare(b.nazev, "cs")),
+            bez: nabidkaZakazek().filter(n => !pocty.has(n)).map(n => ({ nazev: n, zapisu: 0 }))
+        };
+    }
+
+    /* Hledá se bez ohledu na diakritiku a po slovech: „zizkov nadr" najde
+       „Nádraží Žižkov". Nikdo nebude psát háčky, aby něco našel. */
+    const bezDiakritiky = (text) => String(text || "").toLocaleLowerCase("cs")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    function vykresliNabidku(dotaz) {
+        const kusy = bezDiakritiky(dotaz).split(/\s+/).filter(Boolean);
+        const sedi = (r) => {
+            const nazev = bezDiakritiky(r.nazev);
+            return kusy.every(k => nazev.indexOf(k) !== -1);
+        };
+        const seznam = zakazkyProVyber();
+        const radek = (r, prazdny) =>
+            '<button type="button" class="zaknabidka__polozka' +
+                (prazdny ? " zaknabidka__polozka--bez" : "") +
+                '" data-zak="' + esc(r.nazev) + '">' +
+                '<span class="zaknabidka__nazev">' + esc(r.nazev) + "</span>" +
+                '<span class="zaknabidka__cislo">' + esc(prazdny ? "bez zápisu"
+                    : V.pocet(r.zapisu, ["zápis", "zápisy", "zápisů"]) + " · " + V.hod(r.hodiny)) +
+                "</span></button>";
+
+        const s = seznam.sZapisem.filter(sedi);
+        const b = seznam.bez.filter(sedi);
+        $("zakNabidka").innerHTML =
+            (s.length ? '<div class="zaknabidka__nadpis">Zakázky se zápisy</div>' +
+                s.map(r => radek(r, false)).join("") : "") +
+            (b.length ? '<div class="zaknabidka__nadpis">Zatím bez zápisu</div>' +
+                b.map(r => radek(r, true)).join("") : "") +
+            (s.length || b.length ? ""
+                : '<div class="zaknabidka__nadpis">Nic takového tu není</div>');
+        $("zakNabidka").hidden = false;
+    }
+
+    const zavriNabidku = () => { $("zakNabidka").hidden = true; };
+
+    /** Přepnutí na zakázku (prázdný název = domov, celkový přehled). */
+    function nastavZakazku(nazev) {
+        filtr.zakazka = nazev || "";
+        filtr.projekt = "";                 // jiná zakázka = jiné projekty
+        // do pole patří celý název, ne to, co se z něj stihlo napsat
+        $("fZakazka").value = filtr.zakazka;
+        zavriNabidku();
+        render();
+    }
+
     function naplnFiltry() {
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
-        $("fZakazka").innerHTML = V.options(nabidkaZakazek(), filtr.zakazka, "Všechny zakázky");
+        // do pole se píše, hodnotu proto přepisujeme jen když v něm nikdo nestojí
+        if ($("fZakazka") !== document.activeElement) $("fZakazka").value = filtr.zakazka;
+        $("zakVyber").classList.toggle("zakvyber--doma", !filtr.zakazka);
         // bez vybrané zakázky by seznam projektů byl směsice ze všech zakázek
         $("fProjekt").innerHTML = filtr.zakazka
             ? V.options(V.projekty(filtr.zakazka), filtr.projekt, "Všechny projekty")
@@ -324,9 +433,17 @@
            ne jen k tomu, co je ve starém číselníku zakázek – ten měl čtyři
            položky a třináct rozpočtů se tak nikdy neukázalo (Michal
            25. 9. 2026). Bere se proto rovnou seznam rozpočtů. */
+        const spotreba = (zak) => {
+            const s = V.soucty(vsechno.filter(z => z.zakazka === zak));
+            return metrika === "hod" ? s.hodiny : s.castka;
+        };
         const sRozpoctem = Object.keys(window.KB.rozpocty || {}).filter(zak => {
+            if (filtr.zakazka && zak !== filtr.zakazka) return false;    // u vybrané jen ona
             const r = V.rozpocet(zak);
-            return metrika === "hod" ? r.hodiny > 0 : r.kc > 0;
+            const maRozpocet = metrika === "hod" ? r.hodiny > 0 : r.kc > 0;
+            /* „0 z 5 000" nikomu nic neřekne – dokud se na zakázku nic
+               nenapsalo, do čerpání nepatří (Michal 25. 9. 2026). */
+            return maRozpocet && spotreba(zak) > 0;
         });
         if (!sRozpoctem.length) return "";
 
@@ -420,6 +537,40 @@
         "</div>";
     }
 
+    /**
+     * Po měsících. Schválně NE za vybrané období – v základu je zapnutý
+     * tenhle měsíc a jeden sloupec žádný vývoj neukáže. Ostatní filtry
+     * (člověk, zakázka) platí, takže u vybrané zakázky je vidět, jak šla
+     * v čase ona (Michal 25. 9. 2026).
+     */
+    function mesicniKarta() {
+        const bezDat = Object.assign({}, filtr, { od: "", do: "" });
+        const mapa = new Map();
+        V.vyber(window.KB.vykazy || [], bezDat).forEach(z => {
+            const klic = String(z.datum || "").slice(0, 7);
+            if (klic.length !== 7) return;
+            if (!mapa.has(klic)) mapa.set(klic, { klic: klic, hodiny: 0, castka: 0, pocet: 0 });
+            const r = mapa.get(klic);
+            r.hodiny += Number(z.hodiny) || 0;
+            r.castka += Number(z.castka) || 0;
+            r.pocet += 1;
+        });
+        if (mapa.size < 2) return "";        // jediný měsíc není přehled
+
+        const nazevMesice = (klic) => {
+            const kusy = klic.split("-");
+            return new Date(Number(kusy[0]), Number(kusy[1]) - 1, 1)
+                .toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
+        };
+        const mesice = Array.from(mapa.values())
+            .sort((a, b) => a.klic.localeCompare(b.klic))
+            .map(m => Object.assign({}, m, { klic: nazevMesice(m.klic) }));
+
+        return karta("Po měsících",
+            (filtr.zakazka ? filtr.zakazka + " · " : "") + "za celou dobu, ne jen za vybrané období",
+            V.pruhy(mesice, metrika));
+    }
+
     /** Karta „Zakázky“: kruh s hlavními podíly a pod ním seznam všeho. */
     function zakazkyKarta(zaznamy) {
         const polozky = V.podle(zaznamy, "zakazka", poradiZakazek());
@@ -466,9 +617,12 @@
             return;
         }
 
-        // ---- celky za celý výběr
+        /* Domov (žádná vybraná zakázka) ukazuje celek: čerpání rozpočtů,
+           měsíce a rozpad na zakázky. Po výběru zakázky se to samé počítá
+           jen pro ni a seznam zakázek nedává smysl (Michal 25. 9. 2026). */
         $("celky").innerHTML =
             rozpoctyKarta() +
+            mesicniKarta() +
             /* Kruh tam, kde jde o rozdělení celku na pár dílů; vodorovné pruhy
                tam, kde se položky řadí a je jich hodně (technologie, firmy). */
             karta("Části zpracování", "kolik stojí focení, skeny, tabulky a ArcGIS",
@@ -480,7 +634,7 @@
             karta("Technologie", "na čem se pracovalo",
                 V.pruhy(V.podleCasti(zaznamy, "technologie", "podilTech", poradiTech()),
                         metrika, V.techLabel)) +
-            zakazkyKarta(zaznamy) +
+            (filtr.zakazka ? "" : zakazkyKarta(zaznamy)) +
             karta("Fakturováno firmám", "komu se to účtuje",
                 V.pruhy(V.podle(zaznamy, "firma", V.firmy()), metrika));
 
@@ -559,7 +713,33 @@
             });
         });
 
-        [["fOd", "od"], ["fDo", "do"], ["fOsoba", "uid"], ["fZakazka", "zakazka"],
+        /* Výběr zakázky psaním: nabídka se otevře na kliknutí i na psaní,
+           Enter bere první nabídnutou, Esc zavře a domeček vrátí domů. */
+        $("fZakazka").addEventListener("focus", () => vykresliNabidku($("fZakazka").value));
+        $("fZakazka").addEventListener("input", () => vykresliNabidku($("fZakazka").value));
+        $("fZakazka").addEventListener("keydown", (event) => {
+            if (event.key === "Escape") { zavriNabidku(); $("fZakazka").blur(); }
+            if (event.key === "Enter") {
+                const prvni = $("zakNabidka").querySelector("[data-zak]");
+                if (prvni) { event.preventDefault(); nastavZakazku(prvni.dataset.zak); }
+            }
+        });
+        $("zakNabidka").addEventListener("mousedown", (event) => {
+            const volba = event.target.closest("[data-zak]");
+            if (!volba) return;
+            event.preventDefault();          // ať pole neztratí obsah dřív, než se přepne
+            nastavZakazku(volba.dataset.zak);
+        });
+        $("fZakazka").addEventListener("blur", () => {
+            // co se nedopsalo do konce, se po odchodu vrátí na vybranou zakázku
+            setTimeout(() => { zavriNabidku(); $("fZakazka").value = filtr.zakazka; }, 120);
+        });
+        $("btnDomov").addEventListener("click", () => {
+            $("fZakazka").value = "";
+            nastavZakazku("");
+        });
+
+        [["fOd", "od"], ["fDo", "do"], ["fOsoba", "uid"],
          ["fProjekt", "projekt"], ["fFirma", "firma"], ["fCinnost", "cinnost"],
          ["fTech", "tech"]].forEach(([id, klic]) => {
             $(id).addEventListener("change", () => {

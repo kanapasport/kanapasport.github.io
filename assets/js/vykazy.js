@@ -646,10 +646,22 @@
 
     V.SEDA = SEDA;
     V.POCET_BAREV = BARVY.length;
+    /* Položka mimo číselník měla dosud šedou – a protože číselník zakázek
+       je starý a neúplný, byly šedé skoro všechny grafy. Barva se proto
+       odvodí z názvu: je stálá (stejná zakázka má stejnou barvu ve všech
+       grafech i po překreslení) a šedá zůstává tomu, čemu patří – „Ostatním"
+       a nezařazenému (Michal 25. 9. 2026). */
+    const barvaZNazvu = (nazev) => {
+        let soucet = 0;
+        for (let i = 0; i < nazev.length; i++) soucet = (soucet * 31 + nazev.charCodeAt(i)) % 100003;
+        return BARVY[soucet % BARVY.length];
+    };
+
     /** Nezařazené a „Ostatní" jsou vždycky šedé, ať jsou na první pohled vidět. */
     V.barva = (index, nazev) => {
         if (nazev && /nerozřazeno|neurčeno|ostatní|nezařazeno/i.test(nazev)) return SEDA;
-        return index >= 0 && index < BARVY.length ? BARVY[index] : SEDA;
+        if (index >= 0 && index < BARVY.length) return BARVY[index];
+        return nazev ? barvaZNazvu(String(nazev)) : SEDA;
     };
 
     /* ------------------------------------------------------------ období */
