@@ -1704,21 +1704,44 @@
 
         function zaloz(u, poradi, kolik) {
             if (!kolik) return;
-            const kdy = new Date(u.od + "T00:00:00");
-            kdy.setDate(kdy.getDate() - kolik);
-            if (dnes < den(kdy)) return;                   // ještě není čas
 
             const id = "qt_akce_" + u.id + poradi + "_" + uid;
-            if ((window.KB.quicktodo || []).some(q => q.id === id)) return;
-            try { if (localStorage.getItem("kb-" + id)) return; } catch (err) { }
-
             const co = String(u.text || "").trim() || "akce v kalendáři";
             const kdyText = (() => {
                 const c = String(u.od).split("-");
                 return c.length === 3 ? Number(c[2]) + ". " + Number(c[1]) + "." : u.od;
             })();
+            const text = "Připomenutí: " + co + " – " + kdyText;
+
+            /* Vzkaz už existuje: musí držet krok s akcí. Když se akce posune
+               nebo přejmenuje, připomínka to vezme za svou – jinak v ní visí
+               starý termín. (25. 9. 2026: akce vznikla na 25. 9., vzkaz se
+               založil o tři vteřiny později a Marek pak akci přesunul na
+               2. 10.; ve vzkazu zůstalo 25. 9.) Posun DNE odškrtnutý vzkaz
+               zase otevře – je to jiný den, než na který se člověk chystal.
+               Samotná změna názvu odškrtnutí nechá být. */
+            const stary = (window.KB.quicktodo || []).find(q => q.id === id);
+            if (stary) {
+                const jinyDen = (stary.doKdy || "") !== u.od;
+                if (!jinyDen && stary.text === text) return;
+                window.KB.saveQuickTodo(id, Object.assign({}, stary, {
+                    text: text,
+                    doKdy: u.od,
+                    hotovo: jinyDen ? false : stary.hotovo === true,
+                    hotoviUids: jinyDen ? [] : (stary.hotoviUids || []),
+                    hotovoKdo: jinyDen ? "" : (stary.hotovoKdo || ""),
+                    hotovoMs: jinyDen ? 0 : (stary.hotovoMs || 0)
+                })).catch(err => console.warn("Připomínka se nesrovnala:", err));
+                return;
+            }
+
+            const kdy = new Date(u.od + "T00:00:00");
+            kdy.setDate(kdy.getDate() - kolik);
+            if (dnes < den(kdy)) return;                   // ještě není čas
+            try { if (localStorage.getItem("kb-" + id)) return; } catch (err) { }
+
             window.KB.saveQuickTodo(id, {
-                text: "Připomenutí: " + co + " – " + kdyText,
+                text: text,
                 proUids: [uid],
                 odKoho: uid,
                 odKohoJmeno: "Kalendář",
