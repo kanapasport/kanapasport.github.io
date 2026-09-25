@@ -39,6 +39,33 @@
         /* Dovolená, nemoc a školení nejsou odpracovaný čas – řádek je proto
            utlumený, ať se opticky neplete s prací, za kterou se fakturuje. */
         .vyk__absence td { background: var(--bg-soft); color: var(--muted); }
+
+        /* Úplný seznam zakázek pod kruhem. Do šesti výsečí se dvacet zakázek
+           nevejde, ale vidět musí být všechno, do čeho se píše – proto pod
+           grafem ještě tabulka (Michal 25. 9. 2026). */
+        .vsezak { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+        .vsezak__vnitrek { max-height: 340px; overflow: auto; }
+        .vsezak__tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        .vsezak__tab th, .vsezak__tab td {
+            padding: 5px 8px; border-bottom: 1px solid var(--line-soft);
+            text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+        }
+        .vsezak__tab th {
+            position: sticky; top: 0; z-index: 1; background: var(--surface);
+            font-size: 10.5px; font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .vsezak__tab th:first-child, .vsezak__tab td:first-child {
+            text-align: left; white-space: normal; min-width: 180px;
+        }
+        .vsezak__tab tbody tr:hover td { background: var(--bg-soft); }
+        /* Režie a absence nejsou zakázka – štítek to říká hned. */
+        .vsezak__druh {
+            display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 99px;
+            background: var(--bg-soft); border: 1px solid var(--line);
+            font-size: 10px; font-weight: 900; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted);
+        }
     </style>
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
@@ -225,6 +252,36 @@
 
     /* --------------------------------------------------------- skládání */
 
+    /**
+     * Úplný seznam položek pod grafem. Kruh unese šest výsečí a zbytek slije
+     * do „Ostatní“; manažer ale potřebuje vidět všechno, do čeho se píše –
+     * i režii a absence (Michal 25. 9. 2026). Řadí se podle zvolené metriky,
+     * ne podle peněz natvrdo, ať pořadí sedí s tím, co je na grafu.
+     */
+    function seznamVsech(polozky, metrika, druhy) {
+        if (!polozky.length) return "";
+        const hodnota = (p) => metrika === "hod" ? p.hodiny : p.castka;
+        const celek = polozky.reduce((s, p) => s + hodnota(p), 0);
+        const razene = polozky.slice().sort((a, b) => hodnota(b) - hodnota(a) ||
+            b.hodiny - a.hodiny || a.klic.localeCompare(b.klic, "cs"));
+
+        return '<div class="vsezak"><div class="vsezak__vnitrek">' +
+            '<table class="vsezak__tab"><thead><tr>' +
+                "<th>Zakázka</th><th>Zápisů</th><th>Hodin</th><th>Částka</th><th>Podíl</th>" +
+            "</tr></thead><tbody>" +
+            razene.map(p => {
+                const druh = (druhy || {})[p.klic] || "";
+                const podil = celek ? Math.round(hodnota(p) / celek * 100) : 0;
+                return "<tr><td title=\"" + esc(p.klic) + "\">" + esc(p.klic) +
+                        (druh ? '<span class="vsezak__druh">' + esc(druh) + "</span>" : "") + "</td>" +
+                    "<td>" + V.cislo(p.pocet) + "</td>" +
+                    "<td>" + V.hod(p.hodiny) + "</td>" +
+                    "<td>" + V.kc(p.castka) + "</td>" +
+                    "<td>" + podil + " %</td></tr>";
+            }).join("") +
+            "</tbody></table></div></div>";
+    }
+
     const karta = (nadpis, podnadpis, obsah) =>
         '<section class="card" style="padding:16px 18px">' +
             '<div class="spread" style="margin-bottom:10px">' +
@@ -329,6 +386,23 @@
         "</div>";
     }
 
+    /** Karta „Zakázky“: kruh s hlavními podíly a pod ním seznam všeho. */
+    function zakazkyKarta(zaznamy) {
+        const polozky = V.podle(zaznamy, "zakazka", poradiZakazek());
+        /* Režii a absenci nese jednotlivý zápis, ne číselník – druh se proto
+           bere z prvního zápisu dané zakázky. */
+        const druhy = {};
+        zaznamy.forEach(z => {
+            const klic = (z.zakazka || "").trim() || "Nezařazeno";
+            if (druhy[klic] === undefined) {
+                druhy[klic] = z.absence ? "absence" : (z.rezie ? "režie" : "");
+            }
+        });
+        return karta("Zakázky",
+            V.pocet(polozky.length, ["zakázka", "zakázky", "zakázek"]) + " · co která spotřebovala",
+            V.kolac(V.sesypZbytek(polozky), metrika) + seznamVsech(polozky, metrika, druhy));
+    }
+
     function render() {
         if (!window.KBUI.can("vykaz.view")) {
             $("stop").hidden = false;
@@ -371,8 +445,7 @@
             karta("Technologie", "na čem se pracovalo",
                 V.pruhy(V.podleCasti(zaznamy, "technologie", "podilTech", poradiTech()),
                         metrika, V.techLabel)) +
-            karta("Zakázky", "co která zakázka zatím spotřebovala",
-                V.kolac(V.sesypZbytek(V.podle(zaznamy, "zakazka", poradiZakazek())), metrika)) +
+            zakazkyKarta(zaznamy) +
             karta("Fakturováno firmám", "komu se to účtuje",
                 V.pruhy(V.podle(zaznamy, "firma", V.firmy()), metrika));
 
