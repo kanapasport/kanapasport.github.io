@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Porady – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=249">
+    <link rel="stylesheet" href="assets/css/app.css?v=250">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -217,11 +217,11 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=249"></script>
-<script src="assets/js/doc.js?v=249"></script>
-<script src="assets/js/ui.js?v=249"></script>
-<script src="assets/js/vykazy.js?v=249"></script>
-<script type="module" src="assets/js/store.js?v=249"></script>
+<script src="assets/js/taxonomy.js?v=250"></script>
+<script src="assets/js/doc.js?v=250"></script>
+<script src="assets/js/ui.js?v=250"></script>
+<script src="assets/js/vykazy.js?v=250"></script>
+<script type="module" src="assets/js/store.js?v=250"></script>
 
 <script>
 (function () {
@@ -967,16 +967,19 @@
            stránky, ať se zápis kvůli tomu nepřepisuje dokola. Skrytý
            zápis se odemkne DEN PO poradě – v den porady se na ní ještě
            domlouvá, co v něm bude (Michal 25. 9. 2026). */
-        let zverejnenoUz = false;
-        function zverejniProbehle() {
-            if (zverejnenoUz || !manazer()) return;
+        let uklidUz = false;
+        function uklidPorad() {
+            /* Role dorazí až se seznamem lidí, proto se to dělá tady, až
+               když porady přijdou – ne při načtení stránky. */
+            if (uklidUz || !manazer() || !(window.KB.porady || []).length) return;
+            uklidUz = true;
+            // starým zápisům chybí příznak – bez něj by členům z dotazu vypadly
+            window.KB.doplnSkrytiPorad().catch(err => console.warn("Doplnění skrytí:", err));
             const dnes = dnesISO();
-            const zralé = (window.KB.porady || [])
-                .filter(p => jeSkryta(p) && p.datum && p.datum < dnes);
-            if (!zralé.length) return;
-            zverejnenoUz = true;
-            zralé.forEach(p => window.KB.nastavSkrytiPorady(p.id, false)
-                .catch(err => console.warn("Zveřejnění porady:", err)));
+            (window.KB.porady || [])
+                .filter(p => jeSkryta(p) && p.datum && p.datum < dnes)
+                .forEach(p => window.KB.nastavSkrytiPorady(p.id, false)
+                    .catch(err => console.warn("Zveřejnění porady:", err)));
         }
 
         window.KB.on("porady", () => {
@@ -985,7 +988,7 @@
             if (!otevreny && (window.KB.porady || []).length) {
                 otevreny = window.KB.porady[0].id;
             }
-            zverejniProbehle();
+            uklidPorad();
             vykresliSeznam();
             if (!upravuji) vykresliDetail();
         });
@@ -994,13 +997,6 @@
         /* Okruhy porady se vybírají z projektů – manažer má všechny,
            ostatní ty svoje (víc jim pravidla stejně nevydají). */
         if (window.KBUI.can("vykaz.view")) window.KB.watchProjekty();
-
-        /* Jednou za načtení stránky: starým zápisům se doplní příznak
-           (jinak by členům z dotazu vypadly) a porady, které už proběhly,
-           se zveřejní samy. Obojí umí jen manažer. */
-        if (manazer()) {
-            window.KB.doplnSkrytiPorad().catch(err => console.warn("Doplnění skrytí:", err));
-        }
         else window.KB.watchMojeProjekty();
         window.KB.on("projekty-docs", () => { if (upravuji) vykresliEditor(); });
         vykresliSeznam();
