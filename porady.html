@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Porady – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=250">
+    <link rel="stylesheet" href="assets/css/app.css?v=251">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -217,11 +217,11 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=250"></script>
-<script src="assets/js/doc.js?v=250"></script>
-<script src="assets/js/ui.js?v=250"></script>
-<script src="assets/js/vykazy.js?v=250"></script>
-<script type="module" src="assets/js/store.js?v=250"></script>
+<script src="assets/js/taxonomy.js?v=251"></script>
+<script src="assets/js/doc.js?v=251"></script>
+<script src="assets/js/ui.js?v=251"></script>
+<script src="assets/js/vykazy.js?v=251"></script>
+<script type="module" src="assets/js/store.js?v=251"></script>
 
 <script>
 (function () {
@@ -263,6 +263,14 @@
        (Michal 25. 9. 2026). */
     const jeSkryta = (p) => !!p && p.skryto === true;
 
+    /**
+     * Zápisy, které se smí vykreslit. Členům je databáze ani nepošle
+     * (dotaz `skryto == false`), tohle je pro manažera v náhledu
+     * „Zobrazit jako zaměstnanec" – ten mění jen rozhraní, data zůstávají
+     * manažerská, takže by v náhledu skrytá porada svítila dál.
+     */
+    const viditelne = () => (window.KB.porady || []).filter(p => manazer() || !jeSkryta(p));
+
     const czDatum = (iso) => {
         if (!iso) return "";
         const [r, m, d] = String(iso).split("-");
@@ -287,7 +295,7 @@
     /* ------------------------------------------------------- seznam vlevo */
 
     function vykresliSeznam() {
-        const vse = (window.KB.porady || []);
+        const vse = viditelne();
         $("prazdno").hidden = !!vse.length || !!otevreny;
         $("seznam").innerHTML = vse.map(p =>
             '<button type="button" class="ppolozka' +
@@ -448,7 +456,7 @@
     }
 
     function vykresliDiskuzi() {
-        const p = (window.KB.porady || []).find(x => x.id === otevreny);
+        const p = viditelne().find(x => x.id === otevreny);
         if (!p) return void ($("diskuze").innerHTML = "");
         let poradi = 0;
         $("diskuze").innerHTML = (p.sekce || []).map(sek =>
@@ -467,7 +475,7 @@
 
     function naplnFiltrProjekt() {
         const klice = new Set();
-        (window.KB.porady || []).forEach(p =>
+        viditelne().forEach(p =>
             (p.sekce || []).forEach(sek => { if (okruhKlic(sek)) klice.add(okruhKlic(sek)); }));
         const volby = [...klice].sort((a, b) => a.localeCompare(b, "cs"));
         if (!volby.length) { $("filtrProjekt").innerHTML = ""; return; }
@@ -479,7 +487,7 @@
 
     function vykresliProjekt() {
         const kusy = [];
-        (window.KB.porady || []).forEach(p => {
+        viditelne().forEach(p => {
             (p.sekce || []).forEach(sek => {
                 if (okruhKlic(sek) !== filtrProjekt) return;
                 (sek.body || []).filter(b => bodText(b).trim()).forEach(b => {
@@ -498,8 +506,8 @@
     }
 
     function vykresliDetail() {
-        const p = (window.KB.porady || []).find(x => x.id === otevreny);
-        const jsouPorady = !!(window.KB.porady || []).length;
+        const p = viditelne().find(x => x.id === otevreny);
+        const jsouPorady = !!viditelne().length;
         // pohled na projekt jde napříč poradami – nepotřebuje vybraný zápis
         $("detail").hidden = !p && !(pohled === "projekt" && jsouPorady);
         $("prazdno").hidden = !!p || jsouPorady;
@@ -985,8 +993,13 @@
         window.KB.on("porady", () => {
             /* Bez otevřeného zápisu se rovnou ukáže nejnovější – seznam
                chodí seřazený od nejnovější porady. */
-            if (!otevreny && (window.KB.porady || []).length) {
-                otevreny = window.KB.porady[0].id;
+            if (!otevreny && viditelne().length) {
+                otevreny = viditelne()[0].id;
+            }
+            /* Skrytý zápis v náhledu zaměstnance by zůstal otevřený –
+               přepne se na první, který se ukázat smí. */
+            if (otevreny && !viditelne().some(x => x.id === otevreny)) {
+                otevreny = viditelne().length ? viditelne()[0].id : "";
             }
             uklidPorad();
             vykresliSeznam();
