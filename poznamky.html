@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=251">
+    <link rel="stylesheet" href="assets/css/app.css?v=252">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -185,11 +185,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=251"></script>
-<script src="assets/js/doc.js?v=251"></script>
-<script src="assets/js/ui.js?v=251"></script>
-<script src="assets/js/vykazy.js?v=251"></script>
-<script type="module" src="assets/js/store.js?v=251"></script>
+<script src="assets/js/taxonomy.js?v=252"></script>
+<script src="assets/js/doc.js?v=252"></script>
+<script src="assets/js/ui.js?v=252"></script>
+<script src="assets/js/vykazy.js?v=252"></script>
+<script type="module" src="assets/js/store.js?v=252"></script>
 
 <script>
 (function () {
@@ -203,6 +203,27 @@
     let novaListId = "";         // do kterého listu se přidává poznámka
     let otevrenaPozn = "";       // id poznámky v detailu
     let aktivniPozn = "";        // dlaždice s otevřenou editací (pravý klik)
+
+    /**
+     * Kdo smí poznámku zavřít nebo smazat: autor a majitel listu. Do
+     * sdíleného listu píšou kolegové, co se pokazilo, a hospodář listu to
+     * má uklidit – dřív s cizí poznámkou ve vlastním listu nešlo nic
+     * (Michal 25. 9. 2026). Stejné právo drží i pravidla databáze.
+     */
+    const smimResit = (z) => {
+        if (!z) return false;
+        if (z.uid === me()) return true;
+        const list = (window.KB.poznListy || []).find(l => l.id === z.listId);
+        return !!list && list.uid === me();
+    };
+
+    /** Cizí poznámka ve vlastním listu – ať je při mazání jasné, čí je. */
+    const jeCizi = (z) => !!z && z.uid !== me();
+
+    /** Otázka před smazáním: u cizí poznámky se jmenuje její autor. */
+    const otazkaSmazat = (z) => jeCizi(z)
+        ? "Smazat poznámku od " + ((z.jmeno || jmenoUid(z.uid)) || "kolegy") + " i s obrázky?"
+        : "Smazat poznámku i s obrázky?";
     let noveObrazky = [];        // dataUrl obrázků rozepsané poznámky
     const obrazkyCache = new Map();   // id poznámky → nahrané obrázky
     let zParametruOtevreno = false;   // ?pozn=… se otvírá jen jednou
@@ -264,7 +285,7 @@
 
         const dlazdice = (z) => {
             const hotovo = Number(z.stav) === 1;
-            const moje = z.uid === me();
+            const moje = smimResit(z);
             return '<button type="button" class="pozn' + (hotovo ? " pozn--hotovo" : "") +
                 (z.nahled ? "" : " pozn--bezfota") +
                 (z.id === otevrenaPozn ? " pozn--zvyraznena" : "") +
@@ -276,7 +297,9 @@
                         '<span data-pozn-akce="stav" title="' +
                             (hotovo ? "Vrátit na řeší se" : "Označit splněno") + '">' +
                             (hotovo ? "↩" : "✓") + "</span>" +
-                        '<span data-pozn-akce="text" title="Upravit text">✎</span>' +
+                        /* text mění jen autor – majitel listu smí zavřít
+                           nebo smazat, ne přepisovat cizí slova */
+                        (z.uid === me() ? '<span data-pozn-akce="text" title="Upravit text">✎</span>' : "") +
                         '<span class="pakce--smaz" data-pozn-akce="smaz" title="Smazat">×</span>' +
                       "</span>"
                     : "") +
@@ -350,7 +373,7 @@
     function vykresliDetail() {
         const z = (window.KB.poznamky || []).find(x => x.id === otevrenaPozn);
         if (!z) { $("oknoDetail").hidden = true; return; }
-        const moje = z.uid === me();
+        const moje = smimResit(z);
         const hotovo = Number(z.stav) === 1;
         $("detailNadpis").textContent = (z.listNazev || "Poznámka") +
             (moje ? "" : " · " + (z.jmeno || jmenoUid(z.uid)));
@@ -456,7 +479,7 @@
                 window.KB.ulozPoznamku(z.id, { stav: hotovo ? 0 : 1 })
                     .catch(() => window.KBUI.toast("Uložení selhalo.", "error")));
             $("btnSmazPozn").addEventListener("click", async () => {
-                if (!confirm("Smazat poznámku i s obrázky?")) return;
+                if (!confirm(otazkaSmazat(z))) return;
                 await window.KB.smazPoznamku(z.id);
                 otevrenaPozn = "";
                 $("oknoDetail").hidden = true;
@@ -674,7 +697,7 @@
                     const text = prompt("Text poznámky:", z.text || "");
                     if (text !== null) await window.KB.ulozPoznamku(id, { text: text });
                 } else if (akce.dataset.poznAkce === "smaz") {
-                    if (!confirm("Smazat poznámku i s obrázky?")) return;
+                    if (!confirm(otazkaSmazat(z))) return;
                     aktivniPozn = "";
                     await window.KB.smazPoznamku(id);
                 }
