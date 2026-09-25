@@ -1264,6 +1264,30 @@
     UI.quickVzal = (q, uid) => !!(q && (q.vzaliUids || []).indexOf(uid) !== -1);
 
     /**
+     * Kolik adresátů si vzkaz vzalo na vědomí – vrací „3 z 5", nebo nic.
+     * Zadavatel tím pozná, že vzkaz nezapadl, i když ho nikdo neodškrtl
+     * jako splněný (Michal 25. 9. 2026). Nula se neukazuje, jinak by
+     * u každého vzkazu svítilo „0 z 5". U vzkazu jedinému člověku, kterým
+     * jsem já sám, taky ne – vedle už stojí „beru na vědomí". */
+    UI.quickVedomi = (q) => {
+        const komu = UI.quickAdresati(q);
+        const vzali = komu.filter(u => UI.quickVzal(q, u));
+        if (!vzali.length) return "";
+        const ja = (window.KB.currentUid && window.KB.currentUid()) || "";
+        if (komu.length === 1 && vzali[0] === ja) return "";
+        return vzali.length + " z " + komu.length;
+    };
+
+    /** Jména těch, kdo si vzkaz vzali na vědomí. */
+    UI.quickVedomiJmena = (q) => UI.quickAdresati(q)
+        .filter(u => UI.quickVzal(q, u))
+        .map(u => {
+            const x = (window.KB.users || []).find(y => y.id === u);
+            return x ? ((x.first || "") + " " + (x.last || "")).trim() : "";
+        })
+        .filter(Boolean);
+
+    /**
      * „2 z 5 splnilo · chybí Petr Trávník, Marek Pelikán" pod vzkazem, který
      * si každý škrtá sám. Samotný počet nestačil – zadavatel z něj nepoznal,
      * koho má popohnat (Michal 16. 9. 2026). Kdo si vzkaz vzal aspoň na
@@ -1916,6 +1940,10 @@
                 ? '<div class="tiny muted" style="margin-top:6px">Spoluúčast: ' +
                   esc(ostatni.join(", ")) + (q.rezim === "kazdy" ? " · každý sám" : "") + "</div>"
                 : "") +
+            (UI.quickVedomi(q)
+                ? '<div class="tiny muted" style="margin-top:4px">Ví o tom: ' +
+                  esc(UI.quickVedomiJmena(q).join(", ")) + " · " + esc(UI.quickVedomi(q)) + "</div>"
+                : "") +
             (obrazky.length
                 ? '<div class="quickokno__obrazky">' + obrazky.map(o =>
                     '<img src="' + esc(o.data) + '" alt="">').join("") + "</div>"
@@ -2313,6 +2341,11 @@
                         (q.rezim === "kazdy" && ostatni.length
                             ? '<br><span class="quickrad__splnil">' + esc(UI.quickStav(q)) +
                               "</span>" : "") +
+                        // kolik lidí si vzkaz vzalo na vědomí (jména v bublině)
+                        (UI.quickVedomi(q)
+                            ? '<br><span class="quickrad__vzato" title="' +
+                              esc(UI.quickVedomiJmena(q).join(", ")) + '">ví o tom ' +
+                              esc(UI.quickVedomi(q)) + "</span>" : "") +
                         (vzatoMne
                             ? '<br><span class="quickrad__vzato">beru na vědomí</span>' : "") +
                         (q.rezim !== "kazdy" && q.hotovo && q.hotovoKdo

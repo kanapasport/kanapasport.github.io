@@ -44,6 +44,31 @@
         .pbod--ho { box-shadow: 0 0 0 2px var(--accent-lt); }
         .pbod--chybi { background: #fdeff1; border-color: var(--danger); }
 
+        /* víkend v mřížce – ať je vidět, že tam nic být nemusí */
+        .pmr th.pmr--vik, .pmr td.pmr--vik { background: var(--bg-soft); }
+        /* jméno je tlačítko: otevře celkový přehled člověka */
+        .pjmeno { border: none; background: none; font: inherit; color: inherit;
+            padding: 0; cursor: pointer; text-align: left; }
+        .pjmeno:hover { color: var(--accent); text-decoration: underline; }
+
+        /* celkový přehled člověka */
+        .pstat { display: flex; flex-wrap: wrap; gap: 18px 26px; }
+        .pstat__kus { min-width: 84px; }
+        .pstat__cislo { display: block; font-size: 20px; font-weight: 900; line-height: 1.2; }
+        .pmesice { width: 100%; border-collapse: collapse; }
+        .pmesice th, .pmesice td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft);
+            font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+        .pmesice th:first-child, .pmesice td:first-child { text-align: left; }
+        .pmesice th { font-size: 10.5px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--muted); }
+        .pradek { display: flex; gap: 10px; align-items: baseline; width: 100%; font: inherit;
+            padding: 5px 9px; border-radius: var(--radius); border: 1px solid var(--line-soft);
+            background: var(--surface); cursor: pointer; text-align: left; }
+        .pradek:hover { border-color: var(--accent); }
+        .pradek__den { flex: none; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .pradek__text { min-width: 0; color: var(--text-soft);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
         /* prohlížeč obrázku */
         .lupa { position: fixed; inset: 0; z-index: 160; background: rgba(11,13,16,.9);
             display: flex; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; }
@@ -93,7 +118,21 @@
     <!-- ------------------------------------- přehled (jen manažeři) -->
     <section class="card col" id="prehledBox" data-need="vykaz.view" hidden
              style="padding:16px 18px;gap:12px">
-        <b style="font-size:15px">Přehled týmu — posledních 7 dní</b>
+        <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+            <b style="font-size:15px" id="prehledNadpis">Přehled týmu</b>
+            <span class="tiny muted" id="prehledNacitam" hidden>načítám starší týden…</span>
+            <div class="grow"></div>
+            <div class="row" style="gap:6px">
+                <button type="button" id="tydenZpet" class="btn btn--ghost btn--sm"
+                    title="Předchozí týden">«</button>
+                <button type="button" id="tydenTento" class="btn btn--ghost btn--sm">Tento týden</button>
+                <button type="button" id="tydenVpred" class="btn btn--ghost btn--sm"
+                    title="Další týden">»</button>
+            </div>
+        </div>
+        <p class="tiny muted" style="margin:0">
+            Klikni na jméno a uvidíš, kolik toho ten člověk nahrál celkově.
+        </p>
         <div class="row row--wrap" style="gap:14px;font-size:12px;color:var(--text-soft)">
             <span><span class="pbod pbod--ma" style="vertical-align:-6px"></span> nahraný postup (klikem otevřeš)</span>
             <span><span class="pbod pbod--ho" style="vertical-align:-6px"></span> ten den měl home office</span>
@@ -106,6 +145,17 @@
 </main>
 
 <div id="lupa" class="lupa" hidden><img id="lupaImg" alt=""></div>
+
+<!-- ------------------------------ celkový přehled člověka (manažer) -->
+<!-- Musí být v dokumentu PŘED detailem dne: obě okna mají stejnou vrstvu,
+     takže výš leží to pozdější – a detail dne se otevírá z tohohle okna. -->
+<div id="clovek" class="hookno no-print" hidden>
+    <div class="hookno__deska card">
+        <div class="hookno__hlava"><span id="clovekNadpis">Postup dne</span>
+            <button type="button" class="linkbtn linkbtn--tmavy" id="btnClovekZavri">Zavřít</button></div>
+        <div class="hookno__telo col" style="gap:14px" id="clovekTelo"></div>
+    </div>
+</div>
 
 <!-- ------------------------------------------ detail dne (manažer) -->
 <div id="detail" class="hookno no-print" hidden>
@@ -135,6 +185,26 @@
     const czDatum = (iso) => {
         const [r, m, d] = String(iso).split("-");
         return Number(d) + ". " + Number(m) + ".";
+    };
+    const czDatumR = (iso) => czDatum(iso) + " " + String(iso).slice(0, 4);
+
+    /* Datum na ISO podle MÍSTNÍHO času – `toISOString` počítá v UTC
+       a v noci by vracel včerejšek. */
+    const isoZData = (d) => d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+
+    /** Pondělí téhož týdne (v poledne, ať se do toho neplete letní čas). */
+    function pondeli(datum) {
+        const d = new Date(datum);
+        d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return d;
+    }
+
+    const denPlus = (datum, kolik) => {
+        const d = new Date(datum);
+        d.setDate(d.getDate() + kolik);
+        return d;
     };
 
     /* ------------------------------------------------------ můj dnešek -- */
@@ -229,17 +299,50 @@
 
     /* ------------------------------------------------ přehled manažera -- */
 
+    /* Ukazovaný týden (pondělí). Listuje se po týdnech dozadu i dopředu
+       – „posledních 7 dní" nestačilo, když se manažer chce podívat na
+       minulý měsíc (Michal 25. 9. 2026). */
+    let tydenOd = pondeli(new Date());
+    const nactenaObdobi = [];      // už dotažené starší týdny
+    let nacitam = false;
+
+    /** Starší týden si musí stránka dotáhnout – živě se drží jen 14 dní. */
+    async function zajistiData(od, doKdy) {
+        const zive = window.KB.postupyOknoOd || "";
+        if (!zive || od >= zive) return;      // živé okno (nebo se teprve zapíná)
+        if (nactenaObdobi.some(r => r.od <= od && doKdy <= r.do)) return;
+        if (nacitam) return;
+        nacitam = true;
+        $("prehledNacitam").hidden = false;
+        try {
+            await window.KB.nactiPostupyRozsah(od, doKdy);
+            nactenaObdobi.push({ od: od, do: doKdy });
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Starší týden se nepodařilo načíst.", "warn");
+        }
+        nacitam = false;
+        $("prehledNacitam").hidden = true;
+        vykresliPrehled();
+    }
+
     function vykresliPrehled() {
         if (!window.KBUI.can("vykaz.view")) return;
         const dny = [];
-        for (let i = 6; i >= 0; i--) {
-            dny.push(new Date(Date.now() - i * 24 * 3600 * 1000).toISOString().slice(0, 10));
-        }
+        for (let i = 0; i < 7; i++) dny.push(isoZData(denPlus(tydenOd, i)));
+        zajistiData(dny[0], dny[6]);
+
+        const tentoTyden = isoZData(pondeli(new Date()));
+        $("prehledNadpis").textContent = "Přehled týmu — " + czDatum(dny[0]) + " – " + czDatumR(dny[6]) +
+            (dny[0] === tentoTyden ? " (tento týden)" : "");
+        $("tydenVpred").disabled = dny[0] >= tentoTyden;
+        $("tydenTento").disabled = dny[0] === tentoTyden;
+
         const lide = window.KBVYK.lide();
 
         /* Po skupinách jako všude jinde – zaměstnanci, OSVČ, studenti. */
         const radekCloveka = (u) => {
-                const bunky = dny.map(datum => {
+                const bunky = dny.map((datum, i) => {
                     const z = (window.KB.postupy || []).find(x => x.uid === u.id &&
                         x.datum === datum && (Number(x.pocet) > 0 || x.text));
                     const ho = mamHo(u.id, datum);
@@ -247,17 +350,21 @@
                     if (z) cls += " pbod--ma";
                     else if (ho) cls += " pbod--chybi";
                     if (ho) cls += " pbod--ho";
-                    return "<td><span class=\"" + cls + "\"" +
+                    return '<td' + (i > 4 ? ' class="pmr--vik"' : "") + '><span class="' + cls + '"' +
                         (z ? ' data-detail="' + esc(z.id) + '"' : "") +
                         ' title="' + esc((u.last || "") + " " + czDatum(datum) +
                             (ho ? " · HO" : "") + (z ? " · nahráno" : " · nic")) + '"></span></td>';
                 }).join("");
-                return "<tr><td>" + esc(window.KBVYK.jmeno(u)) + "</td>" + bunky + "</tr>";
+                return '<tr><td><button type="button" class="pjmeno" data-clovek="' + esc(u.id) +
+                    '" title="Celkový přehled člověka">' + esc(window.KBVYK.jmeno(u)) +
+                    "</button></td>" + bunky + "</tr>";
         };
 
+        const DNY_KR = ["po", "út", "st", "čt", "pá", "so", "ne"];
         $("prehled").innerHTML =
             "<thead><tr><th>Kdo</th>" +
-            dny.map(d => "<th>" + esc(czDatum(d)) + "</th>").join("") +
+            dny.map((d, i) => '<th' + (i > 4 ? ' class="pmr--vik"' : "") + ">" +
+                DNY_KR[i] + " " + esc(czDatum(d)) + "</th>").join("") +
             "</tr></thead><tbody>" +
             window.KBUI.TYPY.map(t => {
                 const moji = lide.filter(u => window.KBUI.typUvazku(u) === t.id);
@@ -267,6 +374,100 @@
                     'letter-spacing:.07em;text-transform:uppercase;color:var(--dim)">' +
                     esc(t.mnozne) + "</td></tr>" + moji.map(radekCloveka).join("");
             }).join("") + "</tbody>";
+    }
+
+    /* --------------------------------------- celkový přehled člověka -- */
+
+    /** Dny home office z kalendáře, rozbalené na jednotlivé pracovní dny. */
+    function dnyHo(uid) {
+        const ven = new Set();
+        (window.KB.kalendar || [])
+            .filter(k => k.typ === "homeoffice" && k.uid === uid && k.od)
+            .forEach(k => {
+                const od = new Date(k.od + "T12:00:00");
+                const doKdy = new Date((k.do || k.od) + "T12:00:00");
+                if (isNaN(od) || isNaN(doKdy)) return;
+                for (let d = new Date(od); d <= doKdy && ven.size < 2000; d = denPlus(d, 1)) {
+                    if (d.getDay() !== 0 && d.getDay() !== 6) ven.add(isoZData(d));
+                }
+            });
+        return ven;
+    }
+
+    async function otevriCloveka(uid) {
+        const u = window.KBVYK.clovek(uid);
+        $("clovekNadpis").textContent = "Postup dne — " + (u ? window.KBVYK.jmeno(u) : "?");
+        $("clovekTelo").innerHTML = '<span class="tiny muted">Načítám…</span>';
+        $("clovek").hidden = false;
+        let zaznamy = [];
+        try {
+            zaznamy = await window.KB.nactiPostupyCloveka(uid);
+        } catch (err) {
+            console.error(err);
+            $("clovekTelo").innerHTML = '<span class="tiny muted">Záznamy se nepodařilo načíst.</span>';
+            return;
+        }
+        vykresliCloveka(uid, zaznamy);
+    }
+
+    function vykresliCloveka(uid, zaznamy) {
+        // za zápis se počítá den s obrázkem nebo s textem, ne prázdný dokument
+        const zapisy = zaznamy
+            .filter(z => Number(z.pocet) > 0 || (z.text || "").trim())
+            .sort((a, b) => (b.datum || "").localeCompare(a.datum || ""));
+        if (!zapisy.length) {
+            $("clovekTelo").innerHTML = '<span class="small muted">Zatím nenahrál žádný postup.</span>';
+            return;
+        }
+
+        const pred30 = isoZData(denPlus(new Date(), -29));
+        const obrazku = zapisy.reduce((s, z) => s + (Number(z.pocet) || 0), 0);
+        const ho = dnyHo(uid);
+        const hoSeZapisem = Array.from(ho).filter(d => zapisy.some(z => z.datum === d)).length;
+
+        const kus = (cislo, popis) => '<span class="pstat__kus"><b class="pstat__cislo">' +
+            esc(cislo) + "</b><span class=\"tiny muted\">" + esc(popis) + "</span></span>";
+
+        // po měsících, od nejnovějšího; víc než rok dozadu už nikdo neřeší
+        const mesice = {};
+        zapisy.forEach(z => {
+            const klic = String(z.datum).slice(0, 7);
+            if (!mesice[klic]) mesice[klic] = { dnu: 0, obrazku: 0 };
+            mesice[klic].dnu += 1;
+            mesice[klic].obrazku += Number(z.pocet) || 0;
+        });
+        const nazevMesice = (klic) => {
+            const [r, m] = klic.split("-");
+            return new Date(Number(r), Number(m) - 1, 1)
+                .toLocaleDateString("cs-CZ", { month: "long", year: "numeric" });
+        };
+
+        $("clovekTelo").innerHTML =
+            '<div class="pstat">' +
+                kus(zapisy.length, "dní se zápisem") +
+                kus(zapisy.filter(z => z.datum >= pred30).length, "za posledních 30 dní") +
+                kus(obrazku, "screenshotů celkem") +
+                kus(hoSeZapisem + " / " + ho.size, "dnů HO se zápisem") +
+            "</div>" +
+            '<div class="tiny muted">První zápis ' + esc(czDatumR(zapisy[zapisy.length - 1].datum)) +
+                " · poslední " + esc(czDatumR(zapisy[0].datum)) + "</div>" +
+
+            '<div><div class="popisek" style="margin-bottom:4px">Po měsících</div>' +
+            '<table class="pmesice"><thead><tr><th>Měsíc</th><th>Dní</th><th>Screenshotů</th></tr></thead><tbody>' +
+            Object.keys(mesice).sort().reverse().slice(0, 14).map(klic =>
+                "<tr><td>" + esc(nazevMesice(klic)) + "</td><td>" + mesice[klic].dnu +
+                "</td><td>" + mesice[klic].obrazku + "</td></tr>").join("") +
+            "</tbody></table></div>" +
+
+            '<div class="col" style="gap:5px">' +
+            '<div class="popisek">Poslední zápisy (klikem se otevřou)</div>' +
+            zapisy.slice(0, 20).map(z =>
+                '<button type="button" class="pradek" data-detail="' + esc(z.id) + '">' +
+                    '<span class="pradek__den">' + esc(czDatumR(z.datum)) + "</span>" +
+                    '<span class="tiny muted">' + (Number(z.pocet) || 0) + "×</span>" +
+                    '<span class="pradek__text">' + esc(z.text || "bez textu") + "</span>" +
+                "</button>").join("") +
+            "</div>";
     }
 
     async function otevriDetail(zaznamId) {
@@ -338,9 +539,29 @@
             const img = e.target.closest("[data-lupa]");
             if (img) { $("lupaImg").src = img.src; $("lupa").hidden = false; return; }
             if (e.target.closest("#lupa")) { $("lupa").hidden = true; return; }
+            const clovek = e.target.closest("[data-clovek]");
+            if (clovek) return void otevriCloveka(clovek.dataset.clovek);
             const det = e.target.closest("[data-detail]");
             if (det) otevriDetail(det.dataset.detail);
         });
+        $("tydenZpet").addEventListener("click", () => {
+            tydenOd = denPlus(tydenOd, -7);
+            vykresliPrehled();
+        });
+        $("tydenVpred").addEventListener("click", () => {
+            tydenOd = denPlus(tydenOd, 7);
+            vykresliPrehled();
+        });
+        $("tydenTento").addEventListener("click", () => {
+            tydenOd = pondeli(new Date());
+            vykresliPrehled();
+        });
+
+        $("btnClovekZavri").addEventListener("click", () => { $("clovek").hidden = true; });
+        $("clovek").addEventListener("click", (e) => {
+            if (e.target === $("clovek")) $("clovek").hidden = true;
+        });
+
         $("btnDetailZavri").addEventListener("click", () => { $("detail").hidden = true; });
         $("detail").addEventListener("click", (e) => {
             if (e.target === $("detail")) $("detail").hidden = true;

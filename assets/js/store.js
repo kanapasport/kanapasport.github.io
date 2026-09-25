@@ -3218,6 +3218,24 @@ const postupObrazek = (id, n) => doc(db, "artifacts", APP_ID, "private", "postup
 
 KB.postupy = [];
 let postupOdber = null;
+/* Živý odběr drží 14 dní. Starší týdny a celý přehled jednoho člověka se
+   dotahují na vyžádání a drží se stranou – odběr si `KB.postupy` přepisuje
+   čerstvými daty a dotažené by z nich jinak zmizely (Michal 25. 9. 2026). */
+let postupyZive = [];
+let postupyNavic = [];
+
+function slijPostupy() {
+    const mapa = new Map();
+    postupyNavic.forEach(z => mapa.set(z.id, z));
+    postupyZive.forEach(z => mapa.set(z.id, z));       // živé mají přednost
+    KB.postupy = Array.from(mapa.values());
+}
+
+/** Manažer vidí cizí postupy, ostatní jen svoje (pravidla nejsou filtr). */
+function postupManazer() {
+    const ja = (KB.users || []).find(u => u.id === ((auth && auth.currentUser) || {}).uid);
+    return !!ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"].indexOf(ja.role) !== -1;
+}
 
 KB.postupId = (uid, datum) => uid + "_" + datum;
 
@@ -3227,16 +3245,55 @@ KB.watchPostupy = async () => {
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || postupOdber) return;
     const od = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-    const ja = KB.users.find(u => u.id === auth.currentUser.uid);
-    const manazer = ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"].indexOf(ja.role) !== -1;
-    const dotaz = manazer
+    KB.postupyOknoOd = od;
+    const dotaz = postupManazer()
         ? query(postupCol(), where("datum", ">=", od))
         : query(postupCol(), where("uid", "==", auth.currentUser.uid));
     postupOdber = onSnapshot(dotaz, (snap) => {
-        KB.postupy = [];
-        snap.forEach(d => KB.postupy.push({ id: d.id, ...d.data() }));
+        postupyZive = [];
+        snap.forEach(d => postupyZive.push({ id: d.id, ...d.data() }));
+        slijPostupy();
         emit("postupy", null);
     }, (err) => console.error("Chyba čtení postupu:", err));
+};
+
+/**
+ * Dotáhne postupy za období (pro listování přehledu po týdnech dozadu).
+ * Vrací počet záznamů. Jednorázový dotaz, žádný další odběr – starší
+ * týdny se nemění a platit za jejich hlídání nemá smysl.
+ */
+KB.nactiPostupyRozsah = async (od, doKdy) => {
+    if (authReady) await authReady;
+    requireDb();
+    const zacatek = String(od || "").slice(0, 10);
+    const konec = String(doKdy || "9999-12-31").slice(0, 10);
+    if (!zacatek) return 0;
+    const meze = [where("datum", ">=", zacatek), where("datum", "<=", konec)];
+    const dotaz = postupManazer()
+        ? query(postupCol(), ...meze)
+        : query(postupCol(), where("uid", "==", auth.currentUser.uid), ...meze);
+    const snap = await getDocs(dotaz);
+    const nove = [];
+    snap.forEach(d => nove.push({ id: d.id, ...d.data() }));
+    const znam = new Set(postupyNavic.map(z => z.id));
+    nove.forEach(z => { if (!znam.has(z.id)) postupyNavic.push(z); });
+    slijPostupy();
+    emit("postupy", null);
+    return nove.length;
+};
+
+/** Všechny postupy jednoho člověka – podklad pro jeho celkový přehled. */
+KB.nactiPostupyCloveka = async (uid) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(query(postupCol(), where("uid", "==", uid)));
+    const ven = [];
+    snap.forEach(d => ven.push({ id: d.id, ...d.data() }));
+    const znam = new Set(postupyNavic.map(z => z.id));
+    ven.forEach(z => { if (!znam.has(z.id)) postupyNavic.push(z); });
+    slijPostupy();
+    emit("postupy", null);
+    return ven.sort((a, b) => (b.datum || "").localeCompare(a.datum || ""));
 };
 
 KB.ulozPostup = async (datum, patch) => {
