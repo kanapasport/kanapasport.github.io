@@ -1,7 +1,7 @@
 {
   "title": "Pracovní prostor a palety na druhém monitoru",
   "desc": "Výkres na hlavním monitoru, hladiny, vlastnosti a xrefy na druhém – jak si to naskládat a hlavně jak to uložit, aby to tak zůstalo i zítra.",
-  "version": "v1.3",
+  "version": "v1.4",
   "cat": "autocad",
   "subcat": "autocad-prostor",
   "steps": [
@@ -44,6 +44,11 @@
       "title": "Past: Správce hladin se otevře jako okno a blokuje kreslení",
       "content": "Poznáš to na první pohled: Správce hladin **nevypadá jako paleta** (svislá titulní lišta po straně, filtry vlevo), ale jako **klasické dialogové okno** s tlačítky **OK / Storno / Použít / Nápověda** dole – a dokud ho nezavřeš, nejde ve výkrese nic dělat.\n\nNení to rozbitá instalace ani jiná verze. AutoCAD má dvě podoby správce hladin a přepíná je proměnná `LAYERDLGMODE`:\n- `0` = **starý modální dialog** – musíš ho zavřít, než budeš pokračovat (tohle nechceme)\n- `1` = **moderní paleta** – zůstane otevřená a pracuje se vedle ní (výchozí stav)\n\nOprava: **nejdřív dialog zavři** (OK nebo Storno) – dokud je otevřený, nepustí tě do příkazové řádky. Pak napiš `LAYERDLGMODE`, potvrď a zadej `1`. Pak `_LAYER` otevře už normální paletu.\n\nPozor ještě na příkaz `CLASSICLAYER` – ten starý dialog vyvolá schválně, takže když ho má někdo pod zkratkou nebo v panelu, dostane okno i se správně nastavenou proměnnou.",
       "code": "LAYERDLGMODE\n1"
+    },
+    {
+      "title": "Past: paleta hladin spadne a zbude jen staré okno",
+      "content": "Když se po přepnutí `LAYERDLGMODE` na `1` objeví hláška **„V součásti aplikace došlo k neošetřené výjimce\"** s textem *Hodnota SplitterDistance musí být v rozmezí hodnot Panel1MinSize a Width − Panel2MinSize*, není to chyba instalace ani verze. [obr 1]\n\nAutoCAD si při otevírání palety obnovuje **uložené rozvržení** – šířku rozdělovníku mezi stromem filtrů a seznamem hladin. Když je uložená hodnota mimo rozsah (větší než šířka palety), paleta se neotevře a zbyde starý modální dialog.\n\nŘešení od nejjemnějšího:\n1. **maximalizuj okno AutoCADu** a zkus `_LAYER` znovu – když byla uložená šířka jen větší než okno, stačí to\n2. **smaž uložený stav palety** (AutoCAD zavřený): `regedit` → `HKEY_CURRENT_USER\\SOFTWARE\\Autodesk\\AutoCAD\\R25.0\\` → klíč `ACAD-…:405` (405 = česká verze) → `Profiles\\<tvůj profil>\\Dialogs\\` → pravým na **Autodesk.AutoCAD.LayerManager.PaletteHost** → **Exportovat** (záloha) → **Odstranit**. AutoCAD si klíč vyrobí znovu s výchozími hodnotami.\n3. **bez registru**: `_OPTIONS` → záložka **Profily** → **Přidat do seznamu…** → pojmenovat → **Nastavit jako aktuální**. Čistý stav palet, starý profil zůstane pro návrat zpět.\n4. zkontroluj **aktualizace** v Autodesk Access\n\nZdravé hodnoty pro srovnání (klíč `…PaletteHost\\ModelessPrefs`): `SplitPosition` = **210**, `ShowFilterTree` = **True**.\n\nKdyž se stejně chová **paleta Vlastnosti** (názvy vlastností ano, hodnoty ne), zkus totéž – ukládá se stejným mechanismem a bývá to jedna a ta samá rozbitá položka profilu.",
+      "code": "Dialogs\\Autodesk.AutoCAD.LayerManager.PaletteHost\\ModelessPrefs\n    SplitPosition  = 210\n    ShowFilterTree = True"
     },
     {
       "title": "Past: ve Vlastnostech nejsou vidět hodnoty",
