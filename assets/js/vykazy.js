@@ -803,7 +803,12 @@
      */
     V.sesypZbytek = (polozky, kolik) => {
         const limit = kolik || V.POCET_BAREV;
-        if (polozky.length <= limit + 1) return polozky;
+        /* I krátký seznam dostane barvy z palety po pořadí. Barva odvozená
+           z názvu (viz V.barva) se dvěma položkám může potkat a v kruhu by
+           pak dvě výseče splynuly (Michal 25. 9. 2026). */
+        if (polozky.length <= limit + 1) {
+            return polozky.map((p, i) => Object.assign({}, p, { barva: V.barva(i, p.klic) }));
+        }
 
         const hlavni = polozky.slice(0, limit).map((p, i) =>
             Object.assign({}, p, { barva: V.barva(i, p.klic) }));
