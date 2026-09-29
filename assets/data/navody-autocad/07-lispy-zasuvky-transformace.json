@@ -1,0 +1,49 @@
+{
+  "title": "Lispy do AutoCADu – zásuvky a transformace",
+  "desc": "Jak načíst a používat lispy ZAS, ZASKY (vkládání zásuvek jako bodů) a TRANSF (převod výkresu do správných souřadnic podle mřížky).",
+  "version": "v1.0",
+  "cat": "autocad",
+  "subcat": "autocad-lispy",
+  "steps": [
+    {
+      "title": "Co to umí",
+      "content": "Dva lispy do AutoCADu, které šetří klikání:\n- **ZAS** – vloží jednu sadu zásuvek (bodů) v řadě za sebou\n- **ZASKY** – vloží víc sad zásuvek za sebou ve stejném směru\n- **ZASJED** – ruční nastavení jednotek výkresu pro ZAS/ZASKY\n- **TRANSF** – přesune výkres ze špatných souřadnic do správných (posun + otočení + měřítko podle 2 bodů mřížky)\n\nVšechny délky u zásuvek se zadávají v **cm**, desetinná čárka i tečka fungují (`7,5` i `7.5`). Každý příkaz jde celý vrátit jedním `U`.",
+      "code": ""
+    },
+    {
+      "title": "Načtení lispů",
+      "content": "- Ulož si soubory `zasuvky.lsp` a `transformace.lsp` do jedné složky (např. `C:\\LISP`).\n- V AutoCADu napiš příkaz `APPLOAD`.\n- Vyber oba soubory a klikni `Načíst`. [obr 1]\n- Aby se načítaly samy při každém spuštění: v okně APPLOAD klikni v části **Startup Suite** na `Obsah…` a oba soubory přidej.\n- Po načtení se v příkazovém řádku vypíše, jaké příkazy jsou k dispozici.",
+      "code": "APPLOAD"
+    },
+    {
+      "title": "ZAS – jedna sada zásuvek",
+      "content": "- Nejdřív si nastav **hladinu**, do které mají zásuvky přijít – body jdou vždy do aktuální hladiny.\n- Napiš `ZAS`.\n- Klikni na **výchozí bod první zásuvky**.\n- Klikni **směr**, kterým mají jít další zásuvky (funguje ORTHO i uchopení). [obr 2]\n- Zadej **počet zásuvek** – Enter vezme naposledy použitý počet.\n- Zadej **rozteč v cm** – Enter potvrdí výchozích **7,5 cm**.\n- Na konci se vypíše, kolik zásuvek se vložilo.",
+      "code": "ZAS"
+    },
+    {
+      "title": "ZASKY – víc sad za sebou",
+      "content": "Začátek je stejný jako u ZAS (výchozí bod, směr, počet a rozteč 1. sady). Pak se objeví dotaz:\n- `Dalsi sada v tomto smeru? [Ano/Ne] <Ne>` – napiš **A** pro další sadu, **N** nebo Enter pro konec.\n- Při **Ano** zadej:\n- 1) **vzdálenost** od poslední zásuvky předchozí sady k první zásuvce nové sady [cm]\n- 2) **počet** zásuvek nové sady\n- 3) **rozteč** nové sady [cm] (Enter = 7,5)\n- Dotaz se opakuje, dokud neodpovíš Ne. Všechny sady jdou po jedné přímce ve směru zadaném na začátku. [obr 3]",
+      "code": "ZASKY"
+    },
+    {
+      "title": "Jednotky výkresu (ZASJED)",
+      "content": "Zadáváš v cm, lisp to sám přepočítá podle proměnné `INSUNITS`: výkres v **mm** ×10, v **cm** ×1, v **m** ×0,01. Na začátku ZAS/ZASKY se vypíše, s jakými jednotkami počítá.\n- Když to nesedí (výkres je kreslený v mm, ale INSUNITS říká něco jiného), napiš `ZASJED` a zvol `MM`, `CM` nebo `M`.\n- `Auto` vrátí zpět automatiku podle INSUNITS.\n- Nastavení platí do zavření výkresu.",
+      "code": "ZASJED"
+    },
+    {
+      "title": "Body nejsou vidět",
+      "content": "Zásuvky jsou body (POINT). Pokud je ve výkresu nevidíš, je nastavený styl bodu jako tečka.\n- Napiš `PTYPE` a vyber viditelný styl (třeba křížek nebo kolečko). [obr 4]",
+      "code": "PTYPE"
+    },
+    {
+      "title": "TRANSF – převod do správných souřadnic",
+      "content": "Použij, když je výkres ve špatných souřadnicích a máš k dispozici **správnou mřížku**. Nahrazuje ruční `_MOVE` + `_SCALE` + `_ROTATE`.\n- Napiš `TRANSF`.\n- **Vyber objekty** – špatnou mřížku i celý výkres, který k ní patří (celý výkres = napiš `VSE` / `ALL`). **Pozor**, ať ve výběru není i správná mřížka!\n- Klikni **1. bod na špatné mřížce** a pak **stejný bod na správné mřížce**.\n- Klikni **2. bod na špatné mřížce** a pak **stejný bod na správné mřížce**. [obr 5]\n- `Menit i meritko? [Ano/Ne] <Ano>` – Enter = výkres se i zvětší/zmenší, **Ne** = jen posun a otočení.\n- Na konci se vypíše **otočení** ve stupních a **měřítko** – zkontroluj, že dává smysl (typicky 1, 10, 0,1 – ne 0,97).",
+      "code": "TRANSF"
+    },
+    {
+      "title": "Tipy k transformaci",
+      "content": "- Body vybírej **co nejdál od sebe** (ideálně protilehlé rohy mřížky) – čím dál, tím přesnější otočení i měřítko.\n- Body klikej s uchopením (**průsečík** čar mřížky), nebo je napiš souřadnicemi.\n- Když se něco nepovede, `U` vrátí celou transformaci najednou.\n- Objekty v zamčených hladinách se nepřesunou – před transformací hladiny odemkni.\n- Stejnou věc umí i vestavěný příkaz `_ALIGN` (2 páry bodů, Enter, měřítko Ano) – TRANSF je jen pohodlnější a vypíše kontrolní čísla.",
+      "code": "_ALIGN"
+    }
+  ]
+}

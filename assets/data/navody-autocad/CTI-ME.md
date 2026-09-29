@@ -28,12 +28,18 @@ Všechny míří do sekce `autocad` (lišta **AUTOCAD**), podsekce podle
 | `04-mys-prave-tlacitko.json` | `autocad-mys` | Nastavení stanice → Myš a pravé tlačítko |
 | `05-zkratky.json` | `autocad-zkratky` | Ovládání → Klávesové zkratky |
 | `06-lispy.json` | `autocad-lispy` | Ovládání → LISPy a doplňky |
+| `07-lispy-zasuvky-transformace.json` | `autocad-lispy` | Ovládání → LISPy a doplňky |
 
 `autocad-balicek` je zároveň `main` sekce – ten návod se otevře, když se
 lišta AUTOCAD jen rozklikne.
 
 Prázdné zatím zůstávají `autocad-xref` (Externí reference) a
 `autocad-priprava` (Příprava dat pro ArcGIS).
+
+`07-lispy-zasuvky-transformace.json` vznikl na domácím PC (příkazy `ZAS`,
+`ZASKY`, `ZASJED`, `TRANSF`) a přišel mailem v `autocad-lisp.zip`. Původně
+mířil do starého zařazení PROGRAMY → AutoCAD → Zkratky; přesměrováno na
+sekci AUTOCAD. Samotné lispy leží v `D:\CAD_MK\Lispy_Pasport`.
 
 ## Zdroj obsahu
 
