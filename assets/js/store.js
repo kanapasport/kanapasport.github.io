@@ -3206,6 +3206,28 @@ KB.ulozPrirucku = async (html) => {
     KB.zapisAktivitu("navod", "upravil příručku Jak web používat");
 };
 
+/* ------------------------------------------------------ role u odběrů ---
+   Některé odběry se rozhodují podle role: manažer čte celou kolekci, ostatní
+   jen svoje. Role se ale pozná ze seznamu lidí a ten dorazí až po přihlášení.
+   Kdo se zeptal dřív, dostal dotaz pro členy a cizí data mu chyběla celou
+   relaci – takhle 25. 9. zmizely nezveřejněné porady a 1. 10. všechny
+   nastavené dovolené v Nastavení. Proto se čeká. */
+
+const MANAZERSKE_ROLE = ["hlavni-spravce", "majitel", "spravce", "asistentka"];
+
+function jsemManazer() {
+    const ja = (KB.users || []).find(u => u.id === ((auth && auth.currentUser) || {}).uid);
+    return !!ja && MANAZERSKE_ROLE.indexOf(ja.role) !== -1;
+}
+
+/** true = role ještě není známá, odběr se odloží a zavolá se znovu. */
+function pockejNaRoli(znovu) {
+    if ((KB.users || []).length) return false;
+    const az = () => { KB.off("users", az); znovu(); };
+    KB.on("users", az);
+    return true;
+}
+
 /* --------------------------------------------------------- postup dne ---
    Denní záznam práce: pár screenshotů a věta k tomu. Hlavní smysl je
    u home office – manažer vidí, že se práce hýbe, aniž by musel volat.
@@ -3232,10 +3254,7 @@ function slijPostupy() {
 }
 
 /** Manažer vidí cizí postupy, ostatní jen svoje (pravidla nejsou filtr). */
-function postupManazer() {
-    const ja = (KB.users || []).find(u => u.id === ((auth && auth.currentUser) || {}).uid);
-    return !!ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"].indexOf(ja.role) !== -1;
-}
+const postupManazer = jsemManazer;
 
 KB.postupId = (uid, datum) => uid + "_" + datum;
 
@@ -3244,6 +3263,7 @@ KB.watchPostupy = async () => {
     if (postupOdber) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || postupOdber) return;
+    if (pockejNaRoli(KB.watchPostupy)) return;
     const od = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
     KB.postupyOknoOd = od;
     const dotaz = postupManazer()
@@ -3712,9 +3732,11 @@ KB.watchZustatky = async () => {
     if (zustatkyOdber) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || zustatkyOdber) return;
-    const ja = KB.users.find(u => u.id === auth.currentUser.uid);
-    const manazer = ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"]
-        .indexOf(ja.role) !== -1;
+    /* Bez téhle pojistky viděl manažer v Nastavení prázdné dovolené:
+       odběr se zapnul dřív, než dorazil seznam lidí, takže si řekl jen
+       o svůj vlastní zůstatek (Michal 1. 10. 2026). */
+    if (pockejNaRoli(KB.watchZustatky)) return;
+    const manazer = jsemManazer();
     const prijmi = (snap) => {
         KB.zustatky = {};
         snap.forEach(d => { KB.zustatky[d.id] = d.data(); });
@@ -3774,11 +3796,8 @@ const poradaDoc = (id) => doc(db, "artifacts", APP_ID, "private", "porady", "zap
 KB.porady = [];
 let poradyOdber = null;
 
-/** Manažer vidí i nezveřejněné zápisy (stejné role jako u postupu dne). */
-function poradyManazer() {
-    const ja = (KB.users || []).find(u => u.id === ((auth && auth.currentUser) || {}).uid);
-    return !!ja && ["hlavni-spravce", "majitel", "spravce", "asistentka"].indexOf(ja.role) !== -1;
-}
+/** Manažer vidí i nezveřejněné zápisy. */
+const poradyManazer = jsemManazer;
 
 /**
  * Zápisy z porad. Manažer vidí všechny, ostatní jen zveřejněné.
@@ -3793,14 +3812,7 @@ KB.watchPorady = async () => {
     if (poradyOdber) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || poradyOdber) return;
-    /* Role se pozná ze seznamu lidí a ten chodí až po přihlášení. Kdyby se
-       odběr zapnul dřív, dostal by manažer dotaz pro členy a nezveřejněné
-       porady by mu celou relaci chyběly – proto se počká. */
-    if (!(KB.users || []).length) {
-        const az = () => { KB.off("users", az); KB.watchPorady(); };
-        KB.on("users", az);
-        return;
-    }
+    if (pockejNaRoli(KB.watchPorady)) return;
     const dotaz = poradyManazer()
         ? poradyCol()
         : query(poradyCol(), where("skryto", "==", false));
