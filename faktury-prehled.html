@@ -250,6 +250,7 @@
             if (stav === "__caflou_lisi" && !(f.caflou && f.caflou.stav === "lisi")) return false;
             if (stav === "__caflou_chybi" && !(f.caflou && f.caflou.stav === "chybi")) return false;
             if (stav === "__duplicita" && !(f.caflou && f.caflou.stav === "duplicita")) return false;
+            if (stav === "__bez_pdf" && (f.cesta || (f.nahled && f.nahled.strany))) return false;
             if (hledane) {
                 const kupa = [f.nazev, f.cislo, f.protistrana, f.vs, f.projekt, f.poznamka, f.kategorie,
                     DRUHY[f.druhDokladu] || "", f.mena, f.poplatkyPopis].join(" ").toLowerCase();
@@ -300,7 +301,8 @@
         const drzStav = $("filtrStav").value;
         $("filtrStav").innerHTML = [["", "Všechny stavy"], ["__kontrola", "Ke kontrole"], ["__kzaplaceni", "K zaplacení"],
             ["__posplatnosti", "Po splatnosti"], ["__zaplaceno", "Zaplaceno"], ["__caflou_souhlasi", "Souhlasí s Caflou"],
-            ["__caflou_lisi", "Liší se od Caflou"], ["__caflou_chybi", "V Caflou chybí"], ["__duplicita", "Duplicity"]]
+            ["__caflou_lisi", "Liší se od Caflou"], ["__caflou_chybi", "V Caflou chybí"], ["__duplicita", "Duplicity"],
+            ["__bez_pdf", "Bez PDF (jen zápis)"]]
             .map(([v, t]) => '<option value="' + v + '"' + (v === drzStav ? " selected" : "") + ">" + esc(t) + "</option>").join("");
         const drzKat = $("filtrKategorie").value;
         const kategorie = new Set(KATEGORIE_VYCHOZI);
@@ -335,7 +337,9 @@
             "<td>" + esc(projektText(f)) + "</td><td>" + esc(f.kategorie || "") + "</td>" +
             "<td>" + esc(f.splatnost ? V.czDatum(f.splatnost) : "—") + "</td>" +
             '<td class="r"><b>' + esc(castkaText(f)) + "</b></td>" +
-            "<td>" + pilulka(f, s, dnes) + "</td><td>" + caflouPill(f) + "</td>" +
+            "<td>" + pilulka(f, s, dnes) + (!f.cesta && !(f.nahled && f.nahled.strany)
+                ? ' <span class="pill pill--caflou" title="K dokladu není na webu soubor ani náhled – dohledat PDF, nebo je to duplikát">bez PDF</span>' : "") +
+            "</td><td>" + caflouPill(f) + "</td>" +
             '<td><span class="pill pill--typ' + (f.typ === "vydana" ? " pill--typ-vydana" : "") + '">' + (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span></td>" +
         "</tr>";
     }
