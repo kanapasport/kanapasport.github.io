@@ -1966,6 +1966,8 @@
             toast("V souboru " + soubor.name + " nejsou faktury k načtení.", "warn");
             return null;
         }
+        // cesty-nas.json (přesun PDF na NAS): jen přepis cest podle otisku, nic jiného se nemění
+        if (zaznamy.every(z => z.jenCesta)) return await prepisCesty(zaznamy, predpona);
         // koncepty z inboxu čekají na kontrolu, převod z Caflou je hotová historie
         const zInboxu = zaznamy.some(z => z.zdroj === "inbox");
         const zCaflou = zaznamy.some(z => z.zdroj === "caflou");
@@ -2169,6 +2171,44 @@
         }
     }
 
+    /* ------------------------------------------------ cesty k PDF na NAS ----
+       Soubor cesty-nas.json (vyrábí fakturace_nastroje) nese ke každému otisku
+       PDF jeho skutečnou cestu na NAS. Přepíše se jen pole „cesta“ u záznamů se
+       stejným otiskem – i u dokladů „…#2“ ve společném PDF; co člověk vyplnil,
+       zůstává (Michal 6. 10. 2026: „na webu nic nepřepisovat, jen cesty na R:“). */
+
+    async function prepisCesty(zaznamy, predpona) {
+        const podleZakladu = {};
+        (window.KB.faktury || []).forEach(f => {
+            const k = String(f.otisk || "").split("#")[0];
+            if (k && k.indexOf("caflou:") !== 0) (podleZakladu[k] = podleZakladu[k] || []).push(f);
+        });
+        const stavEl = $("importStav");
+        let cesty = 0, bezeZmeny = 0, nenalezeno = 0;
+        try {
+            for (let i = 0; i < zaznamy.length; i++) {
+                stavEl.hidden = false;
+                stavEl.textContent = (predpona || "") + "Přepisuji cesty " + (i + 1) + " / " + zaznamy.length + "…";
+                const z = zaznamy[i];
+                const cile = podleZakladu[z.otisk] || [];
+                if (!cile.length) { nenalezeno += 1; continue; }
+                for (const f of cile) {
+                    if ((f.cesta || "") === z.cesta) { bezeZmeny += 1; continue; }
+                    await window.KB.doplnFakturu(f.id, { cesta: z.cesta });
+                    f.cesta = z.cesta;
+                    cesty += 1;
+                }
+            }
+            return { cesty: cesty, cestyBezeZmeny: bezeZmeny, cestyNenalezeno: nenalezeno };
+        } catch (err) {
+            console.error(err);
+            toast("Přepis cest se přerušil (hotovo " + cesty + "). Zkus to znovu – hotové se nezdvojí.", "error");
+            return null;
+        } finally {
+            stavEl.hidden = true;
+        }
+    }
+
     /* ------------------------------------------------ víc souborů naráz ----
        Michal chce označit všechny měsíce najednou (23. 9.): soubory se
        načtou v pořadí podle názvu (od nejstaršího měsíce), jeden souhrn na konci. */
@@ -2195,7 +2235,7 @@
                 const v = await importuj(soubory[i], predpona);
                 if (!v) { celkem.chyby.push(soubory[i].name); continue; }
                 Object.keys(v).forEach(k => {
-                    if (typeof v[k] === "number") celkem[k] += v[k];
+                    if (typeof v[k] === "number") celkem[k] = (celkem[k] || 0) + v[k];
                     else if (v[k] === true) celkem[k] = true;
                 });
             }
@@ -2218,6 +2258,8 @@
         if (c.pridano) casti.push("nově " + V.pocet(c.pridano, ["doklad", "doklady", "dokladů"]));
         if (c.obnoveno) casti.push(c.obnoveno + "× obnoveno novým čtením");
         if (c.doplneno) casti.push(c.doplneno + "× doplněn náhled nebo QR");
+        if (c.cesty) casti.push(c.cesty + "× přepsána cesta k PDF na NAS");
+        if (c.cestyNenalezeno) casti.push(c.cestyNenalezeno + " PDF na NAS bez záznamu na webu");
         if (c.zCaflou) casti.push("Caflou: souhlasí " + c.souhlasi + ", liší se " + c.lisi + ", v Caflou chybí " + c.chybi +
             (c.duplicit ? ", duplicit " + c.duplicit : ""));
         if (c.preskoceno) casti.push(c.preskoceno + " už na webu bylo");
