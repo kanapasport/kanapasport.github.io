@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=259">
+    <link rel="stylesheet" href="assets/css/app.css?v=260">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -168,12 +168,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=259"></script>
-<script src="assets/js/doc.js?v=259"></script>
-<script src="assets/js/ui.js?v=259"></script>
+<script src="assets/js/taxonomy.js?v=260"></script>
+<script src="assets/js/doc.js?v=260"></script>
+<script src="assets/js/ui.js?v=260"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=259"></script>
-<script type="module" src="assets/js/store.js?v=259"></script>
+<script src="assets/js/vykazy.js?v=260"></script>
+<script type="module" src="assets/js/store.js?v=260"></script>
 
 <script>
 (function () {
@@ -242,18 +242,17 @@
         return Math.round((new Date(iso + "T00:00:00") - dnes) / DEN);
     }
 
-    /** „STAVBA + SLN" jsou dvě technologie, ne jedna. */
-    const techCasti = (cinnost) =>
-        String(cinnost || "").split("+").map(s => s.trim()).filter(Boolean);
-
-    /** Technologie, které člověk dělá – podle milníků, kde je zpracovatelem. */
+    /**
+     * Technologie, které člověk dělá – podle milníků, kde je zpracovatelem.
+     * Bere se celý název: „STAVBA + SLN" je vlastní společná řada obou
+     * profesí, ne vstupenka do cizí (Michal 8. 10. 2026).
+     */
     function mojeTechnologie(ja) {
         const moje = [];
         (window.KB.milniky || []).forEach(m => {
             if (!ja || (m.owners || []).indexOf(ja) === -1) return;
-            techCasti(m.cinnost).forEach(t => {
-                if (moje.indexOf(t) === -1) moje.push(t);
-            });
+            const t = String(m.cinnost || "").trim();
+            if (t && moje.indexOf(t) === -1) moje.push(t);
         });
         return moje;
     }
@@ -435,7 +434,7 @@
         if (pohled === "mujpostup") {
             const moje = mojeTechnologie(ja);
             vsechny = vsechny.filter(m =>
-                techCasti(m.cinnost).some(t => moje.indexOf(t) !== -1));
+                moje.indexOf(String(m.cinnost || "").trim()) !== -1);
         }
 
         paintFiltr(vsechny);

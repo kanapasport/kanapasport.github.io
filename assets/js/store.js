@@ -1260,21 +1260,21 @@ let milnikyPostup = {};      // id -> milník z mojí technologie (i nezveřejn�
 let syroveTerminy = {};      // id -> termín, jen ty, na které mám právo
 let milnikyOdbery = [];
 
-/** „STAVBA + SLN" jsou dvě technologie, ne jedna. */
-function techCasti(cinnost) {
-    return String(cinnost || "").split("+").map(s => s.trim()).filter(Boolean);
-}
-
 /**
  * Kdo na téhle technologii dělá – ti uvidí její milníky jako svůj postup,
  * i když ještě nejsou zveřejněné. Termín u nich stejně nedostanou; jde
  * o to, aby člověk věděl, co po jeho profesi přijde (Michal 8. 10. 2026).
+ *
+ * Technologie se porovnává CELÁ. „STAVBA + SLN" je společný milník obou
+ * profesí, ne důvod, aby stavař viděl ve svém postupu všechny elektro
+ * milníky; kdo je na společném milníku zpracovatel, ten ho ve svém postupu
+ * má přes zpracovatele.
  */
 function postupLide(cinnost, vsechny) {
-    const casti = techCasti(cinnost);
+    const klic = String(cinnost || "").trim();
     const kdo = [];
     (vsechny || []).forEach(m => {
-        if (!techCasti(m.cinnost).some(t => casti.indexOf(t) !== -1)) return;
+        if (String(m.cinnost || "").trim() !== klic) return;
         (m.zpracovatele || m.owners || []).forEach(uid => {
             if (kdo.indexOf(uid) === -1) kdo.push(uid);
         });
