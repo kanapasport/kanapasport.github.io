@@ -168,7 +168,14 @@
        Kolik zbývá dovolené a kolik je naběháno přesčasů. Počítá se od data,
        které je u člověka nastavené (Nastavení → Dovolená a přesčasy) –
        před ním web historii nemá a musí se do něj vstoupit s ručně zadanou
-       hodnotou, jinak by všichni začali na nule. */
+       hodnotou, jinak by všichni začali na nule.
+
+       POZOR na význam toho data: je to den, od kterého má web hodiny toho
+       člověka, NE začátek dovolenkového roku. Fond se z něj počítá den po
+       dni, takže datum o půl roku zpátky znamená půl roku směn, ke kterým
+       web nemá jediný zápis – a přesčas spadne o celý ten fond do mínusu
+       (−1312 h a podobně, Michal 8. 10. 2026). Na dovolenou to vliv nemá:
+       ta stojí na `cerpanoPred` a na zapsaných dnech. */
 
     /** Fond pracovních hodin mezi dvěma dny – bez víkendů a svátků. */
     V.fondHodin = (odIso, doIso) => {
@@ -213,6 +220,12 @@
         const fond = V.fondHodin(od, dnes);
         const prescas = (Number(z.prescasPred) || 0) + prace + absenceDnu * 8 - fond;
 
+        /* Kdo za celé období nemá ani jeden zápis, tomu přesčas spočítat
+           nejde: vyšel by mínus ve výši celého fondu a vypadalo by to, že
+           firmě dluží půl roku. Takový člověk hodiny na web prostě nepíše
+           (Michal 8. 10. 2026). */
+        const bezZapisu = !moje.length;
+
         /* Manažer poslouchá výkazy jen v okně několika měsíců – když je
            začátek počítání starší, chybí mu data a číslo by bylo mimo. */
         const okno = window.KB.vykazyOknoOd || "";
@@ -224,6 +237,7 @@
             zbyva: narok - cerpano,
             dovolenaDnu: dovolenaDnu,
             prescas: Math.round(prescas * 10) / 10,
+            bezZapisu: bezZapisu,
             fond: fond,
             prace: Math.round(prace * 10) / 10,
             neuplne: nastaveno && !!okno && od < okno
