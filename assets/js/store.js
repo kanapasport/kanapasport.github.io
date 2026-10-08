@@ -2330,6 +2330,30 @@ KB.posliDoSheets = (id) => {
     }).catch(err => console.warn("Zápis do Tabulek se neozval:", err));
 };
 
+/**
+ * Opis nové zakázky do Evidence zakázek v Tabulkách Google.
+ *
+ * Posílá se stejnou cestou jako výkazy (`meta/gsync`), jen s `akce:"zakazka"`.
+ * Odpověď se nečte – skript si výsledek zapíše zpátky k projektu do pole
+ * `evidence`, takže je ve Správě vidět, jestli to prošlo.
+ */
+KB.posliZakazkuDoEvidence = (projekt) => {
+    if (!KB.gsyncUrl || !projekt || !projekt.cislo) return;
+    fetch(KB.gsyncUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+            akce: "zakazka",
+            id: projekt.id || "",
+            cislo: projekt.cislo || "",
+            nazev: projekt.nazev || "",
+            objednatel: projekt.objednatel || "",
+            resi: projekt.resi || ""
+        })
+    }).catch(err => console.warn("Zápis zakázky do evidence se neozval:", err));
+};
+
 KB.zpetnePovoleni = {};
 
 /**

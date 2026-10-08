@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=268">
+    <link rel="stylesheet" href="assets/css/app.css?v=270">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -694,7 +694,8 @@
             <div class="fmr__cely">
                 <label class="person" style="width:100%">
                     <input type="checkbox" id="nJednoduchy" checked>
-                    <span>Jednoduchý projekt (bez matice budov a pater)</span></label>
+                    <span>Jednoduchý projekt — bez matice budov a pater,
+                        rovnou se mu založí souhrnný úkol</span></label>
             </div>
             <div class="fmr__cely">
                 <label class="person" style="width:100%">
@@ -735,10 +736,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=268"></script>
-<script src="assets/js/ui.js?v=268"></script>
-<script src="assets/js/vykazy.js?v=268"></script>
-<script type="module" src="assets/js/store.js?v=268"></script>
+<script src="assets/js/taxonomy.js?v=270"></script>
+<script src="assets/js/ui.js?v=270"></script>
+<script src="assets/js/vykazy.js?v=270"></script>
+<script type="module" src="assets/js/store.js?v=270"></script>
 
 <script>
 (function () {
@@ -1105,14 +1106,24 @@
         chyba: "Složku na P: se nepodařilo založit."
     };
 
+    /** Stav opisu do Evidence zakázek – píše ho skript po zápisu. */
+    function evidenceText(p) {
+        if (!p.evidence) return "";
+        if (p.evidence === "zapsáno") return "Zapsáno do Evidence zakázek.";
+        if (p.evidence === "už v evidenci byla") return "V Evidenci zakázek už bylo.";
+        return "Evidence zakázek: " + p.evidence;
+    }
+
     function naplnUdaje(p) {
         $("pCislo").value = p.cislo || "";
         $("pNazevPole").value = p.nazev || "";
         const stav = STAV_SLOZKY[p.slozkaP];
-        $("pSlozkaStav").textContent = stav
-            ? stav + (p.slozkaPCesta ? "  (" + p.slozkaPCesta + ")" : "")
-            : "";
-        $("pSlozkaStav").hidden = !stav;
+        const radky = [
+            stav ? stav + (p.slozkaPCesta ? "  (" + p.slozkaPCesta + ")" : "") : "",
+            evidenceText(p)
+        ].filter(Boolean);
+        $("pSlozkaStav").textContent = radky.join("   ·   ");
+        $("pSlozkaStav").hidden = !radky.length;
         $("pZacatek").value = p.zacatek || "";
         $("pKonec").value = p.konec || "";
         $("pPriorita").value = p.priorita || "stredni";
@@ -2831,6 +2842,30 @@
                uložení Údajů vynuloval, proto jde cestou pravého slučování. */
             if ($("nSlozkaP").checked) {
                 await window.KB.ulozProjektCasti(id, { slozkaP: "ceka" });
+            }
+
+            /* Opis do Evidence zakázek v Tabulkách – lidé si tam zakázky
+               hledají odjakživa a nikdo je tam nemá přepisovat ručně. */
+            window.KB.posliZakazkuDoEvidence({
+                id: id, cislo: cislo, nazev: nazev,
+                objednatel: $("nObjednatel").value
+            });
+
+            /* Jednoduchá zakázka se nedělí na budovy a patra, takže by
+               zůstala úplně bez úkolu – a bez úkolu se na ni nedá psát
+               výkaz tak, aby se práce někam zařadila. Souhrnný úkol proto
+               vzniká rovnou (Michal 8. 10. 2026); u velkého projektu se
+               úkoly skládají podle technologií a pater, tam by překážel. */
+            if ($("nJednoduchy").checked) {
+                await window.KB.saveUkol(window.KB.newUkolId(), {
+                    projektId: id, projekt: nazev,
+                    nazev: "Zpracování zakázky",
+                    druh: "ArcGIS/Kreslení",
+                    technologie: "", budova: "", patro: "",
+                    prirazeni: [], todo: [],
+                    termin: $("nKonec").value,
+                    stav: "otevreny"
+                });
             }
             $("novyOverlay").hidden = true;
             vybrany = id;
