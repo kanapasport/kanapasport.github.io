@@ -88,8 +88,24 @@
         return m ? m[1] : "bez roku";
     }
 
+    /**
+     * Klíč na řazení. Řadit podle napsaného čísla nestačí: jeden projekt má
+     * rok a pořadí prohozené („041-2026") a propadl by na konec, takže by
+     * rok 2026 v seznamu vyskočil dvakrát. Klíč je vždy `RRRR-NNN`.
+     */
+    function klicRazeni(cislo) {
+        const text = String(cislo || "").trim();
+        let m = text.match(/^(\d{4})-(\d{1,3})/);
+        if (!m) {
+            const prohozene = text.match(/^(\d{1,3})-(\d{4})$/);
+            if (prohozene) m = [text, prohozene[2], prohozene[1]];
+        }
+        return m ? m[1] + "-" + String(m[2]).padStart(3, "0") : "0000-" + text;
+    }
+
     function render() {
-        const vsechny = (window.KB.zakazkySeznam || []);
+        const vsechny = (window.KB.zakazkySeznam || []).slice()
+            .sort((a, b) => klicRazeni(b.cislo).localeCompare(klicRazeni(a.cislo), "cs"));
         const vyber = vsechny.filter(z => {
             if (jenOtevrene && z.uzavreno === true) return false;
             if (!hledani) return true;
