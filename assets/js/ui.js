@@ -923,6 +923,7 @@
     UI.PODLISTA_PROJEKTY = [
         { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" },
         { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view" },
+        { title: "SPRÁVA ZAMĚSTNANCŮ", href: "zamestnanci.html", need: "vykaz.view" },
         { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view" }
     ];
     /* FAKTURY byly v podliště projektů – od 22. 9. 2026 jsou v levém pásu

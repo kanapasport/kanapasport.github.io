@@ -2666,6 +2666,56 @@ KB.saveProjektFinance = async (id, data) => {
     }, { merge: true });
 };
 
+/**
+ * Hromadné přiřazení JEDNOHO člověka k projektům – opačný pohled než ve
+ * Správě projektů, kde se to klikalo projekt po projektu (Michal 8. 10. 2026).
+ *
+ * Zapisuje jen `lide` (a uklidí po sobě `lideTech`), ne celou hlavičku:
+ * `saveProjekt` dokument skládá znovu a co mu nepředáš, to vynuluje.
+ * Sahá se jen na projekty, u kterých se přiřazení opravdu mění.
+ *
+ * @param {string} uid          komu se projekty přiřazují
+ * @param {string[]} idsZapnute projekty, na kterých má být
+ * @param {string} [jmeno]      do historie kroků, ať je vidět čí
+ * @returns {Promise<{pridano:number, odebrano:number}>}
+ */
+KB.ulozProjektyCloveka = async (uid, idsZapnute, jmeno) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!uid) return { pridano: 0, odebrano: 0 };
+
+    const chteno = {};
+    (Array.isArray(idsZapnute) ? idsZapnute : []).forEach(id => { chteno[id] = true; });
+    const razitko = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    const zmeny = [];
+    let pridano = 0, odebrano = 0;
+
+    (KB.projektyDocs || []).forEach(p => {
+        const lide = Array.isArray(p.lide) ? p.lide.slice() : [];
+        const ma = lide.indexOf(uid) !== -1;
+        const chce = !!chteno[p.id];
+        if (ma === chce) return;
+        if (chce) { lide.push(uid); pridano++; }
+        else { lide.splice(lide.indexOf(uid), 1); odebrano++; }
+        /* Technologie se vedou po lidech – kdo z projektu odešel, nemá v nich
+           co dělat, jinak by mu tam visely napořád. */
+        const tech = Object.assign({}, p.lideTech || {});
+        if (!chce) delete tech[uid];
+        zmeny.push({ id: p.id, data: Object.assign({ lide: lide, lideTech: tech }, razitko) });
+    });
+
+    for (let i = 0; i < zmeny.length; i += 300) {
+        const davka = writeBatch(db);
+        zmeny.slice(i, i + 300).forEach(z => davka.update(projektDoc(z.id), z.data));
+        await davka.commit();
+    }
+    if (zmeny.length) {
+        KB.zapisAktivitu("projekt", "upravil projekty člověka " + (jmeno || "") +
+            " (přidáno " + pridano + ", odebráno " + odebrano + ")");
+    }
+    return { pridano: pridano, odebrano: odebrano };
+};
+
 KB.loadProjektFinance = async (id) => {
     if (authReady) await authReady;
     requireDb();

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Správa zaměstnanců – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=264">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Rozvržení je schválně stejné jako ve Správě projektů a firem –
+           vlevo seznam, vpravo panel vybraného. Kdo umí jednu stránku,
+           umí i tuhle. */
+        .sprava { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
+        @media (max-width: 980px) { .sprava { grid-template-columns: 1fr; } }
+
+        .seznam { padding: 12px; gap: 10px; }
+        .seznam__vypis { display: flex; flex-direction: column; gap: 2px; max-height: 640px; overflow: auto; }
+        .prjbtn { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+            background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 8px 10px; }
+        .prjbtn:hover { background: var(--bg-soft); }
+        .prjbtn.je-vybrany { background: var(--accent-tint); border-color: var(--accent-lt); }
+        .prjbtn b { display: block; font-size: 13.5px; font-weight: 800; line-height: 1.3; }
+        .prjbtn span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+        .popisek { display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin: 8px 0 4px; }
+
+        /* Projekt jako zaškrtávací řádek. Číslo vlevo monospace, ať jdou
+           čísla pod sebou očima srovnat. */
+        .prj { display: flex; align-items: flex-start; gap: 9px; padding: 7px 10px;
+            border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+            background: var(--bg-soft); }
+        .prj:hover { border-color: var(--accent-lt); }
+        .prj--on { background: var(--accent-tint); border-color: var(--accent); }
+        .prj input { margin-top: 2px; flex: none; }
+        .prj__text { min-width: 0; }
+        .prj__cislo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11.5px; color: var(--muted); }
+        .prj__nazev { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.35; }
+        .prj__pod { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+        .prjmriz { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 7px; }
+
+        /* Lišta se změnami – drží se dole, ať je uložení po ruce i po
+           odrolování dlouhého seznamu. */
+        .ulozlista { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center;
+            justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            padding: 10px 14px; border-radius: var(--radius-lg);
+            background: var(--bg); border: 1px solid var(--line);
+            box-shadow: 0 -6px 18px rgba(11,13,16,.08); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px">
+
+    <div id="bezPrav" class="card center" style="padding:40px 24px" hidden>
+        <b>Na správu zaměstnanců nemáš právo</b>
+        <p class="small muted" style="margin-top:6px;line-height:1.6">
+            Tahle stránka je pro manažery. Když si myslíš, že tu být máš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+
+        <div class="spread">
+            <div style="min-width:0">
+                <h2 style="font-size:20px;font-weight:900;line-height:1.2">Správa zaměstnanců</h2>
+                <p class="small muted" style="margin-top:3px;line-height:1.6">
+                    Vyber člověka a zaškrtej mu projekty naráz. Je to druhý pohled na
+                    totéž přiřazení, které je ve Správě projektů u každého projektu
+                    zvlášť — kdo je přiřazený, vidí projekt a píše na něj výkazy.
+                </p>
+            </div>
+        </div>
+
+        <div class="sprava">
+            <!-- --------------------------------------------------- lidé -->
+            <aside class="card col seznam">
+                <input type="search" id="hledatClovek" class="field" placeholder="Hledat člověka…">
+                <div id="lideVypis" class="seznam__vypis"></div>
+                <span class="tiny muted" id="pocetLidi"></span>
+            </aside>
+
+            <!-- ------------------------------------------------ projekty -->
+            <div>
+                <div id="prazdno" class="card center" style="padding:34px 22px">
+                    <b>Vyber vlevo člověka</b>
+                    <p class="small muted" style="margin-top:6px;line-height:1.6">
+                        U každého je vidět, na kolika projektech je.
+                    </p>
+                </div>
+
+                <div id="panel" hidden style="display:flex;flex-direction:column;gap:14px">
+                    <section class="card" style="padding:12px 14px">
+                        <div class="spread">
+                            <div style="min-width:0">
+                                <h2 id="jmeno" style="margin:0;font-size:19px;font-weight:900;line-height:1.25"></h2>
+                                <p id="podtitul" class="small muted" style="margin:3px 0 0;line-height:1.5"></p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card col" style="padding:12px 14px;gap:10px">
+                        <div class="row row--wrap" style="gap:8px;align-items:center">
+                            <input type="search" id="hledatProjekt" class="field" style="max-width:260px"
+                                   placeholder="Hledat projekt…">
+                            <button type="button" class="chip chip--active" id="btnOtevrene">Jen otevřené</button>
+                            <button type="button" class="chip" id="btnJenJeho">Jen jeho projekty</button>
+                            <span class="grow"></span>
+                            <button type="button" class="btn btn--ghost btn--sm" id="btnVse">Zaškrtnout vše</button>
+                            <button type="button" class="btn btn--ghost btn--sm" id="btnNic">Odškrtnout vše</button>
+                        </div>
+                        <div id="projektyVypis" class="prjmriz"></div>
+                        <span class="tiny muted" id="pocetProjektu"></span>
+                    </section>
+
+                    <div class="ulozlista">
+                        <span id="zmeny" class="small muted"></span>
+                        <div class="row" style="gap:10px">
+                            <button type="button" id="btnZpet" class="btn btn--ghost">Zahodit změny</button>
+                            <button type="button" id="btnUloz" class="btn btn--primary">Uložit přiřazení</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=264"></script>
+<script src="assets/js/doc.js?v=264"></script>
+<script src="assets/js/ui.js?v=264"></script>
+<!-- kvůli V.lide() a V.jmeno() -->
+<script src="assets/js/vykazy.js?v=264"></script>
+<script type="module" src="assets/js/store.js?v=264"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = () => window.KBVYK;
+
+    let vybranyUid = "";
+    let zaskrtnute = null;     // Set id projektů; null = nikdo není vybraný
+    let puvodni = null;        // stav při otevření, kvůli „Zahodit změny"
+    let hledaniClovek = "";
+    let hledaniProjekt = "";
+    let jenOtevrene = true;
+    let jenJeho = false;
+
+    const bezDiakritiky = (text) => String(text || "").toLowerCase()
+        .normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+    const pocet = (n, tvary) =>
+        n + " " + (n === 1 ? tvary[0] : (n >= 2 && n <= 4 ? tvary[1] : tvary[2]));
+    const PROJEKT = ["projekt", "projekty", "projektů"];
+
+    /** Projekty seřazené jako ve Správě projektů – podle čísla zakázky. */
+    const projekty = () => (window.KB.projektyDocs || []).slice()
+        .sort((a, b) => String(a.cislo || "9999").localeCompare(String(b.cislo || "9999"), "cs"));
+
+    const jeNaProjektu = (p, uid) => (p.lide || []).indexOf(uid) !== -1;
+
+    /* ------------------------------------------------------- seznam lidí */
+
+    function vykresliLidi() {
+        const lide = V().lide();
+        const hledane = hledaniClovek
+            ? lide.filter(u => bezDiakritiky(V().jmeno(u) + " " + (u.email || ""))
+                .indexOf(hledaniClovek) !== -1)
+            : lide;
+
+        $("pocetLidi").textContent = hledane.length === lide.length
+            ? lide.length + " lidí"
+            : "zobrazeno " + hledane.length + " z " + lide.length;
+
+        const radek = (u) => {
+            const kolik = projekty().filter(p => jeNaProjektu(p, u.id)).length;
+            return '<button type="button" class="prjbtn' +
+                (u.id === vybranyUid ? " je-vybrany" : "") + '" data-uid="' + esc(u.id) + '">' +
+                "<b>" + esc(V().jmeno(u)) + "</b>" +
+                "<span>" + (kolik ? pocet(kolik, PROJEKT) : "žádný projekt") + "</span>" +
+            "</button>";
+        };
+
+        /* Dělení po úvazcích je stejné jako v sazbách, zůstatcích a ve
+           Spolupracovnících – ať se člověk hledá pořád na stejném místě. */
+        $("lideVypis").innerHTML = window.KBUI.TYPY.map(t => {
+            const skupina = hledane.filter(u => window.KBUI.typUvazku(u) === t.id);
+            return skupina.length
+                ? '<span class="popisek">' + esc(t.mnozne) + "</span>" + skupina.map(radek).join("")
+                : "";
+        }).join("") || '<div class="tiny muted">Nikdo neodpovídá hledání.</div>';
+    }
+
+    /* ---------------------------------------------------- panel člověka */
+
+    function vykresliPanel() {
+        const u = (window.KB.users || []).find(x => x.id === vybranyUid);
+        $("prazdno").hidden = !!u;
+        $("panel").hidden = !u;
+        if (!u) return;
+
+        $("jmeno").textContent = V().jmeno(u);
+        const vsechny = projekty();
+        const jeho = vsechny.filter(p => zaskrtnute.has(p.id));
+        $("podtitul").textContent = (u.email || "") +
+            " · " + (jeho.length ? "zaškrtnuto " + pocet(jeho.length, PROJEKT) : "zatím nikde");
+
+        const vyber = vsechny.filter(p => {
+            if (jenOtevrene && p.uzavreno === true && !zaskrtnute.has(p.id)) return false;
+            if (jenJeho && !zaskrtnute.has(p.id)) return false;
+            if (!hledaniProjekt) return true;
+            return bezDiakritiky([p.cislo, p.nazev, p.firma, p.objednatel].join(" "))
+                .indexOf(hledaniProjekt) !== -1;
+        });
+
+        $("pocetProjektu").textContent = vyber.length === vsechny.length
+            ? pocet(vsechny.length, PROJEKT)
+            : "zobrazeno " + vyber.length + " z " + pocet(vsechny.length, PROJEKT);
+
+        $("projektyVypis").innerHTML = vyber.map(p => {
+            const on = zaskrtnute.has(p.id);
+            const pod = [p.firma || p.objednatel || "", p.faze || ""].filter(Boolean).join(" · ");
+            return '<label class="prj' + (on ? " prj--on" : "") + '">' +
+                '<input type="checkbox" data-prj="' + esc(p.id) + '"' + (on ? " checked" : "") + ">" +
+                '<span class="prj__text">' +
+                    '<span class="prj__nazev">' + esc(p.nazev || "Bez názvu") + "</span>" +
+                    '<span class="prj__pod"><span class="prj__cislo">' + esc(p.cislo || "—") + "</span>" +
+                        (pod ? " · " + esc(pod) : "") + "</span>" +
+                "</span></label>";
+        }).join("") || '<div class="tiny muted">Žádný projekt neodpovídá filtru.</div>';
+
+        vykresliZmeny();
+    }
+
+    /** Kolik se toho od otevření změnilo – ať je uložení vidět, co udělá. */
+    function vykresliZmeny() {
+        if (!puvodni) return;
+        let pridano = 0, odebrano = 0;
+        zaskrtnute.forEach(id => { if (!puvodni.has(id)) pridano++; });
+        puvodni.forEach(id => { if (!zaskrtnute.has(id)) odebrano++; });
+        const zmeneno = pridano || odebrano;
+        $("zmeny").textContent = zmeneno
+            ? "Přibude " + pridano + ", ubude " + odebrano + " – zatím neuloženo."
+            : "Beze změny.";
+        $("btnUloz").disabled = !zmeneno;
+        $("btnZpet").disabled = !zmeneno;
+    }
+
+    function otevriCloveka(uid) {
+        if (!zkusOpustit()) return;
+        vybranyUid = uid;
+        puvodni = new Set(projekty().filter(p => jeNaProjektu(p, uid)).map(p => p.id));
+        zaskrtnute = new Set(puvodni);
+        jenJeho = false;
+        hledaniProjekt = "";
+        $("hledatProjekt").value = "";
+        $("btnJenJeho").classList.remove("chip--active");
+        vykresliLidi();
+        vykresliPanel();
+    }
+
+    /** Rozepsané přiřazení se nesmí ztratit jen proto, že se klikne vedle. */
+    function zkusOpustit() {
+        if (!puvodni || $("btnUloz").disabled) return true;
+        return confirm("Přiřazení není uložené. Opravdu ho zahodit?");
+    }
+
+    /* -------------------------------------------------------- ukládání */
+
+    async function uloz() {
+        const u = (window.KB.users || []).find(x => x.id === vybranyUid);
+        if (!u) return;
+        $("btnUloz").disabled = true;
+        try {
+            const v = await window.KB.ulozProjektyCloveka(
+                vybranyUid, [...zaskrtnute], V().jmeno(u));
+            puvodni = new Set(zaskrtnute);
+            window.KBUI.toast("Uloženo – přidáno " + v.pridano + ", odebráno " + v.odebrano + ".");
+            vykresliLidi();
+            vykresliZmeny();
+        } catch (err) {
+            console.error(err);
+            $("btnUloz").disabled = false;
+            window.KBUI.toast("Uložení selhalo – projekty mění jen manažer.", "error");
+        }
+    }
+
+    /* ----------------------------------------------------------- start */
+
+    document.addEventListener("click", (event) => {
+        const clovek = event.target.closest("[data-uid]");
+        if (clovek) { otevriCloveka(clovek.dataset.uid); return; }
+    });
+
+    $("projektyVypis").addEventListener("change", (event) => {
+        const box = event.target.closest("[data-prj]");
+        if (!box) return;
+        if (box.checked) zaskrtnute.add(box.dataset.prj);
+        else zaskrtnute.delete(box.dataset.prj);
+        box.closest(".prj").classList.toggle("prj--on", box.checked);
+        vykresliZmeny();
+        // podtitul ukazuje počet zaškrtnutých, ten se mění s každým klikem
+        const u = (window.KB.users || []).find(x => x.id === vybranyUid);
+        if (u) {
+            $("podtitul").textContent = (u.email || "") + " · " +
+                (zaskrtnute.size ? "zaškrtnuto " + pocet(zaskrtnute.size, PROJEKT) : "zatím nikde");
+        }
+    });
+
+    function prekresliVyber() { if (vybranyUid) vykresliPanel(); }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        // stejně jako Správa firem: hlavní lišta svítí na Projektech, podlišta sama pozná, kde jsme
+        window.KBUI.mountNav({ active: "sprava.html", subbar: true });
+
+        $("hledatClovek").addEventListener("input", () => {
+            hledaniClovek = bezDiakritiky($("hledatClovek").value.trim());
+            vykresliLidi();
+        });
+        $("hledatProjekt").addEventListener("input", () => {
+            hledaniProjekt = bezDiakritiky($("hledatProjekt").value.trim());
+            prekresliVyber();
+        });
+        $("btnOtevrene").addEventListener("click", () => {
+            jenOtevrene = !jenOtevrene;
+            $("btnOtevrene").classList.toggle("chip--active", jenOtevrene);
+            prekresliVyber();
+        });
+        $("btnJenJeho").addEventListener("click", () => {
+            jenJeho = !jenJeho;
+            $("btnJenJeho").classList.toggle("chip--active", jenJeho);
+            prekresliVyber();
+        });
+        /* Zaškrtnout vše se týká jen toho, co je zrovna vidět – jinak by
+           se jedním klikem přiřadilo i to, co filtr schoval. */
+        $("btnVse").addEventListener("click", () => {
+            $("projektyVypis").querySelectorAll("[data-prj]").forEach(b => zaskrtnute.add(b.dataset.prj));
+            vykresliPanel();
+        });
+        $("btnNic").addEventListener("click", () => {
+            $("projektyVypis").querySelectorAll("[data-prj]").forEach(b => zaskrtnute.delete(b.dataset.prj));
+            vykresliPanel();
+        });
+        $("btnZpet").addEventListener("click", () => {
+            zaskrtnute = new Set(puvodni);
+            vykresliPanel();
+        });
+        $("btnUloz").addEventListener("click", uloz);
+
+        window.addEventListener("beforeunload", (e) => {
+            if (puvodni && !$("btnUloz").disabled) { e.preventDefault(); e.returnValue = ""; }
+        });
+
+        const rozhodni = () => {
+            const smim = window.KBUI.can("vykaz.view");
+            $("obsah").hidden = !smim;
+            $("bezPrav").hidden = smim;
+            if (smim) { vykresliLidi(); prekresliVyber(); }
+        };
+        document.addEventListener("kb-role", rozhodni);
+        window.KB.on("users", () => { vykresliLidi(); prekresliVyber(); });
+        window.KB.on("projekty-docs", () => {
+            // projekty dorazí až po přihlášení; bez nich je seznam prázdný
+            if (vybranyUid && puvodni && $("btnUloz").disabled) otevriCloveka(vybranyUid);
+            else { vykresliLidi(); prekresliVyber(); }
+        });
+
+        rozhodni();
+        await window.KB.whenReady();
+        window.KB.watchProjekty();
+        rozhodni();
+    });
+})();
+</script>
+</body>
+</html>
