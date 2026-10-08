@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=264">
+    <link rel="stylesheet" href="assets/css/app.css?v=266">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -288,13 +288,25 @@
                                     data-penize placeholder="0"
                                     title="Všechny částky na webu se vedou bez DPH"></label>
                             <label class="pole"><span class="popisek">Fakturovat firmě</span>
-                                <select id="fFirma" class="field"></select></label>
+                                <span class="row" style="gap:6px;align-items:center">
+                                    <select id="fFirma" class="field grow"></select>
+                                    <button type="button" class="btn btn--ghost btn--sm"
+                                        data-novafirma="fFirma" title="Přidat firmu do číselníku">+</button>
+                                </span></label>
                             <label class="pole"><span class="popisek">Objednatel</span>
-                                <select id="pObjednatel" class="field"
-                                    title="Kdo práci objednal a komu se fakturuje"></select></label>
+                                <span class="row" style="gap:6px;align-items:center">
+                                    <select id="pObjednatel" class="field grow"
+                                        title="Kdo práci objednal a komu se fakturuje"></select>
+                                    <button type="button" class="btn btn--ghost btn--sm"
+                                        data-novafirma="pObjednatel" title="Přidat firmu do číselníku">+</button>
+                                </span></label>
                             <label class="pole"><span class="popisek">Zákazník</span>
-                                <select id="pZakaznik" class="field"
-                                    title="Pro koho je práce nakonec určená"></select></label>
+                                <span class="row" style="gap:6px;align-items:center">
+                                    <select id="pZakaznik" class="field grow"
+                                        title="Pro koho je práce nakonec určená"></select>
+                                    <button type="button" class="btn btn--ghost btn--sm"
+                                        data-novafirma="pZakaznik" title="Přidat firmu do číselníku">+</button>
+                                </span></label>
                         </div>
                         <!-- co z rozpočtu ubraly hodiny a co externí náklady -->
                         <div id="krajicRozpocet" class="row row--wrap"
@@ -644,10 +656,82 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=264"></script>
-<script src="assets/js/ui.js?v=264"></script>
-<script src="assets/js/vykazy.js?v=264"></script>
-<script type="module" src="assets/js/store.js?v=264"></script>
+<!-- ===================================================== NOVÝ PROJEKT ==
+     Dřív se zakládalo dvěma prompt() okénky (číslo, název) a zbytek se
+     doplňoval až v panelu. Okno dá základ pohromadě (Michal 8. 10. 2026). -->
+<div id="novyOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:580px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b style="font-size:17px">Nový projekt</b>
+
+        <div class="fmr">
+            <label class="pole" style="flex:0 0 150px"><span class="popisek">Číslo zakázky</span>
+                <input type="text" id="nCislo" class="field" placeholder="2026-043"></label>
+            <label class="pole fmr__cely"><span class="popisek">Název</span>
+                <input type="text" id="nNazev" class="field" placeholder="Pasport budovy…"></label>
+
+            <label class="pole fmr__cely"><span class="popisek">Objednatel</span>
+                <span class="row" style="gap:6px;align-items:center">
+                    <select id="nObjednatel" class="field grow"></select>
+                    <button type="button" class="btn btn--ghost btn--sm" data-novafirma="nObjednatel">+ firma</button>
+                </span></label>
+            <label class="pole fmr__cely"><span class="popisek">Zákazník</span>
+                <span class="row" style="gap:6px;align-items:center">
+                    <select id="nZakaznik" class="field grow"></select>
+                    <button type="button" class="btn btn--ghost btn--sm" data-novafirma="nZakaznik">+ firma</button>
+                </span></label>
+            <label class="pole fmr__cely"><span class="popisek">Fakturovat firmě</span>
+                <span class="row" style="gap:6px;align-items:center">
+                    <select id="nFirma" class="field grow"></select>
+                    <button type="button" class="btn btn--ghost btn--sm" data-novafirma="nFirma">+ firma</button>
+                </span></label>
+
+            <label class="pole"><span class="popisek">Začátek</span>
+                <input type="date" id="nZacatek" class="field"></label>
+            <label class="pole"><span class="popisek">Termín</span>
+                <input type="date" id="nKonec" class="field"></label>
+
+            <div class="fmr__cely">
+                <label class="person" style="width:100%">
+                    <input type="checkbox" id="nJednoduchy" checked>
+                    <span>Jednoduchý projekt (bez matice budov a pater)</span></label>
+            </div>
+        </div>
+
+        <div class="row" style="justify-content:space-between;gap:10px;align-items:center">
+            <span id="nStav" class="tiny muted"></span>
+            <div class="row" style="gap:10px;margin-left:auto">
+                <button type="button" id="nZrusit" class="btn btn--ghost">Zrušit</button>
+                <button type="button" id="nZalozit" class="btn btn--primary">Založit projekt</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================= NOVÁ FIRMA ==
+     Malé okno nad oknem projektu i nad panelem Údajů – ať se kvůli jedné
+     firmě nemusí odcházet do Správy firem. -->
+<div id="firmaOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:130;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:22px;max-width:420px;width:100%;gap:12px">
+        <b style="font-size:16px">Nová firma</b>
+        <label class="pole"><span class="popisek">Název</span>
+            <input type="text" id="fnNazev" class="field" placeholder="Firma s.r.o."></label>
+        <label class="pole"><span class="popisek">IČO (nepovinné)</span>
+            <input type="text" id="fnIco" class="field" inputmode="numeric"></label>
+        <p class="tiny muted" style="margin:0;line-height:1.5">
+            Firma se rovnou přidá do číselníku a nabídne se i u ostatních
+            projektů a ve výkazech. Zbytek údajů se doplní ve Správě firem.
+        </p>
+        <div class="row" style="justify-content:flex-end;gap:10px">
+            <button type="button" id="fnZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="fnUlozit" class="btn btn--primary">Přidat firmu</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=266"></script>
+<script src="assets/js/ui.js?v=266"></script>
+<script src="assets/js/vykazy.js?v=266"></script>
+<script type="module" src="assets/js/store.js?v=266"></script>
 
 <script>
 (function () {
@@ -2630,11 +2714,53 @@
      * formuláři, který se hned otevře. Číslo je to, podle čeho se projekt
      * pozná v evidenci, tak ať se nezakládá bezejmenný.
      */
+    /**
+     * Další volné číslo zakázky pro letošek. Čísla jsou „RRRR-NNN"; podčíslo
+     * (2025-027-1) patří pod svoje hlavní číslo a jeden starší projekt má rok
+     * a pořadí prohozené („041-2026"), takže se čtou obě pořadí. Číslo je jen
+     * návrh — v okně se dá přepsat (Michal 8. 10. 2026).
+     */
+    function dalsiCislo() {
+        const rok = String(new Date().getFullYear());
+        let nejvyssi = 0;
+        (window.KB.projektyDocs || []).forEach(p => {
+            const c = String(p.cislo || "").trim();
+            let m = c.match(/^(\d{4})-(\d{1,3})(?:-\d+)?$/);
+            if (!m) {
+                const prohozene = c.match(/^(\d{1,3})-(\d{4})$/);
+                if (prohozene) m = [c, prohozene[2], prohozene[1]];
+            }
+            if (m && m[1] === rok) nejvyssi = Math.max(nejvyssi, Number(m[2]) || 0);
+        });
+        return rok + "-" + String(nejvyssi + 1).padStart(3, "0");
+    }
+
+    /** Roletka firem – stejná nabídka jako v panelu Údajů. */
+    function naplnFirmy(id, hodnota) {
+        const firmy = (window.KBVYK.firmy() || []).slice();
+        if (hodnota && firmy.indexOf(hodnota) === -1) firmy.unshift(hodnota);
+        $(id).innerHTML = '<option value="">— nevyplněno —</option>' +
+            firmy.map(f => '<option value="' + esc(f) + '"' +
+                (f === hodnota ? " selected" : "") + ">" + esc(f) + "</option>").join("");
+    }
+
+    function otevriNovyProjekt() {
+        $("nCislo").value = dalsiCislo();
+        $("nNazev").value = "";
+        $("nZacatek").value = "";
+        $("nKonec").value = "";
+        $("nJednoduchy").checked = true;
+        ["nObjednatel", "nZakaznik", "nFirma"].forEach(id => naplnFirmy(id, ""));
+        $("nStav").textContent = "";
+        $("novyOverlay").hidden = false;
+        $("nNazev").focus();
+    }
+
     async function zalozProjekt() {
-        const cislo = (prompt("Číslo zakázky (např. 2026-019):", "") || "").trim();
-        if (!cislo) return;
-        const nazev = (prompt("Název projektu:", "") || "").trim();
-        if (!nazev) return;
+        const cislo = $("nCislo").value.trim();
+        const nazev = $("nNazev").value.trim();
+        if (!cislo) return window.KBUI.toast("Doplň číslo zakázky.", "warn");
+        if (!nazev) return window.KBUI.toast("Doplň název projektu.", "warn");
 
         const uz = (window.KB.projektyDocs || []).find(x =>
             (x.cislo || "").toLowerCase() === cislo.toLowerCase());
@@ -2642,13 +2768,22 @@
             (uz.nazev || "") + "\"). Založit i tak?")) return;
 
         const id = window.KB.newProjektId();
+        $("nZalozit").disabled = true;
+        $("nStav").textContent = "Zakládám…";
         try {
             await window.KB.saveProjekt(id, {
                 cislo: cislo, nazev: nazev,
+                objednatel: $("nObjednatel").value,
+                zakaznik: $("nZakaznik").value,
+                firma: $("nFirma").value,
+                zacatek: $("nZacatek").value,
+                konec: $("nKonec").value,
+                jednoduchy: $("nJednoduchy").checked,
                 /* Manažer se nepředvyplňuje – kdo projekt zakládá, nemusí
                    ho vést (přání Michala 24. 8.). */
                 priorita: "stredni"
             });
+            $("novyOverlay").hidden = true;
             vybrany = id;
             /* Do hledání jeho číslo: seznam ukazuje vždycky jen jednu
                skupinu a nový projekt by se v dlouhém výpisu ztratil. */
@@ -2656,10 +2791,53 @@
             $("hledat").value = cislo;
             vykresliSeznam();
             vykresliNastaveni();
-            window.KBUI.toast("Projekt založen – doplň mu údaje a ulož.");
+            window.KBUI.toast("Projekt " + cislo + " založen.");
         } catch (err) {
             console.error(err);
+            $("nStav").textContent = "";
             window.KBUI.toast("Založení selhalo – projekty zakládají manažeři.", "error");
+        } finally {
+            $("nZalozit").disabled = false;
+        }
+    }
+
+    /* ------------------------------------------------------- nová firma */
+
+    let firmaProPole = "";      // id roletky, do které firma po přidání padne
+
+    function otevriNovouFirmu(idPole) {
+        firmaProPole = idPole;
+        $("fnNazev").value = "";
+        $("fnIco").value = "";
+        $("firmaOverlay").hidden = false;
+        $("fnNazev").focus();
+    }
+
+    async function ulozNovouFirmu() {
+        const nazev = $("fnNazev").value.trim();
+        if (!nazev) return window.KBUI.toast("Doplň název firmy.", "warn");
+        $("fnUlozit").disabled = true;
+        try {
+            const ico = $("fnIco").value.trim();
+            const vlozena = await window.KB.pridejFirmu(nazev, ico ? { ico: ico } : null);
+            $("firmaOverlay").hidden = true;
+            /* Roletky se překreslují z číselníku, a ten dorazí až odběrem –
+               proto se nová firma rovnou dopíše jako vybraná volba. */
+            const pole = $(firmaProPole);
+            if (pole) {
+                if (!pole.querySelector('option[value="' + CSS.escape(vlozena) + '"]')) {
+                    pole.insertAdjacentHTML("beforeend",
+                        '<option value="' + esc(vlozena) + '">' + esc(vlozena) + "</option>");
+                }
+                pole.value = vlozena;
+                pole.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            window.KBUI.toast("Firma " + vlozena + " přidána.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Firmu se nepodařilo přidat.", "error");
+        } finally {
+            $("fnUlozit").disabled = false;
         }
     }
 
@@ -2870,7 +3048,27 @@
             }
         });
         $("btnUloz").addEventListener("click", uloz);
-        $("btnNovyProjekt").addEventListener("click", zalozProjekt);
+        $("btnNovyProjekt").addEventListener("click", otevriNovyProjekt);
+        $("nZalozit").addEventListener("click", zalozProjekt);
+        $("nZrusit").addEventListener("click", () => { $("novyOverlay").hidden = true; });
+        $("fnUlozit").addEventListener("click", ulozNovouFirmu);
+        $("fnZrusit").addEventListener("click", () => { $("firmaOverlay").hidden = true; });
+        // Enter v názvu firmy = přidat; okno je malé, tlačítko je zbytečná cesta
+        $("fnNazev").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); ulozNovouFirmu(); }
+        });
+        /* Tlačítka „+ firma" jsou u roletek v okně i v panelu Údajů –
+           obsluha je jedna, pole si řekne přes `data-novafirma`. */
+        document.addEventListener("click", (e) => {
+            const plus = e.target.closest("[data-novafirma]");
+            if (plus) otevriNovouFirmu(plus.dataset.novafirma);
+        });
+        // Esc zavře to okno, které je zrovna nahoře
+        document.addEventListener("keydown", (e) => {
+            if (e.key !== "Escape") return;
+            if (!$("firmaOverlay").hidden) { $("firmaOverlay").hidden = true; return; }
+            if (!$("novyOverlay").hidden) $("novyOverlay").hidden = true;
+        });
         $("pJednoduchy").addEventListener("change", prepniJednoduchy);
         $("btnNaklad").addEventListener("click", pridejNaklad);
 

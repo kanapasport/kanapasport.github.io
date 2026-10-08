@@ -2716,6 +2716,38 @@ KB.ulozProjektyCloveka = async (uid, idsZapnute, jmeno) => {
     return { pridano: pridano, odebrano: odebrano };
 };
 
+/**
+ * Přidá firmu do společného číselníku a vrátí její název.
+ *
+ * Dřív šlo firmu založit jedině ve Správě firem, takže kdo zakládal projekt,
+ * musel odejít ze stránky – a přišel o rozepsané údaje (Michal 8. 10. 2026).
+ * Firma, která už v číselníku je, se nepřidává dvakrát; vrátí se tak, jak
+ * je zapsaná, aby roletka našla přesnou shodu.
+ *
+ * @param {string} nazev
+ * @param {Object} [detail] nepovinné IČO, adresa, kontakt…
+ * @returns {Promise<string>} název firmy v číselníku
+ */
+KB.pridejFirmu = async (nazev, detail) => {
+    if (authReady) await authReady;
+    requireDb();
+    const jmeno = String(nazev || "").trim().slice(0, 160);
+    if (!jmeno) throw new Error("Firma bez názvu.");
+
+    const uz = (KB.firmy || []).find(f =>
+        String(f).trim().toLowerCase() === jmeno.toLowerCase());
+    if (uz) return uz;
+
+    await KB.saveCiselnikZakazek({ firmy: (KB.firmy || []).concat([jmeno]) });
+    if (detail && Object.keys(detail).length) {
+        const vse = Object.assign({}, KB.firmyDetail || {});
+        vse[jmeno] = detail;
+        await KB.ulozFirmyDetail({ firmyDetail: vse });
+    }
+    KB.zapisAktivitu("projekt", "přidal firmu " + jmeno);
+    return jmeno;
+};
+
 KB.loadProjektFinance = async (id) => {
     if (authReady) await authReady;
     requireDb();
