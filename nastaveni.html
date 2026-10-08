@@ -44,8 +44,11 @@
         .zustrad__pole > span { font-size: 11px; font-weight: 800; letter-spacing: .04em;
             text-transform: uppercase; color: var(--muted); }
         .zustrad__pole input[type="date"] { width: 150px; }
+        /* Přepínač „počítat přesčas" – ať je v řadě stejně vysoký jako pole. */
+        .zustrad__prepinac { display: flex; align-items: center; gap: 6px;
+            height: 38px; font-size: 13px; white-space: nowrap; }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=262">
+    <link rel="stylesheet" href="assets/css/app.css?v=263">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -198,10 +201,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=262"></script>
-<script src="assets/js/ui.js?v=262"></script>
-<script src="assets/js/vykazy.js?v=262"></script>
-<script type="module" src="assets/js/store.js?v=262"></script>
+<script src="assets/js/taxonomy.js?v=263"></script>
+<script src="assets/js/ui.js?v=263"></script>
+<script src="assets/js/vykazy.js?v=263"></script>
+<script type="module" src="assets/js/store.js?v=263"></script>
 
 <script>
 (function () {
@@ -467,6 +470,13 @@
                     pole("cerpanoPred", Number(d.cerpanoPred) || "", "0.5", 78) + "</label>" +
                 '<label class="zustrad__pole"><span>Přesčas (h)</span>' +
                     pole("prescasPred", Number(d.prescasPred) || "", "0.5", 86) + "</label>" +
+                /* Kdo hodiny na web nepíše, tomu přesčas jen svítí mínusem ve
+                   výši celého fondu – dovolenou si přitom nechává. */
+                '<label class="zustrad__pole"><span>Přesčas</span>' +
+                    '<span class="zustrad__prepinac"><input type="checkbox" ' +
+                        'data-zust="' + esc(u.id) + '" data-pole="vedePrescas"' +
+                        (d.bezPrescasu === true ? "" : " checked") + ">" +
+                        "<span>počítat</span></span></label>" +
             "</div>";
         };
 
@@ -488,7 +498,9 @@
             const uid = el.dataset.zust;
             if (!podle.has(uid)) podle.set(uid, {});
             podle.get(uid)[el.dataset.pole] =
-                el.type === "date" ? el.value : (el.value === "" ? "" : Number(el.value));
+                el.type === "checkbox" ? el.checked
+                : el.type === "date" ? el.value
+                : (el.value === "" ? "" : Number(el.value));
         });
 
         /* Ukládá se jen to, co je opravdu vyplněné – prázdný řádek by
@@ -503,7 +515,11 @@
         $("btnZustatkyUloz").disabled = true;
         $("stavZustatky").textContent = "Ukládám…";
         try {
-            for (const [uid, d] of kUlozeni) await window.KB.ulozZustatek(uid, d);
+            for (const [uid, d] of kUlozeni) {
+                // přepínač je v rozhraní kladný („počítat"), v datech záporný
+                await window.KB.ulozZustatek(uid,
+                    Object.assign({}, d, { bezPrescasu: d.vedePrescas === false }));
+            }
             $("stavZustatky").textContent = "Uloženo u " + kUlozeni.length + " lidí.";
             window.KBUI.toast("Dovolené a přesčasy uloženy.");
             upravovano = false;

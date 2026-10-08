@@ -4002,6 +4002,10 @@ KB.ulozZustatek = async (uid, data) => {
         narok: Math.max(0, Number(data.narok) || 0),
         cerpanoPred: Math.max(0, Number(data.cerpanoPred) || 0),
         prescasPred: Number(data.prescasPred) || 0,
+        /* Komu se přesčas nevede (kancelář, vedení) – hodiny na web nepíše,
+           tak by mu věčně svítil mínus ve výši celého fondu. Dovolenou má
+           dál (Michal 8. 10. 2026). */
+        bezPrescasu: data.bezPrescasu === true,
         odIso: String(data.odIso || "").slice(0, 10),
         pozn: String(data.pozn || "").slice(0, 200),
         updatedMs: Date.now(),

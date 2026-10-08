@@ -238,6 +238,7 @@
             dovolenaDnu: dovolenaDnu,
             prescas: Math.round(prescas * 10) / 10,
             bezZapisu: bezZapisu,
+            bezPrescasu: z.bezPrescasu === true,
             fond: fond,
             prace: Math.round(prace * 10) / 10,
             neuplne: nastaveno && !!okno && od < okno
