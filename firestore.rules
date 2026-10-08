@@ -314,7 +314,13 @@ service cloud.firestore {
        nezveřejněno, jinak UID zpracovatelů. Kolega tak uvidí, že milník
        existuje a čí je, ale ne kdy se odevzdává (Michal 8. 10. 2026). */
     match /artifacts/firemni-kb-app/private/milniky/seznam/{id} {
-      allow read: if spravce() || (clen() && resource.data.get('zverejneno', false) == true);
+      /* Tři okruhy: manažer vidí všechno, člen zveřejněné milníky kohokoliv
+         a navíc VŠECHNY milníky své technologie – i nezveřejněné, aby věděl,
+         co po jeho profesi přijde. Termín k nim nedostane, ten má vlastní
+         dokument a vlastní seznam (Michal 8. 10. 2026). */
+      allow read: if spravce()
+                     || (clen() && resource.data.get('zverejneno', false) == true)
+                     || (clen() && request.auth.uid in resource.data.get('kdoVidiPostup', []));
       allow create, delete: if spravce();
       /* Svůj zveřejněný milník si člen odškrtne sám – ale opravdu jen
          odškrtne. Text, termín ani přiřazení mu pravidla nepustí a

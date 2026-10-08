@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=257">
+    <link rel="stylesheet" href="assets/css/app.css?v=259">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -65,6 +65,7 @@
         <button type="button" class="chip chip--active" data-pohled="nadchazejici">Nadcházející milníky</button>
         <button type="button" class="chip" data-pohled="minuly">Minulý měsíc</button>
         <button type="button" class="chip" data-pohled="splnene">Všechny splněné milníky</button>
+        <button type="button" class="chip" data-pohled="mujpostup">Můj postup</button>
     </div>
 
     <div id="zakRow" class="row row--wrap" style="gap:8px"></div>
@@ -84,6 +85,10 @@
     <div id="hint" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
         Zapisovat a měnit milníky můžou jen <b>správci</b>. Ostatní vidí zveřejněné
         milníky všech, ale <b>termín jen u svých</b> – u kolegových je místo data pomlčka.
+    </div>
+    <div id="hintPostup" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
+        Celá řada tvojí profese v pořadí, jak půjde za sebou – i to, co se bude
+        odevzdávat až za dlouho. Ukazuje se podle technologie, kterou děláš.
     </div>
     <div id="hintManazer" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
         Vidíš <b>celý harmonogram</b> včetně toho, co zaměstnanci zatím nevidí
@@ -163,12 +168,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=257"></script>
-<script src="assets/js/doc.js?v=257"></script>
-<script src="assets/js/ui.js?v=257"></script>
+<script src="assets/js/taxonomy.js?v=259"></script>
+<script src="assets/js/doc.js?v=259"></script>
+<script src="assets/js/ui.js?v=259"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=257"></script>
-<script type="module" src="assets/js/store.js?v=257"></script>
+<script src="assets/js/vykazy.js?v=259"></script>
+<script type="module" src="assets/js/store.js?v=259"></script>
 
 <script>
 (function () {
@@ -237,6 +242,22 @@
         return Math.round((new Date(iso + "T00:00:00") - dnes) / DEN);
     }
 
+    /** „STAVBA + SLN" jsou dvě technologie, ne jedna. */
+    const techCasti = (cinnost) =>
+        String(cinnost || "").split("+").map(s => s.trim()).filter(Boolean);
+
+    /** Technologie, které člověk dělá – podle milníků, kde je zpracovatelem. */
+    function mojeTechnologie(ja) {
+        const moje = [];
+        (window.KB.milniky || []).forEach(m => {
+            if (!ja || (m.owners || []).indexOf(ja) === -1) return;
+            techCasti(m.cinnost).forEach(t => {
+                if (moje.indexOf(t) === -1) moje.push(t);
+            });
+        });
+        return moje;
+    }
+
     /** Starší než týden. Milník bez data nikdy nezastará, ten se neschovává. */
     const jeStary = (item) => !!item.datum && dnyDo(item.datum) < -OKNO_DNI;
 
@@ -259,6 +280,14 @@
      *    hledá to, co se dodělalo naposledy.
      */
     function vyberPohledu(vsechny) {
+        /* Můj postup je výhled profese, ne seznam termínů – řadí se tak, jak
+           milníky jdou v harmonogramu za sebou, a neschovává se nic.
+           U nezveřejněných milníků stejně datum není, takže řazení podle
+           data by je naházelo na jednu hromadu. */
+        if (pohled === "mujpostup") {
+            return vsechny.slice().sort((a, b) =>
+                (Number(a.poradi) || 0) - (Number(b.poradi) || 0));
+        }
         if (pohled === "splnene") {
             return vsechny.filter(m => m.hotovo)
                 .sort((a, b) => (b.datum || "").localeCompare(a.datum || "") ||
@@ -282,12 +311,11 @@
             return { text: iso ? czDate(iso) : "bez termínu", trida: "milnik--hotovo",
                      pozn: "splněno" + (item.hotovoKdo ? " · " + item.hotovoKdo : "") };
         }
-        /* Termín existuje, ale není pro mě: zaměstnanec vidí kolegův milník,
-           ne jeho datum (Michal 8. 10. 2026). Pomlčka to říká líp než
-           „bez termínu", což by znamenalo, že žádný termín nemá. */
+        /* Termín, který pro mě není – pomlčka, a bez vysvětlování: komu
+           datum patří, je věc manažera, ne hláška v tabulce (Michal 8. 10. 2026).
+           „Bez termínu" by lhalo, to znamená, že žádný termín není. */
         if (!iso && item.terminSkryty) {
-            return { text: '<span class="mildash">—</span>', trida: "",
-                     pozn: "termín vidí jen zpracovatel" };
+            return { text: '<span class="mildash">—</span>', trida: "" };
         }
         if (!iso) return { text: "bez termínu", trida: "milnik--zadny" };
 
@@ -377,8 +405,9 @@
            Splněno a řádek má podbarvený, ať své najde na první pohled. */
         const ja = (window.KB.currentUid && window.KB.currentUid()) || "";
         const jeMuj = (m) => !!ja && (m.owners || []).indexOf(ja) !== -1;
-        $("hint").hidden = muzeMenit;
-        $("hintManazer").hidden = !muzeMenit;
+        $("hint").hidden = muzeMenit || pohled === "mujpostup";
+        $("hintManazer").hidden = !muzeMenit || pohled === "mujpostup";
+        $("hintPostup").hidden = pohled !== "mujpostup";
         paintZakRow();
 
         // aktivní dlaždice pohledu – právě jedna
@@ -395,10 +424,18 @@
            neopakuje. V ostrém provozu tyhle milníky zaměstnanec stejně
            nedostane, takže tenhle řádek nic nezkazí. */
         if (!muzeMenit) {
-            vsechny = vsechny.filter(m => m.zverejneno !== false).map(m =>
-                (ja && (m.owners || []).indexOf(ja) !== -1)
+            vsechny = vsechny
+                // nezveřejněné milníky patří jen do Mého postupu
+                .filter(m => pohled === "mujpostup" || m.zverejneno !== false)
+                .map(m => (ja && (m.owners || []).indexOf(ja) !== -1)
                     ? m
                     : Object.assign({}, m, { datum: "", terminSkryty: true }));
+        }
+
+        if (pohled === "mujpostup") {
+            const moje = mojeTechnologie(ja);
+            vsechny = vsechny.filter(m =>
+                techCasti(m.cinnost).some(t => moje.indexOf(t) !== -1));
         }
 
         paintFiltr(vsechny);
@@ -415,7 +452,9 @@
             ? "V tomhle pohledu žádný milník není – přepni si nahoře jiný."
             : (hledat || filCin || filKdo || jenMoje || jenSkryte
                 ? "Filtru neodpovídá žádný milník."
-                : "Zatím tu není žádný milník.");
+                : (pohled === "mujpostup"
+                    ? "Zatím ti není přiřazený žádný milník, tak nevíme, co je tvoje profese."
+                    : "Zatím tu není žádný milník."));
         $("empty").hidden = !!items.length;
         $("tableWrap").hidden = !items.length;
         if (!items.length) return;

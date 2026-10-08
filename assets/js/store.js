@@ -1255,9 +1255,32 @@ const milnikTerminCol = () => collection(db, "artifacts", APP_ID, "private", "mi
 const milnikSeznamDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "seznam", id);
 const milnikTerminDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "terminy", id);
 
-let syroveMilniky = [];      // seznam/{id}, co databáze pustila
+let milnikySeznam = {};      // id -> milník ze zveřejněných
+let milnikyPostup = {};      // id -> milník z mojí technologie (i nezveřejněný)
 let syroveTerminy = {};      // id -> termín, jen ty, na které mám právo
 let milnikyOdbery = [];
+
+/** „STAVBA + SLN" jsou dvě technologie, ne jedna. */
+function techCasti(cinnost) {
+    return String(cinnost || "").split("+").map(s => s.trim()).filter(Boolean);
+}
+
+/**
+ * Kdo na téhle technologii dělá – ti uvidí její milníky jako svůj postup,
+ * i když ještě nejsou zveřejněné. Termín u nich stejně nedostanou; jde
+ * o to, aby člověk věděl, co po jeho profesi přijde (Michal 8. 10. 2026).
+ */
+function postupLide(cinnost, vsechny) {
+    const casti = techCasti(cinnost);
+    const kdo = [];
+    (vsechny || []).forEach(m => {
+        if (!techCasti(m.cinnost).some(t => casti.indexOf(t) !== -1)) return;
+        (m.zpracovatele || m.owners || []).forEach(uid => {
+            if (kdo.indexOf(uid) === -1) kdo.push(uid);
+        });
+    });
+    return kdo;
+}
 
 KB.newMilnikId = () => "mil_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
 
@@ -1265,7 +1288,10 @@ KB.newMilnikId = () => "mil_" + Date.now() + "_" + Math.floor(Math.random() * 10
 function slijMilniky() {
     const uid = (auth && auth.currentUser) ? auth.currentUser.uid : "";
     const manazer = jsemManazer();
-    KB.milniky = syroveMilniky.map(m => {
+    /* Dvě hromádky: zveřejněné milníky (vidí je každý) a milníky mojí
+       technologie (i nezveřejněné). Můžou se překrývat, proto klíč podle id. */
+    const vse = Object.assign({}, milnikyPostup, milnikySeznam);
+    KB.milniky = Object.keys(vse).map(id => vse[id]).map(m => {
         const zpracovatele = Array.isArray(m.zpracovatele) ? m.zpracovatele : [];
         const muj = !!uid && zpracovatele.indexOf(uid) !== -1;
         const termin = syroveTerminy[m.id] || "";
@@ -1274,7 +1300,10 @@ function slijMilniky() {
             zakazka: m.projekt || "",
             datum: termin,
             // termín existuje, ale není pro mě – ne totéž co milník bez termínu
-            terminSkryty: !termin && !manazer && !muj
+            terminSkryty: !termin && !manazer && !muj,
+            /* Tenhle milník mám jen jako výhled své profese – v běžných
+               pohledech nemá co dělat, patří do „Můj postup". */
+            jenPostup: !manazer && m.zverejneno === false
         });
     }).sort((a, b) => (Number(a.poradi) || 0) - (Number(b.poradi) || 0));
     emit("milniky", KB.milniky);
@@ -1296,10 +1325,22 @@ KB.watchMilniky = async () => {
         : query(milnikTerminCol(), where("kdoVidiTermin", "array-contains", uid));
 
     milnikyOdbery.push(onSnapshot(dotazSeznam, (snap) => {
-        syroveMilniky = [];
-        snap.forEach(d => syroveMilniky.push({ id: d.id, ...d.data() }));
+        milnikySeznam = {};
+        snap.forEach(d => { milnikySeznam[d.id] = { id: d.id, ...d.data() }; });
         slijMilniky();
     }, (err) => console.error("Chyba čtení milníků:", err)));
+
+    /* Druhý dotaz: milníky mojí technologie, i nezveřejněné. Pravidla nejsou
+       filtr, takže si o ně musí říct dotaz sám – a `array-contains` na jednom
+       poli se obejde bez složeného indexu. Manažer má všechno z prvního. */
+    if (!manazer) {
+        milnikyOdbery.push(onSnapshot(
+            query(milnikSeznamCol(), where("kdoVidiPostup", "array-contains", uid)), (snap) => {
+                milnikyPostup = {};
+                snap.forEach(d => { milnikyPostup[d.id] = { id: d.id, ...d.data() }; });
+                slijMilniky();
+            }, (err) => console.error("Chyba čtení postupu milníků:", err)));
+    }
 
     milnikyOdbery.push(onSnapshot(dotazTerminy, (snap) => {
         syroveTerminy = {};
@@ -1309,11 +1350,15 @@ KB.watchMilniky = async () => {
 };
 
 /** Co z položky patří do kterého dokumentu. */
-function milnikDoDvou(item, puvodni) {
+function milnikDoDvou(item, puvodni, vsechny) {
     const p = puvodni || {};
     const zpracovatele = Array.isArray(item.owners) ? item.owners
         : (Array.isArray(item.zpracovatele) ? item.zpracovatele : []);
     const zverejneno = item.zverejneno === true;
+    /* Vlastní zpracovatelé tam musí být vždycky – i když se milník zrovna
+       nepočítá do seznamu, ze kterého se parta technologie skládá. */
+    const kdoVidiPostup = postupLide(item.cinnost, vsechny || KB.milniky || [])
+        .concat(zpracovatele).filter((u, i, pole) => pole.indexOf(u) === i);
     const razitko = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
     return {
         zpracovatele: zpracovatele,
@@ -1325,6 +1370,8 @@ function milnikDoDvou(item, puvodni) {
             projekt: String(item.zakazka || item.projekt || "").slice(0, 160),
             zpracovatele: zpracovatele,
             zverejneno: zverejneno,
+            // kdo tuhle technologii dělá – ten milník uvidí i před zveřejněním
+            kdoVidiPostup: kdoVidiPostup,
             poradi: Number(item.poradi) || Number(p.poradi) || 0,
             stav: String(item.stav || p.stav || "planovano"),
             // úprava milníku nesmí shodit značku „splněno"
@@ -1350,10 +1397,41 @@ KB.ulozMilnik = async (item) => {
     requireDb();
     const id = item.id || KB.newMilnikId();
     const puvodni = (KB.milniky || []).find(m => m.id === id);
-    const casti = milnikDoDvou(item, puvodni);
+    /* Uložený milník se do seznamu započítá rovnou – jinak by si u nově
+       přiřazeného člověka sám sebe do `kdoVidiPostup` nedoplnil. */
+    const vsechny = (KB.milniky || []).filter(m => m.id !== id)
+        .concat([Object.assign({}, item, { id: id })]);
+    const casti = milnikDoDvou(item, puvodni, vsechny);
     await setDoc(milnikSeznamDoc(id), casti.seznam, { merge: true });
     await setDoc(milnikTerminDoc(id), casti.termin, { merge: true });
+    await KB.srovnejPostupy(vsechny);
     return id;
+};
+
+/**
+ * Když se u milníku změní zpracovatelé, změní se i to, kdo tu technologii
+ * dělá – a ostatní milníky téže technologie o tom nevědí. Tohle je srovná;
+ * zapisuje jen ty, kterým se seznam opravdu změnil (obvykle žádný).
+ * @returns {Promise<number>} kolik milníků se srovnalo
+ */
+KB.srovnejPostupy = async (vsechny) => {
+    if (authReady) await authReady;
+    requireDb();
+    const seznam = vsechny || KB.milniky || [];
+    const zmenene = seznam.filter(m => {
+        const maji = (m.kdoVidiPostup || []).slice().sort().join(",");
+        return postupLide(m.cinnost, seznam).slice().sort().join(",") !== maji;
+    });
+    if (!zmenene.length) return 0;
+    const davka = writeBatch(db);
+    zmenene.slice(0, 400).forEach(m => {
+        davka.update(milnikSeznamDoc(m.id), {
+            kdoVidiPostup: postupLide(m.cinnost, seznam),
+            updatedMs: Date.now(), updatedBy: window.KB_USER || ""
+        });
+    });
+    await davka.commit();
+    return zmenene.length;
 };
 
 /**
@@ -1417,7 +1495,7 @@ KB.importMilniky = async (polozky) => {
                 owners: p.zpracovatele || p.owners || [],
                 hotovo: p.stav === "hotovo",
                 datum: p.termin || p.datum || ""
-            }));
+            }), null, seznam);
             davka.set(milnikSeznamDoc(id), casti.seznam, { merge: true });
             davka.set(milnikTerminDoc(id), casti.termin, { merge: true });
             hotovo++;
