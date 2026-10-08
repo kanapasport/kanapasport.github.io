@@ -2590,7 +2590,10 @@ KB.ulozProjektCasti = async (id, patch) => {
     /* `zpetne`: projekt bez uzávěrky – zpětné doplnění hodin (2026-027).
        Nemá zaškrtávátko; zapíná se ručně a jednou na něm bude stát
        obrazovka „manažer povolí zpětný zápis". */
-    const povolena = ["sablony", "technologie", "zpetne", "bezSheets"];
+    /* `slozkaP` sem patří proto, že stav složky na P: zapisuje nástroj na
+       PC a uložení Údajů na webu by ho jinak vynulovalo – `saveProjekt`
+       dokument skládá znovu (Michal 8. 10. 2026). */
+    const povolena = ["sablony", "technologie", "zpetne", "bezSheets", "slozkaP"];
     const payload = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
     povolena.forEach(klic => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];

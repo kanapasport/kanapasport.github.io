@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=266">
+    <link rel="stylesheet" href="assets/css/app.css?v=267">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -252,6 +252,7 @@
                             <label class="pole" style="flex:1 1 280px;min-width:0"><span class="popisek">Název</span>
                                 <input type="text" id="pNazevPole" class="field" placeholder="Pasport budovy…"></label>
                         </div>
+                        <p id="pSlozkaStav" class="tiny muted" style="margin:0 0 8px;line-height:1.5" hidden></p>
                         <div class="fmr">
                             <label class="pole"><span class="popisek">Priorita</span>
                                 <select id="pPriorita" class="field">
@@ -695,6 +696,12 @@
                     <input type="checkbox" id="nJednoduchy" checked>
                     <span>Jednoduchý projekt (bez matice budov a pater)</span></label>
             </div>
+            <div class="fmr__cely">
+                <label class="person" style="width:100%">
+                    <input type="checkbox" id="nSlozkaP">
+                    <span>Založit složku na P:</span></label>
+                <div id="nSlozkaNahled" class="tiny muted" style="margin-top:5px;line-height:1.5"></div>
+            </div>
         </div>
 
         <div class="row" style="justify-content:space-between;gap:10px;align-items:center">
@@ -728,10 +735,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=266"></script>
-<script src="assets/js/ui.js?v=266"></script>
-<script src="assets/js/vykazy.js?v=266"></script>
-<script type="module" src="assets/js/store.js?v=266"></script>
+<script src="assets/js/taxonomy.js?v=267"></script>
+<script src="assets/js/ui.js?v=267"></script>
+<script src="assets/js/vykazy.js?v=267"></script>
+<script type="module" src="assets/js/store.js?v=267"></script>
 
 <script>
 (function () {
@@ -1091,9 +1098,21 @@
         }
     }
 
+    /** Stav složky na P: – ať je vidět, že na ni nástroj ještě nedošel. */
+    const STAV_SLOZKY = {
+        ceka: "Složka na P: je objednaná, založí ji nástroj na pracovním PC.",
+        hotovo: "Složka na P: je založená.",
+        chyba: "Složku na P: se nepodařilo založit."
+    };
+
     function naplnUdaje(p) {
         $("pCislo").value = p.cislo || "";
         $("pNazevPole").value = p.nazev || "";
+        const stav = STAV_SLOZKY[p.slozkaP];
+        $("pSlozkaStav").textContent = stav
+            ? stav + (p.slozkaPCesta ? "  (" + p.slozkaPCesta + ")" : "")
+            : "";
+        $("pSlozkaStav").hidden = !stav;
         $("pZacatek").value = p.zacatek || "";
         $("pKonec").value = p.konec || "";
         $("pPriorita").value = p.priorita || "stredni";
@@ -2744,12 +2763,25 @@
                 (f === hodnota ? " selected" : "") + ">" + esc(f) + "</option>").join("");
     }
 
+    /** Název složky skládá stejně jako nástroj na PC – ať je vidět, co vznikne. */
+    function nahledSlozky() {
+        const cislo = $("nCislo").value.trim();
+        const nazev = $("nNazev").value.trim();
+        const jmeno = (cislo + " " + nazev).replace(/[\\/:*?"<>|]/g, "-")
+            .replace(/\s+/g, " ").trim().slice(0, 120).replace(/[. ]+$/, "");
+        $("nSlozkaNahled").textContent = $("nSlozkaP").checked
+            ? (jmeno ? "Vznikne P:\\" + jmeno : "Nejdřív doplň číslo a název.")
+            : "Složku na P: založí nástroj na pracovním PC, do 20 minut.";
+    }
+
     function otevriNovyProjekt() {
         $("nCislo").value = dalsiCislo();
         $("nNazev").value = "";
         $("nZacatek").value = "";
         $("nKonec").value = "";
         $("nJednoduchy").checked = true;
+        $("nSlozkaP").checked = false;
+        nahledSlozky();
         ["nObjednatel", "nZakaznik", "nFirma"].forEach(id => naplnFirmy(id, ""));
         $("nStav").textContent = "";
         $("novyOverlay").hidden = false;
@@ -2783,6 +2815,11 @@
                    ho vést (přání Michala 24. 8.). */
                 priorita: "stredni"
             });
+            /* Složka se zapisuje zvlášť – `saveProjekt` by ji při příštím
+               uložení Údajů vynuloval, proto jde cestou pravého slučování. */
+            if ($("nSlozkaP").checked) {
+                await window.KB.ulozProjektCasti(id, { slozkaP: "ceka" });
+            }
             $("novyOverlay").hidden = true;
             vybrany = id;
             /* Do hledání jeho číslo: seznam ukazuje vždycky jen jednu
@@ -3050,6 +3087,9 @@
         $("btnUloz").addEventListener("click", uloz);
         $("btnNovyProjekt").addEventListener("click", otevriNovyProjekt);
         $("nZalozit").addEventListener("click", zalozProjekt);
+        ["nSlozkaP", "nCislo", "nNazev"].forEach(id =>
+            $(id).addEventListener("input", nahledSlozky));
+        $("nSlozkaP").addEventListener("change", nahledSlozky);
         $("nZrusit").addEventListener("click", () => { $("novyOverlay").hidden = true; });
         $("fnUlozit").addEventListener("click", ulozNovouFirmu);
         $("fnZrusit").addEventListener("click", () => { $("firmaOverlay").hidden = true; });
