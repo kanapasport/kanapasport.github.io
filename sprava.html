@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=267">
+    <link rel="stylesheet" href="assets/css/app.css?v=268">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -494,8 +494,8 @@
                     <div data-list="ukoly" hidden style="display:flex;flex-direction:column;gap:14px">
                         <section class="sblok">
                             <div class="sblok__hlava"><span class="sblok__stitek">Úkoly projektu</span>
-                                <a id="odkazNovyUkol" class="btn btn--sm btn--primary"
-                                   href="ukoly.html#novy">+ Nový úkol</a></div>
+                                <button type="button" id="btnNovyUkolProjekt"
+                                   class="btn btn--sm btn--primary">+ Nový úkol</button></div>
                             <div class="sblok__telo">
                             <div class="row row--wrap" style="gap:8px" id="ukolyFiltr"></div>
                             <div class="row row--wrap" style="gap:8px;margin-top:6px">
@@ -735,10 +735,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=267"></script>
-<script src="assets/js/ui.js?v=267"></script>
-<script src="assets/js/vykazy.js?v=267"></script>
-<script type="module" src="assets/js/store.js?v=267"></script>
+<script src="assets/js/taxonomy.js?v=268"></script>
+<script src="assets/js/ui.js?v=268"></script>
+<script src="assets/js/vykazy.js?v=268"></script>
+<script type="module" src="assets/js/store.js?v=268"></script>
 
 <script>
 (function () {
@@ -1152,9 +1152,6 @@
 
         const nazev = p.nazev || "";
         $("pNazev").textContent = nazev || "Bez názvu";
-        // nový úkol rovnou k tomuhle projektu, ne do prázdna
-        $("odkazNovyUkol").href = "ukoly.html?zak=" +
-            encodeURIComponent(window.KBUI.slug(nazev)) + "&novy=1";
         $("pPodtitul").textContent = [p.cislo, (window.KB.firmaMap || {})[nazev] || p.firma || "",
             p.uzavreno ? "ukončený" : ""].filter(Boolean).join(" · ");
 
@@ -2345,27 +2342,42 @@
         }
     }
 
+    /**
+     * Okno nového úkolu. `klic` je „budova|technologie|patro" z buňky matice;
+     * prázdný klíč znamená úkol na celý projekt – ten potřebuje jednoduchý
+     * projekt, kde matice vůbec není (Michal 8. 10. 2026).
+     */
     function otevriNovyUkol(klic) {
         const p = vybranyProjekt();
         if (!p) return;
-        const [budova, tech, patro] = klic.split("|");
+        const [budova, tech, patro] = String(klic || "||").split("|");
+        const bezOs = !budova && !tech && !patro;
         novyUkolOsy = { budova: budova, tech: tech, patro: patro };
         upravovanyUkolId = "";
 
         $("nuNadpis").textContent = "Nový úkol";
-        $("nuNazev").value = budova + " – " + tech + " – " + patro;
+        $("nuNazev").value = bezOs ? "" : budova + " – " + tech + " – " + patro;
         $("nuDruh").innerHTML = V.options(seznamZTextu($("fDruhy").value).length ? seznamZTextu($("fDruhy").value) : V.cinnosti(), "ArcGIS/Kreslení", "— vyber —");
         $("nuTermin").value = "";
         $("nuBudget").value = "";
-        $("nuOsy").textContent = "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
+        $("nuOsy").textContent = bezOs
+            ? "Projekt " + (p.nazev || "")
+            : "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
         $("nuTodo").value = "";
 
-        nabidniSablony(p, budova, tech, patro);
+        // bez os není co nabízet – šablony visí na technologii a na patře
+        if (bezOs) {
+            $("nuSabTech").hidden = true;
+            $("nuSabMist").hidden = true;
+        } else {
+            nabidniSablony(p, budova, tech, patro);
+        }
         /* Lidé té technologie (Spolupracovníci → Kdo dělá kterou technologii)
            jsou zaškrtnutí rovnou – to jsou ti, kdo úkol nejspíš dostanou.
            Další se přidají normálně. */
         const mapa = (p.lideTech && typeof p.lideTech === "object") ? p.lideTech : {};
-        const predem = Object.keys(mapa).filter(uid => (mapa[uid] || []).indexOf(tech) !== -1);
+        const predem = bezOs ? []
+            : Object.keys(mapa).filter(uid => (mapa[uid] || []).indexOf(tech) !== -1);
         naplnDialogLidi(p, predem);
 
         $("bunkaOverlay").hidden = true;
@@ -3086,6 +3098,9 @@
         });
         $("btnUloz").addEventListener("click", uloz);
         $("btnNovyProjekt").addEventListener("click", otevriNovyProjekt);
+        /* Úkol se zakládá tady, ne odskokem na stránku Úkoly – tam se
+           projekt stejně nestihl předvybrat a člověk se ztratil. */
+        $("btnNovyUkolProjekt").addEventListener("click", () => otevriNovyUkol(""));
         $("nZalozit").addEventListener("click", zalozProjekt);
         ["nSlozkaP", "nCislo", "nNazev"].forEach(id =>
             $(id).addEventListener("input", nahledSlozky));

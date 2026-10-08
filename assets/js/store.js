@@ -107,6 +107,7 @@ const KB = {
     skupiny: DEFAULT_SKUPINY.slice(),   // skupiny úkolů uvnitř zakázky
     users: [],              // lidé, kteří mají na web přístup, a jejich role
     milniky: [],            // termíny odevzdání po činnostech
+    zakazkySeznam: [],      // jmenný seznam zakázek (číslo + název) pro všechny
     boards: [],             // tabule na nápady – jen hlavičky, obsah se dotahuje zvlášť
     vykazy: [],             // zápisy práce – načtou se až na vyžádání
     firmy: [],              // komu se fakturuje (číselník u zakázek, není tajný)
@@ -486,6 +487,16 @@ try {
         }, () => { /* adresa nemusí být nastavená – zápis se pak jen nespustí */ }));
 
         KB.watchMilniky();
+
+        /* Jmenný seznam zakázek – holý výtah (číslo + název) pro všechny.
+           Projekty samotné leží v `private` a zaměstnanec přečte jen ty
+           svoje; tohle je to, co v Evidenci zakázek hledají očima. */
+        odbery.push(onSnapshot(metaDoc("zakazky-seznam"), (snap) => {
+            const data = snap.exists() ? (snap.data() || {}) : {};
+            KB.zakazkySeznam = Array.isArray(data.polozky) ? data.polozky : [];
+            KB.zakazkySeznamMs = Number(data.ms) || 0;
+            emit("zakazky-seznam", KB.zakazkySeznam);
+        }, () => { /* dokument nemusí existovat, než ho manažer poprvé uloží */ }));
 
         odbery.push(onSnapshot(metaDoc("zakazky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
@@ -2639,6 +2650,11 @@ KB.saveProjekt = async (id, data) => {
         updatedBy: window.KB_USER || ""
     }, { merge: true });
     KB.zapisAktivitu("projekt", "uložil projekt " + (data.nazev || ""));
+    /* Jmenný seznam pro celý tým se drží vedle – aktualizuje se tady, ať
+       se o něj nikdo nemusí starat ručně. Nový projekt ještě není
+       v `projektyDocs` (snapshot chodí později), proto se přidá zvlášť. */
+    KB.obnovSeznamZakazek(Object.assign({ id: id }, data))
+        .catch(err => console.warn("Seznam zakázek se neobnovil:", err));
     return id;
 };
 
@@ -2749,6 +2765,40 @@ KB.pridejFirmu = async (nazev, detail) => {
     }
     KB.zapisAktivitu("projekt", "přidal firmu " + jmeno);
     return jmeno;
+};
+
+/**
+ * Přepíše jmenný seznam zakázek, který vidí celý tým.
+ *
+ * Schválně obsahuje JEN číslo, název a jestli je zakázka uzavřená – nic
+ * o penězích, firmě ani lidech. Projekty samotné leží v `private` a
+ * zaměstnanec přečte jen ty svoje; tohle je náhrada toho, co lidé hledali
+ * v Evidenci zakázek (Michal 8. 10. 2026).
+ *
+ * @param {Object} [navic] právě uložený projekt – snapshot ho ještě nemusí mít
+ */
+KB.obnovSeznamZakazek = async (navic) => {
+    if (authReady) await authReady;
+    requireDb();
+    const podle = {};
+    (KB.projektyDocs || []).forEach(p => { podle[p.id] = p; });
+    if (navic && navic.id) podle[navic.id] = Object.assign({}, podle[navic.id], navic);
+
+    const polozky = Object.keys(podle).map(id => podle[id])
+        .filter(p => (p.cislo || p.nazev))
+        .map(p => ({
+            cislo: String(p.cislo || "").trim(),
+            nazev: String(p.nazev || "").trim(),
+            uzavreno: p.uzavreno === true
+        }))
+        .sort((a, b) => String(b.cislo).localeCompare(String(a.cislo), "cs"));
+
+    await setDoc(metaDoc("zakazky-seznam"), {
+        polozky: polozky,
+        ms: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
+    return polozky.length;
 };
 
 KB.loadProjektFinance = async (id) => {

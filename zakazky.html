@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Seznam zakázek – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=268">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Jen seznam – žádné rozvržení na dva sloupce, tahle stránka se
+           otevírá proto, aby se v ní něco našlo, a zase zavřela. */
+        .zaktab { width: 100%; border-collapse: collapse; }
+        .zaktab th { text-align: left; font-size: 11px; font-weight: 800;
+            letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+            padding: 6px 10px; border-bottom: 1px solid var(--line); }
+        .zaktab td { padding: 7px 10px; border-bottom: 1px solid var(--line);
+            font-size: 13.5px; line-height: 1.4; vertical-align: top; }
+        .zaktab tr:hover td { background: var(--bg-soft); }
+        /* Číslo monospace, ať jdou čísla pod sebou očima srovnat. */
+        .zaktab__cislo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12.5px; white-space: nowrap; }
+        .zaktab__rok { background: var(--accent-tint); font-weight: 900; }
+        .zaktab__rok td { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+        tr.je-uzavrena td { color: var(--muted); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div class="spread">
+        <div style="min-width:0">
+            <h2 style="font-size:20px;font-weight:900;line-height:1.2">Seznam zakázek</h2>
+            <p class="small muted" style="margin-top:3px;line-height:1.6">
+                Čísla a názvy všech zakázek, jak je najdeš v Evidenci zakázek.
+                Vidí ho každý — podrobnosti k projektu zůstávají těm, kdo na něm dělají.
+            </p>
+            <p id="pocty" class="small muted" style="margin:3px 0 0"></p>
+        </div>
+    </div>
+
+    <div class="row row--wrap" style="gap:8px;align-items:center">
+        <input type="search" id="hledat" class="field" style="max-width:300px"
+               placeholder="Hledat číslo nebo název…">
+        <button type="button" class="chip chip--active" id="btnOtevrene">Jen otevřené</button>
+    </div>
+
+    <div id="prazdno" class="card center small muted" style="padding:40px" hidden></div>
+
+    <div class="card" style="padding:4px 2px;overflow-x:auto">
+        <table class="zaktab" id="tabulka"></table>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=268"></script>
+<script src="assets/js/doc.js?v=268"></script>
+<script src="assets/js/ui.js?v=268"></script>
+<script type="module" src="assets/js/store.js?v=268"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    let hledani = "";
+    let jenOtevrene = true;
+
+    const bezDiakritiky = (text) => String(text || "").toLowerCase()
+        .normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+    const pocet = (n, tvary) =>
+        n + " " + (n === 1 ? tvary[0] : (n >= 2 && n <= 4 ? tvary[1] : tvary[2]));
+    const ZAKAZKA = ["zakázka", "zakázky", "zakázek"];
+
+    /** Rok z čísla „2026-043"; i z toho obráceně napsaného („041-2026"). */
+    function rok(cislo) {
+        const text = String(cislo || "").trim();
+        const m = text.match(/^(\d{4})-/) || text.match(/-(\d{4})$/);
+        return m ? m[1] : "bez roku";
+    }
+
+    function render() {
+        const vsechny = (window.KB.zakazkySeznam || []);
+        const vyber = vsechny.filter(z => {
+            if (jenOtevrene && z.uzavreno === true) return false;
+            if (!hledani) return true;
+            return bezDiakritiky(z.cislo + " " + z.nazev).indexOf(hledani) !== -1;
+        });
+
+        $("pocty").textContent = vsechny.length
+            ? (vyber.length === vsechny.length
+                ? pocet(vsechny.length, ZAKAZKA)
+                : "zobrazeno " + vyber.length + " z " + pocet(vsechny.length, ZAKAZKA))
+            : "";
+
+        $("prazdno").textContent = vsechny.length
+            ? "Hledání ani filtru neodpovídá žádná zakázka."
+            : "Seznam se zatím neplní. Naplní se, jakmile manažer uloží první projekt.";
+        $("prazdno").hidden = !!vyber.length;
+        $("tabulka").hidden = !vyber.length;
+        if (!vyber.length) { $("tabulka").innerHTML = ""; return; }
+
+        /* Dělení po letech – v Evidenci se taky hledá „něco z pětadvacátého". */
+        let posledniRok = "";
+        $("tabulka").innerHTML =
+            "<thead><tr><th>Číslo</th><th>Název zakázky</th></tr></thead><tbody>" +
+            vyber.map(z => {
+                const r = rok(z.cislo);
+                const predel = r !== posledniRok
+                    ? '<tr class="zaktab__rok"><td colspan="2">' + esc(r) + "</td></tr>"
+                    : "";
+                posledniRok = r;
+                return predel +
+                    '<tr class="' + (z.uzavreno ? "je-uzavrena" : "") + '">' +
+                        '<td class="zaktab__cislo">' + esc(z.cislo || "—") + "</td>" +
+                        "<td>" + esc(z.nazev || "") +
+                            (z.uzavreno ? ' <span class="tiny muted">· uzavřená</span>' : "") +
+                        "</td>" +
+                    "</tr>";
+            }).join("") +
+            "</tbody>";
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        window.KBUI.mountNav({ active: "zakazky.html" });
+
+        $("hledat").addEventListener("input", () => {
+            hledani = bezDiakritiky($("hledat").value.trim());
+            render();
+        });
+        $("btnOtevrene").addEventListener("click", () => {
+            jenOtevrene = !jenOtevrene;
+            $("btnOtevrene").classList.toggle("chip--active", jenOtevrene);
+            render();
+        });
+
+        window.KB.on("zakazky-seznam", render);
+        document.addEventListener("kb-role", render);
+
+        render();
+        await window.KB.whenReady();
+        render();
+    });
+})();
+</script>
+</body>
+</html>

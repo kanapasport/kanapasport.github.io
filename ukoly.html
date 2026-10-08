@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=267">
+    <link rel="stylesheet" href="assets/css/app.css?v=268">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -196,10 +196,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=267"></script>
-<script src="assets/js/ui.js?v=267"></script>
-<script src="assets/js/vykazy.js?v=267"></script>
-<script type="module" src="assets/js/store.js?v=267"></script>
+<script src="assets/js/taxonomy.js?v=268"></script>
+<script src="assets/js/ui.js?v=268"></script>
+<script src="assets/js/vykazy.js?v=268"></script>
+<script type="module" src="assets/js/store.js?v=268"></script>
 
 <script>
 (function () {
@@ -1192,19 +1192,51 @@
             if (uprav) naplnTvorbu(najdiUkol(uprav.dataset.uprav));
         });
 
-        /* ?novy=1 – příchod z „+ Nový úkol" ve Správě: formulář se otevře
-           sám a projekt je předvybraný podle ?zak= (řeší prepniProjekt). */
+        /* ?novy=1 – příchod z odkazu „nový úkol k projektu" (nástěnka,
+           svislý pás): formulář se otevře sám a projekt se předvybere podle
+           ?zak=. Ve Správě projektů se k tomuhle odskakovat nemusí, ta má
+           okno na místě.
+
+           Projekty chodí odběrem až po přihlášení, takže první průchod je
+           obvykle má prázdné. Dřív se tu rozsvítila jednorázová záklopka
+           ještě PŘED dohledáním projektu, takže opakování po příchodu dat
+           se zahodilo a pole zůstalo prázdné. Záklopka proto hlídá jen
+           otevření formuláře; projekt se dovybere, až bude z čeho. */
         let novyOtevren = false;
+        let projektVybran = false;
         const otevriNovy = () => {
-            if (novyOtevren || !params.get("novy")) return;
-            if (!window.KBUI.can("ukol.create")) return;
-            novyOtevren = true;
-            naplnTvorbu(null);
-            if (zakSlug) {
-                const shoda = (window.KB.projektyDocs || []).find(x =>
-                    window.KBUI.slug(x.nazev || "") === zakSlug);
-                if (shoda) { $("uProjekt").value = shoda.nazev; prepniProjekt(null); doplnNazev(); }
+            if (!params.get("novy") || !window.KBUI.can("ukol.create")) return;
+            if (!novyOtevren) {
+                novyOtevren = true;
+                naplnTvorbu(null);
             }
+            if (projektVybran || !zakSlug) return;
+
+            const projekty = window.KB.projektyDocs || [];
+            if (!projekty.length) return;          // ještě nedorazily, zkusí se znovu
+            const shoda = projekty.find(x =>
+                window.KBUI.slug(x.nazev || "") === zakSlug);
+            if (!shoda) return;
+            projektVybran = true;
+
+            /* Uzavřený projekt v nabídce není – kdyby se jen nastavila
+               hodnota, select by ji zahodil a úkol by spadl pod stůl. */
+            if (!$("uProjekt").querySelector('option[value="' + CSS.escape(shoda.nazev) + '"]')) {
+                $("uProjekt").insertAdjacentHTML("beforeend",
+                    '<option value="' + window.KBUI.esc(shoda.nazev) + '">' +
+                    window.KBUI.esc(shoda.nazev) + " (ukončený)</option>");
+            }
+            $("uProjekt").value = shoda.nazev;
+            /* Našeptávač si text okopíroval do svého viditelného pole dřív,
+               než se hodnota nastavila – bez nového nasazení by pole
+               vypadalo prázdné, i když select hodnotu má. */
+            window.KBUI.naseptavac($("uProjekt"), {
+                nazev: "Hledat projekt",
+                popis: "Piš číslo nebo název projektu…",
+                prazdne: "Zatím žádné projekty"
+            });
+            prepniProjekt(null);
+            doplnNazev();
         };
 
         const start = () => { zapniSledovani(); vykresli(); otevriNovy(); };

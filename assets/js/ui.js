@@ -1168,6 +1168,10 @@
             '<div class="siderail__oddel"></div>' +
             '<a class="siderail__btn" href="prirucka.html" data-jen-prihlaseny hidden>' +
                 icon("library") + "<span>Jak web používat</span></a>" +
+            /* Jmenný seznam zakázek – to, co lidé hledali v Evidenci zakázek.
+               Vidí ho každý, i kdo na projekt přiřazený není (Michal 8. 10. 2026). */
+            '<a class="siderail__btn" href="zakazky.html" data-jen-prihlaseny hidden>' +
+                icon("building") + "<span>Seznam zakázek</span></a>" +
             /* Zápisy z porad – čte je celý tým, píše manažer. Sedí pod
                příručkou, protože je to taky „co si přečíst", ne práce
                (přání Michala 2. 9. 2026). */
