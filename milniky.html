@@ -388,6 +388,19 @@
         // `vsechny` = co prošlo zakázkou a filtrem, `items` = co pohled vypíše
         let vsechny = serazene();
         if (activeZak) vsechny = vsechny.filter(m => slug(zakName(m)) === activeZak);
+
+        /* „Zobrazit jako" mění jen rozhraní, ne dotaz do databáze – manažer
+           by si v náhledu zaměstnance pořád viděl vlastní data. U porad se
+           na to přišlo až v provozu (Michal 25. 9. 2026), tak ať se to tady
+           neopakuje. V ostrém provozu tyhle milníky zaměstnanec stejně
+           nedostane, takže tenhle řádek nic nezkazí. */
+        if (!muzeMenit) {
+            vsechny = vsechny.filter(m => m.zverejneno !== false).map(m =>
+                (ja && (m.owners || []).indexOf(ja) !== -1)
+                    ? m
+                    : Object.assign({}, m, { datum: "", terminSkryty: true }));
+        }
+
         paintFiltr(vsechny);
         $("filtrRow").hidden = vsechny.length < 6;   // u pár milníků je filtr k ničemu
         vsechny = vsechny.filter(m => projdeFiltrem(m, ja));
