@@ -219,6 +219,7 @@
         n + " " + (n === 1 ? tvary[0] : (n >= 2 && n <= 4 ? tvary[1] : tvary[2]));
 
     const MILNIK = ["milník", "milníky", "milníků"];
+    const SKRYTY = ["skrytý", "skryté", "skrytých"];
     const DEN_TVARY = ["den", "dny", "dnů"];
 
     /** Zpracovatelé – nová pole s UID mají přednost před starým textem. */
@@ -402,7 +403,11 @@
         const muzeMenit = window.KBUI.can("milnik.manage");
         /* Svůj milník si odškrtne i řadový člověk – vidí u něj zelené
            Splněno a řádek má podbarvený, ať své najde na první pohled. */
-        const ja = (window.KB.currentUid && window.KB.currentUid()) || "";
+        /* Při náhledu „Zobrazit jako <člověk>" se počítá za NĚJ – jinak by
+           si manažer v cizí kůži pořád viděl svoje milníky i termíny
+           a náhled by lhal (Michal 8. 10. 2026). */
+        const ja = (window.KBUI.nahledUid && window.KBUI.nahledUid()) ||
+                   (window.KB.currentUid && window.KB.currentUid()) || "";
         const jeMuj = (m) => !!ja && (m.owners || []).indexOf(ja) !== -1;
         $("hint").hidden = muzeMenit || pohled === "mujpostup";
         $("hintManazer").hidden = !muzeMenit || pohled === "mujpostup";
@@ -509,7 +514,7 @@
                 const hlavicka = '<tr class="milniky__skupina"><td colspan="' + sloupcu + '">' +
                     "<b>" + esc(nazev) + "</b>" +
                     "<span>" + esc(kolik) + " · " + s.hotovych + " splněno" +
-                        (s.skrytych ? " · " + s.skrytych + " skrytých" : "") + "</span>" +
+                        (s.skrytych ? " · " + pocet(s.skrytych, SKRYTY) : "") + "</span>" +
                     hromadne +
                 "</td></tr>";
                 return hlavicka + radky.map(radek).join("");
