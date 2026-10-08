@@ -301,6 +301,40 @@ service cloud.firestore {
       allow write: if spravce() || (docId == 'milniky' && clen());
     }
 
+    /* --- milníky (harmonogram odevzdání) ---------------------------------
+       Dřív pole v `public/data/meta/milniky`, kam vidí každý člen. Od
+       8. 10. 2026 je harmonogram celý (příloha smlouvy) a manažer ho
+       zveřejňuje postupně, takže nezveřejněný plán nesmí databáze vydat.
+
+       Dva dokumenty se stejným {id}, stejně jako u výkazů:
+         seznam/{id}    co milník je – člen čte jen `zverejneno == true`
+         terminy/{id}   termín – člen čte jen ten svůj
+
+       Kdo smí termín číst, je vyjmenovaný v `kdoVidiTermin`: prázdné pole =
+       nezveřejněno, jinak UID zpracovatelů. Kolega tak uvidí, že milník
+       existuje a čí je, ale ne kdy se odevzdává (Michal 8. 10. 2026). */
+    match /artifacts/firemni-kb-app/private/milniky/seznam/{id} {
+      allow read: if spravce() || (clen() && resource.data.get('zverejneno', false) == true);
+      allow create, delete: if spravce();
+      /* Svůj zveřejněný milník si člen odškrtne sám – ale opravdu jen
+         odškrtne. Text, termín ani přiřazení mu pravidla nepustí a
+         potvrzení si nechá manažer. */
+      allow update: if spravce() || (clen()
+                       && resource.data.get('zverejneno', false) == true
+                       && request.auth.uid in resource.data.get('zpracovatele', [])
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['hotovo', 'hotovoKdo', 'hotovoMs',
+                                      'potvrzeno', 'potvrdil', 'potvrzenoMs',
+                                      'updatedMs', 'updatedBy'])
+                       && request.resource.data.get('potvrzeno', false) == false);
+    }
+
+    match /artifacts/firemni-kb-app/private/milniky/terminy/{id} {
+      allow read:  if spravce() || (clen()
+                      && request.auth.uid in resource.data.get('kdoVidiTermin', []));
+      allow write: if spravce();
+    }
+
     // --- seznam lidí spravuje jen hlavní správce ---
     match /artifacts/firemni-kb-app/public/data/users/{userId} {
       allow write: if hlavniSpravce();

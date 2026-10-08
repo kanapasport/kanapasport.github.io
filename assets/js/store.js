@@ -33,7 +33,8 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, increment, arrayUnion, arrayRemove,
+    collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
+    increment, arrayUnion, arrayRemove, writeBatch,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -484,11 +485,7 @@ try {
             emit("gsync-url", KB.gsyncUrl);
         }, () => { /* adresa nemusí být nastavená – zápis se pak jen nespustí */ }));
 
-        odbery.push(onSnapshot(metaDoc("milniky"), (snap) => {
-            const data = snap.exists() ? snap.data() : {};
-            KB.milniky = Array.isArray(data.items) ? data.items : [];
-            emit("milniky", KB.milniky);
-        }, (err) => console.error("Chyba čtení milníků:", err)));
+        KB.watchMilniky();
 
         odbery.push(onSnapshot(metaDoc("zakazky"), (snap) => {
             const data = snap.exists() ? snap.data() : {};
@@ -1230,36 +1227,205 @@ KB.deleteTask = async (id) => {
 };
 
 /* ----------------------------------------------------------- milníky ----
-   Termíny odevzdání po činnostech (STAVBA, CHLAD, VZT…). Ukládají se jako
-   pole v jednom dokumentu `meta/milniky` – je jich málo a zápis do `meta`
-   mají povolený jen správci, takže se tím řeší i oprávnění.
+   Harmonogram odevzdání – celá příloha smlouvy, ne pár termínů. Manažer
+   vidí všechno a zveřejňuje postupně; zaměstnanec vidí zveřejněné milníky
+   i kolegů, ale TERMÍN jen u svých (Michal 8. 10. 2026).
 
-   Položka: { id, cinnost, owners:[uid], owner, napln, datum:"2026-08-31", zakazka } */
+   Dřív to bylo pole v jednom dokumentu `public/data/meta/milniky`. To tohle
+   neumí ze dvou důvodů: do `public/data` vidí každý člen a níž se čtení
+   nedá odebrat, a jeden dokument nejde zamknout po řádcích. Proto dva
+   dokumenty se stejným {id} mimo `public`, stejný trik jako u výkazů:
+
+     private/milniky/seznam/{id}    co milník je   → manažer vše, člen jen zveřejněné
+     private/milniky/terminy/{id}   termín         → manažer vše, člen jen svůj
+
+   Kdo smí termín číst, stojí v poli `kdoVidiTermin`: prázdné = nezveřejněno,
+   jinak UID zpracovatelů. Jedno pole tak zastane zveřejnění i omezení na
+   vlastníka — a dotaz `array-contains` se obejde bez složeného indexu
+   (pravidla nejsou filtr, dotaz si o svoje musí říct sám).
+
+   Stránky dostávají pořád stejný tvar položky jako dřív
+   ({ id, cinnost, owners, napln, datum, zakazka, hotovo… }), jen s termínem
+   jen tam, kde na něj člověk má. Nástěnka, kalendář ani pás se proto
+   neměnily; milník se skrytým termínem je pro ně „bez data" a navíc nese
+   `terminSkryty`, ať se to nespálí s milníkem, který termín opravdu nemá. */
+
+const milnikSeznamCol = () => collection(db, "artifacts", APP_ID, "private", "milniky", "seznam");
+const milnikTerminCol = () => collection(db, "artifacts", APP_ID, "private", "milniky", "terminy");
+const milnikSeznamDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "seznam", id);
+const milnikTerminDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "terminy", id);
+
+let syroveMilniky = [];      // seznam/{id}, co databáze pustila
+let syroveTerminy = {};      // id -> termín, jen ty, na které mám právo
+let milnikyOdbery = [];
 
 KB.newMilnikId = () => "mil_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
 
-KB.saveMilniky = async (items) => {
+/** Slepí milník s termínem do tvaru, na který jsou stránky zvyklé. */
+function slijMilniky() {
+    const uid = (auth && auth.currentUser) ? auth.currentUser.uid : "";
+    const manazer = jsemManazer();
+    KB.milniky = syroveMilniky.map(m => {
+        const zpracovatele = Array.isArray(m.zpracovatele) ? m.zpracovatele : [];
+        const muj = !!uid && zpracovatele.indexOf(uid) !== -1;
+        const termin = syroveTerminy[m.id] || "";
+        return Object.assign({}, m, {
+            owners: zpracovatele,
+            zakazka: m.projekt || "",
+            datum: termin,
+            // termín existuje, ale není pro mě – ne totéž co milník bez termínu
+            terminSkryty: !termin && !manazer && !muj
+        });
+    }).sort((a, b) => (Number(a.poradi) || 0) - (Number(b.poradi) || 0));
+    emit("milniky", KB.milniky);
+}
+
+/** Odběr podle role: manažer celý harmonogram, člen jen zveřejněné. */
+KB.watchMilniky = async () => {
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser) return;
+    if (pockejNaRoli(KB.watchMilniky)) return;
+    milnikyOdbery.forEach(zavri => { try { zavri(); } catch (err) { /* už zavřený */ } });
+    milnikyOdbery = [];
+
+    const uid = auth.currentUser.uid;
+    const manazer = jsemManazer();
+    const dotazSeznam = manazer ? milnikSeznamCol()
+        : query(milnikSeznamCol(), where("zverejneno", "==", true));
+    const dotazTerminy = manazer ? milnikTerminCol()
+        : query(milnikTerminCol(), where("kdoVidiTermin", "array-contains", uid));
+
+    milnikyOdbery.push(onSnapshot(dotazSeznam, (snap) => {
+        syroveMilniky = [];
+        snap.forEach(d => syroveMilniky.push({ id: d.id, ...d.data() }));
+        slijMilniky();
+    }, (err) => console.error("Chyba čtení milníků:", err)));
+
+    milnikyOdbery.push(onSnapshot(dotazTerminy, (snap) => {
+        syroveTerminy = {};
+        snap.forEach(d => { syroveTerminy[d.id] = (d.data() || {}).termin || ""; });
+        slijMilniky();
+    }, (err) => console.error("Chyba čtení termínů milníků:", err)));
+};
+
+/** Co z položky patří do kterého dokumentu. */
+function milnikDoDvou(item, puvodni) {
+    const p = puvodni || {};
+    const zpracovatele = Array.isArray(item.owners) ? item.owners
+        : (Array.isArray(item.zpracovatele) ? item.zpracovatele : []);
+    const zverejneno = item.zverejneno === true;
+    const razitko = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    return {
+        zpracovatele: zpracovatele,
+        seznam: Object.assign({
+            cinnost: String(item.cinnost || "").slice(0, 60),
+            napln: String(item.napln || "").slice(0, 600),
+            skupina: String(item.skupina || p.skupina || "").slice(0, 80),
+            poznamka: String(item.poznamka || "").slice(0, 300),
+            projekt: String(item.zakazka || item.projekt || "").slice(0, 160),
+            zpracovatele: zpracovatele,
+            zverejneno: zverejneno,
+            poradi: Number(item.poradi) || Number(p.poradi) || 0,
+            stav: String(item.stav || p.stav || "planovano"),
+            // úprava milníku nesmí shodit značku „splněno"
+            hotovo: !!item.hotovo,
+            hotovoKdo: item.hotovoKdo || "",
+            hotovoMs: Number(item.hotovoMs) || 0,
+            potvrzeno: item.potvrzeno !== false,
+            potvrdil: item.potvrdil || "",
+            potvrzenoMs: Number(item.potvrzenoMs) || 0
+        }, razitko),
+        termin: Object.assign({
+            termin: String(item.datum || "").slice(0, 10),
+            terminPuvodni: String(item.terminPuvodni || p.terminPuvodni || item.datum || "").slice(0, 10),
+            // nezveřejněný termín nemá číst nikdo kromě manažera
+            kdoVidiTermin: zverejneno ? zpracovatele : []
+        }, razitko)
+    };
+}
+
+/** Založení i úprava milníku – jen manažer. */
+KB.ulozMilnik = async (item) => {
     if (authReady) await authReady;
     requireDb();
-    await setDoc(metaDoc("milniky"), {
-        items: items,
-        updatedMs: Date.now(),
-        updatedBy: window.KB_USER || ""
-    });
+    const id = item.id || KB.newMilnikId();
+    const puvodni = (KB.milniky || []).find(m => m.id === id);
+    const casti = milnikDoDvou(item, puvodni);
+    await setDoc(milnikSeznamDoc(id), casti.seznam, { merge: true });
+    await setDoc(milnikTerminDoc(id), casti.termin, { merge: true });
+    return id;
+};
+
+/**
+ * Zveřejnění milníku. Termín se zpřístupní jen zpracovatelům – kolega
+ * uvidí, že milník existuje a čí je, ne ale kdy ho má odevzdat.
+ */
+KB.zverejniMilnik = async (id, zverejnit) => {
+    if (authReady) await authReady;
+    requireDb();
+    const m = (KB.milniky || []).find(x => x.id === id);
+    if (!m) return;
+    const razitko = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    await updateDoc(milnikSeznamDoc(id), Object.assign({ zverejneno: !!zverejnit }, razitko));
+    // merge, ne update – u ručně založeného milníku nemusí termín ještě existovat
+    await setDoc(milnikTerminDoc(id), Object.assign(
+        { kdoVidiTermin: zverejnit ? (m.owners || []) : [] }, razitko), { merge: true });
+};
+
+KB.smazMilnik = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(milnikSeznamDoc(id));
+    await deleteDoc(milnikTerminDoc(id)).catch(() => { /* termín nemusel vzniknout */ });
+};
+
+/** Odškrtnutí „splněno" – svůj milník si odškrtne i řadový člen. */
+KB.ulozSplneniMilniku = async (id, patch) => {
+    if (authReady) await authReady;
+    requireDb();
+    await updateDoc(milnikSeznamDoc(id), Object.assign({}, patch, {
+        updatedMs: Date.now(), updatedBy: window.KB_USER || ""
+    }));
 };
 
 /** Manažer potvrzuje milník, který si přiřazený člověk odškrtl sám. */
 KB.potvrdMilnik = async (id) => {
-    if (authReady) await authReady;
-    requireDb();
-    const items = (KB.milniky || []).map(m => m.id !== id ? m : Object.assign({}, m, {
+    const m = (KB.milniky || []).find(x => x.id === id);
+    await KB.ulozSplneniMilniku(id, {
         potvrzeno: true,
         potvrdil: window.KB_USER || "",
         potvrzenoMs: Date.now()
-    }));
-    await KB.saveMilniky(items);
-    const m = (KB.milniky || []).find(x => x.id === id);
+    });
     KB.zapisAktivitu("milnik", "potvrdil splněný milník" + (m && m.cinnost ? " " + m.cinnost : ""));
+};
+
+/**
+ * Hromadné nahrání harmonogramu. Píše po dávkách, protože jedna dávka
+ * Firestore unese 500 zápisů a milník jsou zápisy dva.
+ * @returns {Promise<number>} kolik milníků se uložilo
+ */
+KB.importMilniky = async (polozky) => {
+    if (authReady) await authReady;
+    requireDb();
+    const seznam = Array.isArray(polozky) ? polozky : [];
+    let hotovo = 0;
+    for (let i = 0; i < seznam.length; i += 200) {
+        const davka = writeBatch(db);
+        seznam.slice(i, i + 200).forEach(p => {
+            const id = p.id || KB.newMilnikId();
+            const casti = milnikDoDvou(Object.assign({}, p, {
+                owners: p.zpracovatele || p.owners || [],
+                hotovo: p.stav === "hotovo",
+                datum: p.termin || p.datum || ""
+            }));
+            davka.set(milnikSeznamDoc(id), casti.seznam, { merge: true });
+            davka.set(milnikTerminDoc(id), casti.termin, { merge: true });
+            hotovo++;
+        });
+        await davka.commit();
+    }
+    KB.zapisAktivitu("milnik", "nahrál harmonogram – " + hotovo + " milníků");
+    return hotovo;
 };
 
 /* ------------------------------------------------------------- uživatelé --
