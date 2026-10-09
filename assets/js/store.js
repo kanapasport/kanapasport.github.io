@@ -3264,6 +3264,11 @@ KB.saveUkol = async (id, data) => {
         nazev:     data.nazev || "Bez názvu",
         druh:      data.druh || "",
         technologie: data.technologie || "",
+        /* Z jakého milníku harmonogramu úkol vznikl. U VZT se práce
+           nedělí po patrech, ale po milnících – jeden milník = jeden
+           úkol, a podle tohohle pole se pozná, který už svůj úkol má,
+           aby nevznikl dvakrát (Michal 9. 10. 2026). */
+        milnikId:  data.milnikId || "",
         budova:    data.budova || "",
         patro:     data.patro || "",
         prirazeni: Array.isArray(data.prirazeni) ? data.prirazeni : [],

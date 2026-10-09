@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=270">
+    <link rel="stylesheet" href="assets/css/app.css?v=271">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -23,6 +23,9 @@
         .milpil--ceka { background: #fff3d6; color: #9a6b00; border: 1px solid #e8c877; }
         /* milník, který zaměstnanci ještě nevidí – jen pro manažera */
         .milpil--skryty { background: #eceff3; color: #5a6672; border: 1px solid #cfd6dd; }
+        /* milník, který už má svůj úkol – práce se na něj dá zapsat */
+        .milpil--ukol { background: var(--accent-tint); color: var(--p100-fg);
+            border: 1px solid var(--p100-fg); }
         .milnik--skryty td { opacity: .72; }
         /* termín kolegy: existuje, ale není pro mě */
         .milniky__datum .mildash { color: var(--muted); font-weight: 700; }
@@ -55,7 +58,12 @@
             </p>
             <p id="pocty" class="small muted" style="margin:3px 0 0"></p>
         </div>
-        <button type="button" id="btnNew" class="btn btn--primary btn--sm" data-need="milnik.manage" hidden>+ Nový milník</button>
+        <div class="row row--wrap" style="gap:8px;align-items:flex-start">
+            <!-- Tlačítko se neskrývá přes data-need: KBUI podle práva
+                 jen přepíná hidden a přebilo by to počet v názvu. -->
+            <button type="button" id="btnUkolyZMilniku" class="btn btn--ghost btn--sm" hidden>Udělat úkoly z milníků</button>
+            <button type="button" id="btnNew" class="btn btn--primary btn--sm" data-need="milnik.manage" hidden>+ Nový milník</button>
+        </div>
     </div>
 
     <!-- Jeden pohled místo kombinace přepínačů. Aktivní je vždycky právě
@@ -168,12 +176,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=270"></script>
-<script src="assets/js/doc.js?v=270"></script>
-<script src="assets/js/ui.js?v=270"></script>
+<script src="assets/js/taxonomy.js?v=271"></script>
+<script src="assets/js/doc.js?v=271"></script>
+<script src="assets/js/ui.js?v=271"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=270"></script>
-<script type="module" src="assets/js/store.js?v=270"></script>
+<script src="assets/js/vykazy.js?v=271"></script>
+<script type="module" src="assets/js/store.js?v=271"></script>
 
 <script>
 (function () {
@@ -221,6 +229,12 @@
     const MILNIK = ["milník", "milníky", "milníků"];
     const SKRYTY = ["skrytý", "skryté", "skrytých"];
     const DEN_TVARY = ["den", "dny", "dnů"];
+    const UKOL = ["úkol", "úkoly", "úkolů"];
+
+    /* Co je právě vyfiltrované – z toho se zakládají úkoly. Pohled
+       („Nadcházející") je jen výřez, úkoly se ale mají udělat na celou
+       řadu technologie včetně vzdálených termínů. */
+    let filtrovane = [];
 
     /** Zpracovatelé – nová pole s UID mají přednost před starým textem. */
     function ownersText(item) {
@@ -445,6 +459,8 @@
         paintFiltr(vsechny);
         $("filtrRow").hidden = vsechny.length < 6;   // u pár milníků je filtr k ničemu
         vsechny = vsechny.filter(m => projdeFiltrem(m, ja));
+        filtrovane = vsechny;
+        paintUkolyBtn(muzeMenit);
         const items = vyberPohledu(vsechny);
 
         // „N z M" – ať je vidět, že pohled je jen výřez, ne celý seznam
@@ -534,7 +550,9 @@
                                 ? '<span class="milpil milpil--ceka">splněno – čeká na potvrzení</span>'
                                 : '<span class="milpil">splněno</span>')
                             : "") +
-                        (skryty ? '<span class="milpil milpil--skryty">skryté</span>' : "") + "</td>" +
+                        (skryty ? '<span class="milpil milpil--skryty">skryté</span>' : "") +
+                        (muzeMenit && ukolMilniku(item)
+                            ? '<span class="milpil milpil--ukol">úkol</span>' : "") + "</td>" +
                     "<td>" + esc(ownersText(item)) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum"><b>' + t.text + "</b>" +   /* t.text je bezpečný: datum nebo vlastní značka */
@@ -714,6 +732,135 @@
         await uloz(window.KB.ulozSplneniMilniku(id, zmena), hlaska);
     }
 
+    /* ------------------------------------------------- úkoly z milníků --
+       U VZT se práce nedělí po patrech, ale po milnících harmonogramu:
+       jeden milník = jeden úkol, na který se píšou výkazy (Michal 9. 10.
+       2026). Zakládá se z toho, co je právě vyfiltrované – filtr Profese
+       je tedy zároveň volba, pro kterou technologii se úkoly udělají.
+
+       Co se vynechá: milník, který už svůj úkol má (poznává se podle
+       `milnikId`, a u starších podle názvu a zakázky), splněný milník
+       (úkol na hotovou práci by jen zaváděl) a milník, jehož zakázku
+       nenajdeme mezi projekty – takový úkol by se ve výkazu nedal vybrat. */
+
+    /** Název úkolu: „VZT – Odvětrání CHÚC", stejný řád jako „VZT – G61 – 1NP". */
+    const nazevUkolu = (m) => {
+        const tech = (m.cinnost || "").trim();
+        const napln = (m.napln || "").trim();
+        return (napln ? (tech ? tech + " – " + napln : napln) : tech).slice(0, 120);
+    };
+
+    /** Úkol, který k milníku patří – nebo nic. */
+    function ukolMilniku(m) {
+        const ukoly = window.KB.ukoly || [];
+        const podleId = ukoly.find(u => u.milnikId === m.id);
+        if (podleId) return podleId;
+        /* Úkol udělaný ručně ještě před tímhle tlačítkem `milnikId` nemá;
+           ať se nezaloží podruhé, zkusíme ho najít podle názvu a zakázky. */
+        const nazev = nazevUkolu(m);
+        return nazev ? ukoly.find(u => (u.nazev || "").trim() === nazev &&
+            (u.projekt || "").trim() === String(m.zakazka || "").trim()) : null;
+    }
+
+    const projektZakazky = (nazev) => (window.KB.projektyDocs || [])
+        .find(p => (p.nazev || "").trim() === String(nazev || "").trim());
+
+    /** Z čeho se dají udělat úkoly: vyfiltrované, nesplněné, bez úkolu. */
+    const kChybejicim = () => filtrovane
+        .filter(m => !m.hotovo && !ukolMilniku(m));
+
+    function paintUkolyBtn(muzeMenit) {
+        const btn = $("btnUkolyZMilniku");
+        if (!btn) return;
+        const kolik = muzeMenit ? kChybejicim().length : 0;
+        btn.hidden = !muzeMenit || !kolik;
+        btn.textContent = "Udělat úkoly z milníků (" + kolik + ")";
+    }
+
+    let ukolyBezi = false;
+
+    async function ukolyZMilniku() {
+        if (ukolyBezi) return;
+        const chybi = kChybejicim();
+        if (!chybi.length) {
+            return window.KBUI.toast("Všechny vypsané milníky už svůj úkol mají.");
+        }
+
+        const plan = [];
+        let bezProjektu = 0;
+        chybi.forEach(m => {
+            const p = projektZakazky(m.zakazka);
+            if (!p) { bezProjektu += 1; return; }
+            plan.push({ m: m, p: p });
+        });
+        if (!plan.length) {
+            return window.KBUI.toast("Zakázku těch milníků nenajdu mezi projekty – " +
+                "úkol by se nedal nikam zapsat.", "warn");
+        }
+
+        /* Co se zakládá, se vypíše po technologiích – bez filtru je ve
+           výpisu celý harmonogram a sto úkolů naráz nikdo nechce. */
+        const tech = [];
+        plan.forEach(({ m }) => {
+            const t = (m.cinnost || "").trim() || "bez technologie";
+            if (tech.indexOf(t) === -1) tech.push(t);
+        });
+        if (!confirm("Založí se " + pocet(plan.length, UKOL) + " – jeden z každého " +
+                "vypsaného milníku (" + tech.join(", ") + "), s termínem a zpracovateli " +
+                "z milníku." + (bezProjektu
+                    ? " Vynechá se " + bezProjektu + ", protože jejich zakázka není mezi projekty."
+                    : "") + " Pokračovat?")) return;
+
+        ukolyBezi = true;
+        const btn = $("btnUkolyZMilniku");
+        if (btn) btn.disabled = true;
+        let hotovo = 0;
+        try {
+            for (const { m, p } of plan) {
+                await window.KB.saveUkol(window.KB.newUkolId(), {
+                    projektId: p.id,
+                    projekt: p.nazev || "",
+                    nazev: nazevUkolu(m),
+                    /* Milník se odevzdává celý – focení, kreslení i tabulky.
+                       Druh je proto jen primární, stejně jako u souhrnného
+                       úkolu jednoduché zakázky; část práce říká výkaz sám. */
+                    druh: "ArcGIS/Kreslení",
+                    technologie: (m.cinnost || "").trim(),
+                    budova: "", patro: "",
+                    prirazeni: (m.owners || []).slice(),
+                    termin: m.datum || "",
+                    stav: "otevreny",
+                    todo: [],
+                    milnikId: m.id,
+                    poznamka: (m.skupina || "").trim()
+                        ? "Z harmonogramu: " + (m.skupina || "").trim() : ""
+                });
+                hotovo += 1;
+            }
+            window.KBUI.toast("Založeno úkolů: " + hotovo +
+                ". Najdeš je na stránce Úkoly u zakázky.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zakládání selhalo (založeno " + hotovo + ").", "error");
+        } finally {
+            ukolyBezi = false;
+            if (btn) btn.disabled = false;
+            render();
+        }
+    }
+
+    /* Úkoly a projekty čte jen manažer – kvůli tlačítku a značce „úkol".
+       Zapíná se až po příchodu role: KB.users dorazí po přihlášení a bez
+       role by se odběr zvolil špatně (past, na kterou se už naráželo). */
+    let sledovaniZapnuto = false;
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KB.currentUid()) return;
+        if (!window.KBUI.can("milnik.manage")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchUkoly();
+        window.KB.watchProjekty();
+    }
+
     document.addEventListener("click", (event) => {
         const potvrd = event.target.closest("[data-potvrd-milnik]");
         if (potvrd && window.KBUI.can("milnik.manage")) {
@@ -781,6 +928,7 @@
         window.KBUI.mountNav({ active: "milniky.html" });
 
         $("btnNew").addEventListener("click", () => openForm(null));
+        $("btnUkolyZMilniku").addEventListener("click", ukolyZMilniku);
 
         // filtr: psaní hledá hned, roletky a přepínače taky
         $("fHledat").addEventListener("input", () => {
@@ -808,8 +956,12 @@
         $("btnDelete").addEventListener("click", remove);
 
         document.addEventListener("kb-role", render);
+        document.addEventListener("kb-role", zapniSledovani);
         window.KB.on("milniky", render);
         window.KB.on("users", render);
+        window.KB.on("ukoly", render);
+        window.KB.on("projekty-docs", render);
+        zapniSledovani();
 
         render();
         await window.KB.whenReady();
