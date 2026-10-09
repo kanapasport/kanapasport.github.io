@@ -2349,7 +2349,10 @@ KB.posliZakazkuDoEvidence = (projekt) => {
             cislo: projekt.cislo || "",
             nazev: projekt.nazev || "",
             objednatel: projekt.objednatel || "",
-            resi: projekt.resi || ""
+            // sloupec E „řeší:" – kdo zakázku bude dělat
+            resi: projekt.resi || "",
+            // sloupec F – datum poptání
+            poptano: projekt.poptano || projekt.datumPoptani || ""
         })
     }).catch(err => console.warn("Zápis zakázky do evidence se neozval:", err));
 };
@@ -2657,6 +2660,10 @@ KB.saveProjekt = async (id, data) => {
         manazer:  manazeri[0] || "",
         zacatek:  data.zacatek || "",
         konec:    data.konec || "",
+        /* Kdy zakázka přišla jako poptávka. Vede se tu, ne až
+           v Evidenci v Tabulkách – odtamtud se jen opisuje
+           (Michal 9. 10. 2026). */
+        datumPoptani: data.datumPoptani || "",
         stav:     data.stav || "",             // volný text: „kreslí se G61" apod.
         /* Fáze zakázky (poptávka → fakturace). Poslední z nich projekt
            uzavírá, `uzavreno` se z ní odvozuje ve Správě. */

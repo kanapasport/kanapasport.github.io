@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=272">
+    <link rel="stylesheet" href="assets/css/app.css?v=273">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -261,6 +261,9 @@
                                     <option value="vysoka">Vysoká</option>
                                     <option value="resit-okamzite">Řešit okamžitě</option>
                                 </select></label>
+                            <label class="pole"><span class="popisek">Datum poptání</span>
+                                <input type="date" id="pPoptano" class="field"
+                                    title="Kdy zakázka přišla jako poptávka – opisuje se do Evidence zakázek"></label>
                             <label class="pole"><span class="popisek">Začátek</span>
                                 <input type="date" id="pZacatek" class="field"></label>
                             <label class="pole"><span class="popisek">Konec</span>
@@ -284,7 +287,14 @@
                             budgety úkolů i sazby. Web s DPH nikde nepočítá.
                         </p>
                         <div class="fmr">
-                            <label class="pole"><span class="popisek">Rozpočet (Kč bez DPH)</span>
+                            <!-- Rozpočet a čerpání se samy neukazují: Správa bývá na
+                                 promítačce a u projektu se do ní dívá víc lidí. Odkryje
+                                 je klik na „…", po přepnutí projektu se zase schovají. -->
+                            <label class="pole" id="poleRozpocetSkryty"><span class="popisek">Rozpočet (Kč bez DPH)</span>
+                                <button type="button" id="btnRozpocetUkaz" class="btn btn--ghost"
+                                    style="letter-spacing:.2em"
+                                    title="Zobrazit rozpočet a čerpání">…</button></label>
+                            <label class="pole" id="poleRozpocet" hidden><span class="popisek">Rozpočet (Kč bez DPH)</span>
                                 <input type="text" id="fKc" class="field" inputmode="numeric"
                                     data-penize placeholder="0"
                                     title="Všechny částky na webu se vedou bez DPH"></label>
@@ -311,7 +321,7 @@
                         </div>
                         <!-- co z rozpočtu ubraly hodiny a co externí náklady -->
                         <div id="krajicRozpocet" class="row row--wrap"
-                             style="gap:10px;margin-top:12px"></div>
+                             style="gap:10px;margin-top:12px" hidden></div>
 
                         </div>
                     </section>
@@ -686,10 +696,42 @@
                     <button type="button" class="btn btn--ghost btn--sm" data-novafirma="nFirma">+ firma</button>
                 </span></label>
 
+            <label class="pole"><span class="popisek">Datum poptání</span>
+                <input type="date" id="nPoptano" class="field"
+                    title="Opíše se do Evidence zakázek, sloupec F"></label>
             <label class="pole"><span class="popisek">Začátek</span>
                 <input type="date" id="nZacatek" class="field"></label>
             <label class="pole"><span class="popisek">Termín</span>
                 <input type="date" id="nKonec" class="field"></label>
+
+            <label class="pole"><span class="popisek">Priorita</span>
+                <select id="nPriorita" class="field">
+                    <option value="nizka">Nízká</option>
+                    <option value="stredni" selected>Střední</option>
+                    <option value="vysoka">Vysoká</option>
+                    <option value="resit-okamzite">Řešit okamžitě</option>
+                </select></label>
+            <label class="pole" style="flex:1 1 220px"><span class="popisek">Fáze zakázky</span>
+                <select id="nFaze" class="field"></select></label>
+            <label class="pole"><span class="popisek">Rozpočet (Kč bez DPH)</span>
+                <input type="text" id="nKc" class="field" inputmode="numeric"
+                    data-penize placeholder="0"
+                    title="Bez DPH, jako všechny částky na webu"></label>
+            <label class="pole fmr__cely"><span class="popisek">Poznámka</span>
+                <input type="text" id="nPoznamka" class="field"></label>
+
+            <!-- Lidé rovnou při zakládání: jinak se musí projekt po
+                 založení znovu otevřít a proklikat (Michal 9. 10. 2026).
+                 Spolupracovníci jdou zároveň na souhrnný úkol a do
+                 Evidence zakázek do sloupce „řeší:". -->
+            <div class="fmr__cely">
+                <span class="popisek">Manažeři</span>
+                <div id="nManazeri" class="prjlide"></div>
+            </div>
+            <div class="fmr__cely">
+                <span class="popisek">Spolupracovníci</span>
+                <div id="nLide" class="prjlide"></div>
+            </div>
 
             <div class="fmr__cely">
                 <label class="person" style="width:100%">
@@ -736,10 +778,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=272"></script>
-<script src="assets/js/ui.js?v=272"></script>
-<script src="assets/js/vykazy.js?v=272"></script>
-<script type="module" src="assets/js/store.js?v=272"></script>
+<script src="assets/js/taxonomy.js?v=273"></script>
+<script src="assets/js/ui.js?v=273"></script>
+<script src="assets/js/vykazy.js?v=273"></script>
+<script type="module" src="assets/js/store.js?v=273"></script>
 
 <script>
 (function () {
@@ -1124,6 +1166,8 @@
         ].filter(Boolean);
         $("pSlozkaStav").textContent = radky.join("   ·   ");
         $("pSlozkaStav").hidden = !radky.length;
+        schovejRozpocet();
+        $("pPoptano").value = p.datumPoptani || "";
         $("pZacatek").value = p.zacatek || "";
         $("pKonec").value = p.konec || "";
         $("pPriorita").value = p.priorita || "stredni";
@@ -1152,6 +1196,30 @@
                 : "";
         }).join("") || '<span class="tiny muted">V seznamu lidí zatím nikdo není.</span>';
     }
+
+    /* Rozpočet a čerpání se v Údajích samy neukazují – odkryje je klik
+       na „…". Po přepnutí projektu se zase schovají, ať se to neodkryje
+       omylem na dlouho (Michal 9. 10. 2026). */
+    function schovejRozpocet() {
+        $("poleRozpocet").hidden = true;
+        $("poleRozpocetSkryty").hidden = false;
+        $("krajicRozpocet").hidden = true;
+    }
+
+    function ukazRozpocet() {
+        $("poleRozpocet").hidden = false;
+        $("poleRozpocetSkryty").hidden = true;
+        $("krajicRozpocet").hidden = false;
+    }
+
+    /** Zaškrtávátka lidí – stejná podoba jako v Údajích projektu. */
+    const chipyLidi = (seznam, vybrani) => seznam.map(u =>
+        '<label><input type="checkbox" value="' + esc(u.id) + '"' +
+        (vybrani.has(u.id) ? " checked" : "") + "> " + esc(V.jmeno(u)) + "</label>").join("");
+
+    /** Kdo je zaškrtnutý v daném boxu. */
+    const zaskrtnuti = (id) =>
+        Array.from($(id).querySelectorAll("input:checked")).map(ch => ch.value);
 
     function vykresliNastaveni() {
         const p = vybranyProjekt();
@@ -2804,6 +2872,24 @@
         $("nKonec").value = "";
         $("nJednoduchy").checked = true;
         $("nSlozkaP").checked = false;
+        /* Poptávka přichází dneškem – datum jde přepsat, ale ve většině
+           případů se projekt zakládá ten den, co poptávka dorazí. */
+        $("nPoptano").value = new Date().toISOString().slice(0, 10);
+        $("nPriorita").value = "stredni";
+        $("nFaze").innerHTML = V.options(FAZE, "", "— nezadáno —");
+        $("nKc").value = "";
+        $("nPoznamka").value = "";
+        $("nManazeri").innerHTML = chipyLidi(
+            V.lide().filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1),
+            new Set()) || '<span class="tiny muted">V seznamu není žádný manažer.</span>';
+        $("nLide").innerHTML = window.KBUI.TYPY.map(t => {
+            const skupina = V.lide().filter(u => window.KBUI.typUvazku(u) === t.id);
+            return skupina.length
+                ? '<div class="popisek" style="width:100%;margin:6px 0 0">' + esc(t.mnozne) +
+                    ' <span class="muted">(' + skupina.length + ")</span></div>" +
+                  chipyLidi(skupina, new Set())
+                : "";
+        }).join("") || '<span class="tiny muted">V seznamu lidí zatím nikdo není.</span>';
         nahledSlozky();
         ["nObjednatel", "nZakaznik", "nFirma"].forEach(id => naplnFirmy(id, ""));
         $("nStav").textContent = "";
@@ -2826,18 +2912,37 @@
         $("nZalozit").disabled = true;
         $("nStav").textContent = "Zakládám…";
         try {
+            const lide = zaskrtnuti("nLide");
+            const faze = $("nFaze").value;
             await window.KB.saveProjekt(id, {
                 cislo: cislo, nazev: nazev,
                 objednatel: $("nObjednatel").value,
                 zakaznik: $("nZakaznik").value,
                 firma: $("nFirma").value,
+                datumPoptani: $("nPoptano").value,
                 zacatek: $("nZacatek").value,
                 konec: $("nKonec").value,
                 jednoduchy: $("nJednoduchy").checked,
-                /* Manažer se nepředvyplňuje – kdo projekt zakládá, nemusí
-                   ho vést (přání Michala 24. 8.). */
-                priorita: "stredni"
+                /* Manažery ani spolupracovníky nikdo nepředvyplňuje – ale
+                   dají se proklikat rovnou tady, ať se projekt nemusí po
+                   založení znovu otevírat (Michal 9. 10. 2026). */
+                manazeri: zaskrtnuti("nManazeri"),
+                lide: lide,
+                faze: faze,
+                uzavreno: faze === FAZE_UZAVIRA,
+                priorita: $("nPriorita").value,
+                poznamka: $("nPoznamka").value.trim()
             });
+
+            /* Rozpočet nežije u projektu, ale v číselníku výkazů pod NÁZVEM
+               zakázky – ukládá se proto zvlášť a slučuje se do kopie toho,
+               co je v paměti, aby uložení nesmazalo rozpočty ostatních. */
+            const kc = window.KBUI.penize($("nKc"));
+            if (kc > 0) {
+                const rozpocty = Object.assign({}, window.KB.rozpocty);
+                rozpocty[nazev] = Object.assign({}, rozpocty[nazev], { kc: kc });
+                await window.KB.saveVykazNastaveni({ rozpocty: rozpocty });
+            }
             /* Složka se zapisuje zvlášť – `saveProjekt` by ji při příštím
                uložení Údajů vynuloval, proto jde cestou pravého slučování. */
             if ($("nSlozkaP").checked) {
@@ -2848,7 +2953,13 @@
                hledají odjakživa a nikdo je tam nemá přepisovat ručně. */
             window.KB.posliZakazkuDoEvidence({
                 id: id, cislo: cislo, nazev: nazev,
-                objednatel: $("nObjednatel").value
+                objednatel: $("nObjednatel").value,
+                // sloupec E „řeší:" – jména, ne UID; sešit čtou lidé
+                resi: lide.map(uid => {
+                    const clovek = V.clovek(uid);
+                    return clovek ? V.jmeno(clovek) : "";
+                }).filter(Boolean).join(", "),
+                poptano: $("nPoptano").value
             });
 
             /* Jednoduchá zakázka se nedělí na budovy a patra, takže by
@@ -2862,7 +2973,8 @@
                     nazev: "Zpracování zakázky",
                     druh: "ArcGIS/Kreslení",
                     technologie: "", budova: "", patro: "",
-                    prirazeni: [], todo: [],
+                    // ať se na úkol dá hned psát výkaz, aniž by se znovu otvíral
+                    prirazeni: lide, todo: [],
                     termin: $("nKonec").value,
                     stav: "otevreny"
                 });
@@ -2997,6 +3109,7 @@
             zakaznik: $("pZakaznik").value,
             jednoduchy: $("pJednoduchy").checked,
             manazeri: Array.from($("pManazeri").querySelectorAll("input:checked")).map(ch => ch.value),
+            datumPoptani: $("pPoptano").value,
             zacatek: $("pZacatek").value,
             konec: $("pKonec").value,
             stav: p.stav || "",
@@ -3137,6 +3250,7 @@
            projekt stejně nestihl předvybrat a člověk se ztratil. */
         $("btnNovyUkolProjekt").addEventListener("click", () => otevriNovyUkol(""));
         $("nZalozit").addEventListener("click", zalozProjekt);
+        $("btnRozpocetUkaz").addEventListener("click", ukazRozpocet);
         ["nSlozkaP", "nCislo", "nNazev"].forEach(id =>
             $(id).addEventListener("input", nahledSlozky));
         $("nSlozkaP").addEventListener("change", nahledSlozky);

@@ -206,8 +206,19 @@ service cloud.firestore {
     function finance() {
       return clen() && role() in ['hlavni-spravce', 'majitel', 'asistentka'];
     }
+    /* Servisní účet (`zapisdatgs@pasport.eu`), kterým běží nástroje na
+       pracovním PC: zakládá doklady z `_inboxu` a jejich náhledy stránek.
+       Má roli `spravce`, a ta sem nestačí – běžný správce na faktury nesmí.
+       Jmenuje se proto jedním UID a jen tady; na pokladnu se tím nedostane,
+       tu nástroje nepotřebují (Michal 9. 10. 2026). Bez tohohle řádku
+       končilo nahrávání dokladů na 403 – přišlo se na to až při prvních
+       skutečných fakturách, protože schránka byla do té doby prázdná. */
+    function robotFaktur() {
+      return request.auth != null
+        && request.auth.uid == 'ecfzTmq1TMPRHa27agYn8ws0GJm2';
+    }
     match /artifacts/firemni-kb-app/private/faktury/{document=**} {
-      allow read, write: if finance();
+      allow read, write: if finance() || robotFaktur();
     }
     match /artifacts/firemni-kb-app/private/pokladna/{document=**} {
       allow read, write: if finance();
