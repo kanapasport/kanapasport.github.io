@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=273">
+    <link rel="stylesheet" href="assets/css/app.css?v=274">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -671,7 +671,10 @@
      Dřív se zakládalo dvěma prompt() okénky (číslo, název) a zbytek se
      doplňoval až v panelu. Okno dá základ pohromadě (Michal 8. 10. 2026). -->
 <div id="novyOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
-    <div class="card col" style="padding:22px;max-width:580px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+    <!-- Široké schválně: od v273 je v okně celé zadání projektu včetně
+         lidí, a v úzkém sloupci by z toho byla nekonečná nudle
+         (Michal 12. 10. 2026). Pole se pak skládají po dvou vedle sebe. -->
+    <div class="card col" style="padding:22px;max-width:980px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
         <b style="font-size:17px">Nový projekt</b>
 
         <div class="fmr">
@@ -740,6 +743,16 @@
                         rovnou se mu založí souhrnný úkol</span></label>
             </div>
             <div class="fmr__cely">
+                <!-- Zakázka, kterou má Michal v Evidenci dávno ručně, se tam
+                     nemá psát podruhé. Kontrola podle čísla to zachytí sama,
+                     ale jen když je číslo psané stejně – v sešitu se najde
+                     i „2022 - 017". Tohle je jistota navíc (12. 10. 2026). -->
+                <label class="person" style="width:100%">
+                    <input type="checkbox" id="nDoEvidence" checked>
+                    <span>Zapsat do Evidence zakázek v Tabulkách
+                        <span class="tiny muted">— odškrtni, když tam zakázku už máš</span></span></label>
+            </div>
+            <div class="fmr__cely">
                 <label class="person" style="width:100%">
                     <input type="checkbox" id="nSlozkaP">
                     <span>Založit složku na P:</span></label>
@@ -778,10 +791,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=273"></script>
-<script src="assets/js/ui.js?v=273"></script>
-<script src="assets/js/vykazy.js?v=273"></script>
-<script type="module" src="assets/js/store.js?v=273"></script>
+<script src="assets/js/taxonomy.js?v=274"></script>
+<script src="assets/js/ui.js?v=274"></script>
+<script src="assets/js/vykazy.js?v=274"></script>
+<script type="module" src="assets/js/store.js?v=274"></script>
 
 <script>
 (function () {
@@ -2872,6 +2885,7 @@
         $("nKonec").value = "";
         $("nJednoduchy").checked = true;
         $("nSlozkaP").checked = false;
+        $("nDoEvidence").checked = true;
         /* Poptávka přichází dneškem – datum jde přepsat, ale ve většině
            případů se projekt zakládá ten den, co poptávka dorazí. */
         $("nPoptano").value = new Date().toISOString().slice(0, 10);
@@ -2951,7 +2965,7 @@
 
             /* Opis do Evidence zakázek v Tabulkách – lidé si tam zakázky
                hledají odjakživa a nikdo je tam nemá přepisovat ručně. */
-            window.KB.posliZakazkuDoEvidence({
+            if ($("nDoEvidence").checked) window.KB.posliZakazkuDoEvidence({
                 id: id, cislo: cislo, nazev: nazev,
                 objednatel: $("nObjednatel").value,
                 // sloupec E „řeší:" – jména, ne UID; sešit čtou lidé
