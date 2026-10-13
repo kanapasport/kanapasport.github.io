@@ -783,6 +783,15 @@ KB.saveQuickTodo = async (id, data) => {
             duvod: String(data.zadostZpetne.duvod || "").slice(0, 160)
         };
     }
+    /* Nahlášení chyby u výkazu (13. 10. 2026): vlastní zápis jde opravit jen
+       do půlnoci dne zápisu, potom na něj člověk jen kouká. Vzkaz proto nese,
+       kterého zápisu se týká, ať ho manažer nemusí hledat podle data. */
+    if (data.opravaVykazu && data.opravaVykazu.id) {
+        zapis.opravaVykazu = {
+            id: String(data.opravaVykazu.id).slice(0, 60),
+            datum: String(data.opravaVykazu.datum || "").slice(0, 10)
+        };
+    }
 
     await setDoc(quickDoc(id), zapis, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
@@ -2287,6 +2296,11 @@ function zaznamPayload(data) {
         /* Dovolená, nemoc a školení se evidují, ale do součtů odpracovaných
            hodin a peněz se nepočítají – V.soucty je podle tohohle pole vynechá. */
         absence:  data.absence === true,
+        /* Placené školení: absence, u které se sazba přesto počítá.
+           Domluva je mezi člověkem a majitelem, web ji neověřuje –
+           drží jen příznak, podle kterého se nenuluje sazba
+           (Michal 13. 10. 2026). Čte ho i Apps Script u výkazů. */
+        absencePlacena: data.absencePlacena === true,
         /* Home office: zapsané hodiny odvedené z domu – jde do sloupce
            v Tabulkách i do budoucích přehledů, kdo kolik dělá na HO. */
         ho:       data.ho === true,

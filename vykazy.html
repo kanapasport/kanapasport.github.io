@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=274">
+    <link rel="stylesheet" href="assets/css/app.css?v=275">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -81,6 +81,10 @@
         .hovolba { display: flex; align-items: center; gap: 7px; font-size: 13px;
             cursor: pointer; align-self: end; padding-bottom: 9px; white-space: nowrap; }
         .zblok--absence .hovolba, .polozka--absence .hovolba { display: none; }
+        /* Placené školení: nabízí se jen u školení, u dovolené ani
+           u nemoci nemá co dělat. Třídu přepíná výběr druhu absence. */
+        .skolvolba { display: none; }
+        .zblok--skoleni .skolvolba, .polozka--skoleni .skolvolba { display: flex; }
         /* zeleně u zaškrtávátka: ten den je HO nahlášený z Rychlého zápisu */
         .hovolba__znacka { color: var(--ok); font-size: 10.5px; font-weight: 900;
             letter-spacing: .06em; text-transform: uppercase; }
@@ -280,6 +284,32 @@
     </div>
 </div>
 
+<!-- ======================================== NAHLÁSIT CHYBU U VÝKAZU -->
+<div id="opravaOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:136;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" style="padding:0;max-width:520px;width:100%;gap:0;overflow:hidden">
+        <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
+            Nahlásit chybu u výkazu
+        </div>
+        <div class="col" style="padding:16px 18px;gap:12px">
+            <p class="small muted" style="margin:0;line-height:1.6">
+                Tenhle zápis už sám opravit nemůžeš — vlastní výkaz jde měnit
+                <b>do půlnoci dne zápisu</b> (budoucí dny kdykoliv předem).
+                Napiš, co je na něm špatně; manažerům to přijde jako Quick TO-DO
+                i s odkazem na ten zápis.
+            </p>
+            <p class="small" id="opVykaz" style="margin:0;line-height:1.6"></p>
+            <div><label class="label" for="opText">Co je špatně a jak to má být</label>
+                <textarea id="opText" class="field" rows="3" maxlength="400"
+                    placeholder="např. mám tam 8 hodin místo 6; práce patří na jiný projekt"></textarea></div>
+        </div>
+        <div class="row" style="gap:10px;padding:13px 18px;border-top:1px solid var(--line)">
+            <button type="button" id="opPosli" class="btn btn--primary btn--sm">Poslat manažerům</button>
+            <div class="grow"></div>
+            <button type="button" id="opZavri" class="btn btn--ghost btn--sm">Zavřít</button>
+        </div>
+    </div>
+</div>
+
 <div id="zadostOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:135;display:flex;align-items:center;justify-content:center;padding:18px">
     <div class="card col" style="padding:0;max-width:500px;width:100%;gap:0;overflow:hidden">
         <div style="padding:13px 18px;background:var(--accent);color:#fff;font-size:15px;font-weight:900;letter-spacing:.04em">
@@ -384,10 +414,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=274"></script>
-<script src="assets/js/ui.js?v=274"></script>
-<script src="assets/js/vykazy.js?v=274"></script>
-<script type="module" src="assets/js/store.js?v=274"></script>
+<script src="assets/js/taxonomy.js?v=275"></script>
+<script src="assets/js/ui.js?v=275"></script>
+<script src="assets/js/vykazy.js?v=275"></script>
+<script type="module" src="assets/js/store.js?v=275"></script>
 
 <script>
 (function () {
@@ -459,6 +489,9 @@
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
 
+    /** Školení je jediná absence, která se po domluvě platí. */
+    const jeSkoleni = (zakazka) => TYP_ABSENCE[String(zakazka || "").trim()] === "skoleni";
+
     /* Celý den u absence. V časech stojí 00:00–23:59, ať je na první pohled
        vidět, že je pryč celý den; do fondu se ale počítá jedna směna. */
     const CELY_DEN_OD = "00:00";
@@ -504,6 +537,9 @@
         document.querySelectorAll('[data-z="zakazka"], [data-f="zakazka"]').forEach(sel => {
             const drzena = sel.value;
             sel.innerHTML = V.options(volby, drzena, "— vyber —");
+            /* Popisky se právě změnily (číslo před názvem) – našeptávač
+               si drží vlastní text v poli, takže ho musí přepsat taky. */
+            if (typeof obnovProjektVyber === "function") obnovProjektVyber(sel);
             sel.value = drzena;
         });
     });
@@ -645,11 +681,32 @@
         });
     }
 
-    /** Po vložení položky do stránky oživí její roletku úkolů. */
+    /* Projektů je přes osmdesát a hledaly se v roletce očima. Stejný
+       našeptávač jako u úkolů: hledá bez diakritiky a po slovech, takže
+       „zizkov nadr" najde „Nádraží Žižkov" (Michal 13. 10. 2026).
+       Roletka pod ním zůstává, takže čtení hodnot se nikde nemění. */
+    function obnovProjektVyber(select) {
+        window.KBUI.naseptavac(select, {
+            nazev: "Hledat projekt",
+            popis: "Piš číslo nebo název projektu…",
+            prazdne: "Zatím žádné projekty"
+        });
+    }
+
+    /** Po zabalení se píše do pole našeptávače, ne do schované roletky. */
+    function doPoleProjektu(select) {
+        if (!select) return null;
+        const obal = select.closest("[data-hledac]");
+        return (obal && obal.querySelector("[data-hledac-vstup]")) || select;
+    }
+
+    /** Po vložení položky do stránky oživí její roletky. */
     function ozivVybery(koren) {
         const k = koren || document;
         k.querySelectorAll('[data-f="ukolId"]')
             .forEach(select => obnovUkolVyber(select));
+        k.querySelectorAll('[data-z="zakazka"], [data-f="zakazka"]')
+            .forEach(select => obnovProjektVyber(select));
         /* `querySelectorAll` sám kořen nevrací – a kořenem tu bývá právě
            ta jedna čerstvě vložená položka, takže se hlídka HO ani lhůty
            při vykreslení vůbec nespustily a hláška naskočila až po ruční
@@ -1286,6 +1343,7 @@
         const sazbuMenim = menimSazbu();
         const sazbuVidim = sazbuMenim || (vidimPenize() && !!o.sZakazkou);
         return '<div class="polozka' + (absentni ? " polozka--absence" : "") +
+            (o.sZakazkou && jeSkoleni(d.zakazka || "") ? " polozka--skoleni" : "") +
             (rezijni ? " polozka--rezie" : "") + '" data-polozka>' +
             '<div class="polozka__head">' +
                 '<span class="polozka__poradi">Záznam</span>' +
@@ -1400,6 +1458,14 @@
                 '<span class="hobox__pozor" data-abs-hlaska hidden></span>' +
             "</div>" +
 
+            /* Školení se obvykle neplatí, ale po domluvě s majitelem
+               se počítá jako práce. Zaškrtne si to ten, kdo výkaz
+               píše – domluva je mezi ním a majitelem, web ji neřeší
+               (Michal 13. 10. 2026). */
+            '<label class="hovolba skolvolba"><input type="checkbox" data-f="absencePlacena"' +
+                (d.absencePlacena ? " checked" : "") + "> <b>Placené školení</b>" +
+                '<span class="tiny muted" style="margin-left:6px">po domluvě s majitelem</span></label>' +
+
             priplatkyHtml(d) +
 
             /* Poznámka se z formuláře vypustila (přání Michala 25. 8. 2026):
@@ -1424,6 +1490,7 @@
     function zblokHtml(data) {
         const d = data || {};
         return '<div class="zblok' + (jeAbsence(d.zakazka || "") ? " zblok--absence" : "") +
+            (jeSkoleni(d.zakazka || "") ? " zblok--skoleni" : "") +
             (jeRezie(d.zakazka || "") ? " zblok--rezie" : "") + '" data-zblok>' +
             '<div class="zblok__hlava">' +
                 '<div class="zblok__stitek">Výkaz</div>' +
@@ -1507,6 +1574,7 @@
             ho: zaskrtnuto("ho"),
             km: zapnuto("km") ? (Number(val("km")) || 0) : 0,
             sazba: Number(val("sazba")) || 0,
+            absencePlacena: zaskrtnuto("absencePlacena"),
             poznamka: val("poznamka").trim()
         };
     }
@@ -1619,8 +1687,9 @@
     function prepocti(box) {
         if (!box) return 0;
         const p = ctiPolozku(box);
-        // u absence se peníze neúčtují – ať formulář neslibuje, co se neuloží
-        if (polozkaJeAbsence(box, p)) p.sazba = 0;
+        /* U absence se peníze neúčtují – ať formulář neslibuje, co se
+           neuloží. Výjimka je placené školení domluvené s majitelem. */
+        if (polozkaJeAbsence(box, p) && !p.absencePlacena) p.sazba = 0;
         // celý den je v časech 00:00–23:59, ale do fondu jde jedna směna
         const hodiny = p.celyden
             ? HODIN_ZA_DEN
@@ -1750,6 +1819,9 @@
         radkyBox().insertAdjacentHTML("beforeend", zblokHtml({}));
         const blok = bloky().pop();
         pridejPolozku(blok);
+        /* Oživení celého bloku, ne jen položky: výběr projektu sedí
+           v hlavičce bloku, a ta by jinak zůstala obyčejnou roletkou. */
+        ozivVybery(blok);
         return blok;
     }
 
@@ -1757,7 +1829,7 @@
         naplnOsoby();
         radkyBox().innerHTML = "";
         pridejBlok();
-        const prvni = radkyBox().querySelector('[data-z="zakazka"]');
+        const prvni = doPoleProjektu(radkyBox().querySelector('[data-z="zakazka"]'));
         if (prvni) prvni.focus();
     }
 
@@ -2702,15 +2774,66 @@
         }
     }
 
+    /* ============================================ NAHLÁŠENÍ CHYBY ==== */
+    /* Vlastní zápis jde opravit jen do půlnoci toho dne. Potom na něj člověk
+       jen kouká a dřív mu nezbylo než si o opravu říct ústně. Teď napíše, co
+       je špatně, a manažerům to přijde jako Quick TO-DO (Michal 13. 10. 2026).
+       Poznámka k výkazu se v srpnu z formuláře schválně vyhodila, protože
+       dublovala popis práce – tohle není ona: je to žádost, ne údaj. */
+
+    let opravaId = "";
+
+    function otevriOpravu(z) {
+        opravaId = z.id;
+        $("opVykaz").innerHTML = "Jde o zápis z <b>" + esc(V.czDatum(z.datum || "")) + "</b>" +
+            (z.zakazka ? " – " + esc(z.zakazka) : "") +
+            " · " + esc(V.hod(Number(z.hodiny) || 0));
+        $("opText").value = "";
+        $("opravaOverlay").hidden = false;
+        $("opText").focus();
+    }
+
+    async function posliOpravu() {
+        const z = (window.KB.vykazy || []).find(v => v.id === opravaId);
+        if (!z) return;
+        const text = $("opText").value.trim();
+        if (!text) return window.KBUI.toast("Napiš, co je na výkazu špatně.", "warn");
+
+        const uid = mojeUid();
+        const manazeri = V.lide()
+            .filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1 && u.id !== uid)
+            .map(u => u.id);
+        if (!manazeri.length) {
+            return window.KBUI.toast("Nenašel se žádný manažer.", "error");
+        }
+
+        $("opPosli").disabled = true;
+        try {
+            await window.KB.saveQuickTodo(window.KB.newQuickId(), {
+                text: "Oprava výkazu z " + V.czDatum(z.datum || "") +
+                    (z.zakazka ? " (" + z.zakazka + ")" : "") + ": " + text,
+                proUids: manazeri,
+                asap: true,
+                opravaVykazu: { id: z.id, datum: z.datum || "" }
+            });
+            $("opravaOverlay").hidden = true;
+            window.KBUI.toast("Odesláno manažerům.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Nepodařilo se odeslat.", "error");
+        } finally {
+            $("opPosli").disabled = false;
+        }
+    }
+
     /* ======================================================== ÚPRAVA ==== */
 
     function otevriUpravu(id) {
         const z = (window.KB.vykazy || []).find(v => v.id === id);
         if (!z) return;
-        if (!smimUpravit(z)) {
-            return window.KBUI.toast("Vlastní záznam jde opravit do půlnoci dne zápisu" +
-                " (budoucí dny kdykoli předem) – změnu domluv s manažerem.", "warn");
-        }
+        /* Dřív tu byla jen hláška „domluv to s manažerem" a tím to skončilo.
+           Teď se rovnou otevře okno, kde se dá napsat, co je špatně. */
+        if (!smimUpravit(z)) return otevriOpravu(z);
 
         editId = id;
         $("btnSmaz").hidden = !smimSmazat(z);
@@ -3057,6 +3180,7 @@
         if (blok && event.target.dataset.z === "zakazka") {
             doplnFirmu(blok, "data-z", event.target.value);
             blok.classList.toggle("zblok--absence", jeAbsence(event.target.value));
+            blok.classList.toggle("zblok--skoleni", jeSkoleni(event.target.value));
             blok.classList.toggle("zblok--rezie", jeRezie(event.target.value));
             // jiný projekt = jiná nabídka úkolů ve všech záznamech výkazu
             blok.querySelectorAll('[data-f="ukolId"]').forEach(select => {
@@ -3118,6 +3242,7 @@
         if (event.target.dataset.f === "zakazka") {
             doplnFirmu(box, "data-f", event.target.value);
             box.classList.toggle("polozka--absence", jeAbsence(event.target.value));
+            box.classList.toggle("polozka--skoleni", jeSkoleni(event.target.value));
             box.classList.toggle("polozka--rezie", jeRezie(event.target.value));
             predvyplnAbsenci(box, event.target.value, $("eOsoba").value);
             const ukolSelect = box.querySelector('[data-f="ukolId"]');
@@ -3243,6 +3368,11 @@
 
         $("btnZadostZpetne").addEventListener("click", () => otevriZadost(""));
         $("zdPosli").addEventListener("click", odesliZadost);
+        $("opPosli").addEventListener("click", posliOpravu);
+        $("opZavri").addEventListener("click", () => { $("opravaOverlay").hidden = true; });
+        $("opravaOverlay").addEventListener("click", (event) => {
+            if (event.target === $("opravaOverlay")) $("opravaOverlay").hidden = true;
+        });
         $("zdZavri").addEventListener("click", () => { $("zadostOverlay").hidden = true; });
         $("zadostOverlay").addEventListener("click", (event) => {
             if (event.target === $("zadostOverlay")) $("zadostOverlay").hidden = true;
@@ -3348,7 +3478,8 @@
         }
         $("btnZapisZavri").addEventListener("click", () => { $("zapis").hidden = true; });
         $("btnPlus").addEventListener("click", () => {
-            pridejBlok().querySelector('[data-z="zakazka"]').focus();
+            const pole = doPoleProjektu(pridejBlok().querySelector('[data-z="zakazka"]'));
+            if (pole) pole.focus();
         });
         $("btnUloz").addEventListener("click", ulozDen);
         $("dOsoba").addEventListener("change", () => {
