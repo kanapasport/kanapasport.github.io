@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=275">
+    <link rel="stylesheet" href="assets/css/app.css?v=276">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -414,10 +414,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=275"></script>
-<script src="assets/js/ui.js?v=275"></script>
-<script src="assets/js/vykazy.js?v=275"></script>
-<script type="module" src="assets/js/store.js?v=275"></script>
+<script src="assets/js/taxonomy.js?v=276"></script>
+<script src="assets/js/ui.js?v=276"></script>
+<script src="assets/js/vykazy.js?v=276"></script>
+<script type="module" src="assets/js/store.js?v=276"></script>
 
 <script>
 (function () {
@@ -533,16 +533,30 @@
         const zapnuto = event.target.checked;
         try { localStorage.setItem(CISLA_KLIC, zapnuto ? "1" : "0"); } catch (err) { /* nevadí */ }
         document.querySelectorAll("[data-cisla-projektu]").forEach(ch => { ch.checked = zapnuto; });
+        obnovNabidkuProjektu();
+    });
+
+    /**
+     * Přesype nabídku projektů ve všech otevřených roletkách a nechá v nich
+     * vybranou hodnotu.
+     *
+     * Volá se ze dvou míst. Jednak při přepnutí čísel projektů (mění se jen
+     * popisky). A hlavně KDYŽ DORAZÍ DATA: formulář se umí otevřít dřív, než
+     * přijdou projekty z databáze (`vykazy.html#novy` hned po načtení), a
+     * nabídka pak zůstala na záložním číselníku – devět položek místo
+     * osmdesáti a hledat se dalo leda v nich (Michal 13. 10. 2026).
+     */
+    function obnovNabidkuProjektu() {
         const volby = projektyVolby();
         document.querySelectorAll('[data-z="zakazka"], [data-f="zakazka"]').forEach(sel => {
             const drzena = sel.value;
             sel.innerHTML = V.options(volby, drzena, "— vyber —");
-            /* Popisky se právě změnily (číslo před názvem) – našeptávač
-               si drží vlastní text v poli, takže ho musí přepsat taky. */
-            if (typeof obnovProjektVyber === "function") obnovProjektVyber(sel);
             sel.value = drzena;
+            /* Našeptávač si drží vlastní text v poli, takže ho musí
+               přepsat taky – jinak by v něm zůstal starý popisek. */
+            obnovProjektVyber(sel);
         });
-    });
+    }
 
     function nabidkaProjektu() {
         const zEvidence = (window.KB.projektyDocs || [])
@@ -1341,7 +1355,11 @@
            ÚPRAVY (`o.sZakazkou`), kde je částka spočítaná a uložená; při
            psaní nového dne by jim formulář sliboval 0 Kč. */
         const sazbuMenim = menimSazbu();
-        const sazbuVidim = sazbuMenim || (vidimPenize() && !!o.sZakazkou);
+        /* Dřív se OSVČ a studentovi sazba ukázala až v okně úpravy, protože
+           při psaní nového dne nebylo odkud ji vzít a formulář by sliboval
+           0 Kč. Od 13. 10. 2026 má každý, kdo si fakturuje sám, zrcadlo své
+           sazby (`KB.mojeSazba`), takže ji vidí i při psaní. */
+        const sazbuVidim = sazbuMenim || vidimPenize();
         return '<div class="polozka' + (absentni ? " polozka--absence" : "") +
             (o.sZakazkou && jeSkoleni(d.zakazka || "") ? " polozka--skoleni" : "") +
             (rezijni ? " polozka--rezie" : "") + '" data-polozka>' +
@@ -3115,6 +3133,8 @@
             window.KB.watchUkoly();
         } else {
             window.KB.watchMojeVykazy();
+            // vlastní sazba – bez ní by formulář OSVČ sliboval nulu
+            window.KB.watchMojeSazba();
             // projekty jen svoje (pravidla víc nedovolí); úkoly ale všechny –
             // proklik „Zapsat výkaz" z cizího úkolu ho musí umět předvyplnit
             window.KB.watchMojeProjekty();
@@ -3650,6 +3670,11 @@
         window.KB.on("vykazy-meta", () => { naplnFiltry(); nastavVychoziSazbu(true); });
         window.KB.on("users", render);
         window.KB.on("zakazky", naplnFiltry);
+        /* Nabídka projektů v otevřeném formuláři se dosype, až data
+           dorazí – bez toho šlo vybírat jen ze záložního číselníku. */
+        window.KB.on("projekty-docs", obnovNabidkuProjektu);
+        window.KB.on("zakazky", obnovNabidkuProjektu);
+        window.KB.on("ukoly", obnovNabidkuProjektu);
         window.KB.on("vykazy-chyba", () => {
             window.KBUI.toast("Databáze výkazy nevydala – zkontroluj pravidla Firestore.", "error");
         });

@@ -435,7 +435,15 @@
     V.sazbaProZapis = (uid, zakazka) => {
         if (!uid) return 0;
         const proj = ((window.KB.rozpocty || {})[zakazka] || {}).sazby || {};
-        return Number(proj[uid]) || Number((window.KB.sazby || {})[uid]) || 0;
+        const zCiselniku = Number(proj[uid]) || Number((window.KB.sazby || {})[uid]) || 0;
+        if (zCiselniku) return zCiselniku;
+        /* Číselník sazeb vidí jen manažer. Kdo si fakturuje sám, má zrcadlo
+           své vlastní sazby – platí tedy jen sám na sebe, na cizí uid se
+           z něj nic brát nesmí (Michal 13. 10. 2026). */
+        const moje = window.KB.mojeSazba;
+        const ja = window.KB.currentUid ? window.KB.currentUid() : "";
+        if (!moje || !ja || uid !== ja) return 0;
+        return Number((moje.projekty || {})[zakazka]) || Number(moje.zakladni) || 0;
     };
 
     V.rozpocet = (zakazka) => {

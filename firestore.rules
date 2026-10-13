@@ -154,6 +154,22 @@ service cloud.firestore {
                        && resource.data.get('datum', '') >= uzaverkaOd());
     }
 
+    /* Vlastní sazba. Kdo si fakturuje sám, potřebuje svou sazbu vidět UŽ PŘI
+       PSANÍ výkazu, ne až u uloženého zápisu – jinak mu formulář slibuje
+       nulu. Číselník `vykazy/ciselniky/nastaveni` mu ukázat nejde: je to
+       jeden dokument se sazbami všech lidí a s rozpočty zakázek, a pravidla
+       neumí schovat jednotlivé pole. Proto si manažer zrcadlí sazbu každého
+       do jeho vlastního dokumentu, kde id dokumentu JE to uid – ověřit
+       vlastníka tím jde bez čtení dalšího dokumentu (Michal 13. 10. 2026).
+       Zapisuje jen manažer: kolik se za hodinu platí, není přání toho,
+       komu se platí. A čte ji JEN ten, kdo si fakturuje sám – zaměstnanec
+       má domluvenou měsíční výplatu a hodinovka se mu nikde neukazuje,
+       stejně jako u částek. Zrcadlo se mu proto ani nezakládá. */
+    match /artifacts/firemni-kb-app/private/sazby/lide/{uid} {
+      allow read:  if spravce() || (fakturujeSi() && request.auth.uid == uid);
+      allow write: if spravce();
+    }
+
     // --- projekty (dřív „zakázky") --------------------------------------
     //
     //   private/projekty/seznam/{id}    hlavička: název, firma, stav,

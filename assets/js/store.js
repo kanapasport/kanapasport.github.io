@@ -2487,6 +2487,71 @@ KB.deleteVykaz = async (id) => {
  * Tajné číselníky výkazů (sazby lidí, rozpočty zakázek). Zapisuje se jen to,
  * co volající opravdu předá, ať úprava rozpočtu neshodí uložené sazby.
  */
+/* ------------------------------------------------- vlastní sazba ----
+   Kdo si fakturuje sám (OSVČ, student), potřebuje svou sazbu vidět i PŘI
+   PSANÍ výkazu, ne až u uloženého zápisu – jinak mu formulář slibuje nulu.
+   Číselník `vykazy/ciselniky/nastaveni` mu ukázat nejde: je to jeden
+   dokument se sazbami všech lidí a s rozpočty zakázek, a pravidla neumí
+   schovat jednotlivé pole. Proto se sazba každého zrcadlí do jeho vlastního
+   dokumentu, na který právo má (Michal 13. 10. 2026).
+
+   Zrcadlo se přepisuje celé při každém uložení Nastavení. Dopočítávat jen
+   rozdíly by znamenalo pamatovat si, co se změnilo, a první nesrovnalosti
+   by si nikdo nevšiml – sazba v zrcadle je jen pro zobrazení, závazná je
+   pořád ta, kterou k zápisu dopíše manažerský skript. */
+const sazbaDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "sazby", "lide", uid);
+
+KB.mojeSazba = null;        // { zakladni, projekty: { "Zakázka": kc } }
+let mojeSazbaOdber = null;
+
+/** Zrcadlo sazeb po lidech. Volá se z uložení Nastavení; chyba nesmí
+    shodit samotné uložení, proto se jen zaloguje. */
+KB.zrcadliSazby = async (sazby, rozpocty) => {
+    if (!db) return;
+    /* Zaměstnanci zrcadlo nedostanou vůbec. Hodinovka se jim schválně
+       nikde neukazuje (mají domluvenou měsíční výplatu) a co v databázi
+       není, to se nemůže omylem odemknout ani špatným pravidlem. */
+    const siFakturuje = (uid) => {
+        const u = (KB.users || []).find(x => x.id === uid);
+        if (!u) return false;
+        const typ = u.typ || (u.role === "student" ? "student" : "zamestnanec");
+        return ["osvc", "student"].indexOf(typ) !== -1;
+    };
+    const lide = {};
+    Object.keys(sazby || {}).forEach(uid => {
+        lide[uid] = { zakladni: Number(sazby[uid]) || 0, projekty: {} };
+    });
+    Object.keys(rozpocty || {}).forEach(nazev => {
+        const proj = (rozpocty[nazev] || {}).sazby || {};
+        Object.keys(proj).forEach(uid => {
+            if (!lide[uid]) lide[uid] = { zakladni: 0, projekty: {} };
+            lide[uid].projekty[nazev] = Number(proj[uid]) || 0;
+        });
+    });
+    const razitko = Date.now();
+    for (const uid of Object.keys(lide)) {
+        if (!siFakturuje(uid)) continue;
+        try {
+            await setDoc(sazbaDoc(uid), Object.assign({ ms: razitko }, lide[uid]));
+        } catch (err) {
+            console.warn("Sazba se nezrcadlila:", uid, err);
+        }
+    }
+};
+
+/** Odběr vlastní sazby – jen pro toho, kdo si fakturuje sám. */
+KB.watchMojeSazba = async () => {
+    if (mojeSazbaOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || mojeSazbaOdber) return;
+    if (pockejNaRoli(KB.watchMojeSazba)) return;
+    if (!KB.fakturujeSi()) return;
+    mojeSazbaOdber = onSnapshot(sazbaDoc(auth.currentUser.uid), (snap) => {
+        KB.mojeSazba = snap.exists() ? snap.data() : null;
+        emit("moje-sazba", KB.mojeSazba);
+    }, (err) => console.error("Chyba čtení vlastní sazby:", err));
+};
+
 KB.saveVykazNastaveni = async (patch) => {
     if (authReady) await authReady;
     requireDb();
@@ -2500,6 +2565,13 @@ KB.saveVykazNastaveni = async (patch) => {
        i když se z logu nepozná konkrétní číslo (na to je záloha). */
     KB.zapisAktivitu("vykaz", "změnil nastavení výkazů (" +
         Object.keys(patch).join(", ") + ")");
+    /* Zrcadlo sazeb se srovná po každém uložení, které se sazeb týká.
+       Záměrně BEZ `await` v cestě uložení: je to doplněk pro zobrazení
+       a jeho selhání nesmí vypadat jako neuložené nastavení. */
+    if (patch.sazby !== undefined || patch.rozpocty !== undefined) {
+        KB.zrcadliSazby(patch.sazby || KB.sazby, patch.rozpocty || KB.rozpocty)
+            .catch(err => console.warn("Zrcadlo sazeb se neobnovilo:", err));
+    }
 };
 
 /**
