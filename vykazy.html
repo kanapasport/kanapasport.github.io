@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=278">
+    <link rel="stylesheet" href="assets/css/app.css?v=279">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -414,10 +414,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=278"></script>
-<script src="assets/js/ui.js?v=278"></script>
-<script src="assets/js/vykazy.js?v=278"></script>
-<script type="module" src="assets/js/store.js?v=278"></script>
+<script src="assets/js/taxonomy.js?v=279"></script>
+<script src="assets/js/ui.js?v=279"></script>
+<script src="assets/js/vykazy.js?v=279"></script>
+<script type="module" src="assets/js/store.js?v=279"></script>
 
 <script>
 (function () {
@@ -2781,12 +2781,18 @@
                       '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
                     : "") +
                 '<td class="vyk__akce">' +
-                    /* vlastní záznam jde opravit v den zápisu a u budoucích
-                       dnů až do jejich příchodu – potom tlačítko zmizí
-                       a opravy dělá manažer */
+                    /* Vlastní záznam jde opravit v den zápisu a u budoucích
+                       dnů až do jejich příchodu. Potom opravy dělá manažer –
+                       ale člověk mu musí mít jak říct, co je špatně, takže
+                       místo Upravit nastoupí Nahlásit chybu. Bez toho by
+                       okno nahlášení nešlo vůbec otevřít (13. 10. 2026). */
                     (smimUpravit(z)
                         ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>'
-                        : "") +
+                        : (z.uid === mojeUid()
+                            ? '<button type="button" class="btn btn--sm btn--ghost" data-nahlas="' +
+                                  esc(z.id) + '" title="Napsat manažerům, co je na zápisu špatně">' +
+                                  "Nahlásit chybu</button>"
+                            : "")) +
                 "</td>" +
             "</tr>";
         }
@@ -3357,6 +3363,13 @@
         if (zodeber) {
             zodeber.closest("[data-zblok]").remove();
             precisluj();
+            return;
+        }
+
+        const nahlas = event.target.closest("[data-nahlas]");
+        if (nahlas) {
+            const z = (window.KB.vykazy || []).find(v => v.id === nahlas.dataset.nahlas);
+            if (z) otevriOpravu(z);
             return;
         }
 
