@@ -211,14 +211,23 @@
         const narok = Number(z.narok) || 0;
         const cerpano = (Number(z.cerpanoPred) || 0) + dovolenaDnu;
 
-        /* Přesčas stejně jako ve Vytížení: odpracováno + absence po osmi
-           hodinách − fond. Absence se počítá jako odpracovaná směna, jinak
-           by týden dovolené shodil přesčas o 40 hodin do mínusu. */
-        const absenceDnu = moje.filter(v => v.absence === true).length;
+        /* Přesčas stejně jako ve Vytížení: odpracováno + absence − fond.
+           Absence se počítá jako odpracovaný čas, jinak by týden dovolené
+           shodil přesčas o 40 hodin do mínusu.
+
+           Počítají se její SKUTEČNÉ hodiny, ne plná směna. Celodenní
+           absence jich stejně nese osm, ale u částečné (návštěva doktora
+           ráno a odpoledne práce) se dřív připsalo osm hodin k tomu, co
+           člověk ten den odpracoval – a z osmihodinového dne vyšel přesčas
+           +6,5 h. Marcela si toho všimla 14. 10. 2026; stejně nafouklý
+           přesčas měli i Jakub (+12 h) a Dominik (+5,5 h). */
+        const absence = moje.filter(v => v.absence === true);
+        const absenceDnu = absence.length;
+        const absenceHodin = absence.reduce((n, v) => n + (Number(v.hodiny) || 0), 0);
         const prace = moje.filter(v => v.absence !== true)
             .reduce((n, v) => n + (Number(v.hodiny) || 0), 0);
         const fond = V.fondHodin(od, dnes);
-        const prescas = (Number(z.prescasPred) || 0) + prace + absenceDnu * 8 - fond;
+        const prescas = (Number(z.prescasPred) || 0) + prace + absenceHodin - fond;
 
         /* Kdo za celé období nemá ani jeden zápis, tomu přesčas spočítat
            nejde: vyšel by mínus ve výši celého fondu a vypadalo by to, že

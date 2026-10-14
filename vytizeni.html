@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Vytížení týmu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=279">
+    <link rel="stylesheet" href="assets/css/app.css?v=280">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -131,10 +131,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=279"></script>
-<script src="assets/js/ui.js?v=279"></script>
-<script src="assets/js/vykazy.js?v=279"></script>
-<script type="module" src="assets/js/store.js?v=279"></script>
+<script src="assets/js/taxonomy.js?v=280"></script>
+<script src="assets/js/ui.js?v=280"></script>
+<script src="assets/js/vykazy.js?v=280"></script>
+<script type="module" src="assets/js/store.js?v=280"></script>
 
 <script>
 (function () {
@@ -246,14 +246,20 @@
         const konec = iso(new Date(kotva.getFullYear(), kotva.getMonth() + 1, 0));
         const dnesIso = V.dnesISO();
         const mesicDo = konec > dnesIso && mesicOd <= dnesIso ? dnesIso : konec;
-        const soucty = new Map();          // uid → { prace, absenceDnu }
+        const soucty = new Map();          // uid → { prace, absenceDnu, absenceHodin }
         (window.KB.vykazy || []).forEach(z => {
             const k = z.uid + "|" + z.datum;
             const vMesici = (z.datum || "") >= mesicOd && (z.datum || "") <= mesicDo;
             if (vMesici) {
-                const s = soucty.get(z.uid) || { prace: 0, absenceDnu: 0 };
-                if (z.absence === true) s.absenceDnu++;
-                else s.prace += Number(z.hodiny) || 0;
+                const s = soucty.get(z.uid) || { prace: 0, absenceDnu: 0, absenceHodin: 0 };
+                /* Absence se do fondu počítá SKUTEČNÝMI hodinami, ne plnou
+                   směnou – celodenní jich nese osm, ale půldenní doktor
+                   by jinak přidal osm k tomu, co se ten den odpracovalo
+                   (Michal 14. 10. 2026). */
+                if (z.absence === true) {
+                    s.absenceDnu++;
+                    s.absenceHodin += Number(z.hodiny) || 0;
+                } else s.prace += Number(z.hodiny) || 0;
                 soucty.set(z.uid, s);
             }
             if (z.absence === true) { absence.add(k); return; }
@@ -287,19 +293,21 @@
 
     /* Dvě čísla vpravo za mřížkou: kolik má člověk za měsíc dohromady
        a o kolik je nad fondem. Dovolená a volno se počítají jako
-       odpracovaná směna, aby přesčas kvůli nim nespadl do mínusu.
+       odpracovaný čas, aby přesčas kvůli nim nespadl do mínusu –
+       skutečnými hodinami, ne paušální směnou.
        Přesčas dává smysl jen u zaměstnance – OSVČ a studenti fond nemají. */
     function souhrnCloveka(u, data) {
-        const s = data.soucty.get(u.id) || { prace: 0, absenceDnu: 0 };
+        const s = data.soucty.get(u.id) || { prace: 0, absenceDnu: 0, absenceHodin: 0 };
         const celkem = s.prace;
-        const naFond = s.prace + s.absenceDnu * 8;
+        const naFond = s.prace + (Number(s.absenceHodin) || 0);
         const rozdil = naFond - data.fond.hodin;
 
-        const titulek = "Přesčas = odpracováno + absence po 8 h − fond. " +
+        const titulek = "Přesčas = odpracováno + absence − fond. " +
             (data.fond.doDneska ? "Fond k dnešku: " : "Fond měsíce: ") +
             data.fond.dnu + " prac. dní × 8 h = " +
             data.fond.hodin + " h · odpracováno " + hodinyTxt(s.prace) + " h" +
-            (s.absenceDnu ? " · absence " + s.absenceDnu + " dní (" + (s.absenceDnu * 8) + " h)" : "");
+            (s.absenceDnu ? " · absence " + s.absenceDnu + " dní (" +
+                hodinyTxt(s.absenceHodin) + " h)" : "");
 
         /* Přesčas se ukazuje všem – u OSVČ a studentů to není nárok na
            proplacení, ale je z toho vidět, kdo kolik odpracoval
