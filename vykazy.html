@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=281">
+    <link rel="stylesheet" href="assets/css/app.css?v=282">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -414,10 +414,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=281"></script>
-<script src="assets/js/ui.js?v=281"></script>
-<script src="assets/js/vykazy.js?v=281"></script>
-<script type="module" src="assets/js/store.js?v=281"></script>
+<script src="assets/js/taxonomy.js?v=282"></script>
+<script src="assets/js/ui.js?v=282"></script>
+<script src="assets/js/vykazy.js?v=282"></script>
+<script type="module" src="assets/js/store.js?v=282"></script>
 
 <script>
 (function () {
@@ -555,6 +555,31 @@
             /* Našeptávač si drží vlastní text v poli, takže ho musí
                přepsat taky – jinak by v něm zůstal starý popisek. */
             obnovProjektVyber(sel);
+        });
+
+        /* Totéž pro firmy. Číselník chodí stejnou cestou a roletka postavená
+           dřív zůstala s jedinou volbou „— vyber —" – po importu adresáře,
+           kdy firem přibylo 145, to bylo vidět hned (Michal 19. 10. 2026). */
+        const firmy = V.firmy();
+        document.querySelectorAll('[data-z="firma"], [data-f="firma"]').forEach(sel => {
+            const drzena = sel.value;
+            /* Firma zapsaná u staršího výkazu nemusí v číselníku být –
+               kdyby v nabídce chyběla, uložení by ji tiše smazalo. */
+            const volby = drzena && firmy.indexOf(drzena) === -1
+                ? [drzena].concat(firmy) : firmy;
+            sel.innerHTML = V.options(volby, drzena, "— vyber —");
+            sel.value = drzena;
+            obnovFirmuVyber(sel);
+        });
+    }
+
+    /** Hledání ve firmách – stejné jako u projektu, jen jiné popisky. */
+    function obnovFirmuVyber(select) {
+        if (!select) return;
+        window.KBUI.naseptavac(select, {
+            nazev: "Hledat firmu",
+            popis: "Piš název nebo jeho část…",
+            prazdne: "Číselník firem je prázdný"
         });
     }
 
@@ -724,11 +749,7 @@
         /* Firem je po importu adresáře přes sto padesát – stejný našeptávač
            jako u projektu (Michal 19. 10. 2026). */
         k.querySelectorAll('[data-z="firma"], [data-f="firma"]')
-            .forEach(select => window.KBUI.naseptavac(select, {
-                nazev: "Hledat firmu",
-                popis: "Piš název nebo jeho část…",
-                prazdne: "Číselník firem je prázdný"
-            }));
+            .forEach(select => obnovFirmuVyber(select));
         /* `querySelectorAll` sám kořen nevrací – a kořenem tu bývá právě
            ta jedna čerstvě vložená položka, takže se hlídka HO ani lhůty
            při vykreslení vůbec nespustily a hláška naskočila až po ruční
