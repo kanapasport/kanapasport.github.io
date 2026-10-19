@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=280">
+    <link rel="stylesheet" href="assets/css/app.css?v=281">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -791,10 +791,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=280"></script>
-<script src="assets/js/ui.js?v=280"></script>
-<script src="assets/js/vykazy.js?v=280"></script>
-<script type="module" src="assets/js/store.js?v=280"></script>
+<script src="assets/js/taxonomy.js?v=281"></script>
+<script src="assets/js/ui.js?v=281"></script>
+<script src="assets/js/vykazy.js?v=281"></script>
+<script type="module" src="assets/js/store.js?v=281"></script>
 
 <script>
 (function () {
@@ -1261,6 +1261,7 @@
             p.objednatel || "", "— nevyplněno —");
         $("pZakaznik").innerHTML = V.options(sHodnotou(V.firmy(), p.zakaznik || ""),
             p.zakaznik || "", "— nevyplněno —");
+        ["fFirma", "pObjednatel", "pZakaznik"].forEach(id => obnovFirmuVyber($(id)));
         $("pJednoduchy").checked = p.jednoduchy === true;
         prepniJednoduchy();
         vykresliSablony(p);
@@ -2859,12 +2860,26 @@
     }
 
     /** Roletka firem – stejná nabídka jako v panelu Údajů. */
+    /* Firem je po importu adresáře z Pohody přes sto padesát a roletka
+       se stala nepoužitelnou – hledá se v nich stejně jako u projektů
+       a úkolů (Michal 19. 10. 2026). Select pod našeptávačem zůstává,
+       takže `.value` i událost `change` fungují dál. */
+    function obnovFirmuVyber(select) {
+        if (!select) return;
+        window.KBUI.naseptavac(select, {
+            nazev: "Hledat firmu",
+            popis: "Piš název nebo jeho část…",
+            prazdne: "Číselník firem je prázdný"
+        });
+    }
+
     function naplnFirmy(id, hodnota) {
         const firmy = (window.KBVYK.firmy() || []).slice();
         if (hodnota && firmy.indexOf(hodnota) === -1) firmy.unshift(hodnota);
         $(id).innerHTML = '<option value="">— nevyplněno —</option>' +
             firmy.map(f => '<option value="' + esc(f) + '"' +
                 (f === hodnota ? " selected" : "") + ">" + esc(f) + "</option>").join("");
+        obnovFirmuVyber($(id));
     }
 
     /** Název složky skládá stejně jako nástroj na PC – ať je vidět, co vznikne. */
@@ -3041,6 +3056,8 @@
                 }
                 pole.value = vlozena;
                 pole.dispatchEvent(new Event("change", { bubbles: true }));
+                // našeptávač si drží vlastní text – musí se dozvědět o nové firmě
+                obnovFirmuVyber(pole);
             }
             window.KBUI.toast("Firma " + vlozena + " přidána.");
         } catch (err) {
