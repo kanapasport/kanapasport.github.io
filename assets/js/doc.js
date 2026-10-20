@@ -32,7 +32,14 @@
 
     const esc = (str) => String(str == null ? "" : str)
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    /* Návod smí upravit každý člen, takže se nevěří ničemu, co v něm leží:
+       velikost obrázku jen z výčtu, obrázek jen jako data URL. (doc.js se
+       načítá před ui.js, KBUI se proto bere až při vykreslení.) */
+    const velikostObrazku = (size) => (["s", "m", "l"].indexOf(size) >= 0 ? size : "m");
+    const bezpecnyObrazek = (url) => (window.KBUI && window.KBUI.bezpecnyObrazek)
+        ? window.KBUI.bezpecnyObrazek(url) : "";
 
     /* ----------------------------------------------------- text → HTML */
 
@@ -63,7 +70,7 @@
         const steps = guide.steps || [];
 
         // obrázky seskupené po krocích – jen ty, ke kterým máme data
-        const imagesByStep = steps.map(step => (step.images || []).filter(img => imageMap[img.id]));
+        const imagesByStep = steps.map(step => (step.images || []).filter(img => bezpecnyObrazek(imageMap[img.id])));
 
         const atoms = [];
         atoms.push({ step: null, keepWithNext: true, html: headHtml(guide) });
@@ -119,8 +126,8 @@
                                 (img.caption ? " — " + esc(img.caption) : "");
                 atoms.push({
                     step: si,
-                    html: '<figure class="doc-fig doc-fig--' + (img.size || "m") + '">' +
-                          '<img src="' + imageMap[img.id] + '" data-img="' + img.id + '" alt="' + esc(img.caption || caption) + '">' +
+                    html: '<figure class="doc-fig doc-fig--' + velikostObrazku(img.size) + '">' +
+                          '<img src="' + esc(bezpecnyObrazek(imageMap[img.id])) + '" data-img="' + esc(img.id) + '" alt="' + esc(img.caption || caption) + '">' +
                           "<figcaption>" + caption + "</figcaption></figure>"
                 });
             });

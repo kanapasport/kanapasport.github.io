@@ -16,8 +16,55 @@
     window.KBUI = UI;
 
     const esc = (value) => String(value == null ? "" : value)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     UI.esc = esc;
+
+    /* ------------------------------------------- bezpečné hodnoty do HTML ---
+       Pravidla databáze hlídají, KDO smí psát, ne CO zapíše. Poznámku,
+       návod, tabuli nebo plán tak může podvrhnout i student z konzole
+       prohlížeče – a vykreslí se pak manažerovi pod jeho přihlášením.
+       Proto do src, style a innerHTML nejde nic, co by web sám nevyrobil:
+       obrázky jsou vždy data URL z canvasu, barvy hex z palet. */
+
+    const OBRAZEK_OK = /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]*$/;
+    UI.bezpecnyObrazek = (url) => (typeof url === "string" && OBRAZEK_OK.test(url)) ? url : "";
+
+    const BARVA_OK = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+    UI.barva = (hex, nahradni) => {
+        const s = typeof hex === "string" ? hex.trim() : "";
+        return BARVA_OK.test(s) ? s : (nahradni === undefined ? "" : nahradni);
+    };
+
+    /* HTML z databáze (příručka) se projde v inertní šabloně, kde se nic
+       nespustí, a zůstanou jen značky a atributy, které editor příručky
+       opravdu dělá. Skripty, obrázky, styly a on…= odpadnou. */
+    const HTML_ZNACKY = new Set(["P", "B", "STRONG", "I", "EM", "U", "BR", "HR", "SECTION", "DIV", "SPAN",
+        "H2", "H3", "H4", "UL", "OL", "LI", "A", "TABLE", "THEAD", "TBODY", "TR", "TD", "TH",
+        "CODE", "PRE", "SMALL", "BLOCKQUOTE"]);
+    const HTML_PRYC = new Set(["SCRIPT", "STYLE", "IFRAME", "FRAME", "FRAMESET", "OBJECT", "EMBED",
+        "SVG", "MATH", "TEMPLATE", "NOSCRIPT", "LINK", "META", "BASE", "FORM", "INPUT", "BUTTON",
+        "TEXTAREA", "SELECT", "IMG", "VIDEO", "AUDIO", "SOURCE", "PICTURE"]);
+    const HTML_ATRIBUTY = new Set(["class", "id", "href", "title", "colspan", "rowspan"]);
+    UI.cistyHtml = (html) => {
+        const sablona = document.createElement("template");
+        sablona.innerHTML = String(html == null ? "" : html);
+        const projdi = (rodic) => Array.from(rodic.children).forEach(el => {
+            const znacka = el.tagName.toUpperCase();
+            if (HTML_PRYC.has(znacka)) { el.remove(); return; }
+            projdi(el);
+            if (!HTML_ZNACKY.has(znacka)) { el.replaceWith(...el.childNodes); return; }
+            Array.from(el.attributes).forEach(a => {
+                const jmeno = a.name.toLowerCase();
+                if (!HTML_ATRIBUTY.has(jmeno) ||
+                    (jmeno === "href" && !/^(?:https?:|mailto:|#|[^:]*$)/i.test(a.value.trim()))) {
+                    el.removeAttribute(a.name);
+                }
+            });
+        });
+        projdi(sablona.content);
+        return sablona.innerHTML;
+    };
 
     /* -------------------------------------------------------------- barvy ---
        Zkoušení odstínů na stránce barvy.html. Barva se mění POUZE na té

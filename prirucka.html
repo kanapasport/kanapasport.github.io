@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Jak web používat – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=282">
+    <link rel="stylesheet" href="assets/css/app.css?v=283">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -371,10 +371,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=282"></script>
-<script src="assets/js/ui.js?v=282"></script>
-<script src="assets/js/vykazy.js?v=282"></script>
-<script type="module" src="assets/js/store.js?v=282"></script>
+<script src="assets/js/taxonomy.js?v=283"></script>
+<script src="assets/js/ui.js?v=283"></script>
+<script src="assets/js/vykazy.js?v=283"></script>
+<script type="module" src="assets/js/store.js?v=283"></script>
 
 <script>
 (function () {
@@ -390,7 +390,9 @@
     async function nactiUlozene() {
         try {
             const data = await window.KB.nactiPrirucku();
-            if (data.html) $("prTelo").innerHTML = data.html;
+            /* příručku píše 7 manažerských účtů a čte ji každý – z databáze
+               proto jen přes čistič, ať z ní nejde udělat past na ostatní */
+            if (data.html) $("prTelo").innerHTML = window.KBUI.cistyHtml(data.html);
         } catch (err) {
             // bez uložené verze (nebo bez práv na čtení) zůstane text ze souboru
             console.warn("Příručka z databáze se nenačetla:", err);
@@ -451,7 +453,7 @@
         $("btnPrUloz").addEventListener("click", async () => {
             $("btnPrUloz").disabled = true;
             try {
-                await window.KB.ulozPrirucku($("prTelo").innerHTML);
+                await window.KB.ulozPrirucku(window.KBUI.cistyHtml($("prTelo").innerHTML));
                 prepni(false);
                 postavObsah();
                 window.KBUI.toast("Příručka uložena – uvidí ji tak všichni.");

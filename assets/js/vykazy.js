@@ -949,9 +949,17 @@
        Pro český Excel: středník jako oddělovač, desetinná čárka a BOM na
        začátku. Bez BOM se rozsype diakritika, bez čárky čísla. */
 
+    /** Buňka CSV, kterou Excel nespustí jako vzorec: text začínající
+        = + - @ (nebo tabulátorem či koncem řádku) dostane apostrof.
+        Čistá čísla zůstanou – „-3,5" je záporné číslo, ne vzorec. */
+    V.bezVzorce = (value) => {
+        const text = String(value == null ? "" : value);
+        return /^[=+\-@\t\r]/.test(text) && !/^-?\d+(?:[.,]\d+)?$/.test(text) ? "'" + text : text;
+    };
+
     V.csv = (zaznamy) => {
         const bunka = (value) => {
-            const text = String(value == null ? "" : value);
+            const text = V.bezVzorce(value);
             return /[";\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
         };
         const des = (value) => String(Number(value) || 0).replace(".", ",");

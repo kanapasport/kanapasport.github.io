@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=282">
+    <link rel="stylesheet" href="assets/css/app.css?v=283">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -495,10 +495,10 @@
     <div class="prohl__pocty" id="pocty"></div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=282"></script>
-<script src="assets/js/ui.js?v=282"></script>
-<script src="assets/js/vykazy.js?v=282"></script>
-<script type="module" src="assets/js/store.js?v=282"></script>
+<script src="assets/js/taxonomy.js?v=283"></script>
+<script src="assets/js/ui.js?v=283"></script>
+<script src="assets/js/vykazy.js?v=283"></script>
+<script type="module" src="assets/js/store.js?v=283"></script>
 
 <script>
 (function () {
@@ -639,7 +639,9 @@
                 "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
         }
         const data = await soubor.arrayBuffer();
-        const pdf = await window.pdfjsLib.getDocument({ data: data }).promise;
+        /* isEvalSupported: false – pdf.js 3.x by jinak z podvrženého PDF
+           spustil JavaScript (CVE-2024-4367). Výkresy chodí zvenku. */
+        const pdf = await window.pdfjsLib.getDocument({ data: data, isEvalSupported: false }).promise;
         let strana = 1;
         if (pdf.numPages > 1) {
             const odpoved = prompt("PDF má " + pdf.numPages + " stránek. Kterou nahrát?", "1");
@@ -756,7 +758,10 @@
     function hladiny() {
         const plan = (window.KB.planySoubory || []).find(f => f.id === otevreny);
         const vlastni = (plan && Array.isArray(plan.hladiny)) ? plan.hladiny : [];
-        return [ZAKLADNI].concat(vlastni);
+        /* hlavičku plánu smí přepsat každý člen a barva jde do style="…",
+           takže projde jen jako hex */
+        return [ZAKLADNI].concat(vlastni.filter(h => h && typeof h === "object")
+            .map(h => Object.assign({}, h, { barva: window.KBUI.barva(h.barva, "") })));
     }
     const hladina = (id) => hladiny().find(h => h.id === (id || "")) || ZAKLADNI;
 
@@ -1027,7 +1032,8 @@
     function paleta() {
         const plan = (window.KB.planySoubory || []).find(f => f.id === otevreny);
         return (plan && Array.isArray(plan.paleta) && plan.paleta.length)
-            ? plan.paleta : VYCHOZI_PALETA;
+            ? plan.paleta.map(x => ({ b: window.KBUI.barva(x && x.b, "#888"), p: (x && x.p) || "" }))
+            : VYCHOZI_PALETA;
     }
     const palBarva = (i) => (paleta()[Math.min(Number(i) || 0, paleta().length - 1)] || {}).b || "#888";
     const palPopis = (i) => (paleta()[Math.min(Number(i) || 0, paleta().length - 1)] || {}).p || "";

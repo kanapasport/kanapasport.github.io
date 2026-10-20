@@ -135,13 +135,44 @@
         return { x: e.x, y: e.y, w: e.w, h: e.h };
     }
 
+    /* Tabuli s viditelností „všichni" smí přepsat každý, kdo ji vidí, a
+       pravidla hlídají jen KDO píše, ne CO. Každý prvek se proto srovná na
+       hodnoty, které umí vyrobit tabule sama: id z newId(), typ a tvar
+       z výčtu, barvy hex, čísla jako čísla. Do HTML a SVG pak nejde nic,
+       co by mohlo vyskočit z atributu. */
+    const TYPY = ["link", "ink", "arrow", "rect", "ellipse", "note", "text", "mind", "table", "image"];
+    const TVARY = ["none", "rect", "round", "pill"];
+    const ZAROVNANI = ["left", "center", "right"];
+    const STRANY = ["up", "down", "left", "right"];
+    const ID_OK = /^[\w-]{1,64}$/;
+    const jeId = (v) => typeof v === "string" && ID_OK.test(v);
+    const barvaPrvku = (v, nahradni) => (v === "none" || v === "transparent")
+        ? v : window.KBUI.barva(v, nahradni);
+
+    function srovnej(e) {
+        if (e.color != null) e.color = barvaPrvku(e.color, "#16191d");
+        if (e.fill != null) e.fill = barvaPrvku(e.fill, "");
+        if (e.stroke != null) e.stroke = barvaPrvku(e.stroke, "");
+        if (e.tcolor != null) e.tcolor = barvaPrvku(e.tcolor, "#16191d");
+        if (e.width != null) e.width = ok(Number(e.width)) ? Number(e.width) : 3;
+        if (e.size != null) e.size = ok(Number(e.size)) ? Number(e.size) : 15;
+        if (e.rows != null) e.rows = Math.min(50, Math.max(1, Math.round(Number(e.rows)) || 2));
+        if (e.cols != null) e.cols = Math.min(50, Math.max(1, Math.round(Number(e.cols)) || 2));
+        if (e.shape != null && TVARY.indexOf(e.shape) < 0) e.shape = "round";
+        if (e.align != null && ZAROVNANI.indexOf(e.align) < 0) e.align = "center";
+        if (e.dir != null && STRANY.indexOf(e.dir) < 0) e.dir = "right";
+        if (e.imageId != null && !jeId(e.imageId)) e.imageId = "";
+        if (e.cells != null && (typeof e.cells !== "object" || Array.isArray(e.cells))) e.cells = {};
+        return true;
+    }
+
     function sanitize(list) {
         return (list || []).filter(e => {
-            if (!e || !e.type) return false;
-            if (e.type === "link") return !!(e.from && e.to);
-            if (e.type === "ink") return Array.isArray(e.points) && e.points.length >= 4 && e.points.every(ok);
-            if (e.type === "arrow") return ok(e.x) && ok(e.y) && ok(e.x2) && ok(e.y2);
-            return ok(e.x) && ok(e.y) && ok(e.w) && ok(e.h);
+            if (!e || TYPY.indexOf(e.type) < 0 || !jeId(e.id)) return false;
+            if (e.type === "link") return jeId(e.from) && jeId(e.to) && srovnej(e);
+            if (e.type === "ink") return Array.isArray(e.points) && e.points.length >= 4 && e.points.every(ok) && srovnej(e);
+            if (e.type === "arrow") return ok(e.x) && ok(e.y) && ok(e.x2) && ok(e.y2) && srovnej(e);
+            return ok(e.x) && ok(e.y) && ok(e.w) && ok(e.h) && srovnej(e);
         });
     }
 
@@ -360,7 +391,7 @@
 
         if (e.type === "image") {
             return '<div class="bel bel--image' + (sel ? " is-sel" : "") + '" data-el="' + e.id + '" style="' + style + '">' +
-                '<img src="' + (S.images[e.imageId] || "") + '" alt="" draggable="false">' +
+                '<img src="' + esc(window.KBUI.bezpecnyObrazek(S.images[e.imageId])) + '" alt="" draggable="false">' +
                 (sel ? '<span class="bel__grip"></span>' : "") + "</div>";
         }
 

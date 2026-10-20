@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=282">
+    <link rel="stylesheet" href="assets/css/app.css?v=283">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -185,11 +185,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=282"></script>
-<script src="assets/js/doc.js?v=282"></script>
-<script src="assets/js/ui.js?v=282"></script>
-<script src="assets/js/vykazy.js?v=282"></script>
-<script type="module" src="assets/js/store.js?v=282"></script>
+<script src="assets/js/taxonomy.js?v=283"></script>
+<script src="assets/js/doc.js?v=283"></script>
+<script src="assets/js/ui.js?v=283"></script>
+<script src="assets/js/vykazy.js?v=283"></script>
+<script type="module" src="assets/js/store.js?v=283"></script>
 
 <script>
 (function () {
@@ -287,12 +287,13 @@
         const dlazdice = (z) => {
             const hotovo = Number(z.stav) === 1;
             const moje = smimResit(z);
+            const foto = window.KBUI.bezpecnyObrazek(z.nahled);
             return '<button type="button" class="pozn' + (hotovo ? " pozn--hotovo" : "") +
-                (z.nahled ? "" : " pozn--bezfota") +
+                (foto ? "" : " pozn--bezfota") +
                 (z.id === otevrenaPozn ? " pozn--zvyraznena" : "") +
                 (z.id === aktivniPozn ? " pozn--editace" : "") +
                 '" data-pozn="' + esc(z.id) + '">' +
-                (z.nahled ? '<span class="pozn__foto"><img src="' + z.nahled + '" alt=""></span>' : "") +
+                (foto ? '<span class="pozn__foto"><img src="' + esc(foto) + '" alt=""></span>' : "") +
                 (z.id === aktivniPozn && moje
                     ? '<span class="pozn__akce">' +
                         '<span data-pozn-akce="stav" title="' +
@@ -310,7 +311,7 @@
                 '<span class="pozn__meta">' +
                     (z.uid !== me() ? "<span>" + esc(z.jmeno || jmenoUid(z.uid)) + "</span>" : "") +
                     "<span>" + esc(kdy(z.ms)) + "</span>" +
-                    (z.obrazku ? "<span>📷 " + z.obrazku + "</span>" : "") +
+                    (Number(z.obrazku) > 0 ? "<span>📷 " + Number(z.obrazku) + "</span>" : "") +
                     ((z.komentare || []).length ? "<span>💬 " + z.komentare.length + "</span>" : "") +
                 "</span>" +
             "</button>";
@@ -395,7 +396,8 @@
             '<div style="font-size:14px;line-height:1.6;white-space:pre-wrap">' + esc(z.text || "") + "</div>" +
             '<div class="pdetail__obrazky">' +
                 (obrazky === undefined && z.obrazku ? '<span class="tiny muted">Načítám obrázky…</span>' : "") +
-                (obrazky || []).map(o => '<img src="' + o.data + '" alt="">').join("") +
+                (obrazky || []).map(o => window.KBUI.bezpecnyObrazek(o && o.data)).filter(Boolean)
+                    .map(src => '<img src="' + esc(src) + '" alt="">').join("") +
             "</div>" +
 
             '<div>' +
