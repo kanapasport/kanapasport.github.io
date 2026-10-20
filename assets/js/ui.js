@@ -759,21 +759,94 @@
     /** Úzké okno nebo dotykový displej – roletky se ovládají ťuknutím. */
     const isCompact = () => window.matchMedia("(max-width: 1120px), (hover: none)").matches;
 
-    /** Roletka ÚKOLŮ – projekty, ke kterým existují úkoly. Bere se z nového
-        seznamu úkolů; dokud není, poslouží starší úkoly z Postupu práce. */
-    function taskMenu() {
-        const names = [];
-        const zdroj = ((window.KB && window.KB.ukoly && window.KB.ukoly.length)
-            ? window.KB.ukoly : (window.KB && window.KB.tasks) || []);
-        zdroj.forEach(task => {
-            const name = (task.projekt || task.zakazka || "").trim() || "Bez projektu";
-            if (names.indexOf(name) === -1) names.push(name);
-        });
-        if (!names.length) return null;
+    /* Roletka ÚKOLY & TO-DO (Michal 20. 10. 2026: „nechci, aby se tam
+       ukázalo všechno … primárně stačí Biopharm a pak co mají lidé
+       přiřazeno k sobě"). Dřív vypisovala každou zakázku, ke které kdy
+       byl úkol. Teď:
+         MOJE ÚKOLY            počet mých otevřených
+         Moje zakázky          kde mám přiřazené otevřené úkoly, nejvíc nahoře
+         Oblíbené projekty     hvězdička ve Správě (společná pro firmu)
+         Úkoly týmu            jen manažer: kde má otevřené úkoly kdokoliv,
+                               nejvýš osm podle počtu
+         VŠECHNY PROJEKTY →    celý seznam úkolů
+       Žádný projekt tu není natvrdo, všechno jde z dat. Data chodí až po
+       vykreslení lišty – roletku dosypává refreshNav na události „ukoly",
+       „projekty-docs" a „zakazky" (oblíbené). Všechny úkoly pás jinak
+       nečte (jen moje) – manažer si je řekne, až na roletku najede
+       (nactiUkolyTymu), ať se nečtou na každé stránce zbytečně. */
+    const MAX_ZAKAZEK_TYMU = 8;
 
-        return [{ title: "VŠECHNY ÚKOLY", href: "ukoly.html" }].concat(
-            names.map(name => ({ title: name, href: "ukoly.html?zak=" + encodeURIComponent(UI.slug(name)) })));
+    function taskMenu() {
+        const KB = window.KB || {};
+        const uid = KB.currentUid ? KB.currentUid() : "";
+        const otevrene = (KB.ukoly || []).filter(u => u.stav !== "hotovo");
+        const naZakazku = (nazev) => "ukoly.html?zak=" + encodeURIComponent(UI.slug(nazev));
+        const uzVidet = new Set();          // každá zakázka v roletce jen jednou
+        const radek = (nazev, pocet) => {
+            uzVidet.add(UI.slug(nazev));
+            return { title: nazev, href: naZakazku(nazev), pocet: pocet || 0 };
+        };
+        /** Otevřené úkoly po zakázkách, nejvíc nahoře; úkol bez zakázky
+            nemá kam vést (je jen v Mých úkolech). */
+        const poZakazkach = (seznam) => {
+            const pocty = new Map();
+            seznam.forEach(u => {
+                const nazev = String(u.projekt || "").trim();
+                if (nazev) pocty.set(nazev, (pocty.get(nazev) || 0) + 1);
+            });
+            return Array.from(pocty, ([nazev, pocet]) => ({ nazev, pocet }))
+                .filter(z => !uzVidet.has(UI.slug(z.nazev)))
+                .sort((a, b) => b.pocet - a.pocet || a.nazev.localeCompare(b.nazev, "cs"))
+                .slice(0, MAX_ZAKAZEK_TYMU);
+        };
+
+        const moje = uid ? otevrene.filter(u => (u.prirazeni || []).indexOf(uid) !== -1) : [];
+        const menu = [{ title: "MOJE ÚKOLY", href: "ukoly.html?moje=1", pocet: moje.length }];
+
+        const mojeZakazky = poZakazkach(moje).map(z => radek(z.nazev, z.pocet));
+        if (mojeZakazky.length) menu.push({ sekce: "Moje zakázky", polozky: mojeZakazky });
+
+        /* Oblíbené v pořadí, jak je hvězdička seřadila; uzavřené ne.
+           Počet otevřených úkolů jen u manažera – ten má (po najetí)
+           načtené úkoly všech; zaměstnanci by číslo podle stránky
+           jednou počítalo jen jeho úkoly a jindy všechny. */
+        const manazer = UI.can("vykaz.view");
+        const vsechPocet = (nazev) => otevrene.filter(u =>
+            UI.slug(String(u.projekt || "").trim()) === UI.slug(nazev)).length;
+        const oblibene = UI.oblibeneProjekty();
+        const oblibeneProj = (KB.projektyDocs || [])
+            .filter(p => !p.uzavreno && String(p.nazev || "").trim() &&
+                oblibene.indexOf(p.id) !== -1 && !uzVidet.has(UI.slug(p.nazev)))
+            .sort((a, b) => oblibene.indexOf(a.id) - oblibene.indexOf(b.id))
+            .map(p => String(p.nazev).trim())
+            .map(nazev => radek(nazev, manazer ? vsechPocet(nazev) : 0));
+        if (oblibeneProj.length) menu.push({ sekce: "Oblíbené projekty", polozky: oblibeneProj });
+
+        /* Dokud jsou načtené jen moje úkoly, vyjde tu prázdno (všechny
+           zakázky jsou už výš) – oddíl se ukáže, až dorazí úkoly všech. */
+        if (manazer) {
+            const tym = poZakazkach(otevrene).map(z => radek(z.nazev, z.pocet));
+            if (tym.length) menu.push({ sekce: "Úkoly týmu", polozky: tym });
+        }
+
+        menu.push({ title: "VŠECHNY PROJEKTY →", href: "ukoly.html?vse=1" });
+        return menu;
     }
+
+    /* Všechny úkoly si pás řekne jen u manažera a jen když najede na
+       roletku úkolů (myš, Tab, ťuknutí). Odběr pak na stránce běží dál
+       a roletka se dosype přes událost „ukoly". */
+    let ukolyTymuChteny = false;
+    function nactiUkolyTymu(event) {
+        if (ukolyTymuChteny || !event.target || !event.target.closest ||
+            !event.target.closest("[data-ukoly-menu]")) return;
+        const KB = window.KB;
+        if (!KB || !KB.watchUkoly || !KB.currentUid || !KB.currentUid() || !UI.can("vykaz.view")) return;
+        ukolyTymuChteny = true;
+        KB.watchUkoly();
+    }
+    ["mouseover", "focusin", "touchstart"].forEach(typ =>
+        document.addEventListener(typ, nactiUkolyTymu, { passive: true }));
 
     /** Roletka PROJEKTŮ – otevřené projekty z databáze, nejdřív ty naléhavé. */
     /** Oblíbené projekty (hvězdička ve Správě) – sdílený klíč s ní. */
@@ -898,7 +971,8 @@
             const tint = item.barva ? ' style="--skup:' + item.barva + '"' : "";
             const menu = menuOf(item);
             // položka s `need` se ukáže jen tomu, kdo na ni má právo
-            const gate = item.need ? ' data-need="' + item.need + '" hidden' : "";
+            const gate = (item.need ? ' data-need="' + item.need + '" hidden' : "") +
+                (item.tasks ? " data-ukoly-menu" : "");
 
             if (!menu) {
                 return '<div class="navitem"' + gate + '><a class="' + cls + '"' + tint +
@@ -906,14 +980,25 @@
                     (item.icon ? icon(item.icon) : "") + item.title + "</a></div>";
             }
 
-            const groups = menu.map(group =>
-                '<div class="dropdown__group">' +
+            /* Počet otevřených úkolů u řádku roletky (Úkoly & TO-DO). */
+            const pocet = (n) => n ? '<span class="dropdown__pocet">' + esc(n) + "</span>" : "";
+            const groups = menu.map(group => group.sekce
+                /* oddíl = drobný popisek a pod ním řádky (zakázky u úkolů) */
+                ? '<div class="dropdown__group dropdown__group--sekce">' +
+                    '<span class="dropdown__sekce">' + esc(group.sekce) + "</span>" +
+                    (group.polozky || []).map(p =>
+                        '<a class="dropdown__radek" href="' + esc(p.href) + '">' +
+                            '<span class="dropdown__radek-nazev">' + esc(p.title) + "</span>" +
+                            pocet(p.pocet) + "</a>").join("") +
+                  "</div>"
+                : '<div class="dropdown__group">' +
                     /* Názvy v roletce chodí z databáze (zakázky u úkolů, náplň
                        milníků) a přejmenovat je smí kdokoliv přihlášený – bez
                        ošetření by si tudy šlo podstrčit skript do lišty, tedy
                        na každou stránku webu. */
                     (group.href
                         ? '<a class="dropdown__title" href="' + esc(group.href) + '">' + esc(group.title) +
+                          pocet(group.pocet) +
                           ((group.children || []).length ? '<span class="dropdown__more">›</span>' : "") + "</a>"
                         : '<span class="dropdown__title">' + esc(group.title) + "</span>") +
                     ((group.children || []).length
@@ -1128,7 +1213,9 @@
                         '<div class="appbar__user" data-userbox></div>' +
                     "</div>" +
                     '<a class="appbar__logo" href="index.html" aria-label="Domů">' +
-                        '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa">' +
+                        // na telefonu značka a nápis vedle sebe, stejně jako v pásu
+                        '<picture><source media="(max-width: 600px)" srcset="assets/logo-pas.png">' +
+                        '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa"></picture>' +
                     "</a>" +
                     toolsHtml() +
                 "</div></div>" +
@@ -1163,6 +1250,8 @@
             window.KB.on("tasks", refreshNav);
             window.KB.on("ukoly", () => { refreshNav(); renderMujDen(); });
             window.KB.on("projekty-docs", refreshNav);
+            // oblíbené projekty v roletce úkolů leží v číselníku zakázek
+            window.KB.on("zakazky", refreshNav);
             window.KB.on("milniky", refreshNav);
             window.KB.on("vykazy", () => { renderMujDen();
                 /* hlídka smí rozhodnout až nad skutečnými záznamy – emit
@@ -1182,16 +1271,25 @@
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
             window.KB.on("auta", renderAuta);
         }
-        document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); renderQuick(); });
+        // roletka úkolů je pro manažera jiná (Úkoly týmu) – po změně role / náhledu znovu
+        document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); renderQuick(); refreshNav(); });
     };
 
-    /** Překreslí navigaci (obsah roletek se bere z databáze). */
+    /** Překreslí navigaci (obsah roletek se bere z databáze). Roletka
+        otevřená ťuknutím zůstane otevřená – data se do ní dosypávají
+        i ve chvíli, kdy na ni člověk kouká (úkoly týmu u manažera). */
     function refreshNav() {
         const active = lastNav.active || location.pathname.split("/").pop() || "index.html";
         const nav = document.querySelector(".appbar__nav");
         if (!nav) return;
+        const otevrena = nav.querySelector(".navitem.is-open[data-menu]");
+        const index = otevrena ? String(otevrena.dataset.menu).replace(/\D/g, "") : "";
         nav.outerHTML = navHtml(active);
         bindNav();
+        if (index) {
+            const znovu = document.querySelector('.appbar__nav .navitem[data-menu="' + index + '"]');
+            if (znovu) znovu.classList.add("is-open");
+        }
         UI.paintUser();
     }
 
@@ -1206,15 +1304,16 @@
        nepotřeboval být rolovatelný … kliknout a vyjede mi ikonka stránek,
        co jsou v té skupince". Proto:
          nahoře  logo, hledání (jen kde je), + Nový výkaz, zkrácené Stats,
-         střed   skupiny – klik vysune jejich stránky; otevřená je vždy
-                 jen jedna a pás si ji pamatuje (každý prohlížeč zvlášť,
-                 telefon zvlášť od PC),
+         střed   skupiny – klik vysune jejich stránky; každá zůstane
+                 otevřená nebo zavřená, jak ji člověk nechal, a pás si to
+                 pamatuje (každý prohlížeč zvlášť, telefon zvlášť od PC),
          dole    jméno, role, Odhlásit a stav spojení.
        Práva nesou položky samy (`need` = data-need, jinak jen přihlášený –
        stejné jako dřív); skupina, ve které nic nezbude, se neukáže
        (srovnejSkupiny). Odznak Quick TO-DO se na zavřené skupině ukáže jako
-       součet. Na desktopu se při nízkém okně roluje jen prostřední část se
-       skupinami – logo, Nový výkaz a Odhlásit zůstanou vždy vidět. */
+       součet. Když se pás do okna nevejde (víc otevřených skupin, nízké
+       okno), roluje se jen prostřední část se skupinami – logo, Nový
+       výkaz a Odhlásit zůstanou vždy vidět. */
 
     const TELEFON = "(max-width: 600px)";
     const jeTelefon = () => window.matchMedia(TELEFON).matches;
@@ -1344,44 +1443,84 @@
         "</div>";
     }
 
-    /* Která skupina je otevřená – pamatuje se v prohlížeči (volba vzhledu,
-       odhlášení ji nemaže). Telefon má vlastní klíč: tam je výchozí
-       „Stránky webu", na PC „Můj den" nebo skupina otevřené stránky. */
-    const SKUPINA_KEY = "kb-pas-skupina";
-    const klicSkupiny = () => SKUPINA_KEY + (jeTelefon() ? "-telefon" : "");
-    let skupinaOtevrena = "";
+    /* Které skupiny jsou otevřené – každá zvlášť (Michal 20. 10. 2026:
+       „pokud si v levém pásu rozkliknu nějakou skupinu, tak ať je klidně
+       rozkliknutá"; dřív otevření jedné zavřelo ostatní). Pamatuje se
+       v prohlížeči jako { id: true/false } jen u skupin, na které člověk
+       klikl (volba vzhledu, odhlášení ji nemaže); telefon má vlastní
+       klíč. Skupina, na kterou ještě nesáhl, je otevřená, když je výchozí
+       (na PC „Můj den", na telefonu „Stránky webu") nebo když je v ní
+       stránka, na které je. Starý klíč kb-pas-skupina (jedna otevřená
+       skupina nebo „-" = všechny zavřené) se při prvním čtení převede. */
+    const SKUPINY_KEY = "kb-pas-skupiny";
+    const STARY_SKUPINA_KEY = "kb-pas-skupina";
+    const priponaKlice = () => (jeTelefon() ? "-telefon" : "");
+    const idSkupin = () => Array.from(document.querySelectorAll(".siderail [data-skupina]"))
+        .map(sk => sk.dataset.skupina);
 
-    function vychoziSkupina() {
-        let ulozena = null;
-        try { ulozena = localStorage.getItem(klicSkupiny()); } catch (err) { /* soukromý režim */ }
-        if (ulozena === "-") return "";
-        // z prohlížeče jen holé id (jde do selektoru) a jen skupina, která v pásu je
-        const id = String(ulozena || "").replace(/[^a-z]/g, "");
-        if (id && document.querySelector('.siderail [data-skupina="' + id + '"]')) return id;
-        if (jeTelefon()) return "stranky";
-        const aktivni = document.querySelector(".siderail .passkup--aktivni:not(.passkup--telefon)");
-        return aktivni ? aktivni.dataset.skupina : "den";
+    function ulozSkupiny(stav) {
+        try { localStorage.setItem(SKUPINY_KEY + priponaKlice(), JSON.stringify(stav)); }
+        catch (err) { /* soukromý režim – zůstane jen do obnovení stránky */ }
     }
 
-    function otevriSkupinu(id, ulozit) {
-        skupinaOtevrena = id || "";
-        document.querySelectorAll(".siderail [data-skupina]").forEach(sk => {
-            const otevrit = !!id && sk.dataset.skupina === id;
-            const hlava = sk.querySelector("[data-skupina-prepni]");
-            const polozky = sk.querySelector(".passkup__polozky");
-            if (hlava) hlava.setAttribute("aria-expanded", String(otevrit));
-            if (polozky) polozky.hidden = !otevrit;
-            sk.classList.toggle("je-otevrena", otevrit);
-        });
-        if (ulozit) {
-            try { localStorage.setItem(klicSkupiny(), id || "-"); } catch (err) { /* soukromý režim */ }
+    function nactiSkupiny() {
+        let ulozeno = null;
+        try { ulozeno = JSON.parse(localStorage.getItem(SKUPINY_KEY + priponaKlice()) || "null"); }
+        catch (err) { ulozeno = null; }
+        if (ulozeno && typeof ulozeno === "object" && !Array.isArray(ulozeno)) {
+            // z prohlížeče jen skupiny, které v pásu jsou, a jen ano/ne
+            const stav = {};
+            idSkupin().forEach(id => { if (typeof ulozeno[id] === "boolean") stav[id] = ulozeno[id]; });
+            return stav;
         }
+        let stary = null;
+        try { stary = localStorage.getItem(STARY_SKUPINA_KEY + priponaKlice()); } catch (err) { /* soukromý režim */ }
+        if (stary === null) return {};
+        const stav = {};
+        const id = String(stary).replace(/[^a-z]/g, "");
+        if (stary === "-") idSkupin().forEach(sk => { stav[sk] = false; });
+        else if (id && idSkupin().indexOf(id) !== -1) stav[id] = true;
+        ulozSkupiny(stav);
+        try { localStorage.removeItem(STARY_SKUPINA_KEY + priponaKlice()); } catch (err) { /* nevadí */ }
+        return stav;
+    }
+
+    /** Výslovná volba vyhrává; jinak výchozí skupina a skupina otevřené stránky. */
+    function maBytOtevrena(sk, stav) {
+        const id = sk.dataset.skupina;
+        if (typeof stav[id] === "boolean") return stav[id];
+        if (id === (jeTelefon() ? "stranky" : "den")) return true;
+        return sk.classList.contains("passkup--aktivni") && !sk.classList.contains("passkup--telefon");
+    }
+
+    function nastavSkupinu(sk, otevrit) {
+        const hlava = sk.querySelector("[data-skupina-prepni]");
+        const polozky = sk.querySelector(".passkup__polozky");
+        if (hlava) hlava.setAttribute("aria-expanded", String(otevrit));
+        if (polozky) polozky.hidden = !otevrit;
+        sk.classList.toggle("je-otevrena", otevrit);
+    }
+
+    /** Rozloží skupiny podle zapamatovaného stavu – po postavení pásu a při
+        přechodu mezi šířkou telefonu a PC (každá má svůj klíč). */
+    function rozlozSkupiny() {
+        const stav = nactiSkupiny();
+        document.querySelectorAll(".siderail [data-skupina]").forEach(sk =>
+            nastavSkupinu(sk, maBytOtevrena(sk, stav)));
         srovnejSkupiny();
     }
 
+    /** Střed pásu roluje – když pod spodním krajem ještě něco je, kraj se
+        rozplyne. Bez toho to na telefonu (bez posuvníku) vypadalo, že
+        seznam končí a další skupiny zmizely. */
+    function oznacDalsiSkupiny() {
+        const sk = document.querySelector(".siderail__skupiny");
+        if (sk) sk.classList.toggle("ma-dalsi", sk.scrollTop + sk.clientHeight < sk.scrollHeight - 2);
+    }
+
     /** Prázdné skupiny pryč, součty odznaků na zavřených skupinách. Volá se
-        po každém přepočtu práv (paintUser, `poPravech`) a po novém počtu vzkazů. */
-    function srovnejSkupiny(poPravech) {
+        po každém přepočtu práv (paintUser) a po novém počtu vzkazů. */
+    function srovnejSkupiny() {
         // paintUser běží i dřív, než mountNav pás postaví – pak není co srovnávat
         if (!document.querySelector(".siderail")) return;
         document.querySelectorAll(".siderail [data-skupina]").forEach(sk => {
@@ -1397,21 +1536,20 @@
                 el.hidden = !soucet || sk.classList.contains("je-otevrena");
             }
         });
-        /* Zapamatovaná skupina, na kterou člověk nemá právo (Peníze v náhledu
-           „Zobrazit jako" nebo po změně role) – místo prázdna se otevře
-           výchozí. Rozhoduje se až nad skutečnou rolí: při postavení pásu
-           jsou všechny položky ještě skryté a role se bere z prohlížeče. */
-        if (!poPravech || !window.KB_USER || !((window.KB && window.KB.users) || []).length) return;
-        const otevrena = skupinaOtevrena &&
-            document.querySelector('.siderail [data-skupina="' + skupinaOtevrena + '"]');
-        if (otevrena && otevrena.hidden && skupinaOtevrena !== "den") otevriSkupinu("den", false);
+        oznacDalsiSkupiny();
     }
 
+    /* Klik na hlavičku přepne jen tu jednu skupinu; ostatní zůstanou, jak jsou. */
     document.addEventListener("click", (event) => {
         const hlava = event.target.closest && event.target.closest("[data-skupina-prepni]");
-        if (!hlava) return;
-        const id = hlava.dataset.skupinaPrepni;
-        otevriSkupinu(hlava.getAttribute("aria-expanded") === "true" ? "" : id, true);
+        const sk = hlava && hlava.closest(".siderail [data-skupina]");
+        if (!sk) return;
+        const otevrit = hlava.getAttribute("aria-expanded") !== "true";
+        nastavSkupinu(sk, otevrit);
+        const stav = nactiSkupiny();
+        stav[sk.dataset.skupina] = otevrit;
+        ulozSkupiny(stav);
+        srovnejSkupiny();
     });
 
     function mountRail() {
@@ -1421,8 +1559,11 @@
         rail.id = "kbPas";
         rail.setAttribute("aria-label", "Panel akcí");
         rail.innerHTML =
+            /* Logo vedle sebe: vlevo značka, vpravo PASPORT / Kaňa zarovnané
+               doleva (Michal 20. 10. 2026). Obrázek je složený z dílů
+               původního loga – stejné písmo (assets/logo-pas.png). */
             '<a class="siderail__logo" href="index.html" aria-label="Domů">' +
-                '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa"></a>' +
+                '<img src="assets/logo-pas.png" alt="Pasport Kaňa" width="534" height="120"></a>' +
             '<div data-rail-search></div>' +
             // hlavní akce dne – vždy nahoře pod logem, nikdy pod okrajem
             '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
@@ -1440,7 +1581,12 @@
                 '<div class="siderail__stav" data-cloud-status>Připojuji…</div>' +
             "</div>";
         document.body.insertBefore(rail, document.body.firstChild);
-        otevriSkupinu(vychoziSkupina(), false);
+        rozlozSkupiny();
+        // rozplynutý kraj středu: při rolování i při změně jeho výšky (okno, Stats)
+        const stred = rail.querySelector(".siderail__skupiny");
+        stred.addEventListener("scroll", oznacDalsiSkupiny, { passive: true });
+        if (window.ResizeObserver) new ResizeObserver(oznacDalsiSkupiny).observe(stred);
+        else window.addEventListener("resize", oznacDalsiSkupiny);
     }
 
     /* ------------------------------------------- spodní lišta (telefon) ---
@@ -1490,7 +1636,7 @@
     try {
         window.matchMedia(TELEFON).addEventListener("change", () => {
             placeNahled();
-            if (document.querySelector(".siderail")) otevriSkupinu(vychoziSkupina(), false);
+            if (document.querySelector(".siderail")) rozlozSkupiny();
         });
     } catch (err) { /* starší prohlížeč – zůstane, jak se to vykreslilo */ }
 
