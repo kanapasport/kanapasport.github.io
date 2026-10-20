@@ -8,6 +8,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=285">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -351,7 +352,8 @@
         </div>
 
         <div id="tabulkaWrap" style="overflow-x:auto">
-            <table id="tabulka" class="vyk"></table>
+            <!-- .kt = na telefonu se řádky skládají do karet (nabidka.css) -->
+            <table id="tabulka" class="vyk kt"></table>
         </div>
     </div>
 </main>
@@ -575,6 +577,7 @@
 
 <script src="assets/js/taxonomy.js?v=285"></script>
 <script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/nabidka.js?v=285"></script>
 <script src="assets/js/vykazy.js?v=285"></script>
 <script type="module" src="assets/js/store.js?v=285"></script>
 
@@ -3935,10 +3938,12 @@
         /* Sloupce s penězi se tomu, kdo je nemá vidět, úplně vynechají –
            neschovávají se, aby v HTML vůbec nebyly. Kdo je vidí, má o dva
            sloupce víc; manažer navíc sloupec „Kdo". */
-        const sloupcu = 9 + (spravce ? 1 : 0) + (penize ? 2 : 0);
+        /* Manažer má navíc sloupec zaškrtávátek pro hromadné akce. */
+        const sloupcu = 9 + (spravce ? 2 : 0) + (penize ? 2 : 0);
 
         $("tabulka").innerHTML =
             "<thead><tr>" +
+                (spravce ? '<th class="kt-vyber" style="width:34px">' + vyberZapisu.boxVse() + "</th>" : "") +
                 (spravce ? "<th>Kdo</th>" : "") +
                 "<th>Úkol</th><th>Projekt</th><th>Firma</th>" +
                 "<th>Druh</th><th>Patro</th><th>Tech.</th><th>Čas</th>" +
@@ -3948,7 +3953,7 @@
             "</tr></thead><tbody>" +
             Array.from(dny.entries()).map(([datum, radky]) => {
                 const den = V.soucty(radky);
-                return '<tr class="vyk__den"><td colspan="' + sloupcu + '">' +
+                return '<tr class="vyk__den kt-predel"><td colspan="' + sloupcu + '">' +
                         "<b>" + esc(V.czDatum(datum)) + "</b>" +
                         "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
                             (penize ? " · <span class=\"tajne\">" + V.kc(den.castka) + "</span><span class=\"tajne__zastup\">•••</span>" : "") + "</span>" +
@@ -3962,11 +3967,12 @@
            Pod hodnotami se pak ukáže, jak se mezi ně práce dělí – bez toho
            by se z výkazu nedalo poznat, čím je která buňka plnění naplněná.
            Budova (a celé názvy technologií) jsou v bublině, ať řádek neroste. */
-        function osaBunka(hodnota, podilText, titulek) {
+        function osaBunka(hodnota, podilText, titulek, popisek) {
             const casti = V.casti(hodnota);
             const podily = V.podily(podilText, casti.length || 1);
             const pozn = casti.length > 1 ? podily.join(" / ") + " %" : "";
-            return "<td" + (titulek ? ' title="' + esc(titulek) + '"' : "") + ">" +
+            return "<td" + (titulek ? ' title="' + esc(titulek) + '"' : "") +
+                (popisek && hodnota ? ' data-l="' + esc(popisek) + '"' : "") + ">" +
                 esc(hodnota || "") +
                 (pozn ? '<span class="vyk__pozn">' + esc(pozn) + "</span>" : "") +
             "</td>";
@@ -3986,35 +3992,39 @@
             if (z.obed) navic.push("oběd");
             if (Number(z.km)) navic.push(Number(z.km) + " km");
 
-            return '<tr data-zid="' + esc(z.id || "") + '">' +
-                (spravce ? "<td>" + esc(V.osobaText(z)) + "</td>" : "") +
+            return '<tr data-zid="' + esc(z.id || "") + '"' + (spravce ? ' class="kt-vybiratelny"' : "") + ">" +
+                (spravce ? '<td class="kt-vyber">' + vyberZapisu.box(z.id || "",
+                    V.czDatum(z.datum || "") + " " + (z.nazev || z.zakazka || "")) + "</td>" : "") +
+                (spravce ? '<td data-l="Kdo">' + esc(V.osobaText(z)) + "</td>" : "") +
                 /* Popis říká, do čeho zápis spadá; jak se jmenuje úkol,
                    na který se to účtuje, je v bublině. */
-                '<td class="vyk__nazev"' + (ukolNazev(z)
+                '<td class="vyk__nazev kt-hlavni"' + (ukolNazev(z)
                     ? ' title="' + esc("Úkol: " + ukolNazev(z)) + '"' : "") + ">" +
                     esc(z.nazev || "") +
                     (jeVypomoc(z) ? ' <span class="tag" title="Hodiny na úkolu, který má přiřazený někdo jiný" ' +
                         'style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">výpomoc</span>' : "") +
                     (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
-                "<td>" + esc(z.zakazka || "") +
+                '<td data-l="Projekt">' + esc(z.zakazka || "") +
                     (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
-                "<td>" + esc(z.firma || "") + "</td>" +
-                "<td>" + esc(z.cinnost || "") + "</td>" +
-                osaBunka(z.patro, z.podilPatra, z.budova) +
-                osaBunka(z.technologie, z.podilTech, V.techLabel(z.technologie)) +
-                "<td>" + esc(z.od || z.do ? (z.od || "") + "–" + (z.do || "") : "bez času") +
+                (z.firma ? '<td data-l="Firma">' + esc(z.firma) + "</td>" : "<td></td>") +
+                (z.cinnost ? '<td data-l="Druh">' + esc(z.cinnost) + "</td>" : "<td></td>") +
+                osaBunka(z.patro, z.podilPatra, z.budova, "Patro") +
+                osaBunka(z.technologie, z.podilTech, V.techLabel(z.technologie), "Tech.") +
+                '<td data-l="Čas">' + esc(z.od || z.do ? (z.od || "") + "–" + (z.do || "") : "bez času") +
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
-                '<td class="vyk__num">' + V.hod(z.hodiny) + "</td>" +
+                '<td class="vyk__num" data-l="Hodin">' + esc(V.hod(z.hodiny)) + "</td>" +
                 (penize
-                    ? '<td class="vyk__num">' + "<span class=\"tajne\">" + V.cislo(z.sazba) + "</span><span class=\"tajne__zastup\">•••</span>" + "</td>" +
-                      '<td class="vyk__num"><b>' + "<span class=\"tajne\">" + V.kc(z.castka) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
+                    ? '<td class="vyk__num" data-l="Sazba">' + "<span class=\"tajne\">" + esc(V.cislo(z.sazba)) + "</span><span class=\"tajne__zastup\">•••</span>" + "</td>" +
+                      '<td class="vyk__num" data-l="Částka"><b>' + "<span class=\"tajne\">" + esc(V.kc(z.castka)) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
                     : "") +
-                '<td class="vyk__akce">' +
+                '<td class="vyk__akce kt-akce">' +
                     /* Vlastní záznam jde opravit v den zápisu a u budoucích
                        dnů až do jejich příchodu. Potom opravy dělá manažer –
                        ale člověk mu musí mít jak říct, co je špatně, takže
                        místo Upravit nastoupí Nahlásit chybu. Bez toho by
-                       okno nahlášení nešlo vůbec otevřít (13. 10. 2026). */
+                       okno nahlášení nešlo vůbec otevřít (13. 10. 2026).
+                       Hlavní akce zůstává v řádku, ostatní (Otevřít úkol,
+                       filtry, Smazat) jsou v nabídce „⋯“ a na pravém tlačítku. */
                     (smimUpravit(z)
                         ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(z.id) + '">Upravit</button>'
                         : (z.uid === mojeUid()
@@ -4022,6 +4032,8 @@
                                   esc(z.id) + '" title="Napsat manažerům, co je na zápisu špatně">' +
                                   "Nahlásit chybu</button>"
                             : "")) +
+                    window.KBNabidka.tlacitko("Další akce: " + V.czDatum(z.datum || "") + " " +
+                        (z.nazev || z.zakazka || "")) +
                 "</td>" +
             "</tr>";
         }
@@ -4337,8 +4349,31 @@
         return kroky;
     }
 
-    async function smazZapis() {
-        const z = (window.KB.vykazy || []).find(v => v.id === editId);
+    /**
+     * Jádro smazání jednoho zápisu – bez ptaní, chyba vyletí ven. Volá ho
+     * smazání z okna úprav, z nabídky řádku i hromadná lišta (manažer).
+     */
+    async function odstranZapis(z) {
+        // s absencí zmizí i její událost, ať v kalendáři nezůstane viset
+        const udalost = udalostZapisu(z.id, z);
+        /* Den z vícedenní dovolené: kalendář se srovná podle dnů, které
+           zbyly. Rychlý zápis a starší období jako dřív. Plán se dělá
+           PŘED smazáním, dokud je záznam ještě v seznamu. */
+        const plan = jeAbsence(z.zakazka || "") && z.zdroj !== "panel"
+            ? planKalendareAbsenci(z.uid, [z.zakazka], [z.datum], z.id, null) : null;
+        await window.KB.deleteVykaz(z.id);
+        if (plan) {
+            for (const krok of plan) await krok().catch(err => console.warn("Kalendář:", err));
+        } else if (udalost) {
+            await window.KB.deleteUdalost(udalost.id).catch(() => {});
+        }
+    }
+
+    /* `id` přijde z nabídky řádku; z tlačítka v okně úprav přijde událost
+       kliku, a pak platí upravovaný zápis (editId). */
+    async function smazZapis(id) {
+        const cilId = typeof id === "string" ? id : editId;
+        const z = (window.KB.vykazy || []).find(v => v.id === cilId);
         if (!z) return;
         /* Okno mohlo zůstat otevřené, zatímco manažer měsíc uzavřel. */
         if (!smimSmazat(z)) {
@@ -4348,19 +4383,7 @@
         if (!confirm("Opravdu smazat záznam „" + (z.nazev || "") + "“ ze dne " +
                      V.czDatum(z.datum) + "?")) return;
         try {
-            // s absencí zmizí i její událost, ať v kalendáři nezůstane viset
-            const udalost = udalostZapisu(editId, z);
-            /* Den z vícedenní dovolené: kalendář se srovná podle dnů, které
-               zbyly. Rychlý zápis a starší období jako dřív. Plán se dělá
-               PŘED smazáním, dokud je záznam ještě v seznamu. */
-            const plan = jeAbsence(z.zakazka || "") && z.zdroj !== "panel"
-                ? planKalendareAbsenci(z.uid, [z.zakazka], [z.datum], z.id, null) : null;
-            await window.KB.deleteVykaz(editId);
-            if (plan) {
-                for (const krok of plan) await krok().catch(err => console.warn("Kalendář:", err));
-            } else if (udalost) {
-                await window.KB.deleteUdalost(udalost.id).catch(() => {});
-            }
+            await odstranZapis(z);
             $("editOverlay").hidden = true;
             window.KBUI.toast("Záznam smazán.");
         } catch (err) {
@@ -4368,6 +4391,99 @@
             window.KBUI.toast("Smazání selhalo.", "error");
         }
     }
+
+    /* ================================================ NABÍDKA ŘÁDKU ==== */
+    /* Pravé tlačítko, „⋯“ a podržení prstem nad zápisem v tabulce. Jen to,
+       co stránka uměla už dřív: úprava a nahlášení chyby se stejnými
+       hlídkami (smimUpravit, smimSmazat), proklik na úkol a filtry. */
+
+    function filtrujNa(klic, hodnota) {
+        filtr[klic] = hodnota;
+        render();
+    }
+
+    /* Jako příchod z „Zobrazit výkazy" v Úkolech (?ukolFiltr=): všichni
+       lidé a celé období, jinak by výchozí filtr schoval půlku zápisů. */
+    function vykazyUkolu(id) {
+        filtr.ukolId = id;
+        filtr.uid = "";
+        osobaNastavena = true;
+        document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+        const vse = document.querySelector('[data-obdobi="vse"]');
+        if (vse) vse.classList.add("chip--active");
+        nastavObdobi("vse");        // render si zavolá samo
+    }
+
+    function jenDen(datum) {
+        filtr.od = datum;
+        filtr.do = datum;
+        $("fOd").value = datum;
+        $("fDo").value = datum;
+        document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+        dotahniStarsi(filtr.od, filtr.do);
+        render();
+    }
+
+    window.KBNabidka.pripoj((cil) => {
+        const tr = cil.closest && cil.closest("tr[data-zid]");
+        if (!tr || !$("tabulka").contains(tr)) return null;
+        const z = (window.KB.vykazy || []).find(v => v.id === tr.getAttribute("data-zid"));
+        if (!z) return null;
+        const spravce = window.KBUI.can("vykaz.view");
+        const u = z.ukolId ? (window.KB.ukoly || []).find(x => x.id === z.ukolId) : null;
+        const projektVNabidce = !!z.zakazka && nabidkaProjektu().indexOf(z.zakazka) !== -1;
+        const clovekVNabidce = spravce && !!z.uid && V.lide().some(x => x.id === z.uid);
+        return {
+            nadpis: V.czDatum(z.datum || "") + " · " + (z.nazev || z.zakazka || "zápis"),
+            radek: tr,
+            polozky: [
+                smimUpravit(z) && { text: "Upravit…", ikona: "upravit", fn: () => otevriUpravu(z.id) },
+                !smimUpravit(z) && z.uid === mojeUid() && {
+                    text: "Nahlásit chybu…", ikona: "vlajka", fn: () => otevriOpravu(z) },
+                /* přes ?zak= – výchozí pohled „Moje úkoly" by cizí úkol neukázal */
+                u && { text: "Otevřít úkol", ikona: "otevrit",
+                    odkaz: "ukoly.html?" + (u.projekt ? "zak=" + encodeURIComponent(window.KBUI.slug(u.projekt)) + "&" : "") +
+                        "otevri=" + encodeURIComponent(u.id) },
+                u && spravce && filtr.ukolId !== u.id && {
+                    text: "Všechny výkazy tohoto úkolu", ikona: "lupa", fn: () => vykazyUkolu(u.id) },
+                projektVNabidce && filtr.zakazka !== z.zakazka && {
+                    text: "Jen projekt " + z.zakazka, ikona: "filtr", oddel: true,
+                    fn: () => filtrujNa("zakazka", z.zakazka) },
+                clovekVNabidce && filtr.uid !== z.uid && {
+                    text: "Jen " + V.osobaText(z), ikona: "clovek", fn: () => filtrujNa("uid", z.uid) },
+                z.datum && !(filtr.od === z.datum && filtr.do === z.datum) && {
+                    text: "Jen den " + V.czDatum(z.datum), ikona: "kalendar", fn: () => jenDen(z.datum) },
+                smimSmazat(z) && { text: "Smazat záznam…", ikona: "smazat", nebezpeci: true,
+                    fn: () => smazZapis(z.id) }
+            ]
+        };
+    });
+
+    /* Hromadné mazání (jen manažer): zaškrtávátko v řádku, Shift = rozsah.
+       Smyčka přes stejné jádro jako smazání jednoho zápisu, i s kalendářem. */
+    const vyberZapisu = window.KBNabidka.vyber({
+        koren: () => $("tabulka"),
+        nazev: ["zápis", "zápisy", "zápisů"],
+        zap: () => window.KBUI.can("vykaz.view"),
+        akce: (ids) => {
+            const zapisy = ids.map(id => (window.KB.vykazy || []).find(v => v.id === id)).filter(Boolean);
+            const smazatelne = zapisy.filter(smimSmazat);
+            const hodin = smazatelne.reduce((n, z) => n + (Number(z.hodiny) || 0), 0);
+            return [
+                smazatelne.length && { text: "Smazat (" + smazatelne.length + ")", ikona: "smazat", nebezpeci: true,
+                    fn: () => window.KBNabidka.hromadne(smazatelne.map(z => z.id), {
+                        otazka: "Opravdu smazat " + V.pocet(smazatelne.length, ["zápis", "zápisy", "zápisů"]) +
+                            " (" + V.hod(hodin) + ")? Absence zmizí i z kalendáře. Nedá se to vrátit.",
+                        krok: async (id) => {
+                            const z = (window.KB.vykazy || []).find(v => v.id === id);
+                            if (!z || !smimSmazat(z)) return false;
+                            await odstranZapis(z);
+                            return true;
+                        },
+                        hotovo: "Smazáno", proc: "už neexistuje nebo nejde smazat" }) }
+            ];
+        }
+    });
 
     /* ========================================================= START ==== */
 

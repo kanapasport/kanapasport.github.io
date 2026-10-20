@@ -8,6 +8,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Úkoly – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=285">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -90,6 +91,16 @@
         .lidevyber label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
             border: 1px solid var(--line); border-radius: 99px; font-size: 12.5px; cursor: pointer; background: var(--surface); }
         .lidevyber label:has(input:checked) { background: var(--accent-tint); border-color: var(--accent-lt); color: var(--accent); font-weight: 700; }
+
+        /* Telefon: hlavička úkolu nese zaškrtávátko, název, Zapsat výkaz, postup
+           a „⋯" (44 px). Pruh postupu se zúží, ať název nezůstane ve sloupečku
+           po slovech. Musí stát až za základními pravidly .ukol__prubeh/.ukol__pct. */
+        @media (max-width: 599.98px) {
+            .ukol__hlava { gap: 6px; padding: 10px 6px 10px 10px; flex-wrap: wrap; }
+            .ukol__hlava .grow { min-width: 0; flex: 1 1 160px; }
+            .ukol__prubeh { width: 44px; }
+            .ukol__pct { width: auto; min-width: 36px; }
+        }
     </style>
 </head>
 <body>
@@ -198,6 +209,7 @@
 
 <script src="assets/js/taxonomy.js?v=285"></script>
 <script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/nabidka.js?v=285"></script>
 <script src="assets/js/vykazy.js?v=285"></script>
 <script type="module" src="assets/js/store.js?v=285"></script>
 
@@ -234,11 +246,8 @@
     const CHECK = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor">' +
         '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M5 13l4 4L19 7"/></svg>';
 
-    /* Hodiny do tlačítka „Zapsat výkaz" v hlavičce úkolu. */
-    const LUPA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
-        '<circle cx="11" cy="11" r="6" stroke-width="2"/>' +
-        '<path stroke-linecap="round" stroke-width="2" d="M20 20l-4.5-4.5"/></svg>';
-
+    /* Hodiny do tlačítka „Zapsat výkaz" v hlavičce úkolu. (Lupa pro
+       „Zobrazit výkazy" odešla s tlačítkem do nabídky „⋯".) */
     const HODINY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
         '<circle cx="12" cy="12" r="9" stroke-width="2"/>' +
         '<path stroke-linecap="round" stroke-width="2" d="M12 7v5l3.5 2"/></svg>';
@@ -492,8 +501,10 @@
         const otevreny = otevrene.has(u.id);
         const meta = [u.druh, u.technologie, u.budova, u.patro].filter(Boolean).join(" · ");
 
-        return '<div class="ukol' + (u.stav === "hotovo" ? " ukol--hotovo" : "") + '" id="ukol-' + esc(u.id) + '">' +
+        return '<div class="ukol' + (u.stav === "hotovo" ? " ukol--hotovo" : "") + '" id="ukol-' + esc(u.id) + '"' +
+                ' data-ukol="' + esc(u.id) + '" data-vyber-radek>' +
             '<div class="ukol__hlava" data-rozbal="' + esc(u.id) + '">' +
+                vyber.box(u.id, u.nazev || "") +
                 '<div class="grow">' +
                     '<div class="ukol__radek">' +
                         '<span class="ukol__nazev">' + esc(u.nazev) + "</span>" +
@@ -514,15 +525,11 @@
                         '" title="Zapsat odpracovaný čas na tenhle úkol">' + HODINY +
                         "<span>Zapsat výkaz</span></a>"
                     : "") +
-                /* Manažer si vedle zápisu rovnou otevře, co už se na úkol
-                   zapsalo – bez lovení ve filtrech výkazů. */
-                (window.KBUI.can("vykaz.view")
-                    ? '<a class="ukol__vykaz ukol__vykaz--cist" href="vykazy.html?ukolFiltr=' +
-                        encodeURIComponent(u.id) + '" title="Zobrazit výkazy zapsané na tenhle úkol">' +
-                        LUPA + "<span>Zobrazit výkazy</span></a>"
-                    : "") +
-                '<span class="ukol__prubeh"><i style="width:' + pct + '%"></i></span>' +
-                '<span class="ukol__pct">' + pct + " %</span>" +
+                /* „Zobrazit výkazy", Upravit, Označit hotové, Smazat a další jsou
+                   v nabídce „⋯" na konci hlavičky (i na pravém tlačítku). */
+                '<span class="ukol__prubeh"><i style="width:' + esc(pct) + '%"></i></span>' +
+                '<span class="ukol__pct">' + esc(pct) + " %</span>" +
+                window.KBNabidka.tlacitko("Další akce: " + (u.nazev || "úkol")) +
             "</div>" +
             (otevreny
                 ? '<div class="ukol__telo">' +
@@ -542,9 +549,6 @@
                         '<span class="row" style="gap:8px">' +
                         // „Zapsat výkaz" je nahoře v hlavičce, ať se kvůli
                         // němu nemusí úkol rozbalovat – tady už podruhé není
-                        (window.KBUI.isAdmin() && u.stav === "hotovo" && u.potvrzeno !== true
-                            ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
-                                esc(u.id) + '">Potvrdit hotové</button>' : "") +
                         /* Historie posunů procent je manažerská věc – kdo kdy
                            co posunul, zaměstnanci do toho nic není
                            (přání Michala 1. 9. 2026). */
@@ -553,10 +557,14 @@
                                 esc(u.id) + '">' +
                                 (historieOtevrena.has(u.id) ? "Skrýt historii" : "Historie") + "</button>"
                             : "") +
-                        (smiPsat && u.stav !== "hotovo"
-                            ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "") +
-                        (window.KBUI.can("ukol.delete")
-                            ? '<button type="button" class="btn btn--sm btn--ghost" data-uprav="' + esc(u.id) + '">Upravit</button>' : "") +
+                        /* Jedna hlavní akce: u hotového čekajícího Potvrdit,
+                           jinak Označit hotové. Upravit, Smazat a ostatní
+                           jsou v nabídce „⋯" v hlavičce. */
+                        (window.KBUI.isAdmin() && u.stav === "hotovo" && u.potvrzeno !== true
+                            ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
+                                esc(u.id) + '">Potvrdit hotové</button>'
+                            : (smiPsat && u.stav !== "hotovo"
+                                ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "")) +
                         "</span>" +
                     "</div>" +
                   "</div>"
@@ -657,6 +665,114 @@
         seznam.forEach(u => { sbalit ? otevrene.delete(u.id) : otevrene.add(u.id); });
         vykresli();
     }
+
+    /* -------------------------------------------- akce jednoho úkolu ----
+       Stejné funkce volá tlačítko v úkolu, nabídka „⋯" / pravé tlačítko
+       i hromadná lišta. */
+
+    /** Zapisovat smí manažer všude, ostatní jen tam, kde jsou přiřazení. */
+    const smiPsatNa = (u) => !!u && (jeManazer() ||
+        (u.prirazeni || []).indexOf(window.KB.currentUid()) !== -1);
+
+    /** Označit hotové = všechny TO-DO na 100 % a stav hotovo. */
+    const oznacHotove = (u) => window.KB.ulozUkolPostup(u.id,
+        (u.todo || []).map(t => Object.assign({}, t, { pct: 100 })), "hotovo");
+
+    function potvrdHotove(id, btn) {
+        if (btn) btn.disabled = true;
+        window.KB.potvrdUkol(id)
+            .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
+            .catch(() => { if (btn) btn.disabled = false;
+                window.KBUI.toast("Potvrzení selhalo.", "error"); });
+    }
+
+    /** Smazání úkolu – stejné potvrzení jako v okně úprav. */
+    async function smazUkol(id) {
+        if (!id || !window.KBUI.can("ukol.delete")) return;
+        if (!confirm("Opravdu smazat celý úkol i s postupem?")) return;
+        await window.KB.deleteUkol(id).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+    }
+
+    function prepniOtevreny(id, otevrit) {
+        const ma = otevrene.has(id);
+        if (otevrit === undefined ? ma : !otevrit) otevrene.delete(id); else otevrene.add(id);
+        vykresli();
+    }
+
+    /* Nabídka úkolu – pravé tlačítko na hlavičce, „⋯" nebo podržení prstem.
+       Jen to, co stránka uměla tlačítky už dřív. */
+    window.KBNabidka.pripoj((cil) => {
+        const box = cil.closest && cil.closest("[data-ukol]");
+        if (!box || !$("vypis").contains(box)) return null;
+        // TO-DO, poznámky a rozepsané pole uvnitř mají vlastní ovládání
+        if (cil.closest(".ukol__telo") && !cil.closest(".ukol__pata")) return null;
+        const u = najdiUkol(box.getAttribute("data-ukol"));
+        if (!u) return null;
+        const otevreny = otevrene.has(u.id);
+        const hotovy = u.stav === "hotovo";
+        return {
+            nadpis: u.nazev || "Úkol",
+            radek: box,
+            polozky: [
+                { text: otevreny ? "Sbalit" : "Rozbalit TO-DO", ikona: "rozbalit",
+                    fn: () => prepniOtevreny(u.id) },
+                window.KBUI.can("vykaz.otevrit") && !hotovy && {
+                    text: "Zapsat výkaz na úkol", ikona: "hodiny",
+                    odkaz: "vykazy.html?ukol=" + encodeURIComponent(u.id) },
+                window.KBUI.can("vykaz.view") && {
+                    text: "Zobrazit výkazy", ikona: "lupa",
+                    odkaz: "vykazy.html?ukolFiltr=" + encodeURIComponent(u.id) },
+                smiPsatNa(u) && !hotovy && {
+                    text: "Označit hotové", ikona: "hotovo", fn: () => oznacHotove(u) },
+                window.KBUI.isAdmin() && hotovy && u.potvrzeno !== true && {
+                    text: "Potvrdit hotové", ikona: "potvrdit", fn: () => potvrdHotove(u.id) },
+                window.KBUI.can("vykaz.view") && {
+                    text: historieOtevrena.has(u.id) ? "Skrýt historii posunů" : "Historie posunů", ikona: "historie",
+                    fn: () => {
+                        if (historieOtevrena.has(u.id)) historieOtevrena.delete(u.id);
+                        else { historieOtevrena.add(u.id); otevrene.add(u.id); }
+                        vykresli();
+                    } },
+                window.KBUI.can("ukol.delete") && {
+                    text: "Upravit…", ikona: "upravit", fn: () => naplnTvorbu(u) },
+                window.KBUI.can("ukol.delete") && {
+                    text: "Smazat úkol…", ikona: "smazat", nebezpeci: true, fn: () => smazUkol(u.id) }
+            ]
+        };
+    });
+
+    /* Hromadné akce (manažer): zaškrtávátko v hlavičce úkolu, Shift = rozsah. */
+    const vyber = window.KBNabidka.vyber({
+        koren: () => $("vypis"),
+        radek: "[data-vyber-radek]",
+        nazev: ["úkol", "úkoly", "úkolů"],
+        zap: () => window.KBUI.can("ukol.delete"),
+        akce: (ids) => {
+            const vybrane = ids.map(najdiUkol).filter(Boolean);
+            const nehotove = vybrane.filter(u => u.stav !== "hotovo" && smiPsatNa(u));
+            const cekaji = window.KBUI.isAdmin()
+                ? vybrane.filter(u => u.stav === "hotovo" && u.potvrzeno !== true) : [];
+            const N = window.KBNabidka;
+            const kusy = (n) => V.pocet(n, ["úkol", "úkoly", "úkolů"]);
+            return [
+                nehotove.length && { text: "Označit hotové (" + nehotove.length + ")", ikona: "hotovo",
+                    fn: () => N.hromadne(nehotove.map(u => u.id), {
+                        otazka: "Označit " + kusy(nehotove.length) + " jako hotové? Všechny TO-DO půjdou na 100 %.",
+                        krok: (id) => { const u = najdiUkol(id);
+                            return u && u.stav !== "hotovo" ? oznacHotove(u) : false; },
+                        hotovo: "Hotové" }) },
+                cekaji.length && { text: "Potvrdit hotové (" + cekaji.length + ")", ikona: "potvrdit",
+                    fn: () => N.hromadne(cekaji.map(u => u.id), {
+                        otazka: "Potvrdit " + kusy(cekaji.length) + " jako hotové?",
+                        krok: (id) => window.KB.potvrdUkol(id), hotovo: "Potvrzeno" }) },
+                window.KBUI.can("ukol.delete") && { text: "Smazat (" + vybrane.length + ")", ikona: "smazat",
+                    nebezpeci: true,
+                    fn: () => N.hromadne(vybrane.map(u => u.id), {
+                        otazka: "Opravdu smazat " + kusy(vybrane.length) + " i s postupem? Nedá se to vrátit.",
+                        krok: (id) => window.KB.deleteUkol(id), hotovo: "Smazáno" }) }
+            ];
+        }
+    });
 
     /* ------------------------------------------------- zápis postupu ----
        Přiřazený člověk smí měnit jen `todo` a `stav` – přesně to posílá
