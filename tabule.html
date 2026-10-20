@@ -47,29 +47,50 @@
     body.deska-max .siderail,
     body.deska-max #kbNahledPruh { display: none; }
     body.deska-max { padding-left: 0 !important; }
+
+    /* ---- lišty nástrojů na telefonu ----
+       Dvanáct nástrojů v jedné skupině je širších než telefon (~440 px).
+       Skupina se radši posouvá do strany uvnitř lišty (jako seznam tabulí
+       v podliště), než aby se zalomila – každý řádek navíc ubírá z plátna
+       a stránka by jinak ujížděla do strany. */
+    @media (max-width: 700px) {
+        .board__group {
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            -webkit-overflow-scrolling: touch;
+        }
+        .board__group > * { flex: none; }
+        /* app.css dává na telefonu všem .btool 32 px – i textovým
+           (Okraj, Výplň, 13…28), kterým pak text lezl přes okraj */
+        .btool--txt { width: auto; }
+    }
     </style>
 </head>
 <body>
 
 <div id="appHeader"></div>
 
-<!-- Výzva k založení první tabule. Schválně NENÍ <main>: přihlášení
-     odkrývá všechny <main> na stránce naráz, takže tahle hláška vyskakovala
-     i nad otevřenou tabulí („zatím tu není žádná tabule" a pod tím tabule).
-     Jako <div> si o svém zobrazení rozhoduje jen kód níž. -->
-<div id="listView" class="wrap" hidden style="padding-top:30px;padding-bottom:60px">
-    <div class="card center" style="padding:38px 22px">
-        <b style="font-size:16px">Zatím tu není žádná tabule.</b>
-        <p class="small muted" style="margin:8px 0 16px;line-height:1.6">
-            Nekonečné plátno na myšlenkové mapy a náčrtky – všichni vidí to samé.
-        </p>
-        <button id="btnNewBoard" class="btn btn--primary">+ Nová tabule</button>
-    </div>
-</div>
-
-<!-- ========================================================== TABULE ==== -->
+<!-- ========================================================== TABULE ====
+     Přihlášení (UI.paintGate) odkrývá všechny <main> na stránce naráz. Proto
+     výzva i editor jsou uvnitř jako obyčejné <div> s vlastním `hidden`
+     a o jejich zobrazení rozhoduje jen kód níž: bez vybrané tabule zůstane
+     editor schovaný (dřív se pod výzvou „zatím tu není žádná tabule"
+     ukázalo prázdné plátno s věčným „Načítám…"), s tabulí zase výzva. -->
 <main id="boardView" hidden>
-    <div class="board">
+    <!-- Výzva k založení první tabule. -->
+    <div id="listView" class="wrap" hidden style="padding-top:30px;padding-bottom:60px">
+        <div class="card center" style="padding:38px 22px">
+            <b style="font-size:16px">Zatím tu není žádná tabule.</b>
+            <p class="small muted" style="margin:8px 0 16px;line-height:1.6">
+                Nekonečné plátno na myšlenkové mapy a náčrtky – všichni vidí to samé.
+            </p>
+            <button id="btnNewBoard" class="btn btn--primary">+ Nová tabule</button>
+        </div>
+    </div>
+
+    <div class="board" id="boardEditor" hidden>
         <div class="board__bar no-print">
             <input id="bTitle" class="board__title" placeholder="Název tabule" spellcheck="false">
 
@@ -474,7 +495,7 @@
 
     function sizeStage() {
         const stage = $("bStage");
-        if (!stage || $("boardView").hidden) return;
+        if (!stage || $("boardView").hidden || $("boardEditor").hidden) return;
         const nad = Math.round(stage.getBoundingClientRect().top + window.scrollY);
         // zapisovat jen změnu – zápis hýbe rozvržením a ResizeObserver
         // by se s ním jinak honil dokola (bliká celá stránka)
@@ -520,6 +541,10 @@
                Nepřihlášenému se neukazuje: ten nemá seznam tabulí načtený,
                takže by mu to tvrdilo, že tu nic není. */
             $("btnNewBoard").addEventListener("click", createBoard);
+            /* Editor bez tabule nemá co načítat – zůstává schovaný
+               (#boardEditor hidden) a stav „Načítám…" se v něm nesmí
+               nikde ukázat. */
+            $("bStatus").textContent = "";
             const prihlasen = () => !!(window.KB.currentUid && window.KB.currentUid());
             const skoc = () => {
                 const boards = window.KB.tabuleProMne();
@@ -539,6 +564,7 @@
         }
 
         $("boardView").hidden = false;
+        $("boardEditor").hidden = false;   // tabule je vybraná – editor smí ven
         window.KB.on("boards", paintSubbar);
 
         /* Zvětšení se schválně NEPAMATUJE: teď schovává úplně všechno

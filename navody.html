@@ -10,6 +10,24 @@
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
+
+    <style>
+    /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji.
+
+       Sloupce výpisu se nesmí roztáhnout podle obsahu. Náhled návodu je list
+       A4 pevné šířky (210 mm), který se do sloupce jen zmenší transformací –
+       jenže zmenšení rozvržení neubírá, takže sloupec by bez min-width:0
+       narostl na plnou šířku listu a na telefonu by stránka ujížděla do
+       strany (seznam i náhled široké ~800 px). Takhle zůstane sloupec široký
+       jako okno a fitStage list zmenší přesně na něj. */
+    .browse > * { min-width: 0; }
+    @media (max-width: 1079px) {
+        .browse { grid-template-columns: minmax(0, 1fr); }
+        /* po ťuknutí na dlaždici se stránka posune k náhledu – ať ho
+           nepřikryje horní lišta */
+        .browse__preview { scroll-margin-top: 80px; }
+    }
+    </style>
 </head>
 <body>
 
@@ -294,6 +312,15 @@
                 el.classList.toggle("gtile--active", el.dataset.guide === activeId));
             pushUrl();
             paintPreview();
+
+            /* Na úzké obrazovce (telefon, tablet na výšku) je náhled až pod
+               všemi dlaždicemi – po ťuknutí by se zdánlivě nic nestalo,
+               tak se k němu stránka sama posune. */
+            const nahled = document.querySelector(".browse__preview");
+            if (nahled && window.matchMedia("(max-width: 1079px)").matches &&
+                nahled.getBoundingClientRect().top > window.innerHeight * 0.6) {
+                nahled.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
         }
     });
 
