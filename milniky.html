@@ -45,6 +45,125 @@
         .milnik--skryty td { opacity: .72; }
         /* termín kolegy: existuje, ale není pro mě */
         .milniky__datum .mildash { color: var(--muted); font-weight: 700; }
+        /* nový = zveřejněný v posledních sedmi dnech (stojí za základní .milpil) */
+        .milpil--novy { background: var(--accent); color: #fff; }
+
+        /* ------------------------------------ typ milníku (20. 10. 2026)
+           Stavební a technologický milník se liší barvou – a vždycky i slovem
+           ve štítku, barvu sama o sobě nerozezná každý. Barvy jsou tokeny
+           z app.css: okrová (jako skupina Práce) a modrozelená barva webu,
+           obě přes 4,5 : 1 na bílé; mezi sebou se liší i pro barvoslepé
+           (modrá × žlutá osa). Ostatní (historický milník, vzorová místnost)
+           zůstávají neutrálně šedé. */
+        :root {
+            --mil-stav: var(--skup-prace);
+            --mil-tech: var(--accent);
+            --mil-ost:  var(--muted);
+        }
+        .mtyp {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0 7px; border: 1px solid currentColor; border-radius: var(--r-sm);
+            background: var(--surface); color: var(--mil-ost);
+            font-size: var(--fs-1); font-weight: 800; line-height: 1.6; white-space: nowrap;
+        }
+        .mtyp i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
+        .mtyp--stav { color: var(--mil-stav); }
+        .mtyp--tech { color: var(--mil-tech); }
+        .mil-legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+            font-size: var(--fs-1); color: var(--muted); }
+        .mil-legenda .milpil { margin-top: 0; }
+
+        /* harmonogram: pruh vlevo v barvě typu, nadpis skupiny taky */
+        .milniky tr.mtr--stav > td:first-child { box-shadow: inset 4px 0 0 var(--mil-stav); }
+        .milniky tr.mtr--tech > td:first-child { box-shadow: inset 4px 0 0 var(--mil-tech); }
+        .milniky .milcin + .mtyp { margin-top: 4px; }
+        .milniky__skupina--stav td { background: var(--bg-soft); border-bottom-color: var(--mil-stav); }
+        .milniky__skupina--stav:hover td { background: var(--bg-soft); }
+        .milniky__skupina--stav b { color: var(--mil-stav); }
+        .milniky__skupina--ost td { background: var(--bg-soft); border-bottom-color: var(--line); }
+        .milniky__skupina--ost:hover td { background: var(--bg-soft); }
+        .milniky__skupina--ost b { color: var(--text-soft); }
+        @media (max-width: 599.98px) {
+            .milniky tr.mtr--stav > td:first-child, .milniky tr.mtr--tech > td:first-child { box-shadow: none; }
+            table.kt.milniky tr.mtr--stav { border-left: 4px solid var(--mil-stav); }
+            table.kt.milniky tr.mtr--tech { border-left: 4px solid var(--mil-tech); }
+        }
+
+        /* ------------------------------------------------- záložky */
+        .zalozky { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--line); }
+        .zalozka { border: 0; background: none; font: inherit; font-size: var(--fs-2); font-weight: 900;
+            letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+            padding: 9px 14px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+        .zalozka:hover { color: var(--accent); }
+        .zalozka[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+        .zalozka:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+        /* -------------------------------- výpis „Co se chystá" po týdnech */
+        .mvypis { display: flex; flex-direction: column; gap: var(--sp-4); }
+        .mvypis__lista { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--muted); }
+        .mblok { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+        .mblok__hlava { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
+            padding: 9px 14px; background: var(--bg-soft); border-bottom: 1px solid var(--line); }
+        .mblok__hlava b { font-size: var(--fs-2); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+        .mblok__hlava span { font-size: var(--fs-1); color: var(--muted); }
+        .mblok--pozde { border-color: var(--danger); }
+        .mblok--pozde > .mblok__hlava { background: var(--danger-tint); border-bottom-color: var(--danger); }
+        .mblok--pozde > .mblok__hlava b, .mblok--pozde > .mblok__hlava span { color: var(--danger); }
+        .mblok--ceka > .mblok__hlava b { color: var(--warn); }
+        details.mblok > summary { cursor: pointer; list-style: none; }
+        details.mblok > summary::-webkit-details-marker { display: none; }
+        details.mblok > summary b::before { content: "+ "; }
+        details.mblok[open] > summary b::before { content: "− "; }
+        details.mblok:not([open]) > summary { border-bottom: 0; }
+        .mblok__hlava:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+        .mrad {
+            display: grid; grid-template-columns: auto 118px minmax(0, 1fr) auto;
+            grid-template-areas: "vyber datum hlavni akce";
+            gap: 2px 14px; align-items: start;
+            padding: 10px 12px 10px 10px; border-bottom: 1px solid var(--line-soft);
+            border-left: 4px solid var(--mil-ost);
+        }
+        .mrad:last-child { border-bottom: 0; }
+        .mvypis--bez-vyberu .mrad { grid-template-columns: 118px minmax(0, 1fr) auto;
+            grid-template-areas: "datum hlavni akce"; }
+        .mrad--stav { border-left-color: var(--mil-stav); }
+        .mrad--tech { border-left-color: var(--mil-tech); }
+        .mrad--muj { background: var(--accent-tint); }
+        .mrad--skryty { background: var(--bg-soft); }
+        .mrad__vyber { grid-area: vyber; }
+        .mrad__datum { grid-area: datum; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+        .mrad__datum b { font-size: var(--fs-3); font-weight: 900; white-space: nowrap; }
+        .mrad__datum span { font-size: var(--fs-1); color: var(--muted); }
+        .mrad--pozde .mrad__datum b, .mrad--pozde .mrad__datum span { color: var(--danger); }
+        .mrad--blizko .mrad__datum b { color: var(--warn); }
+        .mrad__hlavni { grid-area: hlavni; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .mrad__titul { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+        .mrad__titul .milpil { margin-top: 0; }
+        .mrad__tech { font-weight: 900; letter-spacing: .04em; }
+        .mrad__skup { font-weight: 700; color: var(--text-soft); }
+        .mrad__napln { color: var(--text-soft); line-height: 1.45; overflow-wrap: anywhere; }
+        .mrad__meta { font-size: var(--fs-1); color: var(--muted); overflow-wrap: anywhere; }
+        .mrad__akce { grid-area: akce; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+        .mrad--hotovo .mrad__napln { text-decoration: line-through; }
+        @media (max-width: 640px) {
+            .mrad { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px;
+                grid-template-areas: "vyber datum akce" ". hlavni hlavni"; }
+            .mvypis--bez-vyberu .mrad { grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas: "datum akce" "hlavni hlavni"; }
+            .mrad__datum { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+        }
+
+        /* nadpis si drží šířku – na telefonu tlačítka spadnou pod něj,
+           místo aby ho zmáčkla do sloupečku po jednom slově */
+        main > .spread > .grow { flex-basis: 260px; }
+
+        /* okno hromadné změny termínu */
+        .tsouhrn { padding: 12px 14px; line-height: 1.55; background: var(--bg-soft);
+            border: 1px solid var(--line); border-radius: var(--r); font-size: var(--fs-2); }
+        .tsouhrn ul { margin: 6px 0 0; padding-left: 18px; }
+        .tsouhrn .muted { color: var(--muted); }
+        .tsouhrn__chyba { color: var(--danger); font-weight: 700; }
     </style>
 </head>
 <body>
@@ -58,7 +177,7 @@
         <div class="grow">
             <h2 id="pageTitle" class="nadpis-stranky" style="margin:0">Milníky</h2>
             <p class="small muted" style="margin:3px 0 0">
-                Harmonogram odevzdání, seřazený tak, jak půjde za sebou.
+                Termíny odevzdání – co se chystá a celý harmonogram.
             </p>
             <p id="pocty" class="small muted" style="margin:3px 0 0"></p>
         </div>
@@ -68,6 +187,16 @@
             <button type="button" id="btnUkolyZMilniku" class="btn btn--ghost btn--sm" hidden>Udělat úkoly z milníků</button>
             <button type="button" id="btnNew" class="btn btn--primary btn--sm" data-need="milnik.manage" hidden>+ Nový milník</button>
         </div>
+    </div>
+
+    <!-- Dvě záložky (Michal 20. 10. 2026): výchozí je výpis po datech „co se
+         chystá", dosavadní harmonogram po skupinách je druhá. Poslední
+         zvolenou si stránka pamatuje. -->
+    <div class="zalozky" id="zalozky" role="tablist" aria-label="Pohled na milníky">
+        <button type="button" class="zalozka" role="tab" data-zalozka="vypis" aria-selected="true"
+                aria-controls="obsahMilniku">Co se chystá</button>
+        <button type="button" class="zalozka" role="tab" data-zalozka="harmonogram" aria-selected="false"
+                aria-controls="obsahMilniku" tabindex="-1">Harmonogram</button>
     </div>
 
     <!-- Jeden pohled místo kombinace přepínačů. Aktivní je vždycky právě
@@ -87,11 +216,21 @@
     <div id="filtrRow" class="row row--wrap" style="gap:8px;align-items:center">
         <input type="search" id="fHledat" class="field" style="max-width:230px"
                placeholder="Hledat v náplni…" aria-label="Hledat v náplni milníku">
-        <select id="fCin" class="field" style="max-width:180px" aria-label="Profese"></select>
+        <select id="fTyp" class="field" style="max-width:180px" aria-label="Typ milníku"></select>
+        <select id="fCin" class="field" style="max-width:180px" aria-label="Technologie"></select>
         <select id="fKdo" class="field" style="max-width:210px" aria-label="Zpracovatel"></select>
         <button type="button" class="chip" data-prep="moje">Jen moje</button>
         <button type="button" class="chip" data-prep="skryte" data-need="milnik.manage" hidden>Jen nezveřejněné</button>
         <button type="button" class="chip" id="btnFiltrPryc" hidden>Zrušit filtr</button>
+    </div>
+
+    <!-- legenda: barva vždycky spolu se slovem -->
+    <div id="legenda" class="mil-legenda" hidden>
+        <span>Typ milníku:</span>
+        <span class="mtyp mtyp--stav"><i></i>stavební</span>
+        <span class="mtyp mtyp--tech"><i></i>technologický</span>
+        <span class="mtyp"><i></i>ostatní</span>
+        <span><span class="milpil milpil--novy">nový</span> zveřejněný za posledních 7 dní</span>
     </div>
 
     <div id="hint" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
@@ -104,20 +243,68 @@
     </div>
     <div id="hintManazer" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
         Vidíš <b>celý harmonogram</b> včetně toho, co zaměstnanci zatím nevidí
-        (šedé řádky se značkou <span class="milpil milpil--skryty">skryté</span>).
-        Tlačítkem <b>Zveřejnit</b> milník ukážeš ostatním; termín se zpřístupní
-        jen jeho zpracovatelům. Celou skupinu zveřejníš naráz z jejího nadpisu.
+        (značka <span class="milpil milpil--skryty">nezveřejněno</span>).
+        Zaškrtni milníky a v liště dole jim <b>změň termín</b> nebo je
+        <b>zveřejni s termínem</b>; termín se zpřístupní jen zpracovatelům
+        a každý z nich dostane jeden vzkaz do Quick TO-DO.
+        Celou skupinu zveřejníš naráz z jejího nadpisu v Harmonogramu.
     </div>
 
     <div id="empty" class="card center small muted" style="padding:40px" hidden>
         Zatím tu není žádný milník.
     </div>
 
-    <div id="tableWrap" style="overflow-x:auto">
-        <!-- .kt = na telefonu se řádky skládají do karet (nabidka.css) -->
-        <table id="table" class="milniky kt"></table>
+    <!-- Obal obou pohledů – v něm hledá hromadný výběr zaškrtávátka
+         a nabídka řádku svůj milník. Vykreslený je vždy jen jeden pohled. -->
+    <div id="obsahMilniku">
+        <div id="vypis" class="mvypis" hidden></div>
+        <div id="tableWrap" style="overflow-x:auto">
+            <!-- .kt = na telefonu se řádky skládají do karet (nabidka.css) -->
+            <table id="table" class="milniky kt"></table>
+        </div>
     </div>
 </main>
+
+<!-- ================================================ OKNO ZMĚNY TERMÍNU -->
+<div id="terminOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div class="card col" role="dialog" aria-modal="true" aria-labelledby="tTitle"
+         style="padding:22px;max-width:640px;width:100%;gap:14px;max-height:90vh;overflow-y:auto">
+        <b id="tTitle" style="font-size:var(--fs-4)">Změnit termín</b>
+
+        <div class="fmr">
+            <div class="fmr__cely">
+                <span class="label">Termín</span>
+                <div class="row row--wrap" style="gap:8px">
+                    <label class="person"><input type="radio" name="tRezim" value="datum" checked><span>Nastavit datum</span></label>
+                    <label class="person"><input type="radio" name="tRezim" value="posun"><span>Posunout o dny</span></label>
+                    <label class="person"><input type="radio" name="tRezim" value="ponechat"><span>Ponechat</span></label>
+                </div>
+            </div>
+            <div id="tPoleDatum">
+                <label class="label" for="tDatum">Nový termín</label>
+                <input type="date" id="tDatum" class="field">
+            </div>
+            <div id="tPolePosun" hidden>
+                <label class="label" for="tPosun">Posunout o dní (minus = dřív)</label>
+                <input type="number" id="tPosun" class="field" step="1" value="7">
+            </div>
+            <div>
+                <span class="label">Vidí zaměstnanci?</span>
+                <label class="person" style="width:100%">
+                    <input type="checkbox" id="tZverejnit">
+                    <span>Zveřejnit zároveň</span>
+                </label>
+            </div>
+        </div>
+
+        <div id="tSouhrn" class="tsouhrn" aria-live="polite"></div>
+
+        <div class="row" style="gap:10px;justify-content:flex-end">
+            <button type="button" id="tZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="tUlozit" class="btn btn--primary">Uložit</button>
+        </div>
+    </div>
+</div>
 
 <!-- ======================================================== OKNO MILNÍKU -->
 <div id="milnikOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:110;display:flex;align-items:center;justify-content:center;padding:18px">
@@ -211,6 +398,17 @@
     let filKdo = "";
     let jenMoje = false;
     let jenSkryte = false;
+    let filTyp = "";            // "" | "stav" | "tech" | "ost"
+
+    /* Záložka: výchozí je výpis „Co se chystá" (Michal 20. 10. 2026),
+       harmonogram po skupinách je druhá. Poslední volba se pamatuje jen
+       v tomhle prohlížeči – v soukromém okně úložiště nemusí fungovat. */
+    const ZALOZKA_KLIC = "kb_milniky_zalozka";
+    let zalozka = "vypis";      // "vypis" | "harmonogram"
+    try {
+        const z = localStorage.getItem(ZALOZKA_KLIC);
+        if (z === "vypis" || z === "harmonogram") zalozka = z;
+    } catch (err) { /* úložiště nejde – zůstane výchozí */ }
 
     const DEN = 86400000;
     const OKNO_DNI = 7;     // jak daleko dozadu se milník ještě bere jako aktuální
@@ -226,6 +424,76 @@
     const bezDiakritiky = (text) => String(text || "").toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+    /* ------------------------------------------------------ typ miln\u00edku --
+       Stavebn\u00ed \u00d7 technologick\u00fd se pozn\u00e1 z n\u00e1zvu skupiny harmonogramu
+       (\u201e3. stavebn\u00ed miln\u00edk", \u201e1. technologick\u00fd miln\u00edk"), ne ze seznamu
+       natvrdo \u2013 nov\u00e1 skupina se za\u0159ad\u00ed sama. Co neobsahuje ani jedno
+       (historick\u00fd miln\u00edk, vzorov\u00e1 m\u00edstnost, \u201e-"), je \u201eostatn\u00ed". */
+    const TYPY_MILNIKU = {
+        stav: { nazev: "stavebn\u00ed", mnozne: "Stavebn\u00ed",
+                tvary: ["stavebn\u00ed", "stavebn\u00ed", "stavebn\u00edch"] },
+        tech: { nazev: "technologick\u00fd", mnozne: "Technologick\u00e9",
+                tvary: ["technologick\u00fd", "technologick\u00e9", "technologick\u00fdch"] },
+        ost:  { nazev: "ostatn\u00ed", mnozne: "Ostatn\u00ed",
+                tvary: ["ostatn\u00ed", "ostatn\u00ed", "ostatn\u00edch"] }
+    };
+    const PORADI_TYPU = ["stav", "tech", "ost"];
+
+    function typMilniku(m) {
+        const s = bezDiakritiky(m && m.skupina);
+        if (s.indexOf("stavebni") !== -1) return "stav";
+        if (s.indexOf("technologick") !== -1) return "tech";
+        return "ost";
+    }
+
+    /** \u0160t\u00edtek typu \u2013 barva v\u017edycky spolu se slovem. */
+    const stitekTypu = (typ) => '<span class="mtyp mtyp--' + esc(typ) + '"><i></i>' +
+        esc((TYPY_MILNIKU[typ] || TYPY_MILNIKU.ost).nazev) + "</span>";
+
+    /** Skupina pro text (vzkaz, v\u00fdpis) \u2013 \u201e-" z harmonogramu nic ne\u0159\u00edk\u00e1. */
+    const skupinaText = (m) => {
+        // v datech bývá i dvojitá mezera („Vzorová  místnost")
+        const s = String((m && m.skupina) || "").replace(/\s+/g, " ").trim();
+        return s === "-" ? "" : s;
+    };
+
+    /* Nov\u011b zve\u0159ejn\u011bn\u00fd miln\u00edk m\u00e1 sedm dn\u00ed \u0161t\u00edtek \u201enov\u00fd". Raz\u00edtko
+       `zverejnenoMs` p\u00ed\u0161e KB.nastavMilniky; star\u0161\u00ed zve\u0159ejn\u011bn\u00ed ho nemaj\u00ed. */
+    const NOVY_DNI = 7;
+    const jeNovy = (m) => m.zverejneno !== false && Number(m.zverejnenoMs) > 0 &&
+        Date.now() - Number(m.zverejnenoMs) < NOVY_DNI * 86400000;
+
+    /* ------------------------------------------------- data pro v\u00fdpis */
+    const isoDatum = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+        "-" + String(d.getDate()).padStart(2, "0");
+    const dnesISO = () => isoDatum(new Date());
+    const posunISO = (iso, dni) => {
+        const d = new Date(iso + "T00:00:00");
+        d.setDate(d.getDate() + dni);
+        return isoDatum(d);
+    };
+    /** Pond\u011bl\u00ed t\u00fddne, do kter\u00e9ho datum pat\u0159\u00ed. */
+    const pondeli = (iso) => {
+        const d = new Date(iso + "T00:00:00");
+        return posunISO(iso, -((d.getDay() + 6) % 7));
+    };
+    /** \u010c\u00edslo t\u00fddne podle ISO 8601 (t\u00fdden s prvn\u00edm \u010dtvrtkem roku je 1.). */
+    function cisloTydne(iso) {
+        const d = new Date(iso + "T00:00:00");
+        d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+        const ctvrtek1 = new Date(d.getFullYear(), 0, 4);
+        return 1 + Math.round(((d - ctvrtek1) / 86400000 - 3 + ((ctvrtek1.getDay() + 6) % 7)) / 7);
+    }
+    const DNY_TYDNE = ["ne", "po", "\u00fat", "st", "\u010dt", "p\u00e1", "so"];
+    /** \u201e27. 10." \u2013 rok jen kdy\u017e nen\u00ed leto\u0161n\u00ed. */
+    const kratkeDatum = (iso) => {
+        if (!iso) return "";
+        const [y, m, d] = iso.split("-");
+        return Number(d) + ". " + Number(m) + "." +
+            (Number(y) !== new Date().getFullYear() ? " " + y : "");
+    };
+    const sDnem = (iso) => DNY_TYDNE[new Date(iso + "T00:00:00").getDay()] + " " + kratkeDatum(iso);
+
     const jmeno = (user) => ((user.first || "") + " " + (user.last || "")).trim() || user.email;
 
     /** České skloňování počtu: 1 milník · 2 milníky · 5 milníků. */
@@ -233,7 +501,7 @@
         n + " " + (n === 1 ? tvary[0] : (n >= 2 && n <= 4 ? tvary[1] : tvary[2]));
 
     const MILNIK = ["milník", "milníky", "milníků"];
-    const SKRYTY = ["skrytý", "skryté", "skrytých"];
+    const NEZVEREJNENY = ["nezveřejněný", "nezveřejněné", "nezveřejněných"];
     const DEN_TVARY = ["den", "dny", "dnů"];
     const UKOL = ["úkol", "úkoly", "úkolů"];
 
@@ -358,6 +626,7 @@
 
     /** Projde filtr nahoře? Prázdná část filtru nic neomezuje. */
     function projdeFiltrem(item, ja) {
+        if (filTyp && typMilniku(item) !== filTyp) return false;
         if (filCin && (item.cinnost || "") !== filCin) return false;
         if (filKdo && (item.owners || []).indexOf(filKdo) === -1) return false;
         if (jenMoje && (!ja || (item.owners || []).indexOf(ja) === -1)) return false;
@@ -374,17 +643,25 @@
     function paintFiltr(vsechnyBezFiltru) {
         const cinnosti = [];
         const kdo = [];
+        const typy = [];
         vsechnyBezFiltru.forEach(m => {
             const c = (m.cinnost || "").trim();
             if (c && cinnosti.indexOf(c) === -1) cinnosti.push(c);
             (m.owners || []).forEach(uid => { if (kdo.indexOf(uid) === -1) kdo.push(uid); });
+            const t = typMilniku(m);
+            if (typy.indexOf(t) === -1) typy.push(t);
         });
         cinnosti.sort((a, b) => a.localeCompare(b, "cs"));
+
+        $("fTyp").innerHTML = '<option value="">Všechny typy</option>' +
+            PORADI_TYPU.filter(t => typy.indexOf(t) !== -1 || t === filTyp)
+                .map(t => '<option value="' + esc(t) + '"' + (t === filTyp ? " selected" : "") + ">" +
+                    esc(TYPY_MILNIKU[t].mnozne) + "</option>").join("");
 
         const lide = kdo.map(uid => (window.KB.users || []).find(u => u.id === uid))
             .filter(Boolean).sort((a, b) => jmeno(a).localeCompare(jmeno(b), "cs"));
 
-        $("fCin").innerHTML = '<option value="">Všechny profese</option>' +
+        $("fCin").innerHTML = '<option value="">Všechny technologie</option>' +
             cinnosti.map(c => '<option value="' + esc(c) + '"' +
                 (c === filCin ? " selected" : "") + ">" + esc(c) + "</option>").join("");
         $("fKdo").innerHTML = '<option value="">Všichni zpracovatelé</option>' +
@@ -396,7 +673,7 @@
         document.querySelectorAll("#filtrRow [data-prep]").forEach(el =>
             el.classList.toggle("chip--active",
                 el.dataset.prep === "moje" ? jenMoje : jenSkryte));
-        $("btnFiltrPryc").hidden = !(hledat || filCin || filKdo || jenMoje || jenSkryte);
+        $("btnFiltrPryc").hidden = !(hledat || filTyp || filCin || filKdo || jenMoje || jenSkryte);
     }
 
     /** Pruh se zakázkami – stejný princip jako filtr v úkolovníku. */
@@ -429,9 +706,19 @@
         const ja = (window.KBUI.nahledUid && window.KBUI.nahledUid()) ||
                    (window.KB.currentUid && window.KB.currentUid()) || "";
         const jeMuj = (m) => !!ja && (m.owners || []).indexOf(ja) !== -1;
-        $("hint").hidden = muzeMenit || pohled === "mujpostup";
-        $("hintManazer").hidden = !muzeMenit || pohled === "mujpostup";
-        $("hintPostup").hidden = pohled !== "mujpostup";
+        const harmonogram = zalozka === "harmonogram";
+        // Můj postup je pohled harmonogramu – ve výpisu „Co se chystá" neplatí
+        const postup = harmonogram && pohled === "mujpostup";
+        document.querySelectorAll("#zalozky [data-zalozka]").forEach(el => {
+            const on = el.dataset.zalozka === zalozka;
+            el.setAttribute("aria-selected", on ? "true" : "false");
+            el.tabIndex = on ? 0 : -1;
+        });
+        $("pohledRow").hidden = !harmonogram;
+        $("hint").hidden = muzeMenit || postup;
+        $("hintManazer").hidden = !muzeMenit || postup;
+        $("hintPostup").hidden = !postup;
+        $("legenda").hidden = !(window.KB.milniky || []).length;
         paintZakRow();
 
         // aktivní dlaždice pohledu – právě jedna
@@ -450,13 +737,13 @@
         if (!muzeMenit) {
             vsechny = vsechny
                 // nezveřejněné milníky patří jen do Mého postupu
-                .filter(m => pohled === "mujpostup" || m.zverejneno !== false)
+                .filter(m => postup || m.zverejneno !== false)
                 .map(m => (ja && (m.owners || []).indexOf(ja) !== -1)
                     ? m
                     : Object.assign({}, m, { datum: "", terminSkryty: true }));
         }
 
-        if (pohled === "mujpostup") {
+        if (postup) {
             const moje = mojeTechnologie(ja);
             vsechny = vsechny.filter(m =>
                 moje.indexOf(String(m.cinnost || "").trim()) !== -1);
@@ -467,6 +754,17 @@
         vsechny = vsechny.filter(m => projdeFiltrem(m, ja));
         filtrovane = vsechny;
         paintUkolyBtn(muzeMenit);
+
+        /* Vykreslený je vždycky jen jeden pohled – hromadný výběr hledá
+           zaškrtávátka v obou a dvakrát stejné id by se pralo. */
+        if (!harmonogram) {
+            $("table").innerHTML = "";
+            $("tableWrap").hidden = true;
+            renderVypis(vsechny, { muzeMenit: muzeMenit, jeMuj: jeMuj });
+            return;
+        }
+        $("vypis").innerHTML = "";
+        $("vypis").hidden = true;
         const items = vyberPohledu(vsechny);
 
         // „N z M" – ať je vidět, že pohled je jen výřez, ne celý seznam
@@ -476,9 +774,9 @@
 
         $("empty").textContent = vsechny.length
             ? "V tomhle pohledu žádný milník není – přepni si nahoře jiný."
-            : (hledat || filCin || filKdo || jenMoje || jenSkryte
+            : (hledat || filTyp || filCin || filKdo || jenMoje || jenSkryte
                 ? "Filtru neodpovídá žádný milník."
-                : (pohled === "mujpostup"
+                : (postup
                     ? "Zatím ti není přiřazený žádný milník, tak nevíme, co je tvoje profese."
                     : "Zatím tu není žádný milník."));
         $("empty").hidden = !!items.length;
@@ -536,10 +834,13 @@
                       'data-zverejni-skupinu="' + esc(nazev) + '">Zveřejnit skupinu (' +
                       s.skrytych + ")</button>"
                     : "";
-                const hlavicka = '<tr class="milniky__skupina kt-predel"><td colspan="' + sloupcu + '">' +
+                // barva nadpisu podle typu skupiny (stavební / technologický / ostatní)
+                const typSkupiny = typMilniku({ skupina: nazev });
+                const hlavicka = '<tr class="milniky__skupina milniky__skupina--' + esc(typSkupiny) +
+                    ' kt-predel"><td colspan="' + esc(sloupcu) + '">' +
                     "<b>" + esc(nazev) + "</b>" +
-                    "<span>" + esc(kolik) + " · " + s.hotovych + " splněno" +
-                        (s.skrytych ? " · " + pocet(s.skrytych, SKRYTY) : "") + "</span>" +
+                    "<span>" + esc(kolik + " · " + s.hotovych + " splněno" +
+                        (s.skrytych ? " · " + pocet(s.skrytych, NEZVEREJNENY) : "")) + "</span>" +
                     hromadne +
                 "</td></tr>";
                 return hlavicka + radky.map(radek).join("");
@@ -550,7 +851,8 @@
                 const t = stavTerminu(item);
                 const muj = jeMuj(item);
                 const skryty = item.zverejneno === false;
-                return '<tr class="' + t.trida + (muj && !item.hotovo ? " milnik--muj" : "") +
+                const typ = typMilniku(item);
+                return '<tr class="' + t.trida + " mtr--" + esc(typ) + (muj && !item.hotovo ? " milnik--muj" : "") +
                         (skryty ? " milnik--skryty" : "") + (sloupecVyberu ? " kt-vybiratelny" : "") +
                         '" data-mid="' + esc(item.id) + '">' +
                     (sloupecVyberu
@@ -558,12 +860,14 @@
                         : "") +
                     '<td class="milniky__cinnost kt-hlavni">' +
                         '<span class="milcin">' + esc(item.cinnost || "") + "</span>" +
+                        stitekTypu(typ) + " " +
+                        (jeNovy(item) ? '<span class="milpil milpil--novy">nový</span> ' : "") +
                         (item.hotovo
                             ? (item.potvrzeno === false
                                 ? '<span class="milpil milpil--ceka">splněno – čeká na potvrzení</span>'
                                 : '<span class="milpil">splněno</span>')
                             : "") +
-                        (skryty ? '<span class="milpil milpil--skryty">skryté</span>' : "") +
+                        (skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "") +
                         (muzeMenit && ukolMilniku(item)
                             ? '<span class="milpil milpil--ukol">úkol</span>' : "") + "</td>" +
                     '<td data-l="Zpracovatel">' + esc(ownersText(item)) + "</td>" +
@@ -588,6 +892,174 @@
                           "</td>"
                         : "") +
                 "</tr>";
+        }
+    }
+
+    /* ------------------------------------------ výpis „Co se chystá" -----
+       Výchozí pohled (Michal 20. 10. 2026): „když si kliknu Milníky, vidím,
+       co se chystá za další". Chronologicky od dneška, po týdnech; prošlé
+       nesplněné nahoře zvlášť a červeně; bez termínu a splněné sbalené
+       dole. Filtr nahoře platí stejně jako pro harmonogram. */
+
+    // sbalené bloky, které má člověk otevřené (přežije překreslení)
+    const otevreneBloky = new Set();
+
+    function renderVypis(vsechny, k) {
+        const dnes = dnesISO();
+        const pozde = [], cekaPozde = [], bezTerminu = [], hotove = [];
+        const tydny = new Map();
+        vsechny.forEach(m => {
+            /* „Čeká" je jen výslovné `potvrzeno: false` – staré splněné pole
+               nemají a berou se jako dávno odsouhlasené (stejně jako jinde). */
+            if (m.hotovo && m.potvrzeno !== false) { hotove.push(m); return; }
+            if (!m.datum) { bezTerminu.push(m); return; }
+            if (m.datum < dnes) { (m.hotovo ? cekaPozde : pozde).push(m); return; }
+            const po = pondeli(m.datum);
+            if (!tydny.has(po)) tydny.set(po, []);
+            tydny.get(po).push(m);
+        });
+        hotove.sort((a, b) => (b.datum || "").localeCompare(a.datum || "") ||
+                              (Number(b.hotovoMs) || 0) - (Number(a.hotovoMs) || 0));
+
+        const nadchazejicich = Array.from(tydny.values()).reduce((n, r) => n + r.length, 0);
+        $("pocty").textContent = vsechny.length
+            ? [pozde.length ? pozde.length + " po termínu" : "",
+               nadchazejicich + " od dneška dál",
+               bezTerminu.length ? bezTerminu.length + " bez termínu" : "",
+               hotove.length ? hotove.length + " splněno" : ""].filter(Boolean).join(" · ") + "."
+            : "";
+        $("empty").textContent = hledat || filTyp || filCin || filKdo || jenMoje || jenSkryte
+            ? "Filtru neodpovídá žádný milník."
+            : "Zatím tu není žádný milník.";
+        $("empty").hidden = !!vsechny.length;
+        $("vypis").hidden = !vsechny.length;
+        $("vypis").classList.toggle("mvypis--bez-vyberu", !k.muzeMenit);
+        if (!vsechny.length) { $("vypis").innerHTML = ""; return; }
+
+        // „3 milníky · 1 stavební, 2 technologické" – rozpad podle typu
+        const popisBloku = (radky) => {
+            const typy = PORADI_TYPU.map(t => {
+                const n = radky.filter(m => typMilniku(m) === t).length;
+                return n ? pocet(n, TYPY_MILNIKU[t].tvary) : "";
+            }).filter(Boolean);
+            return pocet(radky.length, MILNIK) + (typy.length > 1 ? " · " + typy.join(", ") : "");
+        };
+
+        const blok = (o) => {
+            const hlava = "<b>" + esc(o.nazev) + "</b><span>" + esc(o.popis) + "</span>";
+            if (!o.sbaleny) {
+                return '<section class="mblok ' + esc(o.trida || "") + '">' +
+                    '<div class="mblok__hlava">' + hlava + "</div>" +
+                    o.radky.map(radekVypisu).join("") + "</section>";
+            }
+            /* Sbalený blok kreslí řádky, až když je otevřený – zaškrtnutí
+               „všeho vypsaného" tak nevybere i to, co člověk nevidí. */
+            const otevreny = otevreneBloky.has(o.klic);
+            return '<details class="mblok ' + esc(o.trida || "") + '" data-blok="' + esc(o.klic) + '"' +
+                (otevreny ? " open" : "") + ">" +
+                '<summary class="mblok__hlava">' + hlava + "</summary>" +
+                (otevreny ? o.radky.map(radekVypisu).join("") : "") + "</details>";
+        };
+
+        const tento = pondeli(dnes);
+        const casti = [];
+        if (pozde.length) {
+            casti.push(blok({ nazev: "Po termínu", trida: "mblok--pozde", radky: pozde,
+                popis: popisBloku(pozde) + " · nesplněné" }));
+        }
+        if (cekaPozde.length) {
+            casti.push(blok({ nazev: "Čeká na potvrzení", trida: "mblok--ceka", radky: cekaPozde,
+                popis: popisBloku(cekaPozde) + " · splněné, ještě nepotvrzené" }));
+        }
+        Array.from(tydny.keys()).sort().forEach(po => {
+            const tydnu = Math.round((new Date(po + "T00:00:00") - new Date(tento + "T00:00:00")) / (7 * DEN));
+            const nazev = tydnu === 0 ? "Tento týden" : (tydnu === 1 ? "Příští týden" : "Týden " + cisloTydne(po));
+            casti.push(blok({ nazev: nazev, radky: tydny.get(po),
+                popis: kratkeDatum(po) + " – " + kratkeDatum(posunISO(po, 6)) + " · " + popisBloku(tydny.get(po)) }));
+        });
+        if (bezTerminu.length) {
+            casti.push(blok({ klic: "bez", sbaleny: true, radky: bezTerminu,
+                nazev: k.muzeMenit ? "Bez termínu" : "Bez termínu nebo s termínem kolegy",
+                popis: popisBloku(bezTerminu) }));
+        }
+        if (hotove.length) {
+            casti.push(blok({ klic: "hotove", sbaleny: true, radky: hotove,
+                nazev: "Splněné", popis: popisBloku(hotove) }));
+        }
+        if (!pozde.length && !cekaPozde.length && !tydny.size) {
+            casti.unshift('<div class="card small muted" style="padding:14px 16px">' +
+                "Od dneška dál se nic nechystá – žádný nesplněný milník s termínem.</div>");
+        }
+
+        $("vypis").innerHTML =
+            (k.muzeMenit
+                ? '<div class="mvypis__lista">' + vyber.boxVse() + "<span>Vybrat všechno vypsané</span></div>"
+                : "") +
+            casti.join("");
+
+        function radekVypisu(m) {
+            const typ = typMilniku(m);
+            const muj = k.jeMuj(m);
+            const skryty = m.zverejneno === false;
+            const ceka = m.hotovo && m.potvrzeno === false;
+            const splneno = m.hotovo && !ceka;
+
+            let datum, pozn = "", stav = "";
+            if (m.datum) {
+                datum = sDnem(m.datum);
+                const dny = dnyDo(m.datum);
+                if (splneno) pozn = "splněno";
+                else if (ceka) pozn = dny < 0 ? "termín byl " + kratkeDatum(m.datum) : (dny === 0 ? "dnes" : "za " + pocet(dny, DEN_TVARY));
+                else if (dny < 0) { pozn = pocet(-dny, DEN_TVARY) + " po termínu"; stav = " mrad--pozde"; }
+                else if (dny === 0) { pozn = "dnes"; stav = " mrad--blizko"; }
+                else if (dny === 1) { pozn = "zítra"; stav = " mrad--blizko"; }
+                else { pozn = "za " + pocet(dny, DEN_TVARY); if (dny <= 7) stav = " mrad--blizko"; }
+            } else {
+                // termín kolegy: pomlčka bez vysvětlování (Michal 8. 10. 2026)
+                datum = m.terminSkryty ? "—" : "bez termínu";
+            }
+
+            const stitky = [
+                jeNovy(m) ? '<span class="milpil milpil--novy">nový</span>' : "",
+                ceka ? '<span class="milpil milpil--ceka">čeká na potvrzení</span>' : "",
+                splneno ? '<span class="milpil">splněno</span>' : "",
+                k.muzeMenit && skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "",
+                k.muzeMenit && ukolMilniku(m) ? '<span class="milpil milpil--ukol">úkol</span>' : ""
+            ].join("");
+
+            const meta = [
+                (m.zakazka || "").trim(),
+                ownersText(m),
+                // zveřejnění vidí jen manažer – zaměstnanec vidí jen zveřejněné
+                k.muzeMenit && !skryty
+                    ? "zveřejněno" + (Number(m.zverejnenoMs) > 0
+                        ? " " + kratkeDatum(isoDatum(new Date(Number(m.zverejnenoMs)))) : "")
+                    : ""
+            ].filter(Boolean).join(" · ");
+
+            const popis = [m.cinnost, skupinaText(m), m.napln].filter(Boolean).join(" – ");
+            return '<div class="mrad mrad--' + esc(typ) + stav + (muj && !m.hotovo ? " mrad--muj" : "") +
+                    (skryty ? " mrad--skryty" : "") + (m.hotovo ? " mrad--hotovo" : "") +
+                    '" data-mid="' + esc(m.id) + '" data-vyber-radek>' +
+                (k.muzeMenit ? '<span class="mrad__vyber">' + vyber.box(m.id, popis) + "</span>" : "") +
+                '<span class="mrad__datum"><b>' + esc(datum) + "</b>" +
+                    (pozn ? "<span>" + esc(pozn) + "</span>" : "") + "</span>" +
+                '<span class="mrad__hlavni">' +
+                    '<span class="mrad__titul">' + stitekTypu(typ) +
+                        '<b class="mrad__tech">' + esc(m.cinnost || "") + "</b>" +
+                        (skupinaText(m) ? '<span class="mrad__skup">' + esc(skupinaText(m)) + "</span>" : "") +
+                        stitky + "</span>" +
+                    (m.napln ? '<span class="mrad__napln">' + esc(m.napln) + "</span>" : "") +
+                    (meta ? '<span class="mrad__meta">' + esc(meta) + "</span>" : "") +
+                "</span>" +
+                '<span class="mrad__akce">' +
+                    (k.muzeMenit && ceka
+                        ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' +
+                            esc(m.id) + '">Potvrdit</button>'
+                        : "") +
+                    window.KBNabidka.tlacitko("Další akce: " + popis) +
+                "</span>" +
+            "</div>";
         }
     }
 
@@ -663,9 +1135,11 @@
     /** zpet = funkce, která změnu vrátí – hláška pak má tlačítko „Zpět“. */
     async function uloz(prace, hlaska, zpet) {
         try {
-            await prace;
+            const vysledek = await prace;
             $("milnikOverlay").hidden = true;
-            window.KBUI.toast(hlaska, undefined, zpet ? { zpet: zpet } : undefined);
+            // hláška může záviset na výsledku (komu odešel vzkaz); zpet = tlačítko „Zpět“
+            window.KBUI.toast(typeof hlaska === "function" ? hlaska(vysledek) : hlaska,
+                undefined, zpet ? { zpet: zpet } : undefined);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Uložení selhalo – nejspíš na to tvoje role nemá právo" +
@@ -702,8 +1176,316 @@
             potvrzenoMs: puvodni.potvrzenoMs || 0
         };
 
-        await uloz(window.KB.ulozMilnik(zaznam),
-                   editingId ? "Milník upraven." : "Milník přidán.");
+        const novyTermin = zaznam.datum;
+        const bylZverejneny = !!puvodni.id && puvodni.zverejneno !== false;
+        const zmenaTerminu = !!puvodni.id && (puvodni.datum || "") !== novyTermin;
+
+        await uloz((async () => {
+            /* Původní termín: KB.milniky ho nemá, takže by ho úprava data
+               přepsala novým. Termín se proto mění přes KB.nastavMilniky,
+               která terminPuvodni přečte a zachová, a ten se předá dál. */
+            if (zmenaTerminu) {
+                const r = await window.KB.nastavMilniky([{ id: zaznam.id, termin: novyTermin }]);
+                zaznam.terminPuvodni = (r && r.puvodni && r.puvodni[zaznam.id]) || zaznam.terminPuvodni;
+            }
+            await window.KB.ulozMilnik(zaznam);
+
+            /* Vzkazy zpracovatelům: milník se právě zveřejnil → všem nový;
+               u zveřejněného se změnil termín → posun; přibyl zpracovatel →
+               pro něj nový. */
+            const oznameni = [];
+            if (zaznam.zverejneno && !bylZverejneny) {
+                // razítko `zverejnenoMs` (štítek „nový") – ulozMilnik ho nepíše
+                await window.KB.nastavMilniky([{ id: zaznam.id, owners: zaznam.owners }], { zverejnit: true });
+                oznameni.push({ m: zaznam, druh: "novy", na: novyTermin });
+            } else if (zaznam.zverejneno) {
+                const byli = puvodni.owners || [];
+                const zustali = zaznam.owners.filter(u => byli.indexOf(u) !== -1);
+                const pribyli = zaznam.owners.filter(u => byli.indexOf(u) === -1);
+                if (zmenaTerminu && zustali.length) {
+                    oznameni.push({ m: zaznam, druh: "posun", z: puvodni.datum || "", na: novyTermin, komu: zustali });
+                }
+                if (pribyli.length) oznameni.push({ m: zaznam, druh: "novy", na: novyTermin, komu: pribyli });
+            }
+            return await oznamZpracovatelum(oznameni);
+        })(), (v) => (editingId ? "Milník upraven." : "Milník přidán.") + vzkazyText(v));
+    }
+
+    /* ---------------------------------------- zveřejnění a vzkazy -------
+       Kdykoliv se milník zveřejní (jednotlivě, skupinou, hromadně, i se
+       změnou termínu), dostane každý jeho zpracovatel JEDEN vzkaz do Quick
+       TO-DO za celou akci – „Máš nově zveřejněné milníky (N): …" (Michal
+       20. 10. 2026). Vzkaz jde stejnou cestou jako ostatní systémové vzkazy
+       (KB.saveQuickTodo), takže na něj chodí i e-mail „Nový Quick TO-DO",
+       kdo ho má v Upozorněních zapnutý. Dostane ho i ten, kdo zveřejňuje,
+       když je sám zpracovatel. */
+
+    /** Potvrzení přes okno webu, když už je (KBUI.potvrd), jinak confirm. */
+    async function potvrd(o) {
+        if (window.KBUI && typeof window.KBUI.potvrd === "function") return !!(await window.KBUI.potvrd(o));
+        return window.confirm((o.nadpis ? o.nadpis + "\n\n" : "") + (o.text || ""));
+    }
+
+    const jeAktivni = (uid) => {
+        const u = (window.KB.users || []).find(x => x.id === uid);
+        return !!u && u.active !== false;
+    };
+
+    /** „SLN – 3. technologický milník – 27. 10." (posun: „27. 10. → 3. 11.") */
+    function popisDoVzkazu(o) {
+        const m = o.m;
+        const co = skupinaText(m) || String(m.napln || "").trim().slice(0, 40);
+        const kdy = o.druh === "posun"
+            ? (kratkeDatum(o.z) || "bez termínu") + " → " + (kratkeDatum(o.na) || "bez termínu")
+            : (kratkeDatum(o.na) || "bez termínu");
+        return [String(m.cinnost || "").trim(), co, kdy].filter(Boolean).join(" – ");
+    }
+
+    /** Text vzkazu, nejvýš ~300 znaků (víc Quick TO-DO neuloží). */
+    function textVzkazu(co) {
+        const konec = " Najdeš je na stránce Milníky.";
+        const casti = [];
+        if (co.nove.length) casti.push({ uvod: "Máš nově zveřejněné milníky", seznam: co.nove.map(popisDoVzkazu) });
+        if (co.posun.length) casti.push({ uvod: "Změnil se termín milníků", seznam: co.posun.map(popisDoVzkazu) });
+        const naCast = Math.floor((295 - konec.length) / casti.length);
+        return casti.map(c => {
+            let text = c.uvod + " (" + c.seznam.length + "): ";
+            let vypsano = 0;
+            for (const p of c.seznam) {
+                const zbyva = c.seznam.length - vypsano - 1;
+                const dalsi = (vypsano ? "; " : "") + p;
+                const rezerva = zbyva ? (" a další " + zbyva).length : 0;
+                if (vypsano && text.length + dalsi.length + rezerva + 1 > naCast) break;
+                text += dalsi;
+                vypsano += 1;
+            }
+            if (vypsano < c.seznam.length) text += " a další " + (c.seznam.length - vypsano);
+            // datum „27. 10." už tečkou končí – druhou nepřidávat
+            const veta = text.slice(0, naCast - 1);
+            return /\.$/.test(veta) ? veta : veta + ".";
+        }).join(" ") + konec;
+    }
+
+    /**
+     * Pošle vzkazy. oznameni: [{ m, druh: "novy"|"posun", z, na, komu? }]
+     * – `komu` zúží adresáty (jinak všichni zpracovatelé milníku).
+     * @returns {Promise<{poslano: number, selhalo: number}>}
+     */
+    async function oznamZpracovatelum(oznameni) {
+        const lide = new Map();
+        (oznameni || []).forEach(o => {
+            (o.komu || o.m.owners || []).forEach(uid => {
+                if (!jeAktivni(uid)) return;
+                if (!lide.has(uid)) lide.set(uid, { nove: [], posun: [] });
+                lide.get(uid)[o.druh === "posun" ? "posun" : "nove"].push(o);
+            });
+        });
+        let poslano = 0, selhalo = 0, i = 0;
+        for (const [uid, co] of lide) {
+            const projekty = co.nove.concat(co.posun).map(o => String(o.m.zakazka || "").trim())
+                .filter((p, j, pole) => p && pole.indexOf(p) === j);
+            try {
+                // vlastní přípona – víc vzkazů v jedné milisekundě nesmí mít stejné id
+                await window.KB.saveQuickTodo(window.KB.newQuickId() + "_m" + (i++), {
+                    text: textVzkazu(co),
+                    proUids: [uid],
+                    projekt: projekty.length === 1 ? projekty[0] : ""
+                });
+                poslano += 1;
+            } catch (err) {
+                console.error("Vzkaz o milnících neodešel:", err);
+                selhalo += 1;
+            }
+        }
+        return { poslano: poslano, selhalo: selhalo };
+    }
+
+    /** Dovětek do hlášky: komu šel vzkaz. */
+    const vzkazyText = (v) => !v ? "" :
+        (v.poslano ? " Vzkaz do Quick TO-DO šel " +
+            (v.poslano === 1 ? "1 zpracovateli." : v.poslano + " zpracovatelům.") : "") +
+        (v.selhalo ? " " + v.selhalo + " vzkaz(y) se nepodařilo poslat." : "");
+
+    /**
+     * Zveřejnění a/nebo změna termínu – jedna cesta pro řádek, skupinu,
+     * hromadnou lištu i okno termínu. polozky: [{ m, na? }] (na = nový
+     * termín; bez něj termín zůstává). Už zveřejněný milník se znovu
+     * nerazítkuje – „nový" se mu nevrací; dostane jen vzkaz o posunu.
+     */
+    async function provedZmeny(polozky, zverejnit) {
+        const nove = [], stare = [];
+        (polozky || []).forEach(p => {
+            const z = p.m.datum || "";
+            const zmena = typeof p.na === "string" && p.na !== z;
+            const zverejnitTed = !!zverejnit && p.m.zverejneno === false;
+            if (!zmena && !zverejnitTed) return;
+            const zapis = { id: p.m.id, owners: (p.m.owners || []).slice() };
+            if (zmena) zapis.termin = p.na;
+            (zverejnitTed ? nove : stare).push({ zapis: zapis, m: p.m, z: z, na: zmena ? p.na : z, zmena: zmena });
+        });
+        if (nove.length) await window.KB.nastavMilniky(nove.map(x => x.zapis), { zverejnit: true });
+        if (stare.length) await window.KB.nastavMilniky(stare.map(x => x.zapis));
+        const oznameni = nove.map(x => ({ m: x.m, druh: "novy", na: x.na }))
+            .concat(stare.filter(x => x.zmena && x.m.zverejneno !== false)
+                .map(x => ({ m: x.m, druh: "posun", z: x.z, na: x.na })));
+        const v = await oznamZpracovatelum(oznameni);
+        return { zapsano: nove.length + stare.length, zverejneno: nove.length,
+                 poslano: v.poslano, selhalo: v.selhalo };
+    }
+
+    /** Hromadné „Zveřejnit (N)" – jedno potvrzení, jedna dávka, vzkazy. */
+    async function zverejnitVybrane(milniky) {
+        const skryte = milniky.filter(m => m.zverejneno === false);
+        if (!skryte.length) return null;
+        const ok = await potvrd({
+            nadpis: "Zveřejnit milníky",
+            text: "Zveřejnit " + pocet(skryte.length, MILNIK) + "? Termín uvidí jen jejich " +
+                "zpracovatelé a každý z nich dostane jeden vzkaz do Quick TO-DO.",
+            ano: "Zveřejnit", ne: "Zrušit"
+        });
+        if (!ok) return null;
+        try {
+            const v = await provedZmeny(skryte.map(m => ({ m: m })), true);
+            window.KBUI.toast("Zveřejněno: " + v.zverejneno + "." + vzkazyText(v));
+            return v;
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zveřejnění selhalo.", "error");
+            return null;
+        }
+    }
+
+    /* -------------------------------------- okno „Změnit termín…" ------
+       Konkrétní datum, nebo posun o ±N dní; „Ponechat" se hodí k samotnému
+       zveřejnění. Před uložením souhrn „N milníků: z → na" a komu půjde
+       vzkaz. Výsledek okna (null = zrušeno) vrací Promise – hromadná lišta
+       podle něj pozná, jestli má výběr zrušit. */
+    let terminOkno = null;     // { milniky, resolve }
+
+    function otevriTerminOkno(milniky, zverejnit) {
+        if (!window.KBUI.can("milnik.manage") || !milniky.length) return Promise.resolve(null);
+        if (terminOkno) terminOkno.resolve(null);
+        return new Promise((resolve) => {
+            terminOkno = { milniky: milniky.slice(), resolve: resolve };
+            const data = milniky.map(m => m.datum || "").filter(Boolean);
+            const stejne = data.length === milniky.length && data.every(d => d === data[0]);
+            $("tDatum").value = stejne ? data[0] : "";
+            $("tPosun").value = "7";
+            document.querySelector('input[name="tRezim"][value="datum"]').checked = true;
+            $("tZverejnit").checked = !!zverejnit;
+            $("terminOverlay").hidden = false;
+            prekresliTerminOkno();
+            $("tDatum").focus();
+        });
+    }
+
+    function zavriTerminOkno(vysledek) {
+        $("terminOverlay").hidden = true;
+        const okno = terminOkno;
+        terminOkno = null;
+        if (okno) okno.resolve(vysledek || null);
+    }
+
+    /** Co by okno udělalo – podle něj se kreslí souhrn i ukládá. */
+    function terminPlan() {
+        const rezim = (document.querySelector('input[name="tRezim"]:checked') || {}).value || "datum";
+        const datum = $("tDatum").value;
+        const posun = Math.trunc(Number($("tPosun").value) || 0);
+        const zverejnit = $("tZverejnit").checked;
+        let chyba = "";
+        if (rezim === "datum" && !/^\d{4}-\d{2}-\d{2}$/.test(datum)) chyba = "Vyber nový termín.";
+        if (rezim === "posun" && (!posun || Math.abs(posun) > 3650)) chyba = "Zadej, o kolik dní posunout (např. 7 nebo -3).";
+        const radky = (terminOkno ? terminOkno.milniky : []).map(m => {
+            const z = m.datum || "";
+            let na = z, pozn = "";
+            if (!chyba && rezim === "datum") na = datum;
+            if (!chyba && rezim === "posun") {
+                if (z) na = posunISO(z, posun); else pozn = "nemá termín – není z čeho posouvat";
+            }
+            const zmena = na !== z;
+            const zverejniSe = zverejnit && m.zverejneno === false;
+            return { m: m, z: z, na: na, zmena: zmena, zverejniSe: zverejniSe, pozn: pozn };
+        });
+        return { rezim, datum, posun, zverejnit, chyba, radky,
+                 deje: radky.filter(r => r.zmena || r.zverejniSe) };
+    }
+
+    function prekresliTerminOkno() {
+        if (!terminOkno) return;
+        const p = terminPlan();
+        $("tPoleDatum").hidden = p.rezim !== "datum";
+        $("tPolePosun").hidden = p.rezim !== "posun";
+        $("tTitle").textContent = (p.zverejnit ? "Zveřejnit s termínem" : "Změnit termín") +
+            " – " + pocet(terminOkno.milniky.length, MILNIK);
+
+        const zmeny = p.deje.filter(r => r.zmena);
+        const zverejni = p.deje.filter(r => r.zverejniSe);
+        const d = (iso) => iso ? czDate(iso) : "bez termínu";
+
+        // hlavní věta: „5 milníků: 27. 10. 2026 → 3. 11. 2026"
+        let veta;
+        if (p.chyba) veta = '<span class="tsouhrn__chyba">' + esc(p.chyba) + "</span>";
+        else if (!zmeny.length) veta = "<b>" + esc(p.rezim === "ponechat" ? "Termín zůstává." : "Termín se nezmění.") + "</b>";
+        else {
+            const z0 = zmeny[0].z, na0 = zmeny[0].na;
+            const stejne = zmeny.every(r => r.z === z0 && r.na === na0);
+            veta = "<b>" + esc(pocet(zmeny.length, MILNIK) + ": " + (stejne
+                ? d(z0) + " → " + d(na0)
+                : (p.rezim === "posun"
+                    ? "posun o " + (p.posun > 0 ? "+" : "") + p.posun + " " + (Math.abs(p.posun) === 1 ? "den" : (Math.abs(p.posun) <= 4 ? "dny" : "dní"))
+                    : "nový termín " + d(p.datum)))) + "</b>";
+        }
+
+        const seznam = p.radky.slice(0, 10).map(r =>
+            "<li><b>" + esc(r.m.cinnost || "") + "</b>" +
+            esc((skupinaText(r.m) ? " – " + skupinaText(r.m) : "") + ": ") +
+            esc(r.zmena ? d(r.z) + " → " + d(r.na) : d(r.z) + (r.pozn ? " (" + r.pozn + ")" : " (beze změny)")) +
+            (r.zverejniSe ? ' <span class="milpil milpil--novy">zveřejní se</span>' : "") +
+            "</li>").join("") +
+            (p.radky.length > 10 ? '<li class="muted">' + esc("… a dalších " + (p.radky.length - 10)) + "</li>" : "");
+
+        // komu půjde vzkaz: zpracovatelé nově zveřejněných a posunutých zveřejněných
+        const adresati = new Map();
+        p.deje.forEach(r => {
+            if (!(r.zverejniSe || (r.zmena && r.m.zverejneno !== false))) return;
+            (r.m.owners || []).filter(jeAktivni).forEach(uid => adresati.set(uid, (adresati.get(uid) || 0) + 1));
+        });
+        const komu = Array.from(adresati.entries()).map(([uid, n]) => {
+            const u = (window.KB.users || []).find(x => x.id === uid);
+            return (u ? jmeno(u) : "?") + " (" + n + ")";
+        });
+
+        $("tSouhrn").innerHTML = veta +
+            (zverejni.length ? "<div>" + esc("Zveřejní se: " + pocet(zverejni.length, MILNIK) +
+                " – termín uvidí jen jejich zpracovatelé.") + "</div>" : "") +
+            "<ul>" + seznam + "</ul>" +
+            '<div class="muted" style="margin-top:6px">' + esc(komu.length
+                ? "Vzkaz do Quick TO-DO dostane: " + komu.join(", ") + "."
+                : "Vzkaz nedostane nikdo (nic se nezveřejňuje a nemění se termín zveřejněného milníku).") + "</div>";
+
+        $("tUlozit").disabled = !!p.chyba || !p.deje.length;
+        $("tUlozit").textContent = p.zverejnit
+            ? "Zveřejnit" + (p.deje.length ? " (" + p.deje.length + ")" : "")
+            : "Uložit" + (p.deje.length ? " (" + p.deje.length + ")" : "");
+    }
+
+    async function ulozTerminOkno() {
+        if (!terminOkno) return;
+        const p = terminPlan();
+        if (p.chyba || !p.deje.length) return;
+        $("tUlozit").disabled = true;
+        try {
+            const v = await provedZmeny(p.deje.map(r => ({ m: r.m, na: r.zmena ? r.na : undefined })), p.zverejnit);
+            const jenTermin = v.zapsano - v.zverejneno;
+            window.KBUI.toast((v.zverejneno
+                ? "Zveřejněno: " + v.zverejneno + (jenTermin ? ", termín změněn u dalších " + jenTermin : "")
+                : "Termín změněn: " + v.zapsano) + "." + vzkazyText(v));
+            zavriTerminOkno(v);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení selhalo – nejspíš na to tvoje role nemá právo.", "error");
+            $("tUlozit").disabled = false;
+        }
     }
 
     /** Smazání milníku – z okna úprav i z nabídky řádku, stejné potvrzení. */
@@ -933,18 +1715,26 @@
         const m = najdiMilnik(id);
         if (!m) return;
         if (btn) btn.disabled = true;
+        /* Zveřejnění jde přes provedZmeny – razítko „nový" a vzkaz
+           zpracovatelům; skrytí zůstává jednoduchý zápis. „Zpět“ vrací jen
+           viditelnost – odeslaný vzkaz už zpátky vzít nejde. */
         const zverejnit = m.zverejneno === false;
-        uloz(window.KB.zverejniMilnik(m.id, zverejnit),
-             zverejnit ? "Milník vidí zaměstnanci." : "Milník je zase skrytý.",
+        uloz(zverejnit
+                ? provedZmeny([{ m: m }], true)
+                : window.KB.zverejniMilnik(m.id, false),
+             zverejnit
+                ? (v) => "Milník vidí zaměstnanci." + vzkazyText(v)
+                : "Milník je zase skrytý.",
              () => window.KB.zverejniMilnik(m.id, !zverejnit))
             .then(() => { if (btn) btn.disabled = false; });
     }
 
     /* Nabídka řádku (pravé tlačítko, „⋯“, podržení prstem) – jen to, co
-       stránka uměla už dřív tlačítky a filtrem. */
+       stránka uměla už dřív tlačítky a filtrem. Platí pro řádek tabulky
+       harmonogramu i pro řádek výpisu „Co se chystá". */
     window.KBNabidka.pripoj((cil) => {
-        const tr = cil.closest && cil.closest("tr[data-mid]");
-        if (!tr || !$("table").contains(tr)) return null;
+        const tr = cil.closest && cil.closest("[data-mid]");
+        if (!tr || !$("obsahMilniku").contains(tr)) return null;
         const m = najdiMilnik(tr.getAttribute("data-mid"));
         if (!m) return null;
         const manazer = window.KBUI.can("milnik.manage");
@@ -965,6 +1755,9 @@
                 manazer && {
                     text: skryty ? "Zveřejnit" : "Skrýt zaměstnancům", ikona: skryty ? "oko" : "skryt",
                     fn: () => prepniZverejneni(m.id) },
+                manazer && skryty && {
+                    text: "Zveřejnit s termínem…", ikona: "kalendar", fn: () => otevriTerminOkno([m], true) },
+                manazer && { text: "Změnit termín…", ikona: "kalendar", fn: () => otevriTerminOkno([m], false) },
                 manazer && { text: "Upravit…", ikona: "upravit", fn: () => openForm(m.id) },
                 manazer && !m.hotovo && !ukol && {
                     text: "Udělat úkol z milníku", ikona: "plus", fn: () => ukolyZMilniku([m]) },
@@ -982,9 +1775,11 @@
     });
 
     /* Hromadné akce (jen manažer): zaškrtávátko v řádku, Shift = rozsah.
-       Každá akce je smyčka přes zápis jednoho milníku – nic nového. */
+       Většina akcí je smyčka přes zápis jednoho milníku; termín a zveřejnění
+       jdou jednou dávkou (KB.nastavMilniky), ať zpracovatel dostane za celou
+       akci jen jeden vzkaz. Kořen = obal obou pohledů. */
     const vyber = window.KBNabidka.vyber({
-        koren: () => $("table"),
+        koren: () => $("obsahMilniku"),
         nazev: MILNIK,
         zap: () => window.KBUI.can("milnik.manage"),
         akce: (ids) => {
@@ -1015,10 +1810,12 @@
                         (id) => { const m = najdiMilnik(id);
                             return m && m.hotovo ? window.KB.ulozSplneniMilniku(id, zmenaSplneni(m)) : false; },
                         "Vráceno") },
+                { text: "Změnit termín… (" + vybrane.length + ")", ikona: "kalendar",
+                    fn: () => otevriTerminOkno(vybrane, false) },
+                skryte && { text: "Zveřejnit s termínem… (" + skryte + ")", ikona: "kalendar",
+                    fn: () => otevriTerminOkno(vybrane, true) },
                 skryte && { text: "Zveřejnit (" + skryte + ")", ikona: "oko",
-                    fn: () => smycka(m => m.zverejneno === false,
-                        "Zveřejnit " + pocet(skryte, MILNIK) + "? Termín uvidí jen jejich zpracovatelé.",
-                        (id) => window.KB.zverejniMilnik(id, true), "Zveřejněno") },
+                    fn: () => zverejnitVybrane(vybrane) },
                 zverejnene && { text: "Skrýt (" + zverejnene + ")", ikona: "skryt",
                     fn: () => smycka(m => m.zverejneno !== false,
                         "Skrýt zaměstnancům " + pocet(zverejnene, MILNIK) + "?",
@@ -1062,8 +1859,9 @@
             if (!(await window.KBUI.potvrd({ nadpis: "Zveřejnit " + pocet(cele.length, MILNIK) +
                          " ze skupiny „" + nazev + "“?", ano: "Zveřejnit" }))) return;
             skup.disabled = true;
-            uloz(Promise.all(cele.map(m => window.KB.zverejniMilnik(m.id, true))),
-                 "Skupina je zveřejněná.")
+            // jedna dávka a jeden vzkaz každému zpracovateli za celou skupinu
+            uloz(provedZmeny(cele.map(m => ({ m: m })), true),
+                 (v) => "Skupina je zveřejněná." + vzkazyText(v))
                 .then(() => { skup.disabled = false; });
             return;
         }
@@ -1092,6 +1890,7 @@
             hledat = bezDiakritiky($("fHledat").value.trim());
             render();
         });
+        $("fTyp").addEventListener("change", () => { filTyp = $("fTyp").value; render(); });
         $("fCin").addEventListener("change", () => { filCin = $("fCin").value; render(); });
         $("fKdo").addEventListener("change", () => { filKdo = $("fKdo").value; render(); });
         document.querySelectorAll("#filtrRow [data-prep]").forEach(chip =>
@@ -1101,9 +1900,54 @@
                 render();
             }));
         $("btnFiltrPryc").addEventListener("click", () => {
-            hledat = ""; filCin = ""; filKdo = ""; jenMoje = false; jenSkryte = false;
+            hledat = ""; filTyp = ""; filCin = ""; filKdo = ""; jenMoje = false; jenSkryte = false;
             $("fHledat").value = "";
             render();
+        });
+
+        // záložky: klik, šipky vlevo/vpravo; volba se pamatuje
+        const prepniZalozku = (z) => {
+            zalozka = z === "harmonogram" ? "harmonogram" : "vypis";
+            try { localStorage.setItem(ZALOZKA_KLIC, zalozka); } catch (err) { /* nevadí */ }
+            render();
+        };
+        document.querySelectorAll("#zalozky [data-zalozka]").forEach(tab =>
+            tab.addEventListener("click", () => prepniZalozku(tab.dataset.zalozka)));
+        $("zalozky").addEventListener("keydown", (event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            prepniZalozku(zalozka === "vypis" ? "harmonogram" : "vypis");
+            const tab = document.querySelector('#zalozky [data-zalozka="' + zalozka + '"]');
+            if (tab) tab.focus();
+        });
+
+        // sbalené bloky výpisu (bez termínu, splněné) – otevřené přežijí překreslení
+        $("vypis").addEventListener("toggle", (event) => {
+            const blok = event.target.closest && event.target.closest("details[data-blok]");
+            if (!blok) return;
+            const klic = blok.getAttribute("data-blok");
+            if (blok.open === otevreneBloky.has(klic)) return;
+            if (blok.open) otevreneBloky.add(klic); else otevreneBloky.delete(klic);
+            render();
+        }, true);
+
+        // okno změny termínu
+        document.querySelectorAll('input[name="tRezim"]').forEach(r =>
+            r.addEventListener("change", prekresliTerminOkno));
+        ["tDatum", "tPosun", "tZverejnit"].forEach(id => {
+            $(id).addEventListener("input", prekresliTerminOkno);
+            $(id).addEventListener("change", prekresliTerminOkno);
+        });
+        $("tZrusit").addEventListener("click", () => zavriTerminOkno(null));
+        $("tUlozit").addEventListener("click", ulozTerminOkno);
+        $("terminOverlay").addEventListener("click", (event) => {
+            if (event.target === $("terminOverlay")) zavriTerminOkno(null);
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && terminOkno && !$("terminOverlay").hidden) {
+                event.preventDefault();
+                zavriTerminOkno(null);
+            }
         });
         // přepínání pohledů Zobrazit: – jeden aktivní, žádné kombinace
         document.querySelectorAll("#pohledRow [data-pohled]").forEach(chip =>
