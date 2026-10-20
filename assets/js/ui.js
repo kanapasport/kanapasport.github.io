@@ -4170,3 +4170,137 @@
         });
     });
 })();
+
+/* ==========================================================================
+   Mini okno ↔ hlavní okna webu (samostatné bloky, logika mini v mini.js).
+   ========================================================================== */
+
+/* --------------------------------- hlavní okno přes BroadcastChannel ---
+   Mini okno (samostatné, ze zástupce na ikoně nebo plovoucí) neotvírá
+   stránky webu u sebe. Zeptá se kanálem „kb-okna", jaká okna webu jsou
+   otevřená, vybere jedno (mini.js vyberOkno) a pošle mu cíl: okno na cíl
+   přejde, otevře detail vzkazu, nebo se jen vytáhne dopředu. Okno, ve
+   kterém člověk něco psal, hlásí `rozepsano` – takové mini nepřepisuje
+   a otevře raději nové. Odpovídá jen okno, které samo není mini. */
+(function () {
+    "use strict";
+
+    const UI = window.KBUI;
+    const KANAL = "kb-okna";
+    const OKNO_ID = "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    // mini.js podle toho pozná, jestli vybrané okno je to, ze kterého se otevřelo
+    window.KB_OKNO_ID = OKNO_ID;
+
+    const jsemMini = () => !!window.KB_MINI || /(^|\/)mini\.html$/.test(location.pathname);
+    const strankaTed = () => location.pathname.split("/").pop() || "index.html";
+    // jen stránka webu s nevinným dotazem a kotvou – nic jiného se nenačte
+    const ADRESA_OK = /^[a-z0-9-]+\.html(\?[A-Za-z0-9=&%._-]*)?(#[A-Za-z0-9=%._-]*)?$/;
+    const QUICK_OK = /^[A-Za-z0-9_-]{1,80}$/;
+
+    let aktivniMs = 0;
+    let rozepsano = false;
+    try { if (document.hasFocus()) aktivniMs = Date.now(); } catch (err) { /* nic */ }
+    window.addEventListener("focus", () => { aktivniMs = Date.now(); });
+
+    /* Rozepsaný formulář: člověk něco napsal nebo vybral (ne hledání).
+       Zpátky se to nevrací – raději nové okno navíc než ztracený zápis. */
+    document.addEventListener("input", (event) => {
+        const t = event.target;
+        if (!event.isTrusted || !t || !t.matches) return;
+        if (t.matches('input[type="search"], .searchbox input')) return;
+        if (t.matches("input, textarea, select, [contenteditable]")) rozepsano = true;
+    }, true);
+
+    let kanal = null;
+    try { kanal = new BroadcastChannel(KANAL); } catch (err) { kanal = null; }
+    if (!kanal) return;
+
+    kanal.onmessage = (event) => {
+        const d = event.data;
+        if (!d || typeof d !== "object" || jsemMini()) return;
+        if (d.typ === "kdo") {
+            kanal.postMessage({
+                typ: "tady", dotaz: d.dotaz, okno: OKNO_ID, stranka: strankaTed(),
+                rozepsano: rozepsano, aktivniMs: aktivniMs,
+                viditelne: document.visibilityState === "visible"
+            });
+            return;
+        }
+        if (d.typ !== "otevri" || d.okno !== OKNO_ID) return;
+        const cil = (d.cil && typeof d.cil === "object") ? d.cil : {};
+        const adresa = String(cil.adresa || "");
+        if (cil.quick && QUICK_OK.test(String(cil.quick))) {
+            if (window.KB && window.KB.watchQuickTodo) window.KB.watchQuickTodo();
+            if (UI && UI.otevriQuick) UI.otevriQuick(String(cil.quick));
+        } else if (!cil.jenUkazat && ADRESA_OK.test(adresa)) {
+            const soubor = adresa.split(/[?#]/)[0];
+            // na té stránce už jsem (a cíl nic dalšího nechce) – jen se ukázat
+            const uzTady = soubor === strankaTed() && !/[?#]/.test(adresa);
+            if (!uzTady) location.href = adresa;
+        }
+        /* Vytáhnout se okno zkusí – prohlížeč to ale bez kliknutí v něm
+           nemusí dovolit (pak mini aspoň hlásí, kde se to otevřelo). */
+        try { window.focus(); } catch (err) { /* nic */ }
+        kanal.postMessage({ typ: "otevreno", dotaz: d.dotaz, okno: OKNO_ID });
+    };
+})();
+
+/* ----------------------------------------- detail vzkazu podle #quick= ---
+   Mini okno bez otevřeného hlavního okna otevře quicktodo.html#quick=ID –
+   vzkaz se ukáže v okně detailu, jakmile dorazí (stejně jako klik na něj). */
+(function () {
+    "use strict";
+
+    let id = "";
+    const zkus = () => {
+        if (!id || !(window.KB.quicktodo || []).some(q => q.id === id)) return;
+        const otevrit = id;
+        id = "";
+        try { history.replaceState(null, "", location.pathname + location.search); } catch (err) { /* nic */ }
+        window.KBUI.otevriQuick(otevrit);
+    };
+    const podleKotvy = () => {
+        const m = /^#quick=([A-Za-z0-9_-]{1,80})$/.exec(location.hash || "");
+        if (!m || window.KB_MINI || !window.KB || !window.KBUI) return;
+        id = m[1];
+        // vzkazy poslouchá i pás; tady pro jistotu (odběr se nezdvojí)
+        if (window.KB.watchQuickTodo) window.KB.watchQuickTodo();
+        zkus();
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!window.KB || !window.KB.on) return;
+        window.KB.on("quicktodo", zkus);
+        window.KB.on("users", podleKotvy);       // přihlášení dorazilo – odběr už půjde
+        podleKotvy();
+    });
+    window.addEventListener("hashchange", podleKotvy);
+})();
+
+/* ------------------------------ velikost okna aplikace po mini okně ---
+   Zástupce „Mini okno" na ikoně nainstalované aplikace otevře okno
+   aplikace a mini.js ho zmenší (velikost předtím uloží do
+   `kb-mini-velke-okno`). Chrome si pamatuje jednu velikost na celou
+   aplikaci, takže by pak i web samotný naskočil jako malé okno. Okno
+   aplikace (display-mode standalone) na PC, které je podezřele malé, se
+   proto vrátí na uloženou velikost – jednou, pak se záznam smaže. */
+(function () {
+    "use strict";
+
+    const VELKE_OKNO = "kb-mini-velke-okno";
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (window.KB_MINI || /(^|\/)mini\.html$/.test(location.pathname)) return;
+        try {
+            if (!window.matchMedia("(display-mode: standalone)").matches) return;
+            if (window.matchMedia("(pointer: coarse)").matches) return;      // telefon, tablet
+            const v = JSON.parse(localStorage.getItem(VELKE_OKNO) || "null");
+            if (!v) return;
+            localStorage.removeItem(VELKE_OKNO);
+            if (!(Number(v.w) >= 600 && Number(v.h) >= 400)) return;
+            // běžné okno nechat – jen to, které zůstalo po mini (to má do 520 px)
+            if (window.outerWidth > 520 && window.outerHeight > 240) return;
+            window.resizeTo(Number(v.w), Number(v.h));
+        } catch (err) { /* prohlížeč změnu velikosti nedovolil */ }
+    });
+})();
