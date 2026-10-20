@@ -1836,10 +1836,12 @@
         if (prijata) {
             prepoctiRozpis();
             const s = stavSouctu();
-            if (s.dphVetsi && !confirm("U některé sazby je DPH větší než základ. Uložit i tak?")) return;
-            if (!s.prazdne && Math.abs(s.rozdil) > 1 && !confirm("Základ + DPH + poplatky + zaokrouhlení (" +
+            if (s.dphVetsi && !(await window.KBUI.potvrd({ nadpis: "Uložit i tak?",
+                    text: "U některé sazby je DPH větší než základ.", ano: "Uložit i tak" }))) return;
+            if (!s.prazdne && Math.abs(s.rozdil) > 1 && !(await window.KBUI.potvrd({ nadpis: "Uložit i tak?",
+                    text: "Základ + DPH + poplatky + zaokrouhlení (" +
                     penize2(s.soucet, menaFormulare()) + ") nedává celkem k úhradě (" +
-                    penize2(s.celkem, menaFormulare()) + ").\n\nUložit i tak?")) return;
+                    penize2(s.celkem, menaFormulare()) + ").", ano: "Uložit i tak" }))) return;
         }
 
         const stary = doklad(vybrana) || {};
@@ -1922,7 +1924,8 @@
     async function smazDoklad(id) {
         const f = doklad(id);
         if (!f) return;
-        if (!confirm("Smazat „" + nazevZaznamu(f) + "“?\n\nEvidence zmizí, PDF na disku zůstává.")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat „" + nazevZaznamu(f) + "“?",
+            text: "Evidence zmizí, PDF na disku zůstává.", ano: "Smazat", nebezpecne: true }))) return;
         try {
             await window.KB.deleteFaktura(id, f.cislo || "");
             if (vybrana === id) zavriDoklad(true);
@@ -1997,7 +2000,8 @@
 
     /** „+ Nová kategorie…“ – přidá kategorii do seznamu a rovnou ji vybere. */
     async function novaKategorie() {
-        const nazev = (prompt("Název nové kategorie výdajů:") || "").trim().slice(0, 60);
+        const nazev = ((await window.KBUI.zeptej({ nadpis: "Název nové kategorie výdajů",
+            maxDelka: 60, ano: "Přidat" })) || "").trim().slice(0, 60);
         if (!nazev) { obnovKategorie(kategoriePred); return; }
         await nactiNastaveni();            // ať se neuloží seznam nad nenačtenými údaji
         const seznam = kategorie().slice();
@@ -2429,8 +2433,13 @@
         vykresliPanel();
     }
 
-    function novaFaktura(typ) {
-        if (dotknuto && !confirm("Zahodit rozepsané změny?")) return;
+    /* Otázka na rozepsaný doklad. Bez rozepsaných změn se okno neukáže
+       a funkce níž doběhnou hned (await se vůbec nespustí). */
+    const zahoditZmeny = () => window.KBUI.potvrd({ nadpis: "Zahodit rozepsané změny?",
+        text: "Doklad má neuložené úpravy.", ano: "Zahodit", nebezpecne: true });
+
+    async function novaFaktura(typ) {
+        if (dotknuto && !(await zahoditZmeny())) return;
         vybrana = "";
         nova = typ;
         dotknuto = false;
@@ -2444,16 +2453,16 @@
     }
 
     /** Okno dokladu – z karty nástěnky, z odkazu ?id= i z rámu na stránce Měsíce. */
-    function otevriDoklad(id) {
-        if (dotknuto && !confirm("Zahodit rozepsané změny?")) return;
+    async function otevriDoklad(id) {
+        if (dotknuto && !(await zahoditZmeny())) return;
         vybrana = id;
         nova = "";
         dotknuto = false;
         vykresliPanel();
     }
 
-    function zavriDoklad(bezPtani) {
-        if (!bezPtani && dotknuto && !confirm("Zahodit rozepsané změny?")) return;
+    async function zavriDoklad(bezPtani) {
+        if (!bezPtani && dotknuto && !(await zahoditZmeny())) return;
         vybrana = "";
         nova = "";
         dotknuto = false;

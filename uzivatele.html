@@ -720,8 +720,8 @@
         if (reset) {
             const user = findUser(reset.dataset.reset);
             if (!user) return;
-            if (!confirm("Poslat " + user.email + " odkaz na změnu hesla?\n\n" +
-                         "Heslo si nastaví sám a nikdo jiný ho neuvidí.")) return;
+            if (!(await window.KBUI.potvrd({ nadpis: "Poslat " + user.email + " odkaz na změnu hesla?",
+                         text: "Heslo si nastaví sám a nikdo jiný ho neuvidí.", ano: "Poslat odkaz" }))) return;
             try {
                 await window.KB.sendPasswordReset(user.email);
                 window.KBUI.toast("Odkaz odeslán na " + user.email + ".");
@@ -736,7 +736,8 @@
 
         const user = (window.KB.users || []).find(u => u.id === del.dataset.del);
         if (!user) return;
-        if (!confirm('Opravdu odebrat přístup pro „' + (user.first + " " + user.last).trim() + '"?')) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Odebrat přístup pro „" + (user.first + " " + user.last).trim() + "“?",
+            ano: "Odebrat přístup", nebezpecne: true }))) return;
 
         try {
             await window.KB.deleteUser(user.id);

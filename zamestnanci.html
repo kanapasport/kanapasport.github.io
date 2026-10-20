@@ -258,8 +258,9 @@
         $("btnZpet").disabled = !zmeneno;
     }
 
-    function otevriCloveka(uid) {
-        if (!zkusOpustit()) return;
+    async function otevriCloveka(uid) {
+        const opustit = zkusOpustit();      // true hned, nebo okno s otázkou (Promise)
+        if (opustit !== true && !(await opustit)) return;
         vybranyUid = uid;
         puvodni = new Set(projekty().filter(p => jeNaProjektu(p, uid)).map(p => p.id));
         zaskrtnute = new Set(puvodni);
@@ -271,10 +272,12 @@
         vykresliPanel();
     }
 
-    /** Rozepsané přiřazení se nesmí ztratit jen proto, že se klikne vedle. */
+    /** Rozepsané přiřazení se nesmí ztratit jen proto, že se klikne vedle.
+        Bez rozepsaného vrací rovnou true, jinak Promise s odpovědí z okna. */
     function zkusOpustit() {
         if (!puvodni || $("btnUloz").disabled) return true;
-        return confirm("Přiřazení není uložené. Opravdu ho zahodit?");
+        return window.KBUI.potvrd({ nadpis: "Zahodit neuložené přiřazení?",
+            text: "Přiřazení projektů není uložené.", ano: "Zahodit", nebezpecne: true });
     }
 
     /* -------------------------------------------------------- ukládání */

@@ -276,8 +276,9 @@
             return void window.KBUI.toast("Na staré umístění se nedá dostat.", "error");
         }
         if (!kolik) return void window.KBUI.toast("Na starém místě už žádné tabule nejsou.");
-        if (!confirm("Zkopírovat " + V.pocet(kolik, ["tabuli", "tabule", "tabulí"]) + " i s obsahem a obrázky na nové místo?\n\n" +
-            "Staré zůstanou, kde jsou – smažou se až druhým tlačítkem.")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Zkopírovat " + V.pocet(kolik, ["tabuli", "tabule", "tabulí"]) +
+            " i s obsahem a obrázky na nové místo?",
+            text: "Staré zůstanou, kde jsou – smažou se až druhým tlačítkem.", ano: "Zkopírovat" }))) return;
 
         $("btnPresun").disabled = true;
         try {
@@ -301,9 +302,10 @@
         try { kolik = await window.KB.pocetStarychTabuli(); }
         catch (err) { return void window.KBUI.toast("Na staré umístění se nedá dostat.", "error"); }
         if (!kolik) return void window.KBUI.toast("Staré umístění je prázdné.");
-        if (!confirm("Smazat " + V.pocet(kolik, ["tabuli", "tabule", "tabulí"]) + " ze starého umístění?\n\n" +
-            "Dělej to až ve chvíli, kdy si na stránce Tabule ověříš, že jsou všechny\n" +
-            "na novém místě i s obsahem. Zpátky to nejde.")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat " + V.pocet(kolik, ["tabuli", "tabule", "tabulí"]) +
+            " ze starého umístění?",
+            text: "Dělej to až ve chvíli, kdy si na stránce Tabule ověříš, že jsou všechny " +
+            "na novém místě i s obsahem. Zpátky to nejde.", ano: "Smazat", nebezpecne: true }))) return;
 
         $("btnUklid").disabled = true;
         try {
@@ -348,8 +350,9 @@
 
         const pocet = Object.values(data.kolekce)
             .reduce((s, k) => s + Object.keys(k || {}).length, 0);
-        if (!confirm("Obnovit " + pocet + " dokumentů ze zálohy z " +
-            (data._vytvoreno || "?").slice(0, 10) + "?\n\nSoučasné verze těch dokumentů se PŘEPÍŠOU.")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Obnovit " + pocet + " dokumentů ze zálohy z " +
+            (data._vytvoreno || "?").slice(0, 10) + "?",
+            text: "Současné verze těch dokumentů se PŘEPÍŠOU.", ano: "Obnovit", nebezpecne: true }))) return;
 
         $("btnObnova").disabled = true;
         try {

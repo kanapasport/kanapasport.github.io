@@ -660,11 +660,12 @@
     }
 
     /** Společné dopadnutí zápisu – ať chyba vypadá všude stejně. */
-    async function uloz(prace, hlaska) {
+    /** zpet = funkce, která změnu vrátí – hláška pak má tlačítko „Zpět“. */
+    async function uloz(prace, hlaska, zpet) {
         try {
             await prace;
             $("milnikOverlay").hidden = true;
-            window.KBUI.toast(hlaska);
+            window.KBUI.toast(hlaska, undefined, zpet ? { zpet: zpet } : undefined);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Uložení selhalo – nejspíš na to tvoje role nemá právo" +
@@ -709,7 +710,8 @@
     async function smazMilnik(id) {
         const item = (window.KB.milniky || []).find(m => m.id === id);
         if (!item) return;
-        if (!confirm('Opravdu smazat milník „' + (item.cinnost || "") + '"?')) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat milník „" + (item.cinnost || "") + "“?",
+            ano: "Smazat", nebezpecne: true }))) return;
         await uloz(window.KB.smazMilnik(id), "Milník smazán.");
     }
 
@@ -748,7 +750,17 @@
                 ? "Milník označen jako splněný." +
                   (pohled === "splnene" ? "" : " Najdeš ho v pohledu Všechny splněné.")
                 : "Milník označen jako splněný – v seznamu zůstává, dokud ho manažer nepotvrdí.");
-        await uloz(window.KB.ulozSplneniMilniku(id, zmena), hlaska);
+        /* Zpět vrátí přesně to, co bylo (i kdo a kdy). Potvrzení si nechává
+           manažer – kolegovi by ho pravidla databáze nevrátila. */
+        const manazer = window.KBUI.can("milnik.manage");
+        const predtim = {
+            hotovo: !!byl.hotovo, hotovoKdo: byl.hotovoKdo || "", hotovoMs: byl.hotovoMs || 0,
+            potvrzeno: manazer && (byl.potvrzeno !== undefined ? !!byl.potvrzeno : !!byl.hotovo),
+            potvrdil: manazer ? byl.potvrdil || "" : "",
+            potvrzenoMs: manazer ? byl.potvrzenoMs || 0 : 0
+        };
+        await uloz(window.KB.ulozSplneniMilniku(id, zmena), hlaska,
+            () => window.KB.ulozSplneniMilniku(id, predtim));
     }
 
     /* ------------------------------------------------- úkoly z milníků --
@@ -833,12 +845,13 @@
             const t = (m.cinnost || "").trim() || "bez technologie";
             if (tech.indexOf(t) === -1) tech.push(t);
         });
-        if (!confirm("Založí se " + pocet(plan.length, UKOL) + " – jeden z každého " +
+        if (!(await window.KBUI.potvrd({ nadpis: "Založit " + pocet(plan.length, UKOL) + "?",
+                text: "Založí se " + pocet(plan.length, UKOL) + " – jeden z každého " +
                 (Array.isArray(vybrane) ? "vybraného" : "vypsaného") +
                 " milníku (" + tech.join(", ") + "), s termínem a zpracovateli " +
                 "z milníku." + (bezProjektu
                     ? " Vynechá se " + bezProjektu + ", protože jejich zakázka není mezi projekty."
-                    : "") + " Pokračovat?")) return null;
+                    : ""), ano: "Založit" }))) return null;
 
         ukolyBezi = true;
         const btn = $("btnUkolyZMilniku");
@@ -920,8 +933,10 @@
         const m = najdiMilnik(id);
         if (!m) return;
         if (btn) btn.disabled = true;
-        uloz(window.KB.zverejniMilnik(m.id, m.zverejneno === false),
-             m.zverejneno === false ? "Milník vidí zaměstnanci." : "Milník je zase skrytý.")
+        const zverejnit = m.zverejneno === false;
+        uloz(window.KB.zverejniMilnik(m.id, zverejnit),
+             zverejnit ? "Milník vidí zaměstnanci." : "Milník je zase skrytý.",
+             () => window.KB.zverejniMilnik(m.id, !zverejnit))
             .then(() => { if (btn) btn.disabled = false; });
     }
 
@@ -1018,7 +1033,7 @@
         }
     });
 
-    document.addEventListener("click", (event) => {
+    document.addEventListener("click", async (event) => {
         const potvrd = event.target.closest("[data-potvrd-milnik]");
         if (potvrd && window.KBUI.can("milnik.manage")) {
             potvrdJeden(potvrd.dataset.potvrdMilnik, potvrd);
@@ -1044,8 +1059,8 @@
             const cele = (window.KB.milniky || [])
                 .filter(m => skupinaName(m) === nazev && m.zverejneno === false);
             if (!cele.length) return;
-            if (!confirm("Zveřejnit " + pocet(cele.length, MILNIK) + " ze skupiny „" +
-                         nazev + '"?')) return;
+            if (!(await window.KBUI.potvrd({ nadpis: "Zveřejnit " + pocet(cele.length, MILNIK) +
+                         " ze skupiny „" + nazev + "“?", ano: "Zveřejnit" }))) return;
             skup.disabled = true;
             uloz(Promise.all(cele.map(m => window.KB.zverejniMilnik(m.id, true))),
                  "Skupina je zveřejněná.")

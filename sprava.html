@@ -669,7 +669,7 @@
 </div>
 
 <!-- ===================================================== NOVÝ PROJEKT ==
-     Dřív se zakládalo dvěma prompt() okénky (číslo, název) a zbytek se
+     Dřív se zakládalo dvěma okénky prohlížeče (číslo, název) a zbytek se
      doplňoval až v panelu. Okno dá základ pohromadě (Michal 8. 10. 2026). -->
 <div id="novyOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:120;display:flex;align-items:center;justify-content:center;padding:18px">
     <!-- Široké schválně: od v273 je v okně celé zadání projektu včetně
@@ -1501,7 +1501,8 @@
         const p = vybranyProjekt();
         const n = nakladyProjektu.find(x => x.id === id);
         if (!p || !n) return;
-        if (!confirm("Smazat náklad " + (n.dodavatel || "") + " " + V.kc(n.castka) + "?")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat náklad " + (n.dodavatel || "") + " " + V.kc(n.castka) + "?",
+            ano: "Smazat", nebezpecne: true }))) return;
         nakladyProjektu = nakladyProjektu.filter(x => x.id !== id);
         try {
             await ulozNaklady(p);
@@ -2265,9 +2266,10 @@
            čtrnáct úkolů všem lidem projektu */
         if (nove.length > 1) {
             const sLidmi = nove.filter(n => (n.prirazeni || []).length).length;
-            if (!window.confirm("Založí se " + nove.length + " úkolů"
-                    + (sLidmi ? " (z toho " + sLidmi + " s přiřazenými lidmi)" : "")
-                    + ". Pokračovat?")) return;
+            if (!(await window.KBUI.potvrd({ nadpis: "Založit " + nove.length + " úkolů?",
+                    text: "Založí se " + nove.length + " úkolů"
+                    + (sLidmi ? " (z toho " + sLidmi + " s přiřazenými lidmi)" : "") + ".",
+                    ano: "Založit" }))) return;
         }
 
         kostraUkoluBezi = true;
@@ -2567,8 +2569,8 @@
     async function smazUkol(id) {
         const u = (window.KB.ukoly || []).find(x => x.id === id);
         if (!u) return;
-        if (!confirm('Smazat úkol „' + (u.nazev || "Bez názvu") + '" i s TO-DO rozpadem?' +
-            String.fromCharCode(10) + "Zapsané výkazy zůstávají, jen přijdou o vazbu na úkol.")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat úkol „" + (u.nazev || "Bez názvu") + "“ i s TO-DO rozpadem?",
+            text: "Zapsané výkazy zůstávají, jen přijdou o vazbu na úkol.", ano: "Smazat", nebezpecne: true }))) return;
         try {
             await window.KB.deleteUkol(id);
             $("bunkaOverlay").hidden = true;
@@ -2984,8 +2986,9 @@
 
         const uz = (window.KB.projektyDocs || []).find(x =>
             (x.cislo || "").toLowerCase() === cislo.toLowerCase());
-        if (uz && !confirm("Zakázka " + cislo + " už v evidenci je („" +
-            (uz.nazev || "") + "\"). Založit i tak?")) return;
+        if (uz && !(await window.KBUI.potvrd({ nadpis: "Založit i tak?",
+            text: "Zakázka " + cislo + " už v evidenci je („" + (uz.nazev || "") + "“).",
+            ano: "Založit i tak" }))) return;
 
         const id = window.KB.newProjektId();
         $("nZalozit").disabled = true;
@@ -3439,7 +3442,8 @@
             const otazka = pridat
                 ? kdo + " se přidá k " + V.pocet(cil.length, ["úkolu", "úkolům", "úkolům"])
                 : kdo + " se odebere z " + V.pocet(cil.length, ["úkolu", "úkolů", "úkolů"]);
-            if (!confirm(otazka + " technologie " + filtr + ". Pokračovat?")) return;
+            if (!(await window.KBUI.potvrd({ nadpis: pridat ? "Přidat na úkoly?" : "Odebrat z úkolů?",
+                text: otazka + " technologie " + filtr + ".", ano: pridat ? "Přidat" : "Odebrat" }))) return;
 
             btn.disabled = true;
             try {

@@ -644,7 +644,10 @@
         const pdf = await window.pdfjsLib.getDocument({ data: data, isEvalSupported: false }).promise;
         let strana = 1;
         if (pdf.numPages > 1) {
-            const odpoved = prompt("PDF má " + pdf.numPages + " stránek. Kterou nahrát?", "1");
+            const odpoved = await window.KBUI.zeptej({ nadpis: "Kterou stránku nahrát?",
+                text: "PDF má " + pdf.numPages + " stránek.", typ: "number", vychozi: "1",
+                min: 1, max: pdf.numPages, krok: 1, ano: "Nahrát", ne: "Nahrát 1. stránku" });
+            // zrušení nebo nesmysl = první stránka, jako dřív
             strana = Math.min(pdf.numPages, Math.max(1, Number(odpoved) || 1));
         }
         const page = await pdf.getPage(strana);
@@ -690,8 +693,9 @@
                 " Převeď plán (má ho Michal) na JPEG a nahraj ten – trvá to vteřiny.",
                 "warn");
         }
-        const nazev = prompt("Název plánu (např. G61 – 2NP – SLB):",
-            soubor.name.replace(/\.[a-z]+$/i, ""));
+        const nazev = await window.KBUI.zeptej({ nadpis: "Název plánu",
+            placeholder: "např. G61 – 2NP – SLB", vychozi: soubor.name.replace(/\.[a-z]+$/i, ""),
+            ano: "Nahrát" });
         if (nazev === null) return;
         window.KBUI.toast("Zpracovávám plán… (u velkých výkresů to chvíli trvá)");
         try {
@@ -1751,9 +1755,9 @@
         if (!cile.length) return window.KBUI.toast("Nic není vybráno.", "warn");
         const manazer = window.KBUI.can("vykaz.view");
         const moje = cile.filter(z => manazer || z.uid === window.KB.currentUid());
-        if (!confirm("Smazat " + moje.length + " značek?" +
-            (moje.length < cile.length ? " (" + (cile.length - moje.length) +
-                " cizích smaže jen manažer)" : ""))) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat " + moje.length + " značek?",
+            text: moje.length < cile.length ? (cile.length - moje.length) +
+                " cizích smaže jen manažer." : "", ano: "Smazat", nebezpecne: true }))) return;
         for (const z of moje) {
             await window.KB.smazZnacku(otevreny, z.id);
             vybrane.delete(z.id);
@@ -1770,12 +1774,14 @@
            proto, aby se dala pojmenovat. Do kolečka se vejdou tři znaky,
            tam dvojklik dál píše poznámku. */
         if (z.tvar === "obdelnik") {
-            const text = prompt("Popisek obdélníku (např. 3S01 – Injekce zebrafish):", z.text || "");
+            const text = await window.KBUI.zeptej({ nadpis: "Popisek obdélníku",
+                placeholder: "např. 3S01 – Injekce zebrafish", vychozi: z.text || "", ano: "Uložit" });
             if (text === null) return;
             await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { text: text }));
             return;
         }
-        const pozn = prompt("Poznámka ke značce (prázdná poznámku smaže):", z.pozn || "");
+        const pozn = await window.KBUI.zeptej({ nadpis: "Poznámka ke značce",
+            text: "Prázdná poznámku smaže.", vychozi: z.pozn || "", ano: "Uložit" });
         if (pozn === null) return;
         await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { pozn: pozn }));
     });
@@ -1786,7 +1792,8 @@
         window.KBUI.mountNav({ active: "plany.html" });
 
         $("btnSlozka").addEventListener("click", async () => {
-            const nazev = prompt("Název složky (např. Hala A – 2.NP):");
+            const nazev = await window.KBUI.zeptej({ nadpis: "Název nové složky",
+                placeholder: "např. Hala A – 2.NP", ano: "Založit" });
             if (!nazev) return;
             await window.KB.ulozSlozkuPlanu(nazev, slozka).catch(err => {
                 console.error(err);
@@ -1802,14 +1809,16 @@
         $("seznam").addEventListener("click", async (e) => {
             const smazS = e.target.closest("[data-smaz-slozku]");
             if (smazS) {
-                if (!confirm("Smazat složku?")) return;
+                if (!(await window.KBUI.potvrd({ nadpis: "Smazat složku?", ano: "Smazat",
+                    nebezpecne: true }))) return;
                 await window.KB.smazSlozkuPlanu(smazS.dataset.smazSlozku)
                     .catch(err => window.KBUI.toast(err.message || "Smazání selhalo.", "error"));
                 return;
             }
             const smazP = e.target.closest("[data-smaz-plan]");
             if (smazP) {
-                if (!confirm("Smazat plán i se všemi značkami?")) return;
+                if (!(await window.KBUI.potvrd({ nadpis: "Smazat plán i se všemi značkami?", ano: "Smazat",
+                    nebezpecne: true }))) return;
                 await window.KB.smazPlan(smazP.dataset.smazPlan)
                     .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
                 return;

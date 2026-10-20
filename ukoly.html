@@ -689,7 +689,8 @@
     /** Smazání úkolu – stejné potvrzení jako v okně úprav. */
     async function smazUkol(id) {
         if (!id || !window.KBUI.can("ukol.delete")) return;
-        if (!confirm("Opravdu smazat celý úkol i s postupem?")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat celý úkol i s postupem?", ano: "Smazat",
+            nebezpecne: true }))) return;
         await window.KB.deleteUkol(id).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
     }
 
@@ -840,7 +841,7 @@
         const [ukolId, todoId, poznId] = klic.split("|");
         const u = najdiUkol(ukolId);
         if (!u) return;
-        if (!confirm("Smazat poznámku?")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat poznámku?", ano: "Smazat", nebezpecne: true }))) return;
         await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
             pozn: (t.pozn || []).filter(p => p.id !== poznId)
         })), "smazal poznámku u TO-DO");
@@ -889,10 +890,11 @@
     let tvorbaSpinava = false;   // v okně tvorby je rozepsaná neuložená změna
 
     /** Zavře okno úpravy a pustí rolování stránky pod ním. */
-    function zavriTvorbu() {
+    async function zavriTvorbu() {
         /* Rozepsaný úkol se nesmí zahodit potichu – Escape, křížek i klik
            na pozadí se napřed zeptají (přání Michala 31. 8. 2026). */
-        if (tvorbaSpinava && !confirm("Zahodit rozepsané změny úkolu?")) return;
+        if (tvorbaSpinava && !(await window.KBUI.potvrd({ nadpis: "Zahodit rozepsané změny úkolu?",
+            ano: "Zahodit", nebezpecne: true }))) return;
         tvorbaSpinava = false;
         $("tvorba").hidden = true;
         document.body.style.overflow = "";
@@ -1145,7 +1147,8 @@
         $("btnRozbal").addEventListener("click", prepniRozbaleniVsech);
         $("btnSmazat").addEventListener("click", async () => {
             if (!editovanyId) return;
-            if (!confirm("Opravdu smazat celý úkol i s postupem?")) return;
+            if (!(await window.KBUI.potvrd({ nadpis: "Smazat celý úkol i s postupem?", ano: "Smazat",
+                nebezpecne: true }))) return;
             await window.KB.deleteUkol(editovanyId).catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
             zavriTvorbu();
         });
