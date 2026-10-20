@@ -8,6 +8,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Pokladna – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=285">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -77,10 +78,8 @@
             padding: 1px 7px; border-radius: 999px; background: var(--bg-soft);
             border: 1px solid var(--line); color: var(--text-soft); white-space: nowrap; }
         .pkkdo { font-weight: 800; color: var(--accent); }
-        .pkakce { border: 0; background: none; color: var(--muted); cursor: pointer;
-            font-weight: 900; padding: 2px 5px; }
-        .pkakce:hover { color: var(--accent); }
-        .pkakce--smaz:hover { color: var(--danger, #c8102e); }
+        /* „⋯“ na konci řádku (dřív „×“ na smazání) – nabídka z nabidka.js */
+        .pkkniha td.pkkniha__akce { padding-top: 3px; padding-bottom: 3px; width: 1%; }
 
         /* Zápis nového řádku */
         .pkform { display: grid; grid-template-columns: 140px minmax(220px, 2fr) 120px 130px 150px auto;
@@ -190,6 +189,7 @@
 
 <script src="assets/js/taxonomy.js?v=285"></script>
 <script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/nabidka.js?v=285"></script>
 <script src="assets/js/vykazy.js?v=285"></script>
 <script type="module" src="assets/js/store.js?v=285"></script>
 
@@ -418,15 +418,15 @@
                 '<th class="num">Příjem</th><th class="num">Výdej</th><th></th></tr></thead>' +
             "<tbody>" + v.map(z => {
                 const prijem = Number(z.prijem) || 0;
-                return '<tr' + (prijem ? ' class="pk--prijem"' : "") + ">" +
+                return '<tr data-pkid="' + esc(z.id) + '"' + (prijem ? ' class="pk--prijem"' : "") + ">" +
                     '<td class="pkkniha__datum">' + esc(czDatum(z.datum)) + "</td>" +
                     "<td>" + textSeZminkou(z.text || "") + "</td>" +
                     '<td><span class="pkstitek">' + esc(nazevKat(z.kategorie)) + "</span></td>" +
                     '<td class="num pkkniha__castka">' + (prijem ? esc(kc(prijem)) : "") + "</td>" +
                     '<td class="num pkkniha__castka">' +
                         (Number(z.vydej) ? esc(kc(z.vydej)) : "") + "</td>" +
-                    '<td class="num"><button type="button" class="pkakce pkakce--smaz" ' +
-                        'data-smaz="' + esc(z.id) + '" title="Smazat zápis">×</button></td>' +
+                    '<td class="num pkkniha__akce">' +
+                        window.KBNabidka.tlacitko("Další akce: " + (z.text || "zápis")) + "</td>" +
                 "</tr>";
             }).join("") + "</tbody>";
     }
@@ -587,13 +587,41 @@
             vykresli();
         });
 
-        $("kniha").addEventListener("click", async (e) => {
-            const b = e.target.closest("[data-smaz]");
-            if (!b) return;
-            const z = (window.KB.pokladna || []).find(x => x.id === b.dataset.smaz);
+        /* Řádek knihy: „⋯“, pravé tlačítko nebo podržení prstem. Mazání
+           (dřív „×“ v každém řádku) je dole za čárou se stejným potvrzením,
+           nad ním filtry, které stránka umí roletkami nahoře. */
+        async function smazZapis(id) {
+            const z = (window.KB.pokladna || []).find(x => x.id === id);
             if (!z || !confirm("Smazat zápis: " + (z.text || "") + "?")) return;
             await window.KB.smazPokladnu(z.id)
                 .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+        }
+        const MESICE_2P = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
+            "srpen", "září", "říjen", "listopad", "prosinec"];
+        window.KBNabidka.pripoj((cil) => {
+            const tr = cil.closest && cil.closest("tr[data-pkid]");
+            if (!tr || !$("kniha").contains(tr) || !window.KBUI.can("finance.view")) return null;
+            const z = (window.KB.pokladna || []).find(x => x.id === tr.getAttribute("data-pkid"));
+            if (!z) return null;
+            const jm = jmenoZaznamu(z);
+            const mesic = String(z.datum || "").slice(0, 7);
+            const mesicText = mesic ? MESICE_2P[Number(mesic.slice(5, 7)) - 1] + " " + mesic.slice(0, 4) : "";
+            return {
+                nadpis: (czDatum(z.datum) ? czDatum(z.datum) + " · " : "") + (z.text || "zápis"),
+                radek: tr,
+                polozky: [
+                    (jm ? filtrKdo !== jm : filtrKdo !== "-") && {
+                        text: jm ? "Jen " + jm : "Jen zápisy bez jména", ikona: "clovek",
+                        fn: () => { filtrKdo = jm || "-"; vykresli(); } },
+                    filtrKdo && { text: "Všichni lidé", ikona: "filtr",
+                        fn: () => { filtrKdo = ""; vykresli(); } },
+                    mesic && obdobi !== mesic && { text: "Jen " + mesicText, ikona: "kalendar",
+                        fn: () => { obdobi = mesic; vykresli(); } },
+                    obdobi && { text: "Celá kniha", ikona: "seznam",
+                        fn: () => { obdobi = ""; vykresli(); } },
+                    { text: "Smazat zápis…", ikona: "smazat", nebezpeci: true, fn: () => smazZapis(z.id) }
+                ]
+            };
         });
 
         window.KB.on("pokladna", paint);

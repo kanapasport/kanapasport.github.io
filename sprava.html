@@ -8,6 +8,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Správa projektů – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=285">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -793,6 +794,7 @@
 
 <script src="assets/js/taxonomy.js?v=285"></script>
 <script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/nabidka.js?v=285"></script>
 <script src="assets/js/vykazy.js?v=285"></script>
 <script type="module" src="assets/js/store.js?v=285"></script>
 
@@ -1745,7 +1747,8 @@
     }
 
     function ukolyTabulkaHtml(ukoly, budgety) {
-        return '<div style="overflow-x:auto"><table class="bu"><thead><tr><th>Úkol</th><th>Lidé</th>' +
+        /* .kt = na telefonu se řádky skládají do karet (nabidka.css) */
+        return '<div style="overflow-x:auto"><table class="bu kt kt--akce-dole"><thead><tr><th>Úkol</th><th>Lidé</th>' +
             '<th class="num">Hotovo (TO-DO)</th><th class="num">Vyfakturováno</th>' +
             '<th class="num">Budget Kč</th><th></th></tr></thead><tbody>' +
             ukoly.map(u => {
@@ -1757,27 +1760,25 @@
                 }).join(", ");
                 const todo = u.todo || [];
                 return '<tr data-burow="' + esc(u.id) + '">' +
-                    "<td><b>" + esc(u.nazev || "Bez názvu") + "</b></td>" +
-                    "<td>" + esc(lide) + "</td>" +
+                    '<td class="kt-hlavni"><b>' + esc(u.nazev || "Bez názvu") + "</b></td>" +
+                    (lide ? '<td data-l="Lidé">' + esc(lide) + "</td>" : "<td></td>") +
                     /* Procento je tlačítko: rozbalí jednotlivé TO-DO i s tím,
                        jak daleko jsou – jinak se muselo chodit do Úkolů. */
-                    '<td class="num"><button type="button" class="linkbtn buproc" data-todo-rozbal="' +
+                    '<td class="num" data-l="Hotovo"><button type="button" class="linkbtn buproc" data-todo-rozbal="' +
                         esc(u.id) + '" title="' +
                         (todo.length ? "Ukázat jednotlivé TO-DO" : "Úkol nemá rozpad na TO-DO") + '">' +
-                        pctUkolu(u) + " %" +
+                        esc(pctUkolu(u)) + " %" +
                         (todo.length ? ' <span class="buproc__sipka">▾</span>' : "") + "</button></td>" +
-                    '<td class="num">' + V.kc(penizeUkolu(u.id)) + "</td>" +
-                    '<td class="num"><input type="number" class="field" min="0" step="1000" data-bud="budget" value="' +
-                        (Number(b.budgetKc) || "") + '"></td>' +
-                    '<td><span class="row" style="gap:4px;justify-content:flex-end">' +
-                        '<button type="button" class="btn btn--sm btn--ghost" data-buuloz="' +
+                    '<td class="num" data-l="Vyfakturováno">' + esc(V.kc(penizeUkolu(u.id))) + "</td>" +
+                    '<td class="num" data-l="Budget Kč"><input type="number" class="field" min="0" step="1000" data-bud="budget" value="' +
+                        esc(Number(b.budgetKc) || "") + '" aria-label="' + esc("Budget Kč: " + (u.nazev || "")) + '"></td>' +
+                    /* V řádku zůstává jen Uložit (patří k poli Budget); Výkazy,
+                       Upravit, Smazat a další jsou v nabídce „⋯“ a na pravém
+                       tlačítku – dřív čtyři tlačítka u každého úkolu. */
+                    '<td class="kt-akce"><span class="row" style="gap:4px;justify-content:flex-end;flex-wrap:nowrap">' +
+                        '<button type="button" class="btn btn--sm btn--ghost kt-nechat" data-buuloz="' +
                             esc(u.id) + '">Uložit</button>' +
-                        '<a class="btn btn--sm btn--ghost" href="vykazy.html?ukolFiltr=' +
-                            esc(encodeURIComponent(u.id)) + '" title="Zobrazit výkazy tohoto úkolu">Výkazy</a>' +
-                        '<button type="button" class="btn btn--sm btn--ghost" data-buedit="' +
-                            esc(u.id) + '">Upravit</button>' +
-                        '<button type="button" class="btn btn--sm btn--ghost" data-budel="' +
-                            esc(u.id) + '" style="color:var(--danger)">Smazat</button></span></td>' +
+                        window.KBNabidka.tlacitko("Další akce: " + (u.nazev || "úkol")) + "</span></td>" +
                 "</tr>" + todoRadekHtml(u);
             }).join("") + "</tbody></table></div>";
     }
@@ -2578,6 +2579,55 @@
             window.KBUI.toast("Smazání selhalo.", "error");
         }
     }
+
+    /* ------------------------------------------- nabídka řádku a projektu --
+       Pravé tlačítko, „⋯“ a podržení prstem. Úkol v tabulce: to, co dřív
+       stálo jako tlačítka Výkazy / Upravit / Smazat (Uložit zůstává u pole
+       Budget). Projekt v seznamu vlevo: otevřít, hvězdička, úkoly projektu. */
+    window.KBNabidka.pripoj((cil) => {
+        const tr = cil.closest && cil.closest("tr[data-burow]");
+        if (tr && $("budgetUkoly").contains(tr)) {
+            const u = (window.KB.ukoly || []).find(x => x.id === tr.getAttribute("data-burow"));
+            if (!u) return null;
+            const rozbal = tr.querySelector("[data-todo-rozbal]");
+            const todoOtevrene = !!(rozbal && rozbal.classList.contains("buproc--otevreno"));
+            return {
+                nadpis: u.nazev || "Úkol",
+                radek: tr,
+                polozky: [
+                    { text: "Upravit úkol…", ikona: "upravit", fn: () => otevriUpravuUkolu(u.id) },
+                    { text: "Uložit budget", ikona: "uloz", fn: () => ulozBudgetRadek(u.id) },
+                    (u.todo || []).length && { text: todoOtevrene ? "Skrýt TO-DO" : "Ukázat TO-DO", ikona: "rozbalit",
+                        fn: () => { const b = tr.querySelector("[data-todo-rozbal]"); if (b) b.click(); } },
+                    { text: "Zobrazit výkazy", ikona: "lupa",
+                        odkaz: "vykazy.html?ukolFiltr=" + encodeURIComponent(u.id) },
+                    { text: "Otevřít v Úkolech", ikona: "otevrit",
+                        odkaz: "ukoly.html?" + (u.projekt ? "zak=" + encodeURIComponent(window.KBUI.slug(u.projekt)) + "&" : "") +
+                            "otevri=" + encodeURIComponent(u.id) },
+                    { text: "Smazat úkol…", ikona: "smazat", nebezpeci: true, fn: () => smazUkol(u.id) }
+                ]
+            };
+        }
+        const radek = cil.closest && cil.closest(".prjradek");
+        const btn = radek && radek.querySelector("[data-prj]");
+        if (btn && $("seznamVypis").contains(radek)) {
+            const p = (window.KB.projektyDocs || []).find(x => x.id === btn.dataset.prj);
+            if (!p) return null;
+            const jeFav = oblibeneIds().indexOf(p.id) !== -1;
+            return {
+                nadpis: p.nazev || "Projekt",
+                radek: radek,
+                polozky: [
+                    p.id !== vybrany && { text: "Otevřít", ikona: "otevrit", fn: () => vyber(p.id) },
+                    { text: jeFav ? "Odebrat z oblíbených" : "Do oblíbených", ikona: "hvezda",
+                        fn: () => prepniOblibeny(p.id) },
+                    p.nazev && { text: "Úkoly projektu", ikona: "seznam",
+                        odkaz: "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(p.nazev)) }
+                ]
+            };
+        }
+        return null;
+    });
 
     async function zalozNovyUkol() {
         const p = vybranyProjekt();

@@ -1,0 +1,152 @@
+/* ==========================================================================
+   Nabídka u řádku (pravé tlačítko, „⋯“, podržení prstu), hromadný výběr
+   a řádky jako karty na telefonu. Patří k assets/js/nabidka.js.
+   Barvy jen z proměnných app.css – se změnou vzhledu se srovná samo.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- nabídka */
+.nabidka {
+    position: fixed; z-index: 400;
+    min-width: 210px; max-width: min(300px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain;
+    padding: 5px; border: 1px solid var(--line); border-radius: var(--radius-lg, 8px);
+    background: var(--surface); color: var(--text);
+    box-shadow: 0 10px 30px -8px rgba(16, 20, 26, .35), 0 2px 6px rgba(16, 20, 26, .08);
+    opacity: 0; transform: scale(.97); transform-origin: top left;
+    transition: opacity .1s, transform .1s;
+}
+.nabidka.videt { opacity: 1; transform: none; }
+.nabidka__nadpis {
+    margin-bottom: 4px; padding: 5px 10px 7px; border-bottom: 1px solid var(--line-soft);
+    font-size: 11.5px; font-weight: 800; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nabidka__polozka {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 10px;
+    border: 0; border-radius: var(--radius, 6px); background: none; cursor: pointer;
+    color: var(--text); font: inherit; font-size: 13.5px; font-weight: 600; text-align: left;
+    text-decoration: none; white-space: nowrap;
+}
+.nabidka__polozka span { overflow: hidden; text-overflow: ellipsis; }
+.nabidka__polozka:hover, .nabidka__polozka:focus-visible { background: var(--accent-tint); color: var(--accent); outline: none; }
+.nabidka__polozka:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.nabidka__polozka svg { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.nabidka__polozka:hover svg, .nabidka__polozka:focus-visible svg { color: currentColor; }
+.nabidka__polozka--nebezpeci, .nabidka__polozka--nebezpeci svg { color: var(--danger); }
+.nabidka__polozka--nebezpeci:hover, .nabidka__polozka--nebezpeci:focus-visible { background: #fdeef0; color: var(--danger); }
+.nabidka__polozka--nebezpeci:focus-visible { box-shadow: inset 0 0 0 2px var(--danger); }
+.nabidka__oddel { margin: 4px 6px; border: 0; border-top: 1px solid var(--line-soft); }
+
+/* řádek, ke kterému nabídka patří */
+.je-v-nabidce, .je-v-nabidce > td { background: var(--accent-tint) !important; }
+
+/* „⋯“ v řádku */
+.nabidka-vic {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    min-width: 32px; height: 32px; padding: 0 6px; vertical-align: middle;
+    border: 1px solid transparent; border-radius: var(--radius, 6px); background: none; cursor: pointer;
+    color: var(--muted); font: inherit; font-size: 18px; font-weight: 900; line-height: 1;
+}
+.nabidka-vic:hover, .nabidka-vic[aria-expanded="true"] { background: var(--surface); border-color: var(--line); color: var(--accent); }
+.nabidka-vic:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ------------------------------------------------------- hromadný výběr */
+.vyber-cil {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    min-width: 28px; min-height: 28px; margin: -4px 0; cursor: pointer;
+    -webkit-user-select: none; user-select: none; vertical-align: middle;
+}
+.vyber-box { width: 17px; height: 17px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+tr.je-vybrany > td, .je-vybrany { background-color: var(--accent-tint); }
+.je-vybrany { box-shadow: inset 3px 0 0 var(--accent); }
+tr.je-vybrany { box-shadow: none; }
+tr.je-vybrany > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+.vyber-lista {
+    /* pod okny stránky (110+) a nad tlačítkem nahoru (90) */
+    position: fixed; z-index: 100; left: 16px; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom));
+    width: fit-content; margin: 0 auto;      /* uprostřed, ale šířka podle obsahu */
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    max-width: calc(100vw - 32px); padding: 8px 8px 8px 16px;
+    border-radius: 10px; background: var(--text); color: #fff;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .3); font-size: 13px;
+}
+.vyber-lista[hidden] { display: none; }
+.vyber-lista__pocet { font-weight: 800; white-space: nowrap; }
+.vyber-lista__akce { display: flex; gap: 6px; flex-wrap: wrap; }
+.vyber-lista__btn, .vyber-lista__zrus {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, .4); border-radius: var(--radius, 6px);
+    background: none; color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.vyber-lista__btn svg { width: 15px; height: 15px; }
+.vyber-lista__btn:hover:not(:disabled), .vyber-lista__zrus:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+.vyber-lista__btn:focus-visible, .vyber-lista__zrus:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.vyber-lista__btn--nebezpeci { border-color: #f29b9b; color: #ffc9c9; }
+.vyber-lista__btn--nebezpeci:hover:not(:disabled) { background: rgba(242, 155, 155, .18); }
+.vyber-lista__btn:disabled, .vyber-lista__zrus:disabled { opacity: .5; cursor: default; }
+.vyber-lista__zrus { padding: 0 11px; font-size: 18px; line-height: 1; }
+/* lišta nesmí zakrýt poslední řádky */
+body.ma-vyber::after { content: ""; display: block; height: 84px; }
+body.ma-vyber .totop { bottom: calc(84px + env(safe-area-inset-bottom)); }
+/* hláška (ui.js, #kbToast) nad lištou, ne přes ni – inline styl přebije jen !important */
+body.ma-vyber #kbToast { bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+
+/* -------------------------------------------- dotyk: větší cíle (≥ 44 px) */
+@media (pointer: coarse) {
+    .nabidka__polozka { min-height: 44px; font-size: 15px; }
+    .nabidka-vic { min-width: 44px; height: 44px; }
+    .vyber-cil { min-width: 44px; min-height: 44px; margin: -8px -6px; }
+    .vyber-box { width: 22px; height: 22px; }
+    .vyber-lista__btn, .vyber-lista__zrus { min-height: 44px; }
+}
+
+/* ----------------------------------------- telefon: řádky tabulky = karty
+   Tabulka s třídou .kt se pod 600 px skládá do karet: buňka s data-l ukáže
+   svůj popisek, .kt-akce (⋯) sedí vpravo nahoře, .kt-vyber vlevo nahoře,
+   předěl (dny, skupiny) je nadpis mezi kartami. Prázdné buňky zmizí. */
+@media (max-width: 599.98px) {
+    .nabidka-vic { min-width: 44px; height: 44px; }
+    .vyber-lista { left: 8px; right: 8px; width: auto; max-width: none;
+        bottom: calc(8px + env(safe-area-inset-bottom)); padding: 8px; gap: 8px; }
+    body.ma-vyber::after { height: 150px; }
+    body.ma-vyber .totop { bottom: calc(150px + env(safe-area-inset-bottom)); }
+    body.ma-vyber #kbToast { bottom: calc(150px + env(safe-area-inset-bottom)) !important; }
+    .vyber-lista__pocet { width: 100%; }
+    .vyber-lista__akce { flex: 1 1 auto; }
+
+    table.kt { display: block; min-width: 0 !important; width: 100%; border: 0; background: none;
+        border-radius: 0; overflow: visible; }
+    table.kt thead { display: none; }
+    table.kt tbody { display: block; }
+    /* sloupec flexu, ať hlavní buňka (název) může jít nahoru bez ohledu na pořadí sloupců */
+    table.kt tr { display: flex; flex-direction: column; position: relative; margin: 0 0 8px; padding: 10px 52px 10px 12px;
+        border: 1px solid var(--line); border-radius: var(--radius-lg, 8px); background-color: var(--surface); }
+    table.kt tr.kt-vybiratelny { padding-left: 50px; }
+    table.kt td { display: block; width: auto; padding: 1px 0; border: 0; text-align: left; white-space: normal;
+        min-width: 0; overflow-wrap: anywhere; }
+    table.kt td:empty { display: none; }
+    table.kt td[data-l]::before { content: attr(data-l) " "; font-size: 10.5px; font-weight: 800;
+        letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+    table.kt td.kt-hlavni { order: -1; font-weight: 800; font-size: 14.5px; padding-bottom: 3px; }
+    table.kt td.kt-hlavni::before { display: none; }
+    table.kt td.kt-akce { position: absolute; top: 2px; right: 2px; padding: 0; display: flex;
+        gap: 4px; align-items: center; justify-content: flex-end; }
+    table.kt td.kt-akce .btn { display: none; }      /* hlavní akce je první v nabídce ⋯ */
+    table.kt td.kt-akce .btn.kt-nechat { display: inline-flex; }
+    table.kt td.kt-vyber { position: absolute; top: 2px; left: 2px; padding: 0; }
+    table.kt td.kt-vyber .vyber-cil { min-width: 44px; min-height: 44px; margin: 0; }
+    table.kt tr.kt-predel { margin: 16px 0 6px; padding: 6px 2px; border: 0; border-radius: 0;
+        background: none; box-shadow: none; }
+    table.kt tr.kt-predel > td { display: block; padding: 0; background: none; border: 0; }
+    table.kt tr.kt-predel:first-child { margin-top: 0; }
+    /* schovaný řádek (rozbalovací TO-DO ve Správě) musí zůstat schovaný */
+    table.kt tr[hidden] { display: none !important; }
+    /* akce dole v kartě místo rohu – když je jich víc (Uložit + ⋯) */
+    table.kt.kt--akce-dole tr { padding-right: 12px; }
+    table.kt.kt--akce-dole td.kt-akce { position: static; padding-top: 6px; }
+    table.kt tr.je-vybrany { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+    table.kt tr.je-vybrany > td, table.kt tr.je-vybrany > td:first-child { background: none; box-shadow: none; }
+    table.kt tr.je-vybrany { background-color: var(--accent-tint); }
+    table.kt td .vyk__pozn, table.kt td .milniky__pozn { display: inline; margin-left: 6px; }
+}

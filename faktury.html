@@ -8,6 +8,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=285">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -105,6 +106,12 @@
         .karta__castka { flex: none; font-weight: 900; font-variant-numeric: tabular-nums; font-size: 13px; }
         .karta__pod { font-size: 11.5px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .karta__stitky { display: flex; gap: 5px; align-items: center; flex: none; }
+        /* zaškrtávátko hromadného výběru a „⋯“ (nabidka.css) */
+        .karta__r .vyber-cil { margin: -6px -2px -6px -6px; }
+        .karta__r .vyber-cil + .karta__nazev { flex: 1 1 auto; }
+        .karta__stitky .nabidka-vic { min-width: 28px; height: 26px; margin: -4px -4px -4px 0; }
+        @media (pointer: coarse), (max-width: 599.98px) {
+            .karta__stitky .nabidka-vic { min-width: 44px; height: 44px; margin: -10px -6px; } }
         .karta__akce { display: flex; justify-content: flex-end; gap: 6px; margin-top: 3px; }
         .karta__btn { font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 6px; cursor: pointer;
             border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
@@ -608,6 +615,7 @@
 
 <script src="assets/js/taxonomy.js?v=285"></script>
 <script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/nabidka.js?v=285"></script>
 <script src="assets/js/vykazy.js?v=285"></script>
 <script type="module" src="assets/js/store.js?v=285"></script>
 <script>
@@ -937,22 +945,25 @@
 
     function karta(f, sloupec, dnes) {
         const den = datumDokladu(f);
+        /* Na kartě zůstává jedna hlavní akce; QR, Vrátit, Prohlédnuto, Tisk,
+           Smazat a další jsou v nabídce „⋯“ a na pravém tlačítku. */
         let akce = "";
         if (sloupec === "kontrola") {
             akce = '<button type="button" class="karta__btn karta__btn--hlavni" data-otevri="' + esc(f.id) + '">Zkontrolovat →</button>';
         } else if (sloupec !== "zaplaceno") {
-            akce = (f.qrPlatba ? '<button type="button" class="karta__btn" data-qr="' + esc(f.id) + '">QR</button>' : "") +
-                '<button type="button" class="karta__btn karta__btn--hlavni" data-zaplatit="' + esc(f.id) + '">Zaplaceno ✓</button>';
+            akce = '<button type="button" class="karta__btn karta__btn--hlavni" data-zaplatit="' + esc(f.id) + '">Zaplaceno ✓</button>';
         }
         return '<div class="karta karta--' + sloupec + '" data-id="' + esc(f.id) + '" draggable="' + (sloupec === "kontrola" ? "false" : "true") + '">' +
-            '<div class="karta__r"><span class="karta__nazev">' + esc(nazevZaznamu(f)) + "</span>" +
+            '<div class="karta__r">' + vyberDokladu.box(f.id, nazevZaznamu(f)) +
+                '<span class="karta__nazev">' + esc(nazevZaznamu(f)) + "</span>" +
                 '<span class="karta__castka">' + esc(castkaText(f.castkaCelkem, f.mena)) + "</span></div>" +
             '<div class="karta__pod">' + esc([den ? V.czDatum(den) : "bez data", projektText(f), f.kategorie || ""]
                 .filter(Boolean).join(" · ")) + "</div>" +
             '<div class="karta__r">' + pilulka(f, sloupec, dnes) +
                 '<span class="karta__stitky">' + caflouPill(f) +
                 '<span class="pill pill--typ' + (f.typ === "vydana" ? " pill--typ-vydana" : "") + '">' +
-                    (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span></span></div>" +
+                    (f.typ === "vydana" ? "vydaná" : "přijatá") + "</span>" +
+                    window.KBNabidka.tlacitko("Další akce: " + nazevZaznamu(f)) + "</span></div>" +
             (akce ? '<div class="karta__akce">' + akce + "</div>" : "") +
         "</div>";
     }
@@ -995,6 +1006,7 @@
 
     let tazeno = "";              // id tažené karty
     let uhradaRychla = "";        // id z nástěnky – okno data úhrady bez formuláře
+    let uhradaHromadna = null;    // hromadná úhrada: kdo čeká na datum (Promise z lišty výběru)
     let zpetAkce = null, zpetCasovac = null;
 
     const smiPresun = (f, cil) => {
@@ -1090,6 +1102,109 @@
             presunKarty(tazeno, s.dataset.sloupec);
         });
     }
+
+    /* ------------------------------------------- nabídka karty a výběr ----
+       Pravé tlačítko, „⋯“ na kartě a podržení prstem otevřou stejnou
+       nabídku. Jsou v ní jen akce, které stránka uměla už dřív (tlačítka
+       karty, přetažení, okno dokladu); hromadná lišta je jejich smyčka. */
+
+    async function prohlednutoDoklad(id) {
+        const f = doklad(id);
+        if (!f || !f.caflou) return;
+        try {
+            await window.KB.prohlednutoFaktura(id, f.caflou.text || "");
+            toast("Zkontrolováno – doklad odchází z Ke kontrole.");
+            if (vybrana === id) zavriDoklad(true);
+        } catch (err) {
+            console.error(err);
+            toast("Uložení selhalo.", "error");
+        }
+    }
+
+    window.KBNabidka.pripoj((cil) => {
+        const k = cil.closest && cil.closest(".karta[data-id]");
+        if (!k || !$("tabule").contains(k)) return null;
+        const f = doklad(k.dataset.id);
+        if (!f) return null;
+        const sloupec = sloupecFaktury(f);
+        const cesta = String(f.cesta || "").trim();
+        return {
+            nadpis: nazevZaznamu(f),
+            radek: k,
+            polozky: [
+                { text: sloupec === "kontrola" ? "Zkontrolovat…" : "Otevřít doklad", ikona: "otevrit",
+                    fn: () => otevriDoklad(f.id) },
+                (sloupec === "kzaplaceni" || sloupec === "posplatnosti") && {
+                    text: "Zaplaceno…", ikona: "hotovo", fn: () => otevriRychlouUhradu(f.id) },
+                sloupec === "zaplaceno" && {
+                    text: "Vrátit do K zaplacení", ikona: "vratit", fn: () => vratMeziNezaplacene(f) },
+                f.qrPlatba && sloupec !== "zaplaceno" && { text: "QR platba", ikona: "qr", fn: () => otevriQr(f.id) },
+                caflouKeKontrole(f) && { text: "Prohlédnuto – na webu je to správně", ikona: "potvrdit",
+                    fn: () => prohlednutoDoklad(f.id) },
+                f.typ === "vydana" && { text: "Tisk faktury", ikona: "tisk",
+                    odkaz: "faktura-tisk.html?id=" + encodeURIComponent(f.id), novaZalozka: true },
+                /^https?:\/\//i.test(cesta) && { text: "Otevřít soubor", ikona: "otevrit", odkaz: cesta,
+                    novaZalozka: true, oddel: true },
+                cesta && !/^https?:\/\//i.test(cesta) && { text: "Kopírovat cestu k souboru", ikona: "kopirovat",
+                    oddel: true,
+                    fn: () => window.KBNabidka.kopiruj(cesta, "Cesta zkopírovaná – vlož ji do Průzkumníka souborů.") },
+                { text: "Smazat doklad…", ikona: "smazat", nebezpeci: true, fn: () => smazDoklad(f.id) }
+            ]
+        };
+    });
+
+    /** Okno data úhrady pro hromadnou úhradu – vrátí datum, nebo "" při zrušení. */
+    function datumUhradyProVyber() {
+        return new Promise((hotovo) => {
+            uhradaRychla = "";
+            uhradaHromadna = hotovo;
+            $("uhrDatum").value = V.dnesISO();
+            $("oknoUhrazeno").hidden = false;
+            $("uhrDatum").focus();
+        });
+    }
+
+    const vyberDokladu = window.KBNabidka.vyber({
+        koren: () => $("tabule"),
+        radek: ".karta",
+        nazev: ["doklad", "doklady", "dokladů"],
+        zap: () => window.KBUI.can("finance.view"),
+        akce: (ids) => {
+            const vybrane = ids.map(doklad).filter(Boolean);
+            const dnes = V.dnesISO();
+            const kZaplaceni = vybrane.filter(f => ["kzaplaceni", "posplatnosti"].indexOf(sloupecFaktury(f, dnes)) !== -1);
+            const zaplacene = vybrane.filter(f => sloupecFaktury(f, dnes) === "zaplaceno");
+            const prohlednout = vybrane.filter(caflouKeKontrole);
+            const N = window.KBNabidka;
+            const kusy = (n) => V.pocet(n, ["doklad", "doklady", "dokladů"]);
+            return [
+                kZaplaceni.length && { text: "Zaplaceno… (" + kZaplaceni.length + ")", ikona: "hotovo",
+                    fn: async () => {
+                        const datum = await datumUhradyProVyber();
+                        if (!datum) return null;
+                        return N.hromadne(kZaplaceni.map(f => f.id), {
+                            krok: (id) => window.KB.uhradFakturu(id, datum),
+                            hotovo: "Zaplaceno " + V.czDatum(datum) });
+                    } },
+                zaplacene.length && { text: "Vrátit do K zaplacení (" + zaplacene.length + ")", ikona: "vratit",
+                    fn: () => N.hromadne(zaplacene.map(f => f.id), {
+                        otazka: "Vrátit " + kusy(zaplacene.length) + " mezi nezaplacené? Datum úhrady se smaže.",
+                        krok: (id) => window.KB.zrusUhraduFaktury(id), hotovo: "Vráceno" }) },
+                prohlednout.length && { text: "Prohlédnuto (" + prohlednout.length + ")", ikona: "potvrdit",
+                    fn: () => N.hromadne(prohlednout.map(f => f.id), {
+                        otazka: "Označit " + kusy(prohlednout.length) + " jako prohlédnuté – na webu je to správně?",
+                        krok: (id) => { const f = doklad(id);
+                            return f && f.caflou ? window.KB.prohlednutoFaktura(id, f.caflou.text || "") : false; },
+                        hotovo: "Prohlédnuto" }) },
+                { text: "Smazat (" + vybrane.length + ")", ikona: "smazat", nebezpeci: true,
+                    fn: () => N.hromadne(vybrane.map(f => f.id), {
+                        otazka: "Smazat " + kusy(vybrane.length) + "?\n\nEvidence zmizí, PDF na disku zůstává.",
+                        krok: (id) => { const f = doklad(id);
+                            return f ? window.KB.deleteFaktura(id, f.cislo || "") : false; },
+                        hotovo: "Smazáno" }) }
+            ];
+        }
+    });
     /* -------------------------------------------------------------- panel */
 
     /** Projekty ze Správy projektů: otevřené první, uzavřené ve své skupině. */
@@ -1553,6 +1668,14 @@
     function potvrdUhrazeno() {
         const datum = $("uhrDatum").value;
         if (!datum) return void toast("Vyplň datum úhrady.", "warn");
+        // hromadná úhrada z lišty výběru – datum si převezme ona
+        if (uhradaHromadna) {
+            const hotovo = uhradaHromadna;
+            uhradaHromadna = null;
+            $("oknoUhrazeno").hidden = true;
+            hotovo(datum);
+            return;
+        }
         // z nástěnky (karta, přetažení): rovnou do databáze, formulář se toho neúčastní
         if (uhradaRychla) {
             const id = uhradaRychla;
@@ -1572,6 +1695,7 @@
     function zrusUhrazeno() {
         if ($("oknoUhrazeno").hidden) return;
         $("oknoUhrazeno").hidden = true;
+        if (uhradaHromadna) { const zrus = uhradaHromadna; uhradaHromadna = null; zrus(""); return; }
         if (uhradaRychla) { uhradaRychla = ""; return; }
         if (!$("fUhrazeno").value) $("fStav").value = posledniStav === "zaplacena" ? "schvalena" : posledniStav;
         vykresliUhrazeno();
@@ -1792,19 +1916,24 @@
         }
     }
 
-    async function smaz() {
-        const f = doklad(vybrana);
+    /** Smazání dokladu – z okna dokladu i z nabídky karty, stejné potvrzení. */
+    async function smazDoklad(id) {
+        const f = doklad(id);
         if (!f) return;
         if (!confirm("Smazat „" + nazevZaznamu(f) + "“?\n\nEvidence zmizí, PDF na disku zůstává.")) return;
         try {
-            await window.KB.deleteFaktura(vybrana, f.cislo || "");
-            zavriDoklad(true);
+            await window.KB.deleteFaktura(id, f.cislo || "");
+            if (vybrana === id) zavriDoklad(true);
             vykresli();
             toast("Faktura smazána.");
         } catch (err) {
             console.error(err);
             toast("Smazání selhalo.", "error");
         }
+    }
+
+    async function smaz() {
+        if (vybrana) await smazDoklad(vybrana);
     }
 
     /* ---------------------------------------------------------- nastavení */
