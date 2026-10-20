@@ -1792,13 +1792,20 @@
                 todo.map(t => {
                     const pct = Math.max(0, Math.min(100, Number(t.pct) || 0));
                     const vyp = t.vypnuto === true;
+                    /* Poznámky jsou pole záznamů {text, kdo, …} (stránka Úkoly) –
+                       holé esc(pole) z nich dělalo „[object Object]". */
+                    const pozn = Array.isArray(t.pozn)
+                        ? t.pozn.map(p => (p && p.text) || "").filter(Boolean).join(" · ")
+                        : (typeof t.pozn === "string" ? t.pozn : "");
                     return '<div class="butodo__radek' + (vyp ? " butodo__radek--vyp" : "") + '">' +
                         '<span class="butodo__text">' + esc(t.text || "") +
+                            /* plnění zaklikané u úkolu bez rozpadu (ukoly.html) */
+                            (t.celkem === true ? ' <span class="tiny muted">(odhad celého úkolu bez TO-DO rozpadu)</span>' : "") +
                             (vyp ? ' <span class="tiny muted">(vypnuto – nepočítá se)</span>' : "") +
                         "</span>" +
                         '<span class="butodo__pruh"><i style="width:' + pct + '%"></i></span>' +
                         '<span class="butodo__pct">' + pct + " %</span>" +
-                        (t.pozn ? '<span class="butodo__pozn">' + esc(t.pozn) + "</span>" : "") +
+                        (pozn ? '<span class="butodo__pozn">' + esc(pozn) + "</span>" : "") +
                     "</div>";
                 }).join("") +
             "</div></td></tr>";

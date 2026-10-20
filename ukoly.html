@@ -87,6 +87,39 @@
         /* Stejná výška řádku TO-DO v obou stylech zapisování procent –
            přepnutí nesmí řádky přeskládat. Výšku diktuje vyšší z ovládání. */
         .subtask { min-height: 64px; }
+
+        /* Plnění úkolu bez TO-DO rozpadu („Celkem"): řada kroků stejné
+           stupnice jako u TO-DO, vždy celá (nezávisle na „styl %"). Řádek
+           si drží vlastní rozvržení – v mřížce .subtask by se šest tlačítek
+           na telefonu nevešlo vedle názvu, takže se tu řada zalomí pod něj. */
+        .subtask.celkem { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+        .celkem__popis { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .celkem__mimo { font-weight: 900; font-variant-numeric: tabular-nums; }
+        .celkem__stupnice { display: flex; flex-wrap: wrap; gap: 6px; }
+        .celkem__krok { min-width: 56px; min-height: 34px; padding: 4px 10px; border-radius: var(--r-pill);
+            border: 1px solid var(--line); background: var(--surface); font-family: inherit;
+            font-size: var(--fs-2); font-weight: 800; font-variant-numeric: tabular-nums; cursor: pointer; }
+        /* barva čísla = barva stupně (--p0…--p100), zvolený krok plný */
+        .celkem__krok--p0   { color: var(--p0-fg); }
+        .celkem__krok--p50  { color: var(--p50-fg); }
+        .celkem__krok--p75  { color: var(--p75-fg); }
+        .celkem__krok--p95  { color: var(--p95-fg); }
+        .celkem__krok--p100 { color: var(--p100-fg); }
+        .celkem__krok:not(:disabled):hover { border-color: currentColor; }
+        .celkem__krok.je-aktivni { color: #fff; }
+        .celkem__krok--p0.je-aktivni   { background: var(--p0-fg);   border-color: var(--p0-fg); }
+        .celkem__krok--p50.je-aktivni  { background: var(--p50-fg);  border-color: var(--p50-fg); }
+        .celkem__krok--p75.je-aktivni  { background: var(--p75-fg);  border-color: var(--p75-fg); }
+        .celkem__krok--p95.je-aktivni  { background: var(--p95-fg);  border-color: var(--p95-fg); }
+        .celkem__krok--p100.je-aktivni { background: var(--p100-fg); border-color: var(--p100-fg); }
+        .celkem__krok:disabled { cursor: default; opacity: .6; }
+        /* odhad celku vedle skutečného rozpadu = varování, ne běžný stav */
+        .celkem--navic .subtask__info { color: var(--warn); font-weight: 700; }
+        /* telefon: šest kroků rovným dílem přes celou šířku, ne zalomené */
+        @media (max-width: 599.98px) {
+            .celkem__stupnice { width: 100%; flex-wrap: nowrap; gap: 4px; }
+            .celkem__krok { flex: 1 1 0; min-width: 0; padding: 4px 2px; }
+        }
         .lidevyber { display: flex; flex-wrap: wrap; gap: 7px; }
         .lidevyber label { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
             border: 1px solid var(--line); border-radius: var(--r-pill); font-size: var(--fs-1); cursor: pointer; background: var(--surface); }
@@ -113,7 +146,7 @@
         <div>
             <h2 class="nadpis-stranky">Úkoly</h2>
             <p class="small muted" style="margin-top:3px">
-                Každý úkol má TO-DO rozpad, ve kterém se zapisuje postup.
+                Každý úkol má TO-DO rozpad, ve kterém se zapisuje postup. Úkol bez rozpadu se zaklikává řádkem Celkem.
             </p>
         </div>
         <div class="row row--wrap" style="gap:8px">
@@ -191,6 +224,8 @@
                     <button type="button" id="uSabMist" class="btn btn--sm btn--ghost" hidden></button>
                 </div>
                 <textarea id="uTodo" rows="3" class="field" placeholder="Zákres půdorysu&#10;Kontrola polohových kódů&#10;Výkres do PDF"></textarea>
+                <!-- odhad „Celkem" z úkolu bez rozpadu – v řádcích není, jen se tu oznámí -->
+                <p id="uCelkemInfo" class="tiny muted" style="margin-top:6px" hidden></p>
             </div>
             <label class="fmr__cely"><span class="label">Poznámka</span><textarea id="uPoznamka" rows="2" class="field"></textarea></label>
         </div>
@@ -230,6 +265,16 @@
     const TECH_KRESLENI = () => (window.KB.technologie || []).map(t => t.zkratka || t);
     const PATRA_VYCHOZI = ["3PP", "2PP", "1PP", "1NP", "2NP", "3NP", "4NP", "5NP", "6NP"];
     const PCT_KROKY = [0, 25, 50, 75, 95, 100];
+
+    /* Úkol bez TO-DO rozpadu (třeba úkoly z milníků – „jeden milník = jeden
+       úkol") neměl kam procenta zapsat. Plnění se mu proto zapisuje do
+       jedné TO-DO položky „Celkem" se značkou `celkem: true` – je to obyčejná
+       položka {id, text, pct, by, ms}, takže ji průměr TO-DO (V.pctUkolu),
+       matice ve Správě, plán projektů i nástěnka počítají beze změny a zápis
+       jde přes KB.ulozUkolPostup (pravidla pustí přiřazeného jen k `todo`).
+       Značka, ne text: položka nazvaná „Celkem" ručně zůstává obyčejná. */
+    const CELKEM_TEXT = "Celkem";
+    const jeCelkem = (t) => !!t && t.celkem === true;
 
     /* Jak si člověk přeje zapisovat procenta: výchozí jedno číslo (starý web),
        nebo celá řada kroků. Osobní volba, drží ji prohlížeč – stejný klíč
@@ -425,8 +470,66 @@
         return '<div class="subtask__pozn">' + seznam + formular + "</div>";
     }
 
+    /**
+     * Řádek „Celkem" – plnění úkolu, který nemá TO-DO rozpad. Řada kroků je
+     * stejná stupnice jako u TO-DO (0–25–50–75–95–100 %) a ukazuje se vždy
+     * celá, ať se plnění dá zaklikat jedním klikem bez ohledu na „styl %".
+     * `t` = už zapsaná položka Celkem (nebo null, dokud nikdo neklikl).
+     * `navic` = úkol mezitím dostal skutečné TO-DO (třeba ve Správě) – odhad
+     * celku by se pak průměroval s nimi, proto varování a tlačítko Smazat.
+     */
+    function celkemHtml(u, t, smiPsat, navic) {
+        // bez položky platí to, co úkol ukazuje teď (0 %, u hotového 100 %)
+        const pct = t ? (Number(t.pct) || 0) : pctUkolu(u);
+        const id = esc(u.id);
+        const zamek = smiPsat ? "" : ' disabled title="Plnění zapisuje přiřazený člověk nebo manažer"';
+        const info = navic
+            ? "Úkol už má TO-DO rozpad – tenhle odhad celku se průměruje s položkami. " +
+                "Smaž ho, ať plnění počítají jen položky."
+            : (t && t.by)
+                ? "zapsal " + esc(t.by) + " · " + esc(casRazitko(t.ms))
+                : (u.stav === "hotovo" && !t)
+                    ? "úkol je označený jako hotový"
+                    : "Úkol nemá TO-DO rozpad – klikni, kolik je zhruba hotovo.";
+        // hodnota mimo stupnici (z posuvníku na nástěnce) – ať je vidět číslem
+        const mimo = PCT_KROKY.indexOf(pct) === -1
+            ? ' <span class="celkem__mimo">' + esc(pct) + " %</span>" : "";
+
+        return '<div class="subtaskblok">' +
+            '<div class="subtask celkem subtask--' + pctUroven(pct) +
+                (navic ? " celkem--navic" : "") + '" data-celkem-radek="' + id + '">' +
+                '<span class="celkem__popis">' +
+                    '<span class="subtask__name">' + esc(CELKEM_TEXT) + mimo + "</span>" +
+                    '<span class="subtask__info">' + info + "</span>" +
+                "</span>" +
+                '<span class="celkem__stupnice" role="group" aria-label="Kolik je z úkolu hotovo">' +
+                    PCT_KROKY.map(p =>
+                        '<button type="button" class="celkem__krok celkem__krok--' + pctUroven(p) +
+                            (pct === p ? " je-aktivni" : "") + '" aria-pressed="' + (pct === p) + '"' +
+                            ' data-celkem="' + p + "|" + id + '"' + zamek + ">" + p + "&nbsp;%</button>").join("") +
+                "</span>" +
+                (smiPsat && t
+                    ? '<span class="subtask__akce">' +
+                        (navic
+                            ? '<button type="button" class="btn btn--sm btn--ghost subtask__vyp" data-celkem-smaz="' +
+                                id + '" title="Smazat odhad celku – plnění pak počítají jen TO-DO položky">Smazat</button>'
+                            : "") +
+                        '<button type="button" class="btn btn--sm btn--ghost subtask__add" ' +
+                            'data-pozn-nova="' + id + "|" + esc(t.id) + '" title="Přidat poznámku">+</button>' +
+                      "</span>"
+                    : "") +
+            "</div>" +
+            (t ? poznamkyHtml(u, t, smiPsat) : "") +
+        "</div>";
+    }
+
     function todoHtml(u, smiPsat) {
-        const radky = (u.todo || []).map(t => {
+        const celkem = (u.todo || []).find(jeCelkem) || null;
+        const polozky = (u.todo || []).filter(t => !jeCelkem(t));
+        // bez skutečného rozpadu se plnění zaklikává do řádku Celkem
+        if (!polozky.length) return celkemHtml(u, celkem, smiPsat, false);
+
+        const radky = polozky.map(t => {
             const pct = Number(t.pct) || 0;
             const klic = esc(u.id) + "|" + esc(t.id);
             /* Vypnutá položka na tomhle místě nedává smysl (patro třeba
@@ -476,8 +579,8 @@
             "</div>";
         }).join("");
 
-        return radky ||
-            '<div class="tiny muted" style="padding:10px 14px">Úkol nemá TO-DO rozpad.</div>';
+        // Celkem vedle skutečných položek: nahoře a s varováním
+        return (celkem ? celkemHtml(u, celkem, smiPsat, true) : "") + radky;
     }
 
     /**
@@ -816,6 +919,45 @@
     const sPolozkou = (u, todoId, uprav) =>
         (u.todo || []).map(t => t.id === todoId ? uprav(t) : t);
 
+    /* ---------------------------------- plnění úkolu bez TO-DO (Celkem) ---
+       Klik na stupnici zapíše procento do položky Celkem; dokud žádná není,
+       založí ji. Smí přiřazený člověk a manažer – stejná hlídka jako u TO-DO
+       (smiPsatNa), databáze pustí totéž (todo, stav, historie). */
+
+    async function zapisCelkem(ukolId, pct) {
+        const u = najdiUkol(ukolId);
+        if (!u || !smiPsatNa(u)) return;
+        const ma = (u.todo || []).find(jeCelkem);
+        if (ma) return zapisPct(ukolId, ma.id, pct);
+
+        const todo = (u.todo || []).concat([{
+            id: "td_celkem_" + Date.now(), text: CELKEM_TEXT, celkem: true,
+            pct: pct, by: window.KB_USER || "", ms: Date.now()
+        }]);
+        const aktivni = todo.filter(t => t.vypnuto !== true);
+        const hotovo = aktivni.length && aktivni.every(t => (Number(t.pct) || 0) === 100);
+        try {
+            // do historie i se stavem před prvním klikem (0 %, u hotového 100 %)
+            await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
+                { text: CELKEM_TEXT, z: pctUkolu(u), na: pct });
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Zápis se nepovedl – plnění zapisuje jen přiřazený člověk.", "error");
+        }
+    }
+
+    /** Odebere odhad Celkem, když už úkol má skutečné TO-DO položky. */
+    async function smazCelkem(ukolId) {
+        const u = najdiUkol(ukolId);
+        if (!u || !smiPsatNa(u)) return;
+        const t = (u.todo || []).find(jeCelkem);
+        if (!t) return;
+        if (!confirm("Smazat odhad „" + CELKEM_TEXT + "“ (" + (Number(t.pct) || 0) +
+                " %)? Plnění úkolu pak počítají jen TO-DO položky.")) return;
+        await ulozTodo(ukolId, (u.todo || []).filter(x => !jeCelkem(x)),
+            "smazal odhad Celkem (" + (Number(t.pct) || 0) + " %)");
+    }
+
     async function pridejPoznamku(klic) {
         const [ukolId, todoId] = klic.split("|");
         const vstup = document.querySelector('[data-pozn-vstup="' + klic + '"]');
@@ -931,7 +1073,16 @@
         prepniProjekt(u);
         $("uTermin").value = u ? u.termin || "" : "";
         $("uNazev").value = u ? u.nazev || "" : "";
-        $("uTodo").value = u ? (u.todo || []).map(t => t.text).join("\n") : "";
+        /* Odhad Celkem do řádků nepatří – není to krok práce. Při uložení
+           s TO-DO položkami se odebere (viz ulozUkol), proto se tu oznámí. */
+        $("uTodo").value = u ? (u.todo || []).filter(t => !jeCelkem(t)).map(t => t.text).join("\n") : "";
+        const celkem = u ? (u.todo || []).find(jeCelkem) : null;
+        $("uCelkemInfo").hidden = !celkem;
+        $("uCelkemInfo").textContent = celkem
+            ? "Plnění zapsané bez rozpadu (" + CELKEM_TEXT + "): " + (Number(celkem.pct) || 0) + " %. " +
+              "Když sem napíšeš TO-DO položky, " + CELKEM_TEXT + " se při uložení odebere " +
+              "a plnění se bude počítat jen z nich."
+            : "";
         $("uPoznamka").value = u ? u.poznamka || "" : "";
 
         const vybrani = new Set(u ? u.prirazeni || [] : []);
@@ -1046,7 +1197,11 @@
            nespáruje, podle POŘADÍ – jinak by oprava překlepu v položce
            vypadala jako nová položka a shodila by zapsaná procenta
            i s tím, kdo je zapsal. */
-        const puvodniTodo = puvodni ? puvodni.todo || [] : [];
+        /* Odhad Celkem se do párování nepouští – jinak by ho první nový
+           řádek „opravou překlepu" převzal i s procenty. */
+        const puvodniVse = puvodni ? puvodni.todo || [] : [];
+        const puvodniCelkem = puvodniVse.filter(jeCelkem);
+        const puvodniTodo = puvodniVse.filter(t => !jeCelkem(t));
         const texty = $("uTodo").value.split("\n").map(r => r.trim()).filter(Boolean);
         const podleTextu = new Map(puvodniTodo.map(t => [t.text, t]));
         const pouzite = new Set();
@@ -1067,6 +1222,11 @@
             return { id: "td_" + Date.now() + "_" + i, text: polozka.text,
                      pct: 0, by: "", ms: 0 };
         });
+        /* Celkem žije jen do chvíle, než úkol dostane skutečný rozpad: odhad
+           celku vedle položek by práci počítal dvakrát a průměr by lhal
+           (Celkem 75 % + tři nové položky na nule = 19 %). Bez řádků
+           zůstává, ať úprava názvu nebo termínu zapsané plnění nesmaže. */
+        const todoUlozit = todo.length ? todo : puvodniCelkem;
 
         const id = editovanyId || window.KB.newUkolId();
         $("btnUlozit").disabled = true;
@@ -1087,7 +1247,7 @@
                 // budget se už nikde nezadává; u starších úkolů se jen přenese dál
                 budgetHodin: puvodni ? puvodni.budgetHodin : 0,
                 stav: puvodni ? puvodni.stav : "otevreny",
-                todo: todo,
+                todo: todoUlozit,
                 poznamka: $("uPoznamka").value.trim(),
                 createdMs: puvodni ? puvodni.createdMs : undefined,
                 createdBy: puvodni ? puvodni.createdBy : undefined
@@ -1241,6 +1401,15 @@
                 otevrene.has(id) ? otevrene.delete(id) : otevrene.add(id);
                 return void vykresli();
             }
+
+            // plnění úkolu bez TO-DO rozpadu: stupnice v řádku Celkem
+            const celkemKrok = event.target.closest("[data-celkem]");
+            if (celkemKrok && !celkemKrok.disabled) {
+                const [hodnota, ukolId] = celkemKrok.dataset.celkem.split("|");
+                return void zapisCelkem(ukolId, Number(hodnota));
+            }
+            const celkemSmaz = event.target.closest("[data-celkem-smaz]");
+            if (celkemSmaz && !celkemSmaz.disabled) return void smazCelkem(celkemSmaz.dataset.celkemSmaz);
 
             // vypnutí položky, která na tomhle místě nedává smysl
             const vypni = event.target.closest("[data-vypni]");
