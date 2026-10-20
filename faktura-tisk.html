@@ -65,6 +65,18 @@
             padding: 30px 26px; text-align: center; font-size: 14px; line-height: 1.6;
             box-shadow: 0 2px 14px rgba(0,0,0,.15); }
 
+        /* Na úzké obrazovce (telefon) se list A4 jen ZOBRAZÍ zmenšený na šířku
+           okna, ať nevyčuhuje do strany – zvětšit se dá prsty. Měřítko
+           počítá skript do --na-obrazovce. Platí jen pro obrazovku, tisk
+           (@media print níž) jde vždy v plné velikosti. */
+        @media screen {
+            .listok { zoom: var(--na-obrazovce, 1); }
+            #zprava { width: calc(100% - 24px); }   /* na telefonu okraj od kraje okna */
+        }
+        /* Stránka je bez app.css, takže `hidden` nic nevynutí a display:flex
+           z .listok by ho přebil – pod hláškou by visel prázdný bílý list. */
+        .listok[hidden] { display: none; }
+
         @media print {
             body { background: #fff; }
             .listok { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
@@ -210,28 +222,97 @@
         document.title = "Faktura " + (f.cislo || "") + " – Pasport Kaňa";
     }
 
+    /* ------------------------------------------------ hlášky místo faktury */
+
+    let konecnaZprava = false;     // hláška, kterou už nic dalšího nepřepíše
+
+    function zprava(html, konecna) {
+        if (vykresleno || konecnaZprava) return;
+        konecnaZprava = !!konecna;
+        document.getElementById("zprava").innerHTML = html;
+    }
+
+    /** Kdo faktury vidí – názvy rolí podle práv v ui.js, ať hláška nezastará. */
+    function kdoVidi() {
+        const role = (window.KBUI.ROLES || [])
+            .filter(r => window.KBUI.canAs(r.id, "finance.view"))
+            .map(r => String(r.title || "").toLowerCase());
+        return role.length > 1 ? role.slice(0, -1).join(", ") + " a " + role[role.length - 1] : role.join("");
+    }
+
+    function bezPrava() {
+        const kdo = kdoVidi();
+        zprava("<b>Faktury vidí jen finance</b>" + (kdo ? " – " + esc(kdo) : "") + ".<br>" +
+            '<span style="color:#666">Když si myslíš, že sem patříš, ozvi se hlavnímu správci.</span>', true);
+    }
+
+    /* Role je jistá až se seznamem lidí z databáze – do té doby platí jen
+       odhad uložený v prohlížeči a podle něj se nic nezakazuje. */
+    const roleZnama = () => !!(window.KB && window.KB.currentUid && window.KB.currentUid() &&
+        (window.KB.users || []).length);
+
+    let spusteno = false;
+
+    function nacti() {
+        if (spusteno) return;
+        spusteno = true;
+        window.KB.watchFaktury();
+        window.KB.loadFakturaNastaveni()
+            .then(n => { nastaveni = n || {}; vykresli(); })
+            .catch(err => {
+                /* Faktury (i nastavení vedle nich v private/faktury) pustí
+                   databáze jen financím – firestore.rules, funkce finance().
+                   Zamítnutí přijde jako FirebaseError s kódem
+                   „permission-denied" a znamená: tenhle člověk na faktury
+                   nemá právo. Jinak čekat nemá smysl, hláška to řekne hned. */
+                const kod = String((err && (err.code || err.message)) || "");
+                if (/permission/i.test(kod)) return bezPrava();
+                nastaveni = {};
+                vykresli();
+            });
+    }
+
+    function rozhodni() {
+        if (vykresleno || konecnaZprava) return;
+        if (window.KB && window.KB.status === "odhlasen") {
+            return zprava("<b>Nejsi přihlášený.</b><br>" +
+                '<span style="color:#666">Přihlas se na webu a otevři fakturu znovu ze stránky Faktury.</span>');
+        }
+        if (window.KBUI.can("finance.view")) return nacti();
+        if (roleZnama()) bezPrava();   // role z databáze je jistá a právo nemá
+    }
+
+    /* ------------------------------------- zmenšení listu na obrazovce --- */
+
+    const A4_PX = 210 * 96 / 25.4;   // šířka listu .listok (210 mm) v px
+
+    function prizpusobSirce() {
+        const okno = document.documentElement.clientWidth;
+        const meritko = Math.min(1, Math.max(0.2, (okno - 16) / A4_PX));
+        document.documentElement.style.setProperty("--na-obrazovce", meritko.toFixed(3));
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
+        prizpusobSirce();
+        window.addEventListener("resize", prizpusobSirce);
+        window.addEventListener("orientationchange", () => setTimeout(prizpusobSirce, 250));
+
         if (!id) {
             document.getElementById("zprava").textContent = "V adrese chybí id faktury.";
             return;
         }
-        // faktury čtou jen manažeři – bez práva zůstane viset zpráva níž
+        // pojistka: když se do 8 s nic nerozhodne (spojení, smazaná faktura…)
         setTimeout(() => {
-            if (!vykresleno) document.getElementById("zprava").textContent =
-                "Fakturu se nepodařilo načíst. Otevři ji ze stránky Faktury " +
-                "a zkontroluj, že jsi přihlášený jako manažer.";
+            if (document.getElementById("zprava").textContent.indexOf("Načítám") !== 0) return;
+            zprava("Fakturu se nepodařilo načíst. Otevři ji znovu ze stránky Faktury " +
+                "a zkontroluj, že jsi přihlášený.");
         }, 8000);
 
-        const start = () => {
-            if (!window.KBUI.can("finance.view")) return;     // bez práva by databáze dotaz odmítla
-            window.KB.watchFaktury();
-            window.KB.loadFakturaNastaveni()
-                .then(n => { nastaveni = n || {}; vykresli(); })
-                .catch(() => { nastaveni = {}; vykresli(); });
-        };
         window.KB.on("faktury", vykresli);
-        document.addEventListener("kb-role", start);
-        start();
+        window.KB.on("users", rozhodni);
+        window.KB.on("status", rozhodni);
+        document.addEventListener("kb-role", rozhodni);
+        rozhodni();
     });
 })();
 </script>
