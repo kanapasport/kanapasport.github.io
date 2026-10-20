@@ -31,7 +31,7 @@
         @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=283">
+    <link rel="stylesheet" href="assets/css/app.css?v=284">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -98,8 +98,8 @@
         </div>
 
         <p class="tiny muted" style="margin:0;line-height:1.6">
-            Tohle <b>není</b> heslo k trezoru níž na téhle stránce – tím se šifrují
-            uložená hesla lidí a je to jiná věc.
+            Tohle <b>není</b> heslo k přihlášení na web – jen zamyká obsah téhle
+            stránky na tomhle počítači.
         </p>
     </section>
 
@@ -243,10 +243,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=283"></script>
-<script src="assets/js/doc.js?v=283"></script>
-<script src="assets/js/ui.js?v=283"></script>
-<script type="module" src="assets/js/store.js?v=283"></script>
+<script src="assets/js/taxonomy.js?v=284"></script>
+<script src="assets/js/doc.js?v=284"></script>
+<script src="assets/js/ui.js?v=284"></script>
+<script type="module" src="assets/js/store.js?v=284"></script>
 
 <script>
 (function () {
@@ -301,8 +301,8 @@
        hesla, ne heslo: nic navíc tím neprozradíme (otisk je i v databázi)
        a hlavně se odemčení samo zruší, jakmile se heslo změní.
 
-       POZOR: tohle NENÍ heslo k trezoru níž na stránce. Trezor šifruje
-       uložená hesla lidí, tenhle zámek jen schovává obsah stránky. */
+       POZOR: tohle NENÍ heslo k přihlášení. Zámek jen schovává obsah
+       stránky; trezor na hesla lidí se zrušil 1. 9. 2026. */
 
     const ZAMEK_KLIC = "company_kb_zamek";
     const ZAMEK_NADPIS = "Uživatelé a hesla jsou zamčení";
@@ -391,7 +391,6 @@
         zamekOdemceno = false;
         zmenaOtevrena = false;
         zamekZapamatuj("");
-        // trezor se zamyká spolu se stránkou, jinak by klíč zůstal v paměti
         render();
         window.KBUI.toast("Zamčeno.");
     }
@@ -430,29 +429,25 @@
     }
 
     /* --------------------------------------------------- generování hesel --
-       Skládá se jméno z e-mailu + firemní slovo + tři číslice + znaménko.
-       Stejné pravidlo jako u prvního rozdání hesel, ať jsou konzistentní. */
+       Tři skupiny po čtyřech znacích z abecedy bez zaměnitelných znaků
+       (žádné 0/O, 1/l/I), např. „k7mp-3xra-qe9t". ~59 bitů náhody.
+       Dřív se heslo skládalo ze jména v e-mailu, firemního slova a tří
+       číslic – jen ~30 000 možností a postup ležel ve veřejném repu
+       (rešerše 19. 10. 2026). Heslo je jen počáteční: člověk si ho po
+       přihlášení změní, nebo dostane rovnou odkaz na vlastní heslo. */
 
-    const BRAND = ["Kana", "Pasport", "Psprt", "Kn", "PasportKana"];
+    const ABECEDA_HESLA = "abcdefghjkmnpqrstuvwxyz23456789";
 
-    const bezDiakritiky = (text) => String(text || "")
-        .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z]/g, "");
-
-    function generatePassword(email) {
-        const rnd = (max) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
-        const pick = (list) => list[rnd(list.length)];
-
-        // základ ze jména v e-mailu (stohr@pasport.eu -> Stohr)
-        const local = String(email || "").split("@")[0].replace(/[._-]/g, " ").trim();
-        const parts = local.split(/\s+/).filter(Boolean).map(bezDiakritiky).filter(Boolean);
-        let base = parts.length ? parts[parts.length - 1] : "Pasport";
-        base = base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
-
-        const digits = String(rnd(1000)).padStart(3, "0");
-        const sign = pick(["+", "-", ""]);
-        const brand = pick(BRAND);
-
-        return (rnd(2) ? base + brand : brand + base) + digits + sign;
+    function generatePassword() {
+        // rovnoměrný výběr bez zkreslení modulem
+        const hranice = Math.floor(4294967296 / ABECEDA_HESLA.length) * ABECEDA_HESLA.length;
+        const znak = () => {
+            const buf = new Uint32Array(1);
+            do { crypto.getRandomValues(buf); } while (buf[0] >= hranice);
+            return ABECEDA_HESLA[buf[0] % ABECEDA_HESLA.length];
+        };
+        const skupina = () => znak() + znak() + znak() + znak();
+        return skupina() + "-" + skupina() + "-" + skupina();
     }
 
     /* ------------------------------------------------------------ seznam */
@@ -726,7 +721,7 @@
             const user = findUser(reset.dataset.reset);
             if (!user) return;
             if (!confirm("Poslat " + user.email + " odkaz na změnu hesla?\n\n" +
-                         "Heslo si nastaví sám a ty ho pak neuvidíš ani v trezoru.")) return;
+                         "Heslo si nastaví sám a nikdo jiný ho neuvidí.")) return;
             try {
                 await window.KB.sendPasswordReset(user.email);
                 window.KBUI.toast("Odkaz odeslán na " + user.email + ".");

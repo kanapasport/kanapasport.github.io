@@ -1,7 +1,8 @@
 /* ==========================================================================
    Datová vrstva – Firebase Firestore.
-   Zůstáváme u Firebase (funguje, je zdarma a umí živou synchronizaci),
-   jen se přidalo ukládání obrázků do podkolekce, aby hlavní dokument
+   Zůstáváme u Firebase (funguje a umí živou synchronizaci). Projekt je na
+   tarifu Blaze: čtení nad denní limit zdarma (50 tis.) se platí, proto se
+   má číst co nejmíň. Obrázky návodů leží v podkolekci, aby hlavní dokument
    návodu zůstal malý a seznam se načítal rychle.
 
    Struktura v databázi:
@@ -33,6 +34,7 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+    terminate, clearIndexedDbPersistence,
     collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
     increment, arrayUnion, arrayRemove, writeBatch,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
@@ -344,7 +346,9 @@ try {
        stránky přečte všechny kolekce znovu a Firestore počítá čtení za
        každý doručený dokument. S ní se odběr obnoví z disku a ze serveru
        přijde jen to, co se mezitím změnilo. Tohle byla hlavní příčina
-       66 tisíc čtení za den při 634 zápisech (25. 8. 2026).
+       66 tisíc čtení za den při 634 zápisech (25. 8. 2026). V říjnu 2026 je
+       to i s mezipamětí ~173 tis. čtení denně – nejvíc ujídají odběry, které
+       stránka nepotřebuje (rešerše 19. 10. 2026, část Technika).
 
        `persistentMultipleTabManager` hlídá víc otevřených záložek naráz;
        kde IndexedDB není (anonymní okno, starý prohlížeč), se tiše
@@ -480,6 +484,15 @@ try {
                 ? data.povoleni : {};
             emit("zpetne", KB.zpetnePovoleni);
         }, () => { /* bez dokumentu prostě nikdo povolení nemá */ }));
+
+        /* Tvrdá čára uzávěrky výkazů: `odIso` = první den, který zůstává
+           otevřený. Starší dny nemanažer nezaloží, neopraví ani nesmaže –
+           hlídají to pravidla (`uzaverkaOd()`); prohlížeč to jen ukazuje
+           dopředu, ať člověk nenarazí až na chybu z databáze. */
+        odbery.push(onSnapshot(metaDoc("uzaverka"), (snap) => {
+            KB.uzaverkaOd = snap.exists() ? String((snap.data() || {}).odIso || "") : "";
+            emit("uzaverka", KB.uzaverkaOd);
+        }, () => { /* bez dokumentu žádná čára */ }));
 
         odbery.push(onSnapshot(metaDoc("gsync"), (snap) => {
             KB.gsyncUrl = (snap.exists() ? (snap.data() || {}).url : "") || "";
@@ -1528,10 +1541,9 @@ KB.importMilniky = async (polozky) => {
 
 /* ------------------------------------------------------------- uživatelé --
    Seznam lidí, kteří mají na web přístup, a jejich role. Spravuje ho hlavní
-   správce. Heslo se ukládá jen jako otisk (SHA-256 se solí), nikdy v čitelné
-   podobě – i tak ale platí, že dokud běží anonymní přihlášení k Firebase
-   a otevřená pravidla, je to zámek na skleněných dveřích. Skutečné oddělení
-   přijde s Firebase Auth; poznámky k tomu jsou v README. */
+   správce. Přihlašuje Firebase Auth (e-mail + heslo); hesla v databázi
+   nejsou ani jako otisk (uklizeno 1. 9. 2026). Roli čtou pravidla databáze
+   z users/{uid}, takže to, co tu stojí, je skutečná hranice přístupu. */
 
 KB.userId = (email) => String(email || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
@@ -1613,6 +1625,24 @@ KB.deleteUser = async (id) => {
 
 KB.signIn = (email, password) => signInWithEmailAndPassword(auth, String(email).trim(), password);
 KB.signOut = () => signOut(auth);
+
+/* Odhlášení tlačítkem uklidí i kopii dat v prohlížeči. Firestore drží
+   načtené dokumenty v IndexedDB (výkazy, u manažera i faktury a sazby)
+   a na sdíleném počítači by je po odhlášení našel další člověk v nástrojích
+   prohlížeče (rešerše 19. 10. 2026). Smazat jde jen zavřenou databázi,
+   takže stránka se potom musí načíst znovu – to dělá UI.logout. Když je
+   web otevřený ještě v jiné záložce, drží kopii ta a smazání se nepovede;
+   proběhne při odhlášení z poslední záložky. */
+KB.odhlasACisti = async () => {
+    await signOut(auth).catch(() => {});
+    if (!db) return;
+    try {
+        await terminate(db);
+        await clearIndexedDbPersistence(db);
+    } catch (err) {
+        console.warn("Kopie dat v prohlížeči se nesmazala (web je otevřený i v jiné záložce?):", err);
+    }
+};
 KB.currentUid = () => (auth && auth.currentUser) ? auth.currentUser.uid : "";
 
 /** Záložní cesta – pošle člověku odkaz, kterým si heslo nastaví sám. */
@@ -1637,8 +1667,9 @@ KB.createAccount = async (email, password) => {
 };
 
 /* ------------------------------------------------------------- záloha ----
-   Firestore na free tarifu nezálohuje. Tohle vysype celý obsah databáze
-   do jednoho JSON souboru, včetně obrázků u návodů a obsahu tabulí.
+   Ruční export celé databáze do jednoho JSON souboru, včetně obrázků
+   u návodů a obsahu tabulí. Skutečné zálohy (PITR a plánované zálohy) se
+   zapínají v konzoli Firebase – k 19. 10. 2026 jsou vypnuté.
    Otisky ani šifrovaná hesla se do zálohy nedávají – záloha se ukládá
    na disk a neměla by to být kopie přihlašovacích údajů. */
 
@@ -2351,8 +2382,13 @@ KB.posliDoSheets = (id) => {
  * Odpověď se nečte – skript si výsledek zapíše zpátky k projektu do pole
  * `evidence`, takže je ve Správě vidět, jestli to prošlo.
  */
-KB.posliZakazkuDoEvidence = (projekt) => {
+KB.posliZakazkuDoEvidence = async (projekt) => {
     if (!KB.gsyncUrl || !projekt || !projekt.cislo) return;
+    /* Adresu skriptu zná každý člen, proto skript (od v284) pustí jen
+       manažera, pozná ho podle ID tokenu, a údaje zakázky si přečte sám
+       z databáze. Pole níž se posílají dál jen kvůli starší verzi skriptu. */
+    let token = "";
+    try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript zápis odmítne */ }
     fetch(KB.gsyncUrl, {
         method: "POST",
         mode: "no-cors",
@@ -2360,6 +2396,7 @@ KB.posliZakazkuDoEvidence = (projekt) => {
         body: JSON.stringify({
             akce: "zakazka",
             id: projekt.id || "",
+            token: token,
             cislo: projekt.cislo || "",
             nazev: projekt.nazev || "",
             objednatel: projekt.objednatel || "",
@@ -2372,6 +2409,27 @@ KB.posliZakazkuDoEvidence = (projekt) => {
 };
 
 KB.zpetnePovoleni = {};
+KB.uzaverkaOd = "";
+
+/**
+ * Uzávěrka výkazů. `odIso` je první den, který zůstává otevřený
+ * („2026-10-01" = září je uzavřené); prázdný řetězec čáru zruší.
+ * Zapisuje jen manažer (pravidla pro meta). Uzavřený měsíc pak opravuje
+ * jen manažer – zaměstnanec ani se zpětným povolením (pravidla to
+ * nepustí), jemu zbývá „Nahlásit chybu".
+ */
+KB.ulozUzaverku = async (odIso, popis) => {
+    if (authReady) await authReady;
+    requireDb();
+    const od = String(odIso || "");
+    if (od && !/^\d{4}-\d{2}-\d{2}$/.test(od)) throw new Error("Neplatné datum uzávěrky.");
+    await setDoc(metaDoc("uzaverka"), {
+        odIso: od,
+        kdo: window.KB_USER || "",
+        ms: Date.now()
+    });
+    KB.zapisAktivitu("vykaz", popis || (od ? "uzavřel výkazy před " + od : "zrušil uzávěrku výkazů"));
+};
 
 /**
  * Povolení zpětného zápisu. Posílá se JEN to, co se mění – { uid: záznam }.

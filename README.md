@@ -6,7 +6,8 @@ Interní web firmy Pasport Kaňa: návody, úkoly, kalendář a výkazy práce.
 - Data a přihlašování: Firebase (Firestore + Authentication). Veškerý firemní
   obsah je za přihlášením a chrání ho serverová pravidla (`firestore.rules`);
   v tomhle repozitáři žádná data nejsou.
-- Bez přihlášení jsou vidět jen veřejné návody.
+- Bez přihlášení se nenačte nic (ani návody). Soubory v `assets/data/navody-*`
+  jsou jen předloha k importu návodů do databáze, web je přímo nečte.
 
 ## Struktura
 

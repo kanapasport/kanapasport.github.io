@@ -542,20 +542,8 @@
     UI.newSalt = () => Array.from(crypto.getRandomValues(new Uint8Array(12)))
         .map(b => b.toString(16).padStart(2, "0")).join("");
 
-    /* ------------------------------------------------- trezor na hesla ---
-
-       Otisk hesla se zpětně přečíst nedá – to je jeho smysl. Aby si hlavní
-       správce mohl heslo i zobrazit, ukládá se vedle otisku ještě zašifrovaná
-       podoba. Klíč se odvozuje z hesla k trezoru, které zná jen on, a nikdy
-       neopouští prohlížeč; v databázi leží pouze šifrovaný text.
-
-       Kdyby se tedy někdo k databázi dostal (dokud běží otevřená pravidla,
-       je to reálné), hesla lidí z ní nevyčte. */
-
-    const toHex = (buffer) => Array.from(new Uint8Array(buffer))
-        .map(b => b.toString(16).padStart(2, "0")).join("");
-    const fromHex = (hex) => new Uint8Array(
-        (String(hex || "").match(/.{1,2}/g) || []).map(byte => parseInt(byte, 16)));
+    /* Trezor na hesla lidí byl zrušený 1. 9. 2026 – hesla v databázi nejsou
+       vůbec, přihlašuje Firebase Auth. */
 
     
     
@@ -615,12 +603,20 @@
     UI.logout = async () => {
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(EMAIL_KEY);
+        /* Co o člověku zůstává v prohlížeči: role, náhled role a odemčení
+           zamčených stránek. Volby vzhledu (záložky, filtry, oblíbené) nic
+           neprozradí, ty zůstávají. */
+        [ROLE_KEY, NAHLED_KEY, "company_kb_zamek"].forEach(k => localStorage.removeItem(k));
+        try { sessionStorage.clear(); } catch (err) { /* nevadí */ }
         window.KB_USER = "";
         window.KB_EMAIL = "";
         UI.setRole("student");
         UI.paintUser();
-        await window.KB.signOut().catch(() => {});
+        await window.KB.odhlasACisti().catch(() => {});
         UI.toast("Odhlášeno.");
+        /* odhlasACisti zavřel databázi, aby šla smazat její kopie
+           v prohlížeči – stránka se proto načte znovu, už bez dat */
+        setTimeout(() => location.reload(), 700);
     };
 
     /** Role se bere ze seznamu – když ji správce změní, projeví se sama. */
@@ -2710,6 +2706,16 @@
         const volba = event.target.closest("#kbHoPanel [data-ho-typ]");
         if (volba) {
             const iso = volba.dataset.hoDen, typ = volba.dataset.hoTyp;
+            /* Dovolená a volno jdou i do výkazu – a uzavřený měsíc (uzávěrka
+               výkazů) databáze nemanažerovi nepustí. Ať to člověk ví hned,
+               ne z obecné chyby. HO je jen kalendář, toho se to netýká. */
+            const cara = String((window.KB && window.KB.uzaverkaOd) || "");
+            const predtim = mujHoZaznam(iso, typ);
+            const sahaNaVykaz = predtim ? !!predtim.vykazId : typ !== "homeoffice";
+            if (cara && iso < cara && sahaNaVykaz && !UI.can("vykaz.view")) {
+                UI.toast("Měsíc je uzavřený – oprava přes Nahlásit chybu ve Výkazech.", "warn");
+                return;
+            }
             volba.disabled = true;
             try {
                 const muj = mujHoZaznam(iso, typ);
