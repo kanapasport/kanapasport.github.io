@@ -1483,6 +1483,59 @@ KB.zverejniMilnik = async (id, zverejnit) => {
         { kdoVidiTermin: zverejnit ? (m.owners || []) : [] }, razitko), { merge: true });
 };
 
+/**
+ * Termín a/nebo zveřejnění několika milníků jednou dávkou – hromadná změna
+ * termínu a „Zveřejnit s termínem…" na stránce Milníky (Michal 20. 10. 2026).
+ *   zmeny: [{ id, termin }]  termin "YYYY-MM-DD"; bez pole termin zůstává
+ *   volby.zverejnit: true    milník zveřejní, termín pustí zpracovatelům
+ *                            a orazítkuje `zverejnenoMs` (štítek „nový")
+ * Původní termín se neztrácí: `terminPuvodni` zůstává, a kde ještě není,
+ * uloží se do něj termín před změnou. Proto se termíny nejdřív přečtou –
+ * KB.milniky je nemá (slijMilniky bere jen `termin`).
+ * @returns {Promise<{zapsano: number, puvodni: Object<string, string>}>}
+ */
+KB.nastavMilniky = async (zmeny, volby) => {
+    if (authReady) await authReady;
+    requireDb();
+    const zverejnit = !!(volby && volby.zverejnit);
+    const seznam = (Array.isArray(zmeny) ? zmeny : []).filter(z => z && z.id);
+    const ted = Date.now();
+    const razitko = { updatedMs: ted, updatedBy: window.KB_USER || "" };
+    const puvodni = {};
+    await Promise.all(seznam.filter(z => typeof z.termin === "string").map(async (z) => {
+        const snap = await getDoc(milnikTerminDoc(z.id));
+        const d = snap.exists() ? (snap.data() || {}) : {};
+        puvodni[z.id] = String(d.terminPuvodni || d.termin || z.termin || "").slice(0, 10);
+    }));
+    let zapsano = 0;
+    // milník = až dva zápisy, dávka unese 500
+    for (let i = 0; i < seznam.length; i += 200) {
+        const davka = writeBatch(db);
+        seznam.slice(i, i + 200).forEach(z => {
+            const m = (KB.milniky || []).find(x => x.id === z.id) || {};
+            const termin = Object.assign({}, razitko);
+            if (typeof z.termin === "string") {
+                termin.termin = z.termin.slice(0, 10);
+                termin.terminPuvodni = puvodni[z.id];
+            }
+            if (zverejnit) {
+                termin.kdoVidiTermin = (m.owners || []).slice();
+                davka.update(milnikSeznamDoc(z.id), Object.assign({
+                    zverejneno: true, zverejnenoMs: ted, zverejnil: window.KB_USER || ""
+                }, razitko));
+            }
+            davka.set(milnikTerminDoc(z.id), termin, { merge: true });
+            zapsano += 1;
+        });
+        await davka.commit();
+    }
+    if (zapsano) {
+        KB.zapisAktivitu("milnik", (zverejnit ? "zveřejnil " : "změnil termín – ") +
+            zapsano + (zapsano === 1 ? " milník" : (zapsano < 5 ? " milníky" : " milníků")));
+    }
+    return { zapsano: zapsano, puvodni: puvodni };
+};
+
 KB.smazMilnik = async (id) => {
     if (authReady) await authReady;
     requireDb();
