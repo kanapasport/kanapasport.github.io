@@ -2936,7 +2936,7 @@
         if (k && k.zadosti.length) {
             otazka += "\nNevyřízené žádosti o zpětný zápis: " + k.zadosti.length + ".";
         }
-        if (!confirm(otazka)) return;
+        if (!(await window.KBUI.potvrd({ text: otazka, ano: "Uzavřít" }))) return;
         $("uzZavrit").disabled = true;
         try {
             await window.KB.ulozUzaverku(noveOd, "uzavřel výkazy do " + doText);
@@ -2964,7 +2964,8 @@
               " zase hlídá jen týdenní lhůta – zaměstnanec do nich zapíše až se zpětným zápisem."
             : "Zrušit uzávěrku úplně?\n\nŽádný měsíc nebude uzavřený. Starší dny dál hlídá" +
               " týdenní lhůta – zaměstnanec do nich zapíše jen se zpětným zápisem.";
-        if (!confirm(otazka)) return;
+        if (!(await window.KBUI.potvrd({ text: otazka, ano: nove ? "Otevřít" : "Zrušit uzávěrku",
+            ne: "Nechat" }))) return;
         $("uzOtevrit").disabled = true;
         try {
             await window.KB.ulozUzaverku(nove, nove
@@ -3669,8 +3670,8 @@
                 tam.map(b => b.od + "–" + b.do).join(", ") + ")";
         }).filter(Boolean);
         const hodin = sCasy.reduce((n, b) => n + b.hodiny, 0);
-        if (!confirm("Založí se " + V.pocet(sCasy.length, ["zápis", "zápisy", "zápisů"]) + ", " +
-            V.hod(hodin) + ".\n\n" + radkyDnu.join("\n"))) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Založí se " + V.pocet(sCasy.length, ["zápis", "zápisy", "zápisů"]) +
+            ", " + V.hod(hodin) + ".", text: radkyDnu.join("\n"), ano: "Založit" }))) return;
 
         $("tyUloz").disabled = true;
         let ulozeno = 0;
@@ -4476,8 +4477,8 @@
             return window.KBUI.toast(podCarou(z.datum) ? MESIC_ZAVRENO
                 : "Tenhle záznam už smazat nejde – domluv to s manažerem.", "warn");
         }
-        if (!confirm("Opravdu smazat záznam „" + (z.nazev || "") + "“ ze dne " +
-                     V.czDatum(z.datum) + "?")) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat záznam „" + (z.nazev || "") + "“ ze dne " +
+                     V.czDatum(z.datum) + "?", ano: "Smazat", nebezpecne: true }))) return;
         try {
             await odstranZapis(z);
             $("editOverlay").hidden = true;
@@ -4917,8 +4918,9 @@
             if (akce !== "ne" && podCarou(q.zadostZpetne.datum)) {
                 return window.KBUI.toast("Ten den je v uzavřeném měsíci – zpětný zápis ho neodemkne.", "warn");
             }
-            if (akce === "ne" && !confirm("Odmítnout žádost – " + (q.odKohoJmeno || jmenoUid(q.odKoho)) +
-                ", " + V.czDatum(q.zadostZpetne.datum) + "? Dostane o tom vzkaz.")) return;
+            if (akce === "ne" && !(await window.KBUI.potvrd({ nadpis: "Odmítnout žádost – " +
+                (q.odKohoJmeno || jmenoUid(q.odKoho)) + ", " + V.czDatum(q.zadostZpetne.datum) + "?",
+                text: "Dostane o tom vzkaz.", ano: "Odmítnout", nebezpecne: true }))) return;
             $("zpZadosti").querySelectorAll("button").forEach(b => { b.disabled = true; });
             try {
                 if (akce === "ne") {

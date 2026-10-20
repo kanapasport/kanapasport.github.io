@@ -9,7 +9,7 @@
    - ikona = název z IKONY níž (žádné HTML ze stránky),
    - odkaz = adresa (položka je pak <a>, jde i prostředním tlačítkem),
    - nebezpeci = mazání a spol.: jde vždycky dolů za čáru a červeně; potvrzení
-     si dělá fn sama stejně jako dosud (confirm), komponenta nic nepřidává,
+     si dělá fn sama (KBUI.potvrd), komponenta nic nepřidává,
    - radek = prvek, který se po dobu otevření zvýrazní.
    Zavře ji Esc (fokus zpátky), klik vedle, Tab, posun stránky nebo výběr.
    V polích, odkazech a nad označeným textem zůstává nabídka prohlížeče.
@@ -335,6 +335,7 @@
     N.pocet = pocetText;
     let lista = null;          // jediná lišta „Vybráno N“ na stránce
     let aktivniVyber = null;   // čí výběr lišta právě ukazuje
+    let spustenaAkce = null;   // akce z lišty, která právě běží (název a barva potvrzení)
 
     /**
      * Jedno potvrzení, smyčka přes funkci pro jednu položku, souhrn.
@@ -344,7 +345,20 @@
     N.hromadne = async (ids, v) => {
         const seznam = (ids || []).slice();
         if (!seznam.length) return null;
-        if (v.otazka && !window.confirm(v.otazka)) return null;
+        if (v.otazka) {
+            /* Okno webu (KBUI.potvrd): první otázka je nadpis, zbytek text.
+               Tlačítko a barvu (mazání červeně, fokus na Zrušit) dá akce
+               z lišty, která hromadnou smyčku spustila. */
+            const a = spustenaAkce || {};
+            const m = /^([^\n]*?\?)\s+([\s\S]+)$/.exec(String(v.otazka));
+            const souhlas = await window.KBUI.potvrd({
+                nadpis: m ? m[1] : String(v.otazka),
+                text: m ? m[2] : "",
+                ano: v.ano || String(a.text || "").replace(/\s*\(\d+\)\s*$/, "") || "Pokračovat",
+                nebezpecne: v.nebezpecne != null ? !!v.nebezpecne : !!a.nebezpeci
+            });
+            if (!souhlas) return null;
+        }
         let ok = 0, preskoceno = 0, chyba = 0;
         for (let i = 0; i < seznam.length; i++) {
             if (aktivniVyber && aktivniVyber.bezi) {
@@ -388,9 +402,11 @@
             vyber.prubeh = "";
             lista.querySelectorAll("button").forEach(x => { x.disabled = true; });
             let vysledek = null;
+            spustenaAkce = a;
             try { vysledek = await a.fn(ids); }
             catch (err) { console.error(err); toast("Hromadná akce selhala.", "error"); }
             finally {
+                spustenaAkce = null;
                 vyber.bezi = false;
                 vyber.prubeh = "";
                 // po doběhnutí (ne po zrušení dotazu) výběr zmizí – položky se změnily

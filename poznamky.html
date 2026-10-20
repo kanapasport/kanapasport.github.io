@@ -482,9 +482,11 @@
         if (moje) {
             $("btnStav").addEventListener("click", () =>
                 window.KB.ulozPoznamku(z.id, { stav: hotovo ? 0 : 1 })
+                    .then(() => window.KBUI.toast(hotovo ? "Vráceno na řeší se." : "Označeno jako splněné.",
+                        undefined, { zpet: () => window.KB.ulozPoznamku(z.id, { stav: hotovo ? 1 : 0 }) }))
                     .catch(() => window.KBUI.toast("Uložení selhalo.", "error")));
             $("btnSmazPozn").addEventListener("click", async () => {
-                if (!confirm(otazkaSmazat(z))) return;
+                if (!(await window.KBUI.potvrd({ nadpis: otazkaSmazat(z), ano: "Smazat", nebezpecne: true }))) return;
                 await window.KB.smazPoznamku(z.id);
                 otevrenaPozn = "";
                 $("oknoDetail").hidden = true;
@@ -685,8 +687,8 @@
             if (smazl) {
                 const list = (window.KB.poznListy || []).find(l => l.id === smazl.dataset.smazList);
                 const kolik = (window.KB.poznamky || []).filter(z => z.listId === smazl.dataset.smazList).length;
-                if (!confirm("Smazat list „" + (list ? list.nazev : "") + "“" +
-                    (kolik ? " i s " + kolik + " poznámkami?" : "?"))) return;
+                if (!(await window.KBUI.potvrd({ nadpis: "Smazat list „" + (list ? list.nazev : "") + "“" +
+                    (kolik ? " i s " + kolik + " poznámkami?" : "?"), ano: "Smazat", nebezpecne: true }))) return;
                 await window.KB.smazPoznList(smazl.dataset.smazList);
                 return;
             }
@@ -697,12 +699,17 @@
                 const z = (window.KB.poznamky || []).find(x => x.id === id);
                 if (!z) return;
                 if (akce.dataset.poznAkce === "stav") {
-                    await window.KB.ulozPoznamku(id, { stav: Number(z.stav) === 1 ? 0 : 1 });
+                    const byla = Number(z.stav) === 1 ? 1 : 0;
+                    await window.KB.ulozPoznamku(id, { stav: byla ? 0 : 1 });
+                    window.KBUI.toast(byla ? "Vráceno na řeší se." : "Označeno jako splněné.", undefined,
+                        { zpet: () => window.KB.ulozPoznamku(id, { stav: byla }) });
                 } else if (akce.dataset.poznAkce === "text") {
-                    const text = prompt("Text poznámky:", z.text || "");
+                    const text = await window.KBUI.zeptej({ nadpis: "Text poznámky", vychozi: z.text || "",
+                        viceradku: true, maxDelka: 2000, ano: "Uložit" });
                     if (text !== null) await window.KB.ulozPoznamku(id, { text: text });
                 } else if (akce.dataset.poznAkce === "smaz") {
-                    if (!confirm(otazkaSmazat(z))) return;
+                    if (!(await window.KBUI.potvrd({ nadpis: otazkaSmazat(z), ano: "Smazat",
+                        nebezpecne: true }))) return;
                     aktivniPozn = "";
                     await window.KB.smazPoznamku(id);
                 }

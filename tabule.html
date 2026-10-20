@@ -364,7 +364,8 @@
     }
 
     async function createBoard() {
-        const title = (prompt("Název nové tabule:", "Nápady") || "").trim();
+        const title = ((await window.KBUI.zeptej({ nadpis: "Název nové tabule", vychozi: "Nápady",
+            ano: "Založit" })) || "").trim();
         if (!title) return;
         try {
             const id = window.KB.newBoardId();
@@ -454,7 +455,8 @@
         const rename = event.target.closest("[data-rename]");
         if (rename) {
             const board = (window.KB.boards || []).find(b => b.id === rename.dataset.rename);
-            const title = (prompt("Nový název tabule:", board ? board.title : "") || "").trim();
+            const title = ((await window.KBUI.zeptej({ nadpis: "Nový název tabule",
+                vychozi: board ? board.title : "", ano: "Přejmenovat" })) || "").trim();
             if (!title) return;
             await window.KB.saveBoardMeta(rename.dataset.rename, { title: title });
             podlistaOtisk = null;
@@ -468,8 +470,10 @@
             /* Tabule se maže i s obsahem a obrázky – zpátky se to nevrátí,
                tak ať se název opíše ručně, ne že se to odklikne omylem. */
             const nazev = board ? (board.title || "Bez názvu") : "";
-            const opis = prompt('Smazání tabule „' + nazev + '" i s obsahem nejde vzít zpět.\n' +
-                "Pro potvrzení opiš její název:", "");
+            const opis = await window.KBUI.zeptej({ nadpis: "Smazat tabuli „" + nazev + "“?",
+                text: "Smazání i s obsahem nejde vzít zpět. Pro potvrzení opiš její název:",
+                ano: "Smazat", nebezpecne: true,
+                overeni: (h) => h.trim() === nazev.trim() ? "" : "Název nesedí – opiš ho přesně." });
             if (opis === null) return;
             if (opis.trim() !== nazev.trim()) return window.KBUI.toast("Název nesedí, nemažu.", "warn");
             try {

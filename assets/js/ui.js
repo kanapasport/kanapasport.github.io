@@ -195,34 +195,342 @@
         document.addEventListener("keydown", obnov);
     };
 
-    /* ------------------------------------------------------------- toast */
+    /* ------------------------------------------------------------- toast
+       UI.toast(text, typ, { zpet }) – typ "error" / "warn" / nic (zelená).
+       zpet = funkce, která akci vrátí (může vrátit Promise): v hlášce je
+       pak tlačítko „Zpět“, hláška vydrží 8 s a pod myší nezmizí. Jen pro
+       akce, které mají v kódu jednoduchý opak (Splněno, beru na vědomí,
+       zveřejnění…) – mazání má dál potvrzovací okno (UI.potvrd níž). */
 
-    UI.toast = (message, tone) => {
+    UI.toast = (message, tone, volby) => {
         let el = document.getElementById("kbToast");
         if (!el) {
             el = document.createElement("div");
             el.id = "kbToast";
             el.className = "no-print";
+            el.setAttribute("role", "status");
+            el.setAttribute("aria-live", "polite");
             // --spodek-listy: na telefonu výška spodní lišty (app.css), jinak 0
             el.style.cssText = "position:fixed;left:50%;bottom:calc(24px + var(--spodek-listy, 0px));" +
                 "transform:translate(-50%,140%);" +
                 "z-index:300;padding:13px 20px;border-radius:12px;color:#fff;font-size:14px;font-weight:700;" +
                 "box-shadow:0 18px 34px -14px rgba(0,0,0,.5);transition:transform .25s ease,opacity .25s ease;" +
-                "opacity:0;max-width:min(560px,calc(100vw - 32px));text-align:center";
+                "opacity:0;max-width:min(560px,calc(100vw - 32px));text-align:center;" +
+                "display:flex;align-items:center;justify-content:center;gap:14px;pointer-events:none";
+            el._schovej = () => {
+                el.style.transform = "translate(-50%, 140%)";
+                el.style.opacity = "0";
+                el.style.pointerEvents = "none";
+                el._zpet = null;
+                const b = el.querySelector("button");
+                if (b) b.disabled = true;          // schovaný „Zpět“ nesmí jít odkliknout ani Tabem
+            };
+            // pod myší hláška se „Zpět“ nezmizí – kdo na něj míří, nesmí o něj přijít
+            el.addEventListener("mouseenter", () => { if (el._zpet) clearTimeout(el._timer); });
+            el.addEventListener("mouseleave", () => {
+                if (el._zpet) { clearTimeout(el._timer); el._timer = setTimeout(el._schovej, 3000); }
+            });
             document.body.appendChild(el);
         }
+        const zpet = volby && typeof volby.zpet === "function" ? volby.zpet : null;
         el.style.background = tone === "error" ? "#b91c1c" : tone === "warn" ? "#b45309" : "#16794a";
         el.textContent = message;
+        el._zpet = zpet;
+        if (zpet) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = "Zpět";
+            b.style.cssText = "flex:none;min-height:32px;padding:0 14px;border:1px solid rgba(255,255,255,.65);" +
+                "border-radius:var(--r,6px);background:rgba(255,255,255,.16);color:#fff;font:inherit;" +
+                "font-weight:900;cursor:pointer";
+            b.addEventListener("click", () => {
+                if (el._zpet !== zpet) return;     // hláška mezitím patří jiné akci
+                el._zpet = null;
+                clearTimeout(el._timer);
+                el._schovej();
+                Promise.resolve().then(zpet).then(
+                    () => UI.toast("Vráceno."),
+                    (err) => { console.error(err); UI.toast("Vrátit se nepodařilo.", "error"); });
+            });
+            el.appendChild(b);
+        }
+        el.style.pointerEvents = zpet ? "auto" : "none";
         requestAnimationFrame(() => {
             el.style.transform = "translate(-50%, 0)";
             el.style.opacity = "1";
         });
         clearTimeout(el._timer);
-        el._timer = setTimeout(() => {
-            el.style.transform = "translate(-50%, 140%)";
-            el.style.opacity = "0";
-        }, 3400);
+        el._timer = setTimeout(el._schovej, zpet ? 8000 : 3400);
     };
+
+    /* ------------------------------------------- okna Potvrď a Zeptej se ----
+       Místo nativních oken prohlížeče confirm() a prompt(): ta blokují celou
+       stránku, nejdou nastylovat, na telefonu v aplikaci vypadají cize
+       a automatický test je neodklikne (rešerše webu 19. 10. 2026).
+
+         await UI.potvrd({ nadpis, text, ano: "Smazat", ne: "Zrušit", nebezpecne: true })
+             → true / false
+         await UI.zeptej({ nadpis, text, vychozi, typ: "text" | "number" | "date",
+                           overeni, ano, ne, placeholder, min, max, krok, viceradku })
+             → zadaný řetězec (jako prompt, neořezaný) / null = zrušeno
+
+       - Bez nadpisu se nadpisem stane první odstavec textu (do prázdného
+         řádku): „Smazat X?\n\nPodrobnosti“ se rozdělí samo. \n v textu platí.
+       - overeni(hodnota) → nic / "" = v pořádku, text = chyba (ukáže se pod
+         polem a okno zůstane otevřené), false = obecná chyba.
+       - Modální: role alertdialog / dialog, aria-modal, fokus jde dovnitř
+         (pole; u nebezpečné akce „Zrušit“, jinak hlavní tlačítko), Tab
+         neuteče ven, po zavření se vrátí, odkud přišel. Esc = zrušit,
+         Enter = potvrdit (na tlačítku zmáčkne to tlačítko; u nebezpečné
+         akce jen tak – omylem se nic nesmaže). Klávesy a kliky z okna
+         nejdou do stránky pod ním (její Delete, Ctrl+Z, Esc…).
+       - Na telefonu (do 600 px) vyjede zespodu přes celou šířku.
+       - Vzhled z tokenů app.css (styl se vloží jednou, s náhradními hodnotami).
+
+       Převod: if (!confirm("…")) return;  →  if (!(await UI.potvrd({ … }))) return;
+       Funkce kolem musí být async a kdo čekal na její výsledek, musí ho
+       počkat (await) – jinak by kód běžel dřív, než člověk odpoví. */
+
+    const DLG_STYL = [
+        ".kbdlg{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;",
+        "padding:var(--sp-4,16px);background:rgba(11,13,16,.55);opacity:0;transition:opacity .15s ease}",
+        ".kbdlg.je-videt{opacity:1}",
+        ".kbdlg__deska{box-sizing:border-box;width:min(460px,100%);max-height:calc(100vh - 32px);",
+        "max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;display:grid;",
+        "grid-template-columns:auto minmax(0,1fr);gap:var(--sp-2,8px) var(--sp-4,16px);align-items:start;",
+        "padding:var(--sp-5,24px);background:var(--surface,#fff);color:var(--text,#16191d);",
+        "border:1px solid var(--line,#dfe3e8);border-radius:var(--r-lg,8px);",
+        "box-shadow:0 24px 48px -18px rgba(11,13,16,.5);font-family:var(--font,system-ui,sans-serif);",
+        "font-size:var(--fs-3,14px);line-height:var(--lh,1.45);text-align:left;",
+        "transform:translateY(8px);transition:transform .15s ease}",
+        ".kbdlg.je-videt .kbdlg__deska{transform:none}",
+        ".kbdlg__deska:focus{outline:none}",
+        ".kbdlg__kruh{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;",
+        "background:var(--accent-tint,#f0f7fa);color:var(--accent,#1d556d)}",
+        ".kbdlg__kruh svg{width:20px;height:20px}",
+        ".kbdlg--nebezpecne .kbdlg__kruh{background:var(--danger-tint,#fde3e3);color:var(--danger,#b91c1c)}",
+        ".kbdlg__nadpis{margin:0;min-height:40px;display:flex;align-items:center;font-size:var(--fs-4,16px);",
+        "font-weight:var(--fw-tucne,900);line-height:1.3;color:var(--text,#16191d);overflow-wrap:anywhere}",
+        ".kbdlg__text{grid-column:2;margin:0;color:var(--text-soft,#3f4650);white-space:pre-line;",
+        "overflow-wrap:anywhere}",
+        ".kbdlg__pole{grid-column:2;display:grid;gap:var(--sp-1,4px);margin-top:var(--sp-1,4px)}",
+        ".kbdlg__vstup{box-sizing:border-box;width:100%;font:inherit}",
+        "textarea.kbdlg__vstup{min-height:96px;resize:vertical}",
+        ".kbdlg__chyba{margin:0;font-size:var(--fs-2,13px);font-weight:var(--fw-polotucne,700);",
+        "color:var(--danger,#b91c1c)}",
+        ".kbdlg__chyba[hidden]{display:none}",
+        ".kbdlg__vstup[aria-invalid=true]{border-color:var(--danger,#b91c1c)}",
+        ".kbdlg__akce{grid-column:1 / -1;display:flex;flex-wrap:wrap;justify-content:flex-end;",
+        "gap:var(--sp-2,8px);margin-top:var(--sp-3,12px)}",
+        ".kbdlg .btn:focus-visible{outline:2px solid var(--accent,#1d556d);outline-offset:2px}",
+        ".kbdlg .kbdlg__ano--nebezpecne{background:var(--danger,#b91c1c);border-color:var(--danger,#b91c1c);",
+        "color:#fff}",
+        ".kbdlg .kbdlg__ano--nebezpecne:hover{filter:brightness(.9)}",
+        ".kbdlg .kbdlg__ano--nebezpecne:focus-visible{outline-color:var(--danger,#b91c1c)}",
+        "@media (max-width:600px){",
+        ".kbdlg{align-items:flex-end;padding:0}",
+        ".kbdlg__deska{width:100%;max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);",
+        "border-width:1px 0 0;border-radius:var(--r-lg,8px) var(--r-lg,8px) 0 0;",
+        "padding:var(--sp-5,24px) var(--sp-4,16px) calc(var(--sp-4,16px) + env(safe-area-inset-bottom));",
+        "transform:translateY(32px)}",
+        ".kbdlg__akce{display:grid;grid-template-columns:1fr 1fr}",
+        ".kbdlg__akce .btn{width:100%}}",
+        "@media (prefers-reduced-motion:reduce){.kbdlg,.kbdlg__deska{transition:none}}"
+    ].join("");
+
+    const dlgIkona = (cesta) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+        ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + cesta + "</svg>";
+    const DLG_IKONY = {
+        otazka: dlgIkona('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4' +
+            'c-.6.3-1 .8-1 1.5v.5M12 16.8v.01"/>'),
+        pozor: dlgIkona('<path d="M12 4.5l9 15.5H3z"/><path d="M12 10v4.5M12 17.5v.01"/>'),
+        pero: dlgIkona('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>')
+    };
+
+    const dlgZasobnik = [];     // otevřená okna, nahoře poslední
+    let dlgPocitadlo = 0;
+    let dlgDozvukDo = 0;        // chvíli po zavření: držený Enter nesmí znovu zmáčknout tlačítko pod ním
+    const dlgHorni = () => dlgZasobnik[dlgZasobnik.length - 1] || null;
+
+    window.addEventListener("keydown", (e) => {
+        const o = dlgHorni();
+        if (!o) {
+            if (e.key === "Enter" && e.repeat && Date.now() < dlgDozvukDo) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
+        e.stopPropagation();            // zkratky stránky pod oknem nejedou
+        if (e.key === "Escape") { e.preventDefault(); o.zrus(); return; }
+        if (e.key === "Tab") { e.preventDefault(); o.tab(e.shiftKey); return; }
+        if (e.key !== "Enter" || e.isComposing) return;
+        if (e.repeat) { e.preventDefault(); return; }
+        const cil = e.target;
+        if (cil && cil.tagName === "BUTTON" && o.el.contains(cil)) return;     // zmáčkne tlačítko s fokusem
+        if (cil && cil.tagName === "TEXTAREA" && !(e.ctrlKey || e.metaKey)) return;   // nový řádek
+        e.preventDefault();
+        if (o.sPolem || !o.nebezpecne) o.ano();
+    }, true);
+
+    // fokus mimo okno (klik do stránky, myš, čtečka) se vrací dovnitř
+    document.addEventListener("focusin", (e) => {
+        const o = dlgHorni();
+        if (o && !o.el.contains(e.target)) o.fokus();
+    }, true);
+
+    function dlgOtevri(volby, sPolem) {
+        const v = typeof volby === "string" ? { text: volby } : Object.assign({}, volby || {});
+        if (!document.getElementById("kbDlgStyl")) {
+            const styl = document.createElement("style");
+            styl.id = "kbDlgStyl";
+            styl.textContent = DLG_STYL;
+            document.head.appendChild(styl);
+        }
+        return new Promise((hotovo) => {
+            const id = "kbdlg" + (++dlgPocitadlo);
+            const nebezpecne = !!v.nebezpecne;
+            const typ = v.typ === "number" || v.typ === "date" ? v.typ : "text";
+            const viceradku = sPolem && typ === "text" && !!v.viceradku;
+            let nadpis = v.nadpis == null ? "" : String(v.nadpis);
+            let text = v.text == null ? "" : String(v.text);
+            if (!nadpis) {
+                const i = text.indexOf("\n\n");
+                nadpis = i === -1 ? text : text.slice(0, i);
+                text = i === -1 ? "" : text.slice(i + 2).replace(/^\n+/, "");
+            }
+            if (!nadpis) nadpis = sPolem ? "Zadej hodnotu" : "Opravdu?";
+
+            let pole = "";
+            if (sPolem) {
+                const vychozi = v.vychozi == null ? "" : String(v.vychozi);
+                const spolecne = ' class="field kbdlg__vstup" id="' + id + '-v" aria-labelledby="' + id + '-n"' +
+                    ' aria-describedby="' + (text ? id + "-t " : "") + id + '-ch" autocomplete="off"' +
+                    (v.placeholder ? ' placeholder="' + esc(v.placeholder) + '"' : "") +
+                    (v.maxDelka ? ' maxlength="' + esc(v.maxDelka) + '"' : "");
+                const cislo = typ === "number"
+                    ? (v.min != null ? ' min="' + esc(v.min) + '"' : "") +
+                      (v.max != null ? ' max="' + esc(v.max) + '"' : "") +
+                      ' step="' + esc(v.krok != null ? v.krok : "any") + '"' +
+                      ' inputmode="' + (v.krok != null && Number.isInteger(Number(v.krok)) ? "numeric" : "decimal") + '"'
+                    : "";
+                pole = '<div class="kbdlg__pole">' +
+                    (viceradku
+                        ? '<textarea rows="4"' + spolecne + ">" + esc(vychozi) + "</textarea>"
+                        : '<input type="' + typ + '"' + spolecne + cislo + ' value="' + esc(vychozi) + '">') +
+                    '<p class="kbdlg__chyba" id="' + id + '-ch" role="alert" hidden></p></div>';
+            }
+
+            const pred = document.activeElement;
+            const el = document.createElement("div");
+            el.className = "kbdlg no-print" + (nebezpecne ? " kbdlg--nebezpecne" : "");
+            el.innerHTML =
+                '<div class="kbdlg__deska" role="' + (sPolem ? "dialog" : "alertdialog") + '" aria-modal="true"' +
+                    ' aria-labelledby="' + id + '-n"' + (text ? ' aria-describedby="' + id + '-t"' : "") + ' tabindex="-1">' +
+                    '<span class="kbdlg__kruh">' +
+                        (sPolem ? DLG_IKONY.pero : nebezpecne ? DLG_IKONY.pozor : DLG_IKONY.otazka) + "</span>" +
+                    '<h2 class="kbdlg__nadpis" id="' + id + '-n">' + esc(nadpis) + "</h2>" +
+                    (text ? '<p class="kbdlg__text" id="' + id + '-t">' + esc(text) + "</p>" : "") +
+                    pole +
+                    '<div class="kbdlg__akce">' +
+                        '<button type="button" class="btn btn--ghost" data-kbdlg="ne">' +
+                            esc(v.ne || "Zrušit") + "</button>" +
+                        '<button type="button" class="btn ' +
+                            (nebezpecne ? "kbdlg__ano--nebezpecne" : "btn--primary") + '" data-kbdlg="ano">' +
+                            esc(v.ano || (sPolem ? "OK" : "Ano")) + "</button>" +
+                    "</div>" +
+                "</div>";
+
+            const vstup = el.querySelector(".kbdlg__vstup");
+            const chyba = el.querySelector(".kbdlg__chyba");
+            const tlNe = el.querySelector('[data-kbdlg="ne"]');
+            const tlAno = el.querySelector('[data-kbdlg="ano"]');
+            const o = { el: el, sPolem: sPolem, nebezpecne: nebezpecne };
+            const otevrenoMs = Date.now();
+            let zavreno = false;
+
+            o.fokus = () => {
+                const cil = vstup || (nebezpecne ? tlNe : tlAno);
+                try { cil.focus({ preventScroll: true }); } catch (err) { cil.focus(); }
+            };
+            o.tab = (zpet) => {
+                const prvky = [vstup, tlNe, tlAno].filter(Boolean);
+                const i = prvky.indexOf(document.activeElement);
+                prvky[zpet ? (i <= 0 ? prvky.length - 1 : i - 1)
+                           : (i === -1 || i === prvky.length - 1 ? 0 : i + 1)].focus();
+            };
+            const zavri = (vysledek) => {
+                if (zavreno) return;
+                zavreno = true;
+                const i = dlgZasobnik.indexOf(o);
+                if (i !== -1) dlgZasobnik.splice(i, 1);
+                el.classList.remove("je-videt");
+                el.style.pointerEvents = "none";
+                setTimeout(() => el.remove(), 200);
+                dlgDozvukDo = Date.now() + 1000;
+                // fokus zpátky, odkud přišel (tlačítko, pole); jinak do okna pod ním
+                if (pred && pred !== document.body && pred.isConnected && typeof pred.focus === "function") {
+                    try { pred.focus({ preventScroll: true }); } catch (err) { /* nic */ }
+                } else if (dlgHorni()) dlgHorni().fokus();
+                hotovo(vysledek);
+            };
+            const ukazChybu = (zprava) => {
+                chyba.textContent = zprava || "";
+                chyba.hidden = !zprava;
+                if (zprava) vstup.setAttribute("aria-invalid", "true");
+                else vstup.removeAttribute("aria-invalid");
+            };
+            const zkontroluj = () => {
+                const s = vstup.validity || {};
+                let zprava = "";
+                if (s.badInput) zprava = typ === "date" ? "Zadej platné datum." : "Zadej číslo.";
+                else if (typ === "number" && vstup.value !== "" &&
+                         (s.rangeUnderflow || s.rangeOverflow || s.stepMismatch)) {
+                    zprava = v.min != null && v.max != null
+                        ? "Zadej číslo od " + v.min + " do " + v.max + "." : "Zadej platné číslo.";
+                }
+                if (!zprava && typeof v.overeni === "function") {
+                    let r;
+                    try { r = v.overeni(vstup.value); } catch (err) { console.error(err); r = false; }
+                    if (r === false) zprava = "Zadej platnou hodnotu.";
+                    else if (typeof r === "string") zprava = r;
+                }
+                ukazChybu(zprava);
+                return !zprava;
+            };
+            o.ano = () => {
+                if (!sPolem) return zavri(true);
+                if (!zkontroluj()) { vstup.focus(); return; }
+                zavri(vstup.value);
+            };
+            o.zrus = () => zavri(sPolem ? null : false);
+
+            if (vstup) vstup.addEventListener("input", () => { if (!chyba.hidden) ukazChybu(""); });
+            /* Klik na tmavé pozadí = Zrušit, ale jen celý klik na pozadí a ne
+               hned po otevření – druhý klik dvojkliku na „Smazat“ by okno
+               jinak rovnou zavřel. Kliky z okna do stránky neprobublají. */
+            let dolu = false;
+            el.addEventListener("pointerdown", (e) => { dolu = e.target === el; e.stopPropagation(); });
+            el.addEventListener("mousedown", (e) => e.stopPropagation());
+            el.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const b = e.target.closest("[data-kbdlg]");
+                if (b) { if (b.dataset.kbdlg === "ano") o.ano(); else o.zrus(); return; }
+                if (e.target === el && dolu && Date.now() - otevrenoMs > 350) o.zrus();
+            });
+
+            dlgZasobnik.push(o);
+            document.body.appendChild(el);
+            o.fokus();
+            // řádek k přepsání se označí celý (jako u prompt), delší text dostane kurzor na konec
+            if (vstup && viceradku) vstup.setSelectionRange(vstup.value.length, vstup.value.length);
+            else if (vstup && typ === "text") vstup.select();
+            requestAnimationFrame(() => el.classList.add("je-videt"));
+        });
+    }
+
+    UI.potvrd = (volby) => dlgOtevri(volby, false);
+    UI.zeptej = (volby) => dlgOtevri(volby, true);
 
     /* ------------------------------------------------------ uživatel a role --
 
@@ -3469,7 +3777,11 @@
         }
         const vzalBtn = event.target.closest("[data-quick-vzal]");
         if (vzalBtn && vzalBtn.tagName === "BUTTON") {
-            window.KB.quickVzetiNaVedomi(vzalBtn.dataset.quickVzal, !vzalBtn.dataset.zpet)
+            const id = vzalBtn.dataset.quickVzal;
+            const vzal = !vzalBtn.dataset.zpet;
+            window.KB.quickVzetiNaVedomi(id, vzal)
+                .then(() => UI.toast(vzal ? "Vzato na vědomí." : "Vráceno mezi nové.", undefined,
+                    { zpet: () => window.KB.quickVzetiNaVedomi(id, !vzal) }))
                 .catch(() => UI.toast("Uložení selhalo.", "error"));
             return;
         }
@@ -3481,7 +3793,13 @@
             if (!hotovoBtn.closest("#kbQuickPanel, #kbQuickOkno, [data-quick-seznam]")) return;
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
             if (q) {
-                UI.quickPrepni(q, !hotovoBtn.dataset.zpet)
+                const hotovo = !hotovoBtn.dataset.zpet;
+                UI.quickPrepni(q, hotovo)
+                    .then(() => UI.toast(hotovo ? "Splněno." : "Vráceno mezi nesplněné.", undefined, {
+                        // vrací se nad čerstvým vzkazem – mezitím ho mohl odškrtnout i někdo další
+                        zpet: () => UI.quickPrepni((window.KB.quicktodo || [])
+                            .find(x => x.id === q.id) || q, !hotovo)
+                    }))
                     .catch(() => UI.toast("Uložení selhalo.", "error"));
             }
             return;
@@ -3550,7 +3868,7 @@
 
     /* --------------------------------------------- ovládání oblíbených part */
 
-    document.addEventListener("click", (event) => {
+    document.addEventListener("click", async (event) => {
         const panel = document.getElementById("kbQuickPanel");
         if (!panel) return;
 
@@ -3558,7 +3876,8 @@
             const komu = vybraniKomu();
             if (!komu.length) return UI.toast("Nejdřív zaškrtni lidi, které chceš uložit.", "warn");
 
-            const nazev = (prompt("Jak se má ta parta jmenovat?", "") || "").trim();
+            const nazev = ((await UI.zeptej({ nadpis: "Jak se má ta parta jmenovat?",
+                placeholder: "např. Parta na focení", ano: "Uložit" })) || "").trim();
             if (!nazev) return;
 
             const seznam = nactiOblibene().filter(o => o.nazev !== nazev);

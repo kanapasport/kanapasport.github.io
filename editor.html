@@ -573,7 +573,8 @@
     async function removeGuide() {
         const guide = (window.KB.guides || []).find(g => g.id === state.docId);
         if (!guide) return;
-        if (!confirm('Opravdu smazat návod „' + (guide.title || state.docId) + '" všem ve firmě?')) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat návod „" + (guide.title || state.docId) + "“?",
+            text: "Zmizí všem ve firmě.", ano: "Smazat", nebezpecne: true }))) return;
         try {
             await window.KB.deleteGuide(state.docId);
             window.KBUI.toast("Návod smazán.");
@@ -635,8 +636,9 @@
             renderSteps();
             refresh();
         });
-        $("btnClear").addEventListener("click", () => {
-            if (confirm("Vyčistit formulář a začít nový návod?")) resetForm();
+        $("btnClear").addEventListener("click", async () => {
+            if (await window.KBUI.potvrd({ nadpis: "Vyčistit formulář a začít nový návod?",
+                text: "Neuložené změny se zahodí.", ano: "Vyčistit", nebezpecne: true })) resetForm();
         });
         $("btnSave").addEventListener("click", save);
         $("btnDelete").addEventListener("click", removeGuide);

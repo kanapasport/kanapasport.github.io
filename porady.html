@@ -697,10 +697,11 @@
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "porady.html" });
 
-        $("seznam").addEventListener("click", (e) => {
+        $("seznam").addEventListener("click", async (e) => {
             const b = e.target.closest("[data-porada]");
             if (!b) return;
-            if (upravuji && !confirm("Rozepsaný zápis se zahodí. Pokračovat?")) return;
+            if (upravuji && !(await window.KBUI.potvrd({ nadpis: "Zahodit rozepsaný zápis?",
+                text: "Neuložené úpravy se ztratí.", ano: "Zahodit", nebezpecne: true }))) return;
             upravuji = false;
             otevreny = b.dataset.porada;
             vykresliSeznam();
@@ -758,7 +759,8 @@
 
         $("btnSmazat").addEventListener("click", async () => {
             const p = (window.KB.porady || []).find(x => x.id === otevreny);
-            if (!p || !confirm("Smazat zápis z " + czDatum(p.datum) + "?")) return;
+            if (!p || !(await window.KBUI.potvrd({ nadpis: "Smazat zápis z " + czDatum(p.datum) + "?",
+                ano: "Smazat", nebezpecne: true }))) return;
             try {
                 await window.KB.smazPoradu(otevreny);
                 otevreny = "";
@@ -777,7 +779,8 @@
                 await window.KB.nastavSkrytiPorady(p.id, skryt);
                 window.KBUI.toast(skryt
                     ? "Zápis vidí jen manažeři. Ostatním se ukáže den po poradě."
-                    : "Zápis je zveřejněný celému týmu.");
+                    : "Zápis je zveřejněný celému týmu.", undefined,
+                    { zpet: () => window.KB.nastavSkrytiPorady(p.id, !skryt) });
             } catch (err) {
                 console.error(err);
                 window.KBUI.toast("Nepovedlo se uložit.", "error");
@@ -917,7 +920,8 @@
 
             const smaz = e.target.closest("[data-kom-smaz]");
             if (smaz) {
-                if (!confirm("Smazat komentář?")) return;
+                if (!(await window.KBUI.potvrd({ nadpis: "Smazat komentář?", ano: "Smazat",
+                    nebezpecne: true }))) return;
                 await window.KB.smazPoradaKomentar(smaz.dataset.komSmaz)
                     .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
                 return;
@@ -946,8 +950,8 @@
                 const sek = (p.sekce || []).find(x => (x.body || []).some(b => bodId(b) === bId));
                 const bod = sek && sek.body.find(b => bodId(b) === bId);
                 if (!bod) return;
-                const novy = prompt("Závěr k bodu (prázdný závěr smaže):",
-                    bodZaver(bod) || "");
+                const novy = await window.KBUI.zeptej({ nadpis: "Závěr k bodu",
+                    text: "Prázdný závěr smaže.", vychozi: bodZaver(bod) || "", ano: "Uložit" });
                 if (novy === null) return;
                 const kopie = JSON.parse(JSON.stringify(p));
                 kopie.sekce.forEach(x => (x.body || []).forEach(b => {
