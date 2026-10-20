@@ -293,6 +293,8 @@ body { overflow-x: clip; }
 .linkbtn:hover { background: #fff; color: var(--accent); border-color: #fff; }
 
 .appbar__logo { display: flex; align-items: center; }
+/* <picture>: na telefonu se místo loga pod sebou načte logo vedle sebe */
+.appbar__logo picture { display: flex; }
 .appbar__logo img { height: 130px; object-fit: contain; transition: height .18s ease; }
 .appbar--big .appbar__logo img { height: 178px; }
 
@@ -473,6 +475,50 @@ body { overflow-x: clip; }
 }
 .dropdown__link:hover { background: var(--bg); color: var(--accent); }
 
+/* Roletka ÚKOLY & TO-DO (20. 10. 2026): oddíly „Moje zakázky", „Oblíbené
+   projekty", „Úkoly týmu" – drobný popisek a pod ním řádky zakázek
+   s počtem otevřených úkolů (ui.js → taskMenu). */
+.dropdown__group--sekce { padding: 2px 0 4px; }
+.dropdown__sekce {
+    display: block;
+    padding: 9px 12px 3px;
+    font-size: var(--fs-1);
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+.dropdown__radek {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    font-size: var(--fs-2);
+    font-weight: 700;
+    color: var(--text);
+    text-decoration: none;
+    transition: background .13s, color .13s;
+}
+.dropdown__radek:hover { background: var(--accent-tint); color: var(--accent); }
+.dropdown__radek-nazev { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropdown__pocet {
+    flex: none;
+    min-width: 22px;
+    margin-left: auto;
+    padding: 0 7px;
+    border-radius: var(--r-pill);
+    background: var(--accent-tint);
+    color: var(--accent);
+    font-size: var(--fs-1);
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1.6;
+    text-align: center;
+}
+.dropdown__radek:hover .dropdown__pocet,
+.dropdown__group:hover .dropdown__title .dropdown__pocet { background: var(--accent); color: #fff; }
+
 /* Na dotyku (a v úzkém okně) není kam najet myší: v seznamu jsou nejdřív
    jen hlavní sekce a obsah se rozbalí pod nimi až po ťuknutí. */
 @media (max-width: 1120px), (hover: none) {
@@ -488,6 +534,7 @@ body { overflow-x: clip; }
     .dropdown__more { transition: transform .18s ease; }
     .dropdown__title { min-height: 46px; }
     .dropdown__link { min-height: 42px; display: flex; align-items: center; }
+    .dropdown__radek { min-height: 42px; }
 }
 
 /* hledání v liště – vpravo; na dotyku je z něj jen lupa, pole vyjede po ťuknutí */
@@ -3031,18 +3078,23 @@ input.hledac__vstup.opt--cizi {
    zmačkne logo a řádky Stats a pás vypadá rozbitě */
 .siderail > * { flex: none; }
 
+/* Logo vedle sebe (Michal 20. 10. 2026): vlevo značka, vpravo PASPORT /
+   Kaňa zarovnané doleva – jeden obrázek složený z dílů loga
+   (assets/logo-pas.png, 534 × 120 = trojnásobek výšky 40 px). */
 .siderail__logo {
-    display: block;
-    text-align: center;
-    padding: 2px 4px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px 4px 12px;
     border-bottom: 1px solid rgba(255, 255, 255, .28);
 }
 .siderail__logo img {
-    display: inline-block;
-    width: 100%;
-    max-width: 140px;
-    max-height: 64px;
+    display: block;
+    width: auto;
+    height: 40px;
+    max-width: 100%;
     object-fit: contain;
+    object-position: left center;
 }
 
 /* tlačítko v pásu – dnes jen hlavní akce dne (Nový výkaz) */
@@ -3149,6 +3201,22 @@ input.hledac__vstup.opt--cizi {
     gap: 2px;
     padding-top: 10px;
     border-top: 1px solid rgba(255, 255, 255, .28);
+    /* Skupiny se otevírají nezávisle – když se otevřené do okna nevejdou,
+       roluje se jen tahle prostřední část (na PC i ve vysunutém pásu na
+       dotyku); logo, Nový výkaz a Odhlásit zůstanou vidět. Spodní mez
+       drží pár řádků skupin – v extrémně nízkém okně (telefon na šířku)
+       se pak roluje celý pás (pojistka v .siderail). */
+    flex: 1 1 auto;
+    min-height: min(132px, 30vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .35) transparent;
+}
+/* pod spodním krajem je další obsah – kraj se rozplyne (ui.js → oznacDalsiSkupiny) */
+.siderail__skupiny.ma-dalsi {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
 }
 .passkup { display: flex; flex-direction: column; }
 .passkup__hlava {
@@ -3228,12 +3296,29 @@ input.hledac__vstup.opt--cizi {
 
 /* ---- spodek: člověk, odhlášení, stav spojení ---- */
 .siderail__spodek {
+    position: relative;
     margin-top: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding-top: 10px;
     border-top: 1px solid rgba(255, 255, 255, .28);
+}
+/* Pod rolujícím středem je další obsah – šipka na dělicí čáře. Rozplynutý
+   kraj sám nestačí: když řez padne do mezery mezi skupinami, vypadá to,
+   že seznam končí (telefon nemá posuvník). */
+.siderail__skupiny.ma-dalsi + .siderail__spodek::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    width: 30px;
+    height: 19px;
+    margin-left: -15px;
+    border: 1px solid rgba(255, 255, 255, .45);
+    border-radius: var(--r-pill);
+    background: var(--accent-dark) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") center / 12px no-repeat;
+    pointer-events: none;
 }
 .siderail__nahled:empty { display: none; }
 .siderail__ja {
@@ -3312,23 +3397,11 @@ input.hledac__vstup.opt--cizi {
 /* Stránka bez hledání: prázdné místo po poli zmizí. */
 .siderail--bezhledani [data-rail-search] { display: none; }
 
-/* Na širokém okně s myší je pás pořád vidět – když se do nízkého okna
-   nevejde, roluje se jen prostředek se skupinami. */
-@media (min-width: 1121px) and (hover: hover) {
-    .siderail__skupiny {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, .35) transparent;
-    }
-}
 /* nízké okno (notebook, okno prohlížeče s lištami) – menší logo a mezery */
 @media (max-height: 820px) {
     .siderail { gap: 8px; padding-top: 8px; }
-    .siderail__logo { padding-bottom: 6px; }
-    .siderail__logo img { max-height: 44px; }
+    .siderail__logo { padding-bottom: 8px; }
+    .siderail__logo img { height: 34px; }
 }
 
 /* hledání přestěhované do pásu – přebije absolutní usazení z lišty */
@@ -3377,7 +3450,7 @@ input.hledac__vstup.opt--cizi {
         transition: transform .22s ease;
         z-index: 130;
         box-shadow: 0 0 34px rgba(0, 0, 0, .38);
-        /* vysunutý pás se roluje celý (na telefonu nese i stránky webu) */
+        /* pojistka – běžně se roluje jen střed se skupinami (.siderail__skupiny) */
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -4241,9 +4314,10 @@ body.penize-videt .tajne__zastup { display: none; }
         padding: 6px 12px 6px 62px;
     }
     .appbar__burger { top: 6px; left: 10px; }
-    .appbar__logo { order: 0; width: auto; justify-content: flex-start; }
+    .appbar__logo { order: 0; width: auto; min-width: 0; justify-content: flex-start; }
+    /* logo vedle sebe (značka + PASPORT / Kaňa) – jako v pásu */
     .appbar__logo img,
-    .appbar--big .appbar__logo img { height: 40px; }
+    .appbar--big .appbar__logo img { height: 32px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; }
     .appbar__userbox { order: 1; width: auto; margin-left: auto; }
     .toolrail { order: 2; gap: 4px; }
     .toolbtn { height: 36px; padding: 0 7px; }
