@@ -60,8 +60,10 @@
     --line-soft:  #eaedf1;
     --text:       #16191d;
     --text-soft:  #3f4650;
-    --muted:      #6b7480;
-    --dim:        #949ca6;
+    /* kontrast (20. 10. 2026): --muted 4,6 : 1 i na šedém podkladu (dřív 4,15),
+       --dim 4,2 : 1 na bílé (dřív 2,78 – drobný šedý text skoro nešel číst) */
+    --muted:      #646d78;
+    --dim:        #737c88;
 
     /* --- hlavní barva --- */
     /* Výchozí je petrolejová modrá (změna z 17. 8. 2026). Původní firemní
@@ -76,6 +78,16 @@
     --ok-tint: #e6f5ed;
     --warn:    #b45309;
     --danger:  #b91c1c;
+    /* sémantické podklady (štítky, hlášky) – místo hex přímo ve stránkách */
+    --warn-tint:   #fff3d6;
+    --danger-tint: #fde3e3;
+    --info:        var(--accent);        /* informační = barva webu */
+    --info-tint:   var(--accent-tint);
+
+    /* skupiny horní lišty (barva u položky v KB_NAV, taxonomy.js) */
+    --skup-prace:     #8f6b00;
+    --skup-podklady:  #a8432a;
+    --skup-manazer:   var(--ok);
 
     /* --- stupnice rozpracovanosti úkolů ---
        0 % šedá · 25 a 50 % žlutá · 75 % oranžová · 95 % slabší zelená · 100 % zelená */
@@ -92,11 +104,39 @@
        Změň tenhle řádek a @font-face. */
     --font: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 
+    /* --- DESIGN SYSTÉM (20. 10. 2026) ---
+       Šest velikostí písma místo dřívějších 33 (11–13,5 px a desetinky).
+       Každé font-size v tomhle souboru je jeden z tokenů; mimo stupnici
+       zůstávají jen popisky v grafech/náhledech a tištěný dokument (pt).
+       Nic pod 12 px. Nová stránka: jen tokeny, žádné vlastní px. */
+    --fs-1: 12px;      /* drobné: štítky, popisky, čas, odznaky */
+    --fs-2: 13px;      /* vedlejší text, tabulky, malá tlačítka */
+    --fs-3: 14px;      /* základ – text, pole, tlačítka */
+    --fs-4: 16px;      /* zvýraznění, názvy karet, čísla */
+    --fs-5: 20px;      /* nadpisy sekcí a stránek */
+    --fs-6: 28px;      /* velké nadpisy (úvod nástěnky) */
+    --fs-nadpis: var(--fs-5);   /* nadpis stránky – všude stejný */
+    --lh: 1.45;
+    --fw-text: 400;  --fw-polotucne: 700;  --fw-tucne: 900;
+
+    /* mezery */
+    --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;  --sp-4: 16px;  --sp-5: 24px;  --sp-6: 32px;
+
+    /* výšky ovládacích prvků (44 = dotyk) */
+    --h-sm: 28px;  --h: 36px;  --h-lg: 44px;
+
+    /* vrstvy */
+    --z-menu: 100;  --z-lista: 100;  --z-sticky: 110;  --z-okno: 120;  --z-toast: 130;
+
     /* --- tvary ---
        Obdélníkové s jemným zaoblením; drž hodnoty nízko, ať to nevypadá
        jako bubliny. */
-    --radius:    6px;
-    --radius-lg: 8px;
+    --r-sm:      4px;          /* štítky, malé značky */
+    --r:         6px;          /* tlačítka, pole, karty */
+    --r-lg:      8px;          /* okna, velké karty */
+    --r-pill:    999px;        /* pilulky, odznaky */
+    --radius:    var(--r);     /* starší názvy – používají je stránky */
+    --radius-lg: var(--r-lg);
     --shadow:    0 1px 2px rgba(16, 20, 26, .05), 0 8px 20px -12px rgba(16, 20, 26, .22);
     --shadow-up: 0 4px 10px rgba(16, 20, 26, .07), 0 18px 34px -18px rgba(16, 20, 26, .3);
 
@@ -107,7 +147,12 @@
     /* --- šířka obsahu ---
        Web se roztahuje s monitorem (HD i 2K), strop drží čitelnost.
        Přání Michala: radši širší a vzdušné než úzký sloupec uprostřed. */
-    --sirka-stranky: min(1720px, 96vw);
+    --sirka-stranky: 2200px;         /* strop jen pro ultraširoký monitor */
+    --sirka-cteci-stranky: 900px;    /* čtecí stránka o jednom sloupci (.pohled-uzky) */
+    --sirka-cteni: 68ch;             /* řádek souvislého textu, ~75 znaků */
+    --sirka-okna: 720px;             /* okno uprostřed */
+    --sirka-okna-siroke: 1040px;     /* široké okno (Rychlý zápis, Nový projekt) */
+    --sloupec-min: 320px;            /* nejužší sloupec mřížky karet (.mrizka-karet) */
 
     /* --- geometrie A4 --- */
     --a4-w:      210mm;
@@ -158,8 +203,8 @@ input, select, textarea, button { font-family: inherit; }
 .spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .grow { flex: 1; min-width: 0; }
 .muted { color: var(--muted); }
-.small { font-size: 12.5px; }
-.tiny { font-size: 11.5px; }
+.small { font-size: var(--fs-2); }
+.tiny { font-size: var(--fs-1); }
 .center { text-align: center; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [hidden] { display: none !important; }
@@ -214,7 +259,7 @@ body { overflow-x: clip; }
     border-radius: var(--radius);
     background: rgba(255, 255, 255, .14);
     color: #fff;
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 700;
     text-decoration: none;
     transition: background .15s, color .15s, border-color .15s;
@@ -226,12 +271,12 @@ body { overflow-x: clip; }
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
-    font-size: 15.5px;
+    font-size: var(--fs-4);
     color: rgba(255, 255, 255, .88);
 }
 .appbar__user b { color: #fff; font-weight: 900; }
 
-.appbar__status { font-size: 12px; margin-top: 6px; color: rgba(255, 255, 255, .72); }
+.appbar__status { font-size: var(--fs-1); margin-top: 6px; color: rgba(255, 255, 255, .72); }
 .appbar__status[data-state="online"]  { color: #d8f7e6; }
 .appbar__status[data-state="offline"] { color: #ffe0b8; }
 
@@ -241,7 +286,7 @@ body { overflow-x: clip; }
     color: #fff;
     border-radius: var(--radius);
     padding: 5px 11px;
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 700;
     cursor: pointer;
 }
@@ -280,7 +325,7 @@ body { overflow-x: clip; }
     overflow: hidden;
     white-space: nowrap;
     opacity: 0;
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 700;
     transition: max-width .24s ease, opacity .18s ease, margin-left .24s ease;
 }
@@ -320,7 +365,7 @@ body { overflow-x: clip; }
     border-radius: var(--radius);
     background: transparent;
     color: var(--text-soft);
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .08em;
     text-decoration: none;
@@ -386,7 +431,7 @@ body { overflow-x: clip; }
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .07em;
     color: var(--text);
@@ -394,7 +439,7 @@ body { overflow-x: clip; }
     padding: 11px 12px;
     border-radius: var(--radius);
 }
-.dropdown__more { color: var(--dim); font-size: 15px; line-height: 1; }
+.dropdown__more { color: var(--dim); font-size: var(--fs-4); line-height: 1; }
 .dropdown__group:hover .dropdown__title { background: var(--accent-tint); color: var(--accent); }
 .dropdown__group:hover .dropdown__more { color: var(--accent); }
 
@@ -419,7 +464,7 @@ body { overflow-x: clip; }
 
 .dropdown__link {
     display: block;
-    font-size: 13px;
+    font-size: var(--fs-2);
     color: var(--text-soft);
     text-decoration: none;
     padding: 9px 12px;
@@ -469,7 +514,7 @@ body { overflow-x: clip; }
     border: none;
     background: none;
     outline: none;
-    font-size: 13.5px;
+    font-size: var(--fs-3);
     color: var(--text);
     padding: 0;
 }
@@ -500,20 +545,20 @@ body { overflow-x: clip; }
 .searchbox__vysledky a {
     display: block;
     padding: 7px 9px;
-    border-radius: 7px;
+    border-radius: var(--r);
     color: var(--text);
     text-decoration: none;
 }
 .searchbox__vysledky a:hover { background: var(--accent-tint); }
-.searchbox__vysledky b { display: block; font-size: 13.5px; font-weight: 800; }
+.searchbox__vysledky b { display: block; font-size: var(--fs-3); font-weight: 800; }
 .searchbox__vysledky b mark { background: var(--accent-tint); color: var(--accent); padding: 0 1px; }
 .searchbox__vysledky span {
-    display: block; font-size: 12px; color: var(--muted);
+    display: block; font-size: var(--fs-1); color: var(--muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.searchbox__vic { font-size: 12px; font-weight: 800; color: var(--accent) !important;
+.searchbox__vic { font-size: var(--fs-1); font-weight: 800; color: var(--accent) !important;
     border-top: 1px solid var(--line-soft); border-radius: 0 !important; margin-top: 4px; }
-.searchbox__nic { display: block; padding: 9px; font-size: 12.5px; color: var(--muted); }
+.searchbox__nic { display: block; padding: 9px; font-size: var(--fs-2); color: var(--muted); }
 .searchbox__nic a { display: inline; padding: 0; color: var(--accent); text-decoration: underline; }
 
 /* ------------------------------------------------------- nahoru na stránku */
@@ -543,7 +588,7 @@ body { overflow-x: clip; }
     color: var(--text-soft);
     border-radius: var(--radius);
     padding: 6px 12px;
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 800;
     letter-spacing: .04em;
     cursor: pointer;
@@ -588,7 +633,7 @@ body { overflow-x: clip; }
     border-radius: var(--radius);
     background: var(--accent);
     color: #fff;
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .07em;
     text-decoration: none;
@@ -637,15 +682,15 @@ body { overflow-x: clip; }
     box-shadow: inset 4px 0 0 #fff, var(--shadow-up);
 }
 .gtile__cat {
-    font-size: 10.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .09em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, .8);
     margin-bottom: 4px;
 }
-.gtile__title { font-size: 14.5px; font-weight: 900; line-height: 1.3; }
-.gtile__meta { font-size: 11.5px; color: rgba(255, 255, 255, .78); margin-top: 5px; }
+.gtile__title { font-size: var(--fs-3); font-weight: 900; line-height: 1.3; }
+.gtile__meta { font-size: var(--fs-1); color: rgba(255, 255, 255, .78); margin-top: 5px; }
 .gtile mark { background: #ffe9a8; color: #6b4b00; }
 
 @media (hover: none) { .gtile:hover { transform: none; } }
@@ -714,7 +759,7 @@ body { overflow-x: clip; }
 .tile__icon svg { width: 19px; height: 19px; }
 
 .tile__title {
-    font-size: 14.5px;
+    font-size: var(--fs-3);
     font-weight: 900;
     letter-spacing: .03em;
     line-height: 1.2;
@@ -722,7 +767,7 @@ body { overflow-x: clip; }
     text-align: left;
 }
 .tile__sub {
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     color: rgba(255, 255, 255, .85);
     line-height: 1.45;
 }
@@ -740,7 +785,7 @@ body { overflow-x: clip; }
 .tile__children + .tile__children { margin-top: 0; }
 
 .tile__meta {
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 700;
     color: rgba(255, 255, 255, .8);
     margin-top: auto;
@@ -762,7 +807,7 @@ body { overflow-x: clip; }
 /* štítky podkategorií */
 .chip {
     display: inline-block;
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 700;
     letter-spacing: .015em;
     padding: 5px 10px;
@@ -791,7 +836,7 @@ body { overflow-x: clip; }
 
 .hero__title {
     margin-top: 22px;
-    font-size: 30px;
+    font-size: var(--fs-6);
     font-weight: 900;
     letter-spacing: -.01em;
     line-height: 1.15;
@@ -799,7 +844,7 @@ body { overflow-x: clip; }
 .hero__lead {
     margin: 12px auto 0;
     max-width: 56ch;
-    font-size: 16px;
+    font-size: var(--fs-4);
     line-height: 1.6;
     color: var(--muted);
 }
@@ -811,7 +856,7 @@ body { overflow-x: clip; }
     margin-bottom: 26px;
 }
 .section-head h2 {
-    font-size: 27px;
+    font-size: var(--fs-6);
     font-weight: 900;
     letter-spacing: .01em;
     color: var(--text);
@@ -823,7 +868,7 @@ body { overflow-x: clip; }
     width: 54px;
     height: 3px;
     margin: 12px auto 0;
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: var(--accent);
 }
 /* nadpis sekce jako proklikové tlačítko */
@@ -836,7 +881,7 @@ body { overflow-x: clip; }
     border-radius: var(--radius);
     background: var(--accent);
     color: #fff;
-    font-size: 14px;
+    font-size: var(--fs-3);
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -847,7 +892,7 @@ body { overflow-x: clip; }
 .sectionbtn:hover { background: var(--accent-dark); }
 
 .section-head p {
-    font-size: 15.5px;
+    font-size: var(--fs-4);
     color: var(--muted);
     line-height: 1.55;
     max-width: 60ch;
@@ -882,12 +927,12 @@ body { overflow-x: clip; }
 
 .tag {
     display: inline-block;
-    font-size: 10.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .05em;
     text-transform: uppercase;
     padding: 3px 8px;
-    border-radius: 6px;
+    border-radius: var(--r);
     background: var(--accent-tint);
     color: var(--accent);
 }
@@ -901,7 +946,7 @@ body { overflow-x: clip; }
     padding: 0 18px;
     border-radius: var(--radius);
     border: 1px solid transparent;
-    font-size: 14px;
+    font-size: var(--fs-3);
     font-weight: 800;
     cursor: pointer;
     text-decoration: none;
@@ -914,7 +959,7 @@ body { overflow-x: clip; }
 .btn--ghost:hover { border-color: var(--accent); color: var(--accent); }
 .btn--ok { background: var(--ok); color: #fff; }
 .btn--ok:hover { filter: brightness(.92); }
-.btn--sm { min-height: 36px; padding: 0 13px; font-size: 12.5px; border-radius: var(--radius); }
+.btn--sm { min-height: 36px; padding: 0 13px; font-size: var(--fs-2); border-radius: var(--radius); }
 
 .field {
     width: 100%;
@@ -924,7 +969,7 @@ body { overflow-x: clip; }
     border-radius: var(--radius);
     background: var(--surface);
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--fs-3);
     font-family: inherit;
 }
 .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
@@ -965,24 +1010,24 @@ textarea.field { resize: vertical; }
     border: none;
     background: none;
     color: var(--text-soft);
-    font-size: 16px;
+    font-size: var(--fs-4);
     font-weight: 700;
     line-height: 1;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
 }
 .zoomctl button:hover { background: var(--accent-tint); color: var(--accent); }
 .zoomctl span {
     min-width: 46px;
     text-align: center;
-    font-size: 12px;
+    font-size: var(--fs-1);
     color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
 
 .label {
     display: block;
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 800;
     letter-spacing: .05em;
     text-transform: uppercase;
@@ -990,7 +1035,7 @@ textarea.field { resize: vertical; }
     margin-bottom: 6px;
 }
 
-mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; }
+mark { background: #fde68a; color: #6b4b00; border-radius: var(--r-sm); padding: 0 2px; }
 
 /* ========================================================= ÚKOLOVNÍK ==== */
 
@@ -1008,19 +1053,19 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--bg-soft);
-    font-size: 13.5px;
+    font-size: var(--fs-3);
 }
 .zakrow--closed { background: var(--ok-tint); border-color: #bfe3d0; }
 .zakrow--closed b { color: var(--ok); }
 
 .taskgroup__tag {
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--ok);
     background: var(--ok-tint);
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     padding: 2px 7px;
 }
 .taskgroup__head--closed { border-bottom-color: var(--ok); }
@@ -1034,13 +1079,13 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-bottom: 2px solid var(--accent);
 }
 .taskgroup__name {
-    font-size: 17px;
+    font-size: var(--fs-4);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
     color: var(--accent);
 }
-.taskgroup__meta { font-size: 12.5px; color: var(--muted); }
+.taskgroup__meta { font-size: var(--fs-2); color: var(--muted); }
 
 /* seznam úkolů uvnitř dlaždice na rozcestníku */
 .tile__list { width: 100%; display: flex; flex-direction: column; gap: 5px; }
@@ -1054,7 +1099,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     margin: 8px 0 1px;
     padding-bottom: 3px;
     border-bottom: 1px solid rgba(255, 255, 255, .28);
-    font-size: 10.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .12em;
     text-transform: uppercase;
@@ -1068,8 +1113,8 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     gap: 8px;
     padding: 3px 5px;
     margin: 0 -5px;
-    border-radius: 4px;
-    font-size: 12.5px;
+    border-radius: var(--r-sm);
+    font-size: var(--fs-2);
     color: rgba(255, 255, 255, .92);
     line-height: 1.35;
     text-decoration: none;
@@ -1079,14 +1124,14 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .tile__dot {
     width: 7px; height: 7px;
     flex: none;
-    border-radius: 2px;
+    border-radius: var(--r-sm);
     background: rgba(255, 255, 255, .45);
 }
 .tile__dot--done { background: #8ce9bb; }
 .tile__dot--run  { background: #ffd45e; }
 .tile__listpct {
     margin-left: auto;
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 900;
     font-variant-numeric: tabular-nums;
     color: rgba(255, 255, 255, .8);
@@ -1124,8 +1169,8 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .task__caret svg { width: 15px; height: 15px; }
 .task--open .task__caret { transform: rotate(90deg); color: var(--accent); }
-.task__title { font-size: 15.5px; font-weight: 900; line-height: 1.25; }
-.task__meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.task__title { font-size: var(--fs-4); font-weight: 900; line-height: 1.25; }
+.task__meta { font-size: var(--fs-1); color: var(--muted); margin-top: 2px; }
 
 .task__progress { width: 150px; }
 .task__admin { display: flex; gap: 6px; }
@@ -1150,10 +1195,10 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     min-height: 38px;
     padding: 0 14px;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: var(--surface);
     color: var(--text-soft);
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -1179,7 +1224,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     padding-left: 2px;
 }
 .skup__name {
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .1em;
     text-transform: uppercase;
@@ -1188,18 +1233,18 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     padding-bottom: 2px;
 }
 .skup__name--none { color: var(--muted); border-bottom-color: var(--line); }
-.skup__meta { font-size: 12px; color: var(--muted); }
+.skup__meta { font-size: var(--fs-1); color: var(--muted); }
 .skup__add { margin-left: auto; }
 .bar {
     height: 9px;
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: var(--bg);
     overflow: hidden;
     border: 1px solid var(--line-soft);
 }
 .bar__fill {
     height: 100%;
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: var(--accent);
     transition: width .3s ease, background .3s ease;
 }
@@ -1288,8 +1333,8 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .subtask--p75  .subtask__slider { accent-color: var(--p75-fg); }
 .subtask--p50  .subtask__slider { accent-color: var(--p50-fg); }
 
-.subtask__name { grid-area: name; font-size: 14px; font-weight: 800; }
-.subtask__info { grid-area: info; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.subtask__name { grid-area: name; font-size: var(--fs-3); font-weight: 800; }
+.subtask__info { grid-area: info; font-size: var(--fs-1); color: var(--muted); line-height: 1.4; }
 
 /* Poznámky k jednotlivé položce – co drží práci („čekám na stavbu").
    Byly na verzi 1.0 a lidem chyběly. */
@@ -1300,7 +1345,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
    rozpadlo i úzké rozvržení na telefonu. */
 .subtask__akce { grid-area: note; display: flex; gap: 4px; align-items: center; }
 .subtask__akce .subtask__add { grid-area: auto; }
-.subtask__vyp { min-height: 30px; padding: 0 9px; font-size: 11.5px; }
+.subtask__vyp { min-height: 30px; padding: 0 9px; font-size: var(--fs-1); }
 /* Vypnutá položka: přeškrtnutá a šrafovaná, ať je na první pohled vidět,
    že se nepočítá – obyčejné zešednutí by splynulo s nulou. */
 .subtask--vyp {
@@ -1312,7 +1357,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .subtask--vyp .subtask__slider, .subtask--vyp .subtask__kroky { opacity: .35; }
 .subtask__pozn { padding: 0 18px 10px 56px; display: flex; flex-direction: column; gap: 6px; }
 .note__text { display: block; }
-.note__vstup { width: 100%; font-size: 13px; padding: 4px 8px; }
+.note__vstup { width: 100%; font-size: var(--fs-2); padding: 4px 8px; }
 .note__akce {
     border: none; background: none; padding: 0; font: inherit;
     color: var(--accent); cursor: pointer; text-decoration: underline;
@@ -1321,7 +1366,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 
 .subtask__pct {
     grid-area: pct;
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     font-variant-numeric: tabular-nums;
     width: 52px;
@@ -1342,7 +1387,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     padding: 10px 14px;
     background: var(--ok-tint);
     border-top: 2px solid var(--ok);
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 700;
     color: var(--ok);
 }
@@ -1355,7 +1400,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 
 /* historie zápisů (jen správce) */
-.tasklog { border-top: 1px solid var(--line-soft); font-size: 12px; }
+.tasklog { border-top: 1px solid var(--line-soft); font-size: var(--fs-1); }
 .tasklog summary {
     padding: 9px 14px;
     cursor: pointer;
@@ -1384,7 +1429,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .tasklog__day {
     padding: 8px 14px 4px;
     border-top: 1px solid var(--line-soft);
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
@@ -1401,15 +1446,15 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .task--hl { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .note {
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     color: var(--text-soft);
     background: var(--bg-soft);
     border-left: 3px solid var(--line);
-    border-radius: 0 8px 8px 0;
+    border-radius: 0 var(--r-lg) var(--r-lg) 0;
     padding: 7px 11px;
     margin: 6px 0 0;
 }
-.note__who { display: block; font-size: 10.5px; color: var(--dim); margin-top: 3px; }
+.note__who { display: block; font-size: var(--fs-1); color: var(--dim); margin-top: 3px; }
 
 /* ============================================================= TABULE ====
    Nekonečné plátno. Posun a přiblížení dělá jedna transformace na .board__world,
@@ -1435,7 +1480,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border: 1px solid transparent;
     border-radius: var(--radius);
     background: transparent;
-    font-size: 15px;
+    font-size: var(--fs-4);
     font-weight: 900;
     color: var(--text);
 }
@@ -1464,7 +1509,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-bottom: 1px solid var(--line);
 }
 .board__selinfo {
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -1472,16 +1517,16 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     margin-right: 4px;
 }
 .board__selbar .board__group { background: var(--surface); }
-.board__zoom { font-size: 12px; color: var(--muted); min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.board__zoom { font-size: var(--fs-1); color: var(--muted); min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
 
 .btool {
     width: 34px; height: 34px;
     display: inline-flex; align-items: center; justify-content: center;
     border: none;
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     background: none;
     color: var(--text-soft);
-    font-size: 16px;
+    font-size: var(--fs-4);
     cursor: pointer;
 }
 .btool svg { width: 19px; height: 19px; }
@@ -1493,7 +1538,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .board__colors button {
     width: 26px; height: 26px;
     border: 2px solid transparent;
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     background: var(--c);
     cursor: pointer;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
@@ -1503,9 +1548,9 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .board__widths button {
     width: 30px; height: 30px;
     display: inline-flex; align-items: center; justify-content: center;
-    border: none; border-radius: 5px; background: none; cursor: pointer;
+    border: none; border-radius: var(--r-sm); background: none; cursor: pointer;
 }
-.board__widths button i { display: block; width: 18px; border-radius: 4px; background: var(--text-soft); }
+.board__widths button i { display: block; width: 18px; border-radius: var(--r-sm); background: var(--text-soft); }
 .board__widths button:hover { background: var(--accent-tint); }
 .board__widths button.is-active { background: var(--accent); }
 .board__widths button.is-active i { background: #fff; }
@@ -1517,7 +1562,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     align-items: center;
     justify-content: center;
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--r-lg);
     box-shadow: 0 2px 5px rgba(16, 20, 26, .12);
     text-align: center;
 }
@@ -1546,7 +1591,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .btool--txt {
     width: auto;
     padding: 0 10px;
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 700;
 }
 
@@ -1559,7 +1604,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-radius: 50%;
     background: #fff;
     color: var(--accent);
-    font-size: 15px;
+    font-size: var(--fs-4);
     font-weight: 900;
     line-height: 1;
     cursor: pointer;
@@ -1597,15 +1642,15 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .board__shapes button {
     width: 30px; height: 30px;
     display: inline-flex; align-items: center; justify-content: center;
-    border: none; border-radius: 5px; background: none; cursor: pointer;
+    border: none; border-radius: var(--r-sm); background: none; cursor: pointer;
 }
 .board__shapes button:hover { background: var(--accent-tint); }
 .board__shapes button.is-active { background: var(--accent); }
 .board__shapes button.is-active .sh { border-color: #fff; }
 .sh { display: block; width: 20px; height: 13px; border: 2px solid var(--text-soft); }
 .sh--none { border-style: dashed; }
-.sh--pill { border-radius: 999px; }
-.sh--round { border-radius: 4px; }
+.sh--pill { border-radius: var(--r-pill); }
+.sh--round { border-radius: var(--r-sm); }
 .sh--rect { border-radius: 0; }
 
 /* tabulka */
@@ -1615,7 +1660,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-right: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
     padding: 4px 7px;
-    font-size: 13px;
+    font-size: var(--fs-2);
     overflow: hidden;
     outline: none;
 }
@@ -1629,7 +1674,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-radius: 50%;
     background: #fff;
     color: var(--text-soft);
-    font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+    font-size: var(--fs-3); line-height: 1; cursor: pointer; padding: 0;
 }
 .bel__minus:hover { border-color: var(--danger); color: var(--danger); }
 .bel__minus--right { top: calc(50% + 26px); right: -28px; }
@@ -1651,13 +1696,13 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 /* prvky na plátně */
 .bel {
     position: absolute;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     box-sizing: border-box;
 }
 .bel--note {
     box-shadow: 0 2px 6px rgba(16, 20, 26, .14);
     padding: 10px 12px;
-    border-radius: 6px;
+    border-radius: var(--r);
 }
 .bel--text { padding: 6px 10px; box-shadow: none; }
 /* volný text: dva řádky, jen bílá výplň bez rámečku */
@@ -1692,14 +1737,14 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     right: -7px; bottom: -7px;
     width: 14px; height: 14px;
     border: 2px solid var(--accent);
-    border-radius: 3px;
+    border-radius: var(--r-sm);
     background: #fff;
     cursor: nwse-resize;
 }
 .bel__ghost {
     position: absolute;
     border: 2px dashed var(--accent);
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     pointer-events: none;
 }
 
@@ -1711,7 +1756,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-radius: var(--radius);
     background: rgba(22, 25, 29, .82);
     color: #fff;
-    font-size: 12px;
+    font-size: var(--fs-1);
     pointer-events: none;
     transition: opacity .4s ease;
 }
@@ -1891,7 +1936,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     box-shadow: var(--shadow);
     color: var(--text);
     font: inherit;
-    font-size: 16px;
+    font-size: var(--fs-4);
     font-weight: 800;
     cursor: pointer;
     text-align: left;
@@ -1906,7 +1951,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 
 @media (max-width: 640px) {
     .gate { padding: 32px 14px; }
-    .gate__btn { font-size: 14.5px; padding: 18px 20px; gap: 12px; }
+    .gate__btn { font-size: var(--fs-3); padding: 18px 20px; gap: 12px; }
 }
 
 /* ======================================================= PŘIHLÁŠENÍ ==== */
@@ -1930,7 +1975,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     top: 8px;
     border: 0;
     background: none;
-    font-size: 26px;
+    font-size: var(--fs-6);
     line-height: 1;
     color: var(--muted);
     cursor: pointer;
@@ -1950,7 +1995,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .milniky {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: var(--fs-3);
     min-width: 780px;
     background: var(--surface);
     border: 1px solid var(--line);
@@ -1959,7 +2004,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .milniky th {
     background: var(--bg-soft);
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
@@ -1979,7 +2024,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .milniky__cinnost { font-weight: 900; letter-spacing: .04em; white-space: nowrap; }
 .milniky__zak {
     display: block;
-    font-size: 10.5px;
+    font-size: var(--fs-1);
     font-weight: 700;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -1988,7 +2033,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .milniky__napln { color: var(--text-soft); line-height: 1.45; }
 .milniky__datum { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.milniky__pozn { display: block; font-size: 11px; color: var(--dim); margin-top: 2px; }
+.milniky__pozn { display: block; font-size: var(--fs-1); color: var(--dim); margin-top: 2px; }
 
 /* jak je termín blízko */
 .milnik--po    { background: #fdeef0; }
@@ -2017,17 +2062,17 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     padding: 9px 14px;
 }
 .milniky__skupina b {
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .1em;
     text-transform: uppercase;
     color: var(--accent);
 }
-.milniky__skupina span { font-size: 11.5px; color: var(--muted); margin-left: 10px; }
+.milniky__skupina span { font-size: var(--fs-1); color: var(--muted); margin-left: 10px; }
 .milniky__skupina:hover td { background: var(--accent-tint); }
 
 @media (max-width: 640px) {
-    .milniky { min-width: 620px; font-size: 13px; }
+    .milniky { min-width: 620px; font-size: var(--fs-2); }
     .milniky th, .milniky td { padding: 10px; }
 }
 
@@ -2049,9 +2094,9 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     gap: 7px;
     padding: 6px 11px;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: var(--surface);
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 700;
     cursor: pointer;
     user-select: none;
@@ -2065,12 +2110,12 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .pwdrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
 .pwd {
     font-family: ui-monospace, Consolas, "Courier New", monospace;
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 700;
     letter-spacing: .04em;
     background: var(--bg);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: var(--r);
     padding: 3px 9px;
     user-select: all;
 }
@@ -2080,7 +2125,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .permtable {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: var(--fs-2);
     min-width: 560px;
 }
 .permtable th, .permtable td {
@@ -2090,7 +2135,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .permtable th {
     background: var(--bg-soft);
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .05em;
     text-transform: uppercase;
@@ -2115,17 +2160,17 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .lightbox.is-open { display: flex; }
 .lightbox img {
     max-width: 96vw; max-height: 86vh;
-    border-radius: 10px; background: #fff;
+    border-radius: var(--r-lg); background: #fff;
     box-shadow: 0 30px 60px -20px #000;
 }
 .lightbox__cap {
     position: absolute; bottom: 18px; left: 0; right: 0;
-    text-align: center; font-size: 13px; color: #d3d7dc;
+    text-align: center; font-size: var(--fs-2); color: #d3d7dc;
 }
 .lightbox__close {
     position: absolute; top: 14px; right: 18px;
     width: 44px; height: 44px;
-    font-size: 30px; line-height: 1; color: #d3d7dc;
+    font-size: var(--fs-6); line-height: 1; color: #d3d7dc;
     background: none; border: none; cursor: pointer;
 }
 .lightbox__close:hover { color: #fff; }
@@ -2136,7 +2181,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .thumb {
     position: relative;
     width: 78px; height: 58px;
-    border-radius: 9px; overflow: hidden;
+    border-radius: var(--r-lg); overflow: hidden;
     border: 1px solid var(--line);
     background: var(--bg);
     cursor: zoom-in; flex: none;
@@ -2146,27 +2191,27 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     position: absolute; left: 3px; bottom: 3px;
     font-size: 9.5px; font-weight: 800;
     background: rgba(11, 13, 16, .78); color: #fff;
-    padding: 1px 5px; border-radius: 4px;
+    padding: 1px 5px; border-radius: var(--r-sm);
 }
 .thumb__del {
     position: absolute; top: 2px; right: 2px;
     width: 20px; height: 20px;
-    border-radius: 6px; border: none;
+    border-radius: var(--r); border: none;
     background: rgba(11, 13, 16, .78); color: #ffb4bd;
-    font-size: 12px; line-height: 1; cursor: pointer;
+    font-size: var(--fs-1); line-height: 1; cursor: pointer;
 }
 .thumb__size {
     position: absolute; right: 2px; bottom: 2px;
     font-size: 8.5px; font-weight: 800;
     background: rgba(11, 13, 16, .78); color: #fff;
-    border: none; border-radius: 4px; padding: 2px 4px; cursor: pointer;
+    border: none; border-radius: var(--r-sm); padding: 2px 4px; cursor: pointer;
 }
 .thumb-add {
     width: 78px; height: 58px;
-    border-radius: 9px;
+    border-radius: var(--r-lg);
     border: 1px dashed var(--line);
     color: var(--muted); background: transparent;
-    font-size: 10.5px; line-height: 1.25; cursor: pointer; flex: none;
+    font-size: var(--fs-1); line-height: 1.25; cursor: pointer; flex: none;
     transition: border-color .14s, color .14s;
 }
 .thumb-add:hover { border-color: var(--accent); color: var(--accent); }
@@ -2224,22 +2269,22 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 
     .subbar__in { padding: 8px 16px; }
     .subbar__right { margin-left: auto; }
-    .section-head h2 { font-size: 24px; }
-    .section-head p { font-size: 15px; }
+    .section-head h2 { font-size: var(--fs-6); }
+    .section-head p { font-size: var(--fs-4); }
 }
 
 @media (max-width: 700px) {
     .wrap { padding-inline: 14px; }
     .appbar__bandin { padding: 10px 14px 10px 64px; }
     .appbar__barin { padding: 6px 14px; min-height: 50px; }
-    .appbar__user { font-size: 13.5px; }
+    .appbar__user { font-size: var(--fs-3); }
     .appbar__logo img,
     .appbar--big .appbar__logo img { height: 68px; }
 
     /* užší tlačítka, ať se všechna tři vejdou vedle lupy */
     .appbar__barin { padding-right: 58px; }
     .appbar__nav { gap: 3px; }
-    .navbtn { height: 36px; padding: 0 9px; font-size: 12px; letter-spacing: .02em; gap: 5px; }
+    .navbtn { height: 36px; padding: 0 9px; font-size: var(--fs-1); letter-spacing: .02em; gap: 5px; }
     .navbtn svg { width: 15px; height: 15px; }
     .navbtn__caret { width: 10px; height: 10px; }
 
@@ -2247,16 +2292,16 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     .searchbox.is-open { left: 14px; right: 14px; }
 
     .subbar__in { padding: 8px 14px; gap: 8px; }
-    .subbar__cat { height: 32px; padding: 0 11px; font-size: 12px; }
+    .subbar__cat { height: 32px; padding: 0 11px; font-size: var(--fs-1); }
     .subbar__right { width: 100%; justify-content: flex-end; }
 
     .tile { min-height: 0; padding: 14px; }
-    .tile__title { font-size: 14px; }
+    .tile__title { font-size: var(--fs-3); }
 
-    .section-head h2 { font-size: 21px; }
-    .section-head p { font-size: 14.5px; margin-top: 10px; }
+    .section-head h2 { font-size: var(--fs-5); }
+    .section-head p { font-size: var(--fs-3); margin-top: 10px; }
 
-    .taskgroup__name { font-size: 15px; }
+    .taskgroup__name { font-size: var(--fs-4); }
 }
 
 @media (hover: none) {
@@ -2275,20 +2320,20 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .vyktile { padding: 13px 16px; }
 .vyktile__label {
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--muted);
 }
 .vyktile__value {
-    font-size: 23px;
+    font-size: var(--fs-5);
     font-weight: 900;
     line-height: 1.15;
     margin-top: 4px;
     font-variant-numeric: tabular-nums;
 }
-.vyktile__note { font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+.vyktile__note { font-size: var(--fs-1); color: var(--dim); margin-top: 2px; }
 .vyktile--money .vyktile__value { color: var(--accent); }
 
 /* --- formulář výkazu ------------------------------------------------------
@@ -2315,7 +2360,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     background: var(--accent);
 }
 .zblok__stitek {
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .09em;
     text-transform: uppercase;
@@ -2350,7 +2395,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     margin-bottom: 10px;
 }
 .polozka__poradi {
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -2403,7 +2448,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 /* „Zobrazit čísla projektů" vedle Fakturovat firmě */
 .cisla-prep {
     display: flex; align-items: center; gap: 7px; align-self: end;
-    min-height: 44px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+    min-height: 44px; font-size: var(--fs-2); font-weight: 700; cursor: pointer;
 }
 
 /* Poznámka je vlastní řádek přes celou šířku. Dokud byla v mřížce výběrů,
@@ -2417,7 +2462,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .vicpole__radek { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .vicpole__radek > select { flex: 1 1 auto; min-width: 0; }
 .vicpole__radek[hidden] { display: none; }
-.vicpole__pridej { align-self: flex-start; font-size: 12px; }
+.vicpole__pridej { align-self: flex-start; font-size: var(--fs-1); }
 
 /* Podíl práce se vyklikává: každý klik přidá deset procent tomuhle patru
    a ostatním je ubere. Vypadá to jako pole, ale je to tlačítko. */
@@ -2431,7 +2476,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     background: var(--bg-soft);
     color: var(--text);
     font-family: inherit;
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     font-variant-numeric: tabular-nums;
     cursor: pointer;
@@ -2482,7 +2527,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 700;
     color: var(--text-soft);
     cursor: pointer;
@@ -2491,9 +2536,9 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .priplatek__prepinac input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .priplatek__pole { display: flex; align-items: center; gap: 6px; }
 .priplatek__pole .field { width: 78px; min-width: 0; }
-.priplatek__jednotka { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.priplatek__jednotka { font-size: var(--fs-1); color: var(--muted); white-space: nowrap; }
 .priplatek__pausal {
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     color: var(--accent);
     font-variant-numeric: tabular-nums;
@@ -2510,18 +2555,18 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     border-top: 1px dashed var(--line);
     font-variant-numeric: tabular-nums;
 }
-.polozka__hod { font-size: 16px; font-weight: 900; }
-.polozka__kc  { font-size: 16px; font-weight: 900; color: var(--accent); }
-.polozka__varovani { font-size: 11.5px; font-weight: 700; color: var(--warn); }
+.polozka__hod { font-size: var(--fs-4); font-weight: 900; }
+.polozka__kc  { font-size: var(--fs-4); font-weight: 900; color: var(--accent); }
+.polozka__varovani { font-size: var(--fs-1); font-weight: 700; color: var(--warn); }
 
-.polozka__rozpis { font-size: 12px; color: var(--muted); }
+.polozka__rozpis { font-size: var(--fs-1); color: var(--muted); }
 
 /* --- tabulka zápisů --- */
 
 .vyk {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: var(--fs-3);
     min-width: 900px;
     background: var(--surface);
     border: 1px solid var(--line);
@@ -2530,7 +2575,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 }
 .vyk th {
     background: var(--bg-soft);
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
@@ -2547,7 +2592,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .vt__skupina > td {
     background: var(--bg-soft);
     border-top: 2px solid var(--line);
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -2570,17 +2615,17 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     margin-bottom: 8px;
 }
 .ukolskup__hlava b {
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
     color: var(--accent);
 }
-.ukolskup__stav { margin-left: auto; font-size: 12px; color: var(--muted); }
+.ukolskup__stav { margin-left: auto; font-size: var(--fs-1); color: var(--muted); }
 
 /* Procento hotovo je tlačítko – rozbalí jednotlivé TO-DO. */
 .buproc { font: inherit; font-size: inherit; }
-.buproc__sipka { font-size: 10px; display: inline-block; transition: transform .12s; }
+.buproc__sipka { font-size: var(--fs-1); display: inline-block; transition: transform .12s; }
 .buproc--otevreno .buproc__sipka { transform: rotate(180deg); }
 
 .butodo > td { background: var(--bg-soft); padding: 0 !important; }
@@ -2590,12 +2635,12 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     grid-template-columns: minmax(0, 1fr) 120px 46px;
     align-items: center;
     gap: 10px;
-    font-size: 12.5px;
+    font-size: var(--fs-2);
 }
 .butodo__text { min-width: 0; overflow-wrap: anywhere; }
 .butodo__pruh {
     height: 7px;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     background: var(--line);
     overflow: hidden;
 }
@@ -2605,7 +2650,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
 .butodo__pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 .butodo__pozn {
     grid-column: 1 / -1;
-    font-size: 11px;
+    font-size: var(--fs-1);
     color: var(--dim);
     line-height: 1.5;
 }
@@ -2624,7 +2669,7 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     transform: translateY(-50%);
     color: var(--dim);
     pointer-events: none;
-    font-size: 11px;
+    font-size: var(--fs-1);
 }
 /* `fixed`, ne `absolute`: blok výkazu má overflow:hidden a nabídku by
    ořezal. Polohu i šířku dopočítává umistiNabidku() z polohy pole.
@@ -2646,10 +2691,10 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     text-align: left;
     padding: 7px 9px;
     border: 0;
-    border-radius: 5px;
+    border-radius: var(--r-sm);
     background: none;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs-2);
     color: var(--text);
     cursor: pointer;
 }
@@ -2662,13 +2707,13 @@ mark { background: #fde68a; color: #6b4b00; border-radius: 3px; padding: 0 2px; 
     padding: 8px 9px 4px;
     margin-top: 4px;
     border-top: 1px dashed var(--line);
-    font-size: 10px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
     color: var(--dim);
 }
-.hledac__prazdno { padding: 10px 9px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.hledac__prazdno { padding: 10px 9px; font-size: var(--fs-1); color: var(--muted); line-height: 1.5; }
 
 /* Cizí úkol v nabídce výkazu: vlastní skupina pod čarou a jiná barva,
    ať je jasné, že se zapisuje výpomoc na něčí cizí práci. */
@@ -2684,7 +2729,7 @@ input.hledac__vstup.opt--cizi {
 /* Řádek, na který se přišlo z upozornění „pro kontrolu". */
 .vyk--najeto > td { background: var(--accent-tint); }
 .vyk--najeto > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-.vyk__pozn { display: block; font-size: 11px; color: var(--dim); margin-top: 2px; }
+.vyk__pozn { display: block; font-size: var(--fs-1); color: var(--dim); margin-top: 2px; }
 .vyk__akce { text-align: right; white-space: nowrap; }
 
 /* mezisoučet dne – oddělí jeden den od druhého */
@@ -2694,12 +2739,12 @@ input.hledac__vstup.opt--cizi {
     padding: 8px 12px;
 }
 .vyk__den b {
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .06em;
     color: var(--accent);
 }
-.vyk__den span { font-size: 11.5px; color: var(--muted); margin-left: 10px; }
+.vyk__den span { font-size: var(--fs-1); color: var(--muted); margin-left: 10px; }
 .vyk__den:hover td { background: var(--accent-tint); }
 
 /* --- přehled: vodorovné pruhy --- */
@@ -2712,7 +2757,7 @@ input.hledac__vstup.opt--cizi {
     padding: 4px 0;
 }
 .vykbar__name {
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 800;
     letter-spacing: .04em;
     overflow: hidden;
@@ -2721,14 +2766,14 @@ input.hledac__vstup.opt--cizi {
 }
 .vykbar__track {
     height: 14px;
-    border-radius: 4px;
+    border-radius: var(--r-sm);
     background: var(--bg);
     border: 1px solid var(--line-soft);
     overflow: hidden;
 }
 .vykbar__fill { height: 100%; background: var(--accent); transition: width .3s ease; }
 .vykbar__val {
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 800;
     text-align: right;
     white-space: nowrap;
@@ -2748,13 +2793,13 @@ input.hledac__vstup.opt--cizi {
     margin-bottom: 12px;
     border-bottom: 1px solid var(--line);
 }
-.osoba__jmeno { font-size: 16px; font-weight: 900; }
+.osoba__jmeno { font-size: var(--fs-4); font-weight: 900; }
 .osoba__cisla { font-variant-numeric: tabular-nums; font-weight: 900; }
 .osoba__cisla b { color: var(--accent); }
 .osoba__grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
 @media (min-width: 900px) { .osoba__grid { grid-template-columns: 1fr 1fr; } }
 .osoba__nadpis {
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
@@ -2763,7 +2808,7 @@ input.hledac__vstup.opt--cizi {
 }
 
 @media (max-width: 640px) {
-    .vyk { min-width: 760px; font-size: 13px; }
+    .vyk { min-width: 760px; font-size: var(--fs-2); }
     .vyk th, .vyk td { padding: 9px 10px; }
     .vykbar { grid-template-columns: minmax(70px, 100px) minmax(0, 1fr) auto; }
 }
@@ -2778,7 +2823,7 @@ input.hledac__vstup.opt--cizi {
     display: flex; align-items: baseline; justify-content: space-between;
     gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
 }
-.bpkarta__hlava b { font-size: 15px; }
+.bpkarta__hlava b { font-size: var(--fs-4); }
 
 /* koláč vedle legendy; na úzkém displeji pod sebou */
 .bpkolac { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: center; }
@@ -2793,12 +2838,12 @@ input.hledac__vstup.opt--cizi {
 
 .bpleg { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .bpleg__radek {
-    display: grid; align-items: center; gap: 8px; font-size: 13px;
+    display: grid; align-items: center; gap: 8px; font-size: var(--fs-2);
     grid-template-columns: 10px minmax(0, 1fr) auto 42px;
     padding: 3px 0; border-bottom: 1px solid var(--line-soft);
 }
 .bpleg__radek:last-child { border-bottom: 0; }
-.bpleg__tecka { width: 10px; height: 10px; border-radius: 2px; }
+.bpleg__tecka { width: 10px; height: 10px; border-radius: var(--r-sm); }
 .bpleg__nazev { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bpleg__cislo { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bpleg__pct { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
@@ -2807,7 +2852,7 @@ input.hledac__vstup.opt--cizi {
 .bpmesice { display: flex; align-items: flex-end; gap: 3px; height: 150px; min-width: 620px; }
 .bpmesic { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 14px; }
 .bpmesic__sloupec {
-    background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px;
+    background: var(--accent); border-radius: var(--r-sm) var(--r-sm) 0 0; min-height: 2px;
     transition: background .15s;
 }
 .bpmesic:hover .bpmesic__sloupec { background: var(--accent-dark); }
@@ -2830,7 +2875,7 @@ input.hledac__vstup.opt--cizi {
     gap: 8px;
     max-width: calc(50% - 30px);
     color: #fff;
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 700;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -2845,7 +2890,7 @@ input.hledac__vstup.opt--cizi {
     background: rgba(255, 255, 255, .14);
     color: #fff;
     font-family: inherit;
-    font-size: 12.5px;
+    font-size: var(--fs-2);
     font-weight: 700;
     text-transform: none;
     letter-spacing: 0;
@@ -2869,7 +2914,7 @@ input.hledac__vstup.opt--cizi {
     padding: 9px 20px;
     background: var(--warn);
     color: #fff;
-    font-size: 13px;
+    font-size: var(--fs-2);
     line-height: 1.4;
     text-align: center;
 }
@@ -2899,7 +2944,7 @@ input.hledac__vstup.opt--cizi {
     gap: 12px; flex-wrap: wrap;
     padding-bottom: 10px; border-bottom: 1px solid var(--line);
 }
-.nastaveni__hlava b { font-size: 16px; }
+.nastaveni__hlava b { font-size: var(--fs-4); }
 .nastaveni__hlava span { margin-left: 10px; }
 /* Popisek sekce se dřív lepil na nadpis a četl se jako jeho pokračování.
    Odsazený a oddělený lomítkem je poznat na první pohled jako vysvětlivka
@@ -2933,9 +2978,9 @@ input.hledac__vstup.opt--cizi {
     padding: 6px 10px; border: 1px solid var(--line-soft); border-radius: var(--radius);
 }
 .sazba:focus-within { border-color: var(--accent); }
-.sazba__jmeno { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sazba__jmeno { font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sazba input { min-height: 36px; text-align: right; font-variant-numeric: tabular-nums; }
-.sazba__jednotka { font-size: 11.5px; color: var(--muted); }
+.sazba__jednotka { font-size: var(--fs-1); color: var(--muted); }
 
 /* ============================================================== TISK ==== */
 
@@ -2954,10 +2999,16 @@ input.hledac__vstup.opt--cizi {
 }
 
 /* ========================================================= SVISLÝ PÁS ==== */
-/* Levý pás jako v Caflou: nahoře logo (klik = domů), pod ním hledání
-   a rychlé akce. Jen na širokém okně s myší – na dotyku a v úzkém okně
-   zůstává všechno v horní liště a pás se nevykresluje (CSS ho schová
-   a hledání si přestěhuje zpátky ui.js → placeSearch). */
+/* Levý pás jako v Caflou. Od 20. 10. 2026 po skupinách, aby se na 1080p
+   i 1440 × 900 vešel bez rolování (dřív 1 284–1 353 px):
+     nahoře  logo, hledání (jen kde je), + Nový výkaz, zkrácené Stats,
+     střed   skupiny – klik vysune ikony a názvy stránek (ui.js → mountRail),
+     dole    jméno, role, Odhlásit a stav spojení.
+   Na širokém okně s myší je vidět pořád; na dotyku a v úzkém okně je
+   schovaný za levým okrajem a vysouvá ho hamburger (a na telefonu „Menu"
+   ve spodní liště). Kdyby se pás do okna přece jen nevešel (velmi nízké
+   okno), roluje se jen prostřední část se skupinami – logo, Nový výkaz
+   a Odhlásit zůstávají vidět. */
 
 :root { --rail-w: 216px; }
 
@@ -2968,48 +3019,316 @@ input.hledac__vstup.opt--cizi {
     z-index: 70;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 16px 14px calc(14px + env(safe-area-inset-bottom));
+    gap: 10px;
+    padding: 12px 12px calc(10px + env(safe-area-inset-bottom));
     background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
     color: #fff;
+    /* pojistka pro extrémně nízké okno – běžně se roluje jen střed se skupinami */
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
+/* nic v pásu se nesmí smrštit pod svůj obsah – jinak se při nízkém okně
+   zmačkne logo a řádky Stats a pás vypadá rozbitě */
+.siderail > * { flex: none; }
 
 .siderail__logo {
     display: block;
     text-align: center;
-    padding: 4px 4px 12px;
+    padding: 2px 4px 10px;
     border-bottom: 1px solid rgba(255, 255, 255, .28);
 }
-.siderail__logo img { width: 100%; max-width: 164px; object-fit: contain; display: inline-block; }
+.siderail__logo img {
+    display: inline-block;
+    width: 100%;
+    max-width: 140px;
+    max-height: 64px;
+    object-fit: contain;
+}
 
-.siderail__akce { display: flex; flex-direction: column; gap: 8px; }
-
+/* tlačítko v pásu – dnes jen hlavní akce dne (Nový výkaz) */
 .siderail__btn {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    min-height: var(--h);
+    padding: 8px 12px;
     border: 1px solid rgba(255, 255, 255, .38);
-    border-radius: var(--radius);
+    border-radius: var(--r);
     background: rgba(255, 255, 255, .13);
     color: #fff;
     font-weight: 700;
-    font-size: 13.5px;
+    font-size: var(--fs-3);
     text-decoration: none;
 }
 .siderail__btn:hover { background: #fff; color: var(--accent); }
 .siderail__btn svg { width: 18px; height: 18px; flex: none; }
-
-/* hlavní akce dne – zapsat výkaz – svítí bíle */
-.siderail__btn--hlavni { background: #fff; color: var(--accent); }
+/* hlavní akce dne – zapsat výkaz – svítí bíle a je vždy nahoře */
+.siderail__btn--hlavni {
+    min-height: 40px;
+    background: #fff;
+    border-color: #fff;
+    color: var(--accent);
+    font-weight: 900;
+}
 .siderail__btn--hlavni:hover { background: rgba(255, 255, 255, .88); }
 
-.siderail__pata {
-    margin-top: auto;
-    font-size: 10.5px;
+/* klávesnice: fokus musí být na tmavém pásu vidět */
+.siderail a:focus-visible,
+.siderail button:focus-visible,
+.siderail select:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+/* ---- Stats: dvě čísla, podrobnosti po kliknutí ---- */
+.siderail__mujden { display: flex; flex-direction: column; gap: 4px; }
+.mujden__hlava {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: var(--r);
+}
+.mujden__cislo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 8px;
+    border-radius: var(--r);
+    background: rgba(255, 255, 255, .12);
+}
+.mujden__cislo small { font-size: var(--fs-1); line-height: 1.3; color: rgba(255, 255, 255, .85); }
+.mujden__cislo b {
+    font-size: var(--fs-4);
+    font-weight: 900;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.mujden__hlava:hover .mujden__cislo { background: rgba(255, 255, 255, .2); }
+.mujden__sipka { flex: none; align-self: center; width: 14px; height: 14px; opacity: .85; transition: transform .18s; }
+.mujden__hlava[aria-expanded="true"] .mujden__sipka { transform: rotate(180deg); }
+.mujden__vic { display: flex; flex-direction: column; gap: 1px; padding: 2px 2px 0; }
+.mujden__radek {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 6px;
+    font-size: var(--fs-2);
+    color: rgba(255, 255, 255, .85);
+}
+.mujden__radek b { font-size: var(--fs-3); font-weight: 900; color: #fff; }
+.mujden__termin {
+    display: block;
+    margin-top: 4px;
+    padding: 7px 9px;
+    border-radius: var(--r);
+    background: rgba(255, 255, 255, .13);
+    color: #fff;
+    text-decoration: none;
+    font-size: var(--fs-1);
+    line-height: 1.4;
+}
+.mujden__termin:hover { background: #fff; color: var(--accent); }
+.mujden__termin span { display: block; opacity: .85; }
+.mujden__termin b { font-weight: 900; }
+
+/* ---- skupiny: hlavička = tlačítko, pod ní vysunuté stránky ---- */
+.siderail__skupiny {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, .28);
+}
+.passkup { display: flex; flex-direction: column; }
+.passkup__hlava {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 8px 6px 10px;
+    border: 0;
+    border-radius: var(--r);
+    background: none;
+    color: #fff;
+    font: inherit;
+    font-size: var(--fs-3);
+    font-weight: 800;
+    text-align: left;
+    cursor: pointer;
+}
+.passkup__hlava > svg { width: 18px; height: 18px; flex: none; }
+.passkup__hlava:hover { background: rgba(255, 255, 255, .12); }
+.passkup.je-otevrena > .passkup__hlava { background: rgba(255, 255, 255, .14); }
+/* delší název skupiny („Nastavení a nápověda") se zalomí, neusekne */
+.passkup__nazev { flex: 1; min-width: 0; line-height: 1.2; overflow-wrap: anywhere; }
+.passkup__hlava > .passkup__sipka { width: 14px; height: 14px; opacity: .8; transition: transform .18s; }
+.passkup.je-otevrena .passkup__sipka { transform: rotate(180deg); }
+/* skupina s otevřenou stránkou – bílý proužek vlevo, poznat i zavřenou */
+.passkup--aktivni > .passkup__hlava { box-shadow: inset 3px 0 0 #fff; }
+
+.passkup__polozky {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 2px 0 6px 18px;
+    padding-left: 6px;
+    border-left: 1px solid rgba(255, 255, 255, .28);
+}
+.passkup__polozka {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 32px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--r);
+    background: none;
+    color: #fff;
+    font: inherit;
+    font-size: var(--fs-3);
+    font-weight: 700;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.passkup__polozka svg { width: 16px; height: 16px; flex: none; opacity: .9; }
+.passkup__polozka:hover { background: #fff; color: var(--accent); }
+.passkup__polozka.je-aktivni { background: rgba(255, 255, 255, .2); }
+.passkup__polozka.je-aktivni:hover { background: #fff; }
+.passkup__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* počet nesplněných vzkazů – u položky i jako součet na zavřené skupině */
+.siderail__odznak {
+    margin-left: auto;
+    flex: none;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: var(--r-pill);
+    background: #fff;
+    color: var(--accent);
+    font-size: var(--fs-1);
+    font-weight: 900;
     line-height: 1.5;
     text-align: center;
-    color: rgba(255, 255, 255, .62);
+}
+.passkup__polozka:hover .siderail__odznak { background: var(--accent); color: #fff; }
+
+/* ---- spodek: člověk, odhlášení, stav spojení ---- */
+.siderail__spodek {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, .28);
+}
+.siderail__nahled:empty { display: none; }
+.siderail__ja {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 9px;
+    color: #fff;
+    font-size: var(--fs-2);
+    line-height: 1.3;
+}
+.siderail__avatar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, .5);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .16);
+    font-size: var(--fs-1);
+    font-weight: 900;
+    letter-spacing: .03em;
+}
+.siderail__kdo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.siderail__kdo b { font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.siderail__role {
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 0 7px;
+    border: 1px solid rgba(255, 255, 255, .5);
+    border-radius: var(--r-pill);
+    font-size: var(--fs-1);
+    font-weight: 800;
+    letter-spacing: .03em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.siderail__odhlasit {
+    width: 100%;
+    min-height: 30px;
+    padding: 4px 12px;
+    border: 1px solid rgba(255, 255, 255, .45);
+    border-radius: var(--r);
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    font-family: inherit;
+    font-size: var(--fs-2);
+    font-weight: 700;
+    cursor: pointer;
+}
+.siderail__odhlasit:hover { background: #fff; color: var(--accent); border-color: #fff; }
+.siderail__stav { font-size: var(--fs-1); color: rgba(255, 255, 255, .8); text-align: center; }
+.siderail__stav[data-state="online"] { color: #d8f7e6; }
+.siderail__stav[data-state="offline"] { color: #ffe0b8; }
+
+/* Obal přepínače náhledu: v pruhu nehraje roli (děti jsou položky pruhu
+   jako dřív), na telefonu ho ui.js → placeNahled přestěhuje do pásu. */
+.appbar__vlevo { display: contents; }
+.siderail .appbar__vlevo { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+
+/* „Zobrazit jako" přestěhované na telefonu do pásu */
+.siderail .appbar__nahled {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    max-width: none;
+    margin: 0;
+}
+.siderail .appbar__nahled > span { display: block; }
+.siderail .appbar__nahled select { width: 100%; height: 36px; }
+
+/* Stránka bez hledání: prázdné místo po poli zmizí. */
+.siderail--bezhledani [data-rail-search] { display: none; }
+
+/* Na širokém okně s myší je pás pořád vidět – když se do nízkého okna
+   nevejde, roluje se jen prostředek se skupinami. */
+@media (min-width: 1121px) and (hover: hover) {
+    .siderail__skupiny {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, .35) transparent;
+    }
+}
+/* nízké okno (notebook, okno prohlížeče s lištami) – menší logo a mezery */
+@media (max-height: 820px) {
+    .siderail { gap: 8px; padding-top: 8px; }
+    .siderail__logo { padding-bottom: 6px; }
+    .siderail__logo img { max-height: 44px; }
 }
 
 /* hledání přestěhované do pásu – přebije absolutní usazení z lišty */
@@ -3058,7 +3377,9 @@ input.hledac__vstup.opt--cizi {
         transition: transform .22s ease;
         z-index: 130;
         box-shadow: 0 0 34px rgba(0, 0, 0, .38);
+        /* vysunutý pás se roluje celý (na telefonu nese i stránky webu) */
         overflow-y: auto;
+        overscroll-behavior: contain;
     }
     body.pas-otevren .siderail { transform: translateX(0); }
 }
@@ -3180,16 +3501,6 @@ main .linkbtn:hover,
     .tilegrid { grid-template-columns: repeat(4, 1fr); }
 }
 
-/* ---- svislý pás: kontext sekce a spodek s člověkem a stavem ---- */
-
-.siderail__nadpis {
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, .6);
-    padding: 8px 6px 4px;
-}
 /* Okno Rychlý zápis – uprostřed, žádné vysouvání. */
 .hookno {
     position: fixed;
@@ -3215,7 +3526,7 @@ main .linkbtn:hover,
     padding: 13px 18px;
     background: var(--accent);
     color: #fff;
-    font-size: 15px;
+    font-size: var(--fs-4);
     font-weight: 900;
     letter-spacing: .04em;
     display: flex;
@@ -3282,10 +3593,10 @@ main .linkbtn:hover,
 
 .hoden__svatek {
     padding: 1px 8px;
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: #fdeff1;
     color: #c8102e;
-    font-size: 10.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .05em;
     text-transform: uppercase;
@@ -3300,16 +3611,16 @@ main .linkbtn:hover,
 .autapruh { margin-top: 4px; }
 .autapruh__nadpis {
     margin: 12px 0 6px;
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .09em;
     text-transform: uppercase;
     color: var(--muted);
 }
-.autoden__nikdo { color: var(--dim); font-style: italic; font-size: 12px; }
+.autoden__nikdo { color: var(--dim); font-style: italic; font-size: var(--fs-1); }
 
 .autakarta__nadpis {
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 900;
     letter-spacing: .09em;
     text-transform: uppercase;
@@ -3334,7 +3645,7 @@ main .linkbtn:hover,
     padding: 5px 10px;
     background: var(--bg-soft);
     border-bottom: 1px solid var(--line-soft);
-    font-size: 11.5px;
+    font-size: var(--fs-1);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: .05em;
@@ -3343,7 +3654,7 @@ main .linkbtn:hover,
 .autoden--dnes .autoden__kdy { color: var(--accent); }
 .autoden__kdo {
     padding: 7px 10px;
-    font-size: 13px;
+    font-size: var(--fs-2);
     line-height: 1.55;
     display: flex;
     flex-direction: column;
@@ -3366,7 +3677,7 @@ main .linkbtn:hover,
 /* hlášky k danému dni – červeně a čitelně, nesmí zapadnout */
 .hobox__pozor {
     color: var(--danger);
-    font-size: 13.5px;
+    font-size: var(--fs-3);
     font-weight: 900;
     line-height: 1.4;
 }
@@ -3379,14 +3690,14 @@ main .linkbtn:hover,
 /* Týden jako blok – střídavé barvy, ať se týdny oddělí na první pohled. */
 .hotyden {
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--r-lg);
     overflow: hidden;
     margin-bottom: 8px;
 }
 .hotyden:last-child { margin-bottom: 0; }
 .hotyden__hlava {
     padding: 4px 12px;
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 900;
     letter-spacing: .07em;
     text-transform: uppercase;
@@ -3409,16 +3720,16 @@ main .linkbtn:hover,
     padding: 3px 0;
     border-bottom: 1px dashed var(--line-soft);
 }
-.hoden__den { flex: 0 0 92px; font-size: 13px; }
+.hoden__den { flex: 0 0 92px; font-size: var(--fs-2); }
 /* tlačítka roztažená mezi datem a pravou hranou, ať se den čte jako řádek */
 .hoden__tlacitka { display: flex; gap: 6px; flex: 1; justify-content: space-evenly; }
 .hoden__btn {
     padding: 3px 10px;
     border: 1px solid var(--line);
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     background: var(--surface);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 700;
     color: var(--text-soft);
     cursor: pointer;
@@ -3442,106 +3753,15 @@ main .linkbtn:hover,
        s nahlášeným HO měl přepínače jinde (přání Michala 1. 9. 2026) */
     flex: 0 0 100%;
     margin-top: 1px;
-    font-size: 11px;
+    font-size: var(--fs-1);
     color: var(--muted);
 }
 
-/* Čárka nad odkazem na příručku – stejná jako nad spodní sadou akcí. */
-.siderail__oddel {
-    border-top: 1px solid rgba(255, 255, 255, .28);
-    margin: 8px 0;
-}
-
-.siderail__spodek {
-    margin-top: auto;
-    border-top: 1px solid rgba(255, 255, 255, .28);
-    padding-top: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-/* jméno, role a odhlášení – vycentrované uprostřed spodku pásu */
-.siderail__ja {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    text-align: center;
-    font-size: 12.5px;
-    color: rgba(255, 255, 255, .95);
-    line-height: 1.4;
-}
-.siderail__ja b { font-weight: 900; }
-.siderail__role {
-    display: inline-block;
-    padding: 2px 9px;
-    border: 1px solid rgba(255, 255, 255, .5);
-    border-radius: 99px;
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: .07em;
-}
-.siderail__odhlasit {
-    border: 1px solid rgba(255, 255, 255, .45);
-    background: rgba(255, 255, 255, .12);
-    color: #fff;
-    border-radius: var(--radius);
-    padding: 5px 14px;
-    font-family: inherit;
-    font-size: 11.5px;
-    font-weight: 700;
-    cursor: pointer;
-}
-.siderail__odhlasit:hover { background: #fff; color: var(--accent); border-color: #fff; }
-.siderail__stav { font-size: 10.5px; color: rgba(255, 255, 255, .62); text-align: center; }
-.siderail__stav[data-state="online"] { color: #d8f7e6; }
-.siderail__stav[data-state="offline"] { color: #ffe0b8; }
-
 /* jméno nahoře jen na úzkém okně – na širokém ho nese svislý pás */
-.appbar__jmeno-mobil { display: none; color: #fff; font-size: 13.5px; margin-right: 10px; }
+.appbar__jmeno-mobil { display: none; color: #fff; font-size: var(--fs-3); margin-right: 10px; }
 @media (max-width: 1120px), (hover: none) {
     .appbar__jmeno-mobil { display: inline; }
 }
-
-/* Stránka bez hledání: prázdné místo po poli zmizí a s ním i druhá čára –
-   pod logem zůstane jedna. */
-.siderail--bezhledani [data-rail-search] { display: none; }
-.siderail--bezhledani .siderail__mujden { border-top: none; padding-top: 0; }
-
-/* ---- „Můj den" ve svislém pásu ---- */
-.siderail__mujden {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding-top: 4px;
-    border-top: 1px solid rgba(255, 255, 255, .28);
-}
-.mujden__radek {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 4px 6px;
-    font-size: 12.5px;
-    color: rgba(255, 255, 255, .82);
-}
-.mujden__radek b { font-size: 14px; font-weight: 900; color: #fff; }
-.mujden__termin {
-    display: block;
-    margin-top: 5px;
-    padding: 8px 10px;
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, .13);
-    color: #fff;
-    text-decoration: none;
-    font-size: 11.5px;
-    line-height: 1.4;
-}
-.mujden__termin:hover { background: #fff; color: var(--accent); }
-.mujden__termin span { display: block; opacity: .75; font-size: 10.5px; }
-.mujden__termin b { font-weight: 900; }
-.mujden__termin--klid { background: none; padding: 6px; opacity: .7; }
-.mujden__termin--klid:hover { background: none; color: #fff; }
 
 /* Na širokém okně nese jméno i odhlášení svislý pás – nahoře by to bylo
    dvakrát. Úzké okno pás nemá, tam zůstává původní podoba vpravo nahoře. */
@@ -3560,7 +3780,7 @@ main .linkbtn:hover,
 
 /* Nadpisy dlaždic na nástěnce ať vyniknou. */
 .nastenka__karta > .spread > b {
-    font-size: 15px;
+    font-size: var(--fs-4);
     font-weight: 900;
     letter-spacing: .01em;
 }
@@ -3582,21 +3802,6 @@ main .linkbtn:hover,
 @media (max-width: 640px) { .fmr__sirsi { grid-column: 1 / -1; } }
 /* display:block výš by přebilo prohlížečové [hidden] */
 .fmr > [hidden] { display: none; }
-
-/* ---- Quick TO-DO ve svislém pásu ---- */
-.siderail__quick { display: flex; flex-direction: column; gap: 6px; }
-.siderail__quick .field {
-    width: 100%;
-    min-height: 34px;
-    padding: 6px 9px;
-    font-size: 12px;
-    background: rgba(255, 255, 255, .13);
-    border-color: rgba(255, 255, 255, .38);
-    color: #fff;
-}
-.siderail__quick .field::placeholder { color: rgba(255, 255, 255, .6); }
-.siderail__quick select.field option { color: var(--text); background: var(--surface); }
-.siderail__quick .field:focus { background: #fff; color: var(--text); }
 
 /* ============================================== QUICK TO-DO PANEL ==== */
 /* Vyjede zpoza levého pásu přes obsah stránky – vzkaz se píše uprostřed
@@ -3634,7 +3839,7 @@ main .linkbtn:hover,
     background: var(--accent);
 }
 .quickpanel__stitek {
-    font-size: 12px; font-weight: 900; letter-spacing: .09em;
+    font-size: var(--fs-1); font-weight: 900; letter-spacing: .09em;
     text-transform: uppercase; color: #fff;
 }
 .quickpanel__telo { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 20px; }
@@ -3642,11 +3847,11 @@ main .linkbtn:hover,
 .quickpanel__radek { display: flex; gap: 8px; }
 .quickpanel__radek .field { min-width: 0; }
 .quickpanel__nadpis {
-    font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
+    font-size: var(--fs-1); font-weight: 900; letter-spacing: .07em; text-transform: uppercase;
     color: var(--muted); margin: 14px 0 4px;
 }
 .quickpanel__prazdno {
-    padding: 20px 4px; color: var(--muted); font-size: 13.5px; line-height: 1.6; text-align: center;
+    padding: 20px 4px; color: var(--muted); font-size: var(--fs-3); line-height: 1.6; text-align: center;
 }
 
 .quickrad {
@@ -3660,14 +3865,14 @@ main .linkbtn:hover,
 .pnahledy { display: flex; gap: 8px; flex-wrap: wrap; }
 .pnahled { position: relative; }
 .pnahled img { width: 110px; height: 74px; object-fit: cover;
-    border-radius: 6px; border: 1px solid var(--line); display: block; }
+    border-radius: var(--r); border: 1px solid var(--line); display: block; }
 .pnahled button { position: absolute; top: -7px; right: -7px; width: 20px;
     height: 20px; border-radius: 50%; border: 0; background: var(--danger, #c8102e);
-    color: #fff; font-size: 12px; font-weight: 900; cursor: pointer; line-height: 1; }
+    color: #fff; font-size: var(--fs-1); font-weight: 900; cursor: pointer; line-height: 1; }
 
 /* Screenshot v řádku vzkazu – malý, ale poznat na první pohled. */
 .quickrad__foto {
-    flex: none; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+    flex: none; padding: 0; border: 1px solid var(--line); border-radius: var(--r);
     background: var(--bg-soft); cursor: pointer; line-height: 0; overflow: hidden;
 }
 .quickrad__foto img { width: 52px; height: 36px; object-fit: cover; display: block; }
@@ -3689,12 +3894,12 @@ main .linkbtn:hover,
 
 /* Vkládání screenshotu ve formuláři vzkazu */
 .quickpanel__fotky { display: flex; flex-direction: column; gap: 2px; }
-.quickrad__text { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.45; }
-.quickrad__kdo { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.quickrad__text { flex: 1; min-width: 0; font-size: var(--fs-3); font-weight: 700; line-height: 1.45; }
+.quickrad__kdo { display: block; font-size: var(--fs-1); font-weight: 400; color: var(--muted); margin-top: 2px; }
 .quickrad__po { color: var(--danger); font-weight: 700; }
 /* „co nejdříve" má křičet stejně jako prošlý termín – je to totéž sdělení */
 .quickrad__asap { color: var(--danger); font-weight: 900; text-transform: uppercase;
-    font-size: 10.5px; letter-spacing: .04em; }
+    font-size: var(--fs-1); letter-spacing: .04em; }
 /* kdo společný vzkaz odškrtl za všechny */
 .quickrad__splnil { color: var(--p100-fg); font-weight: 800; }
 /* Vzkaz vzatý na vědomí: zůstane vidět, ale ustoupí do pozadí. */
@@ -3710,11 +3915,11 @@ main .linkbtn:hover,
 /* --- formulář vzkazu: komu, oblíbené party, co nejdříve --- */
 
 .quickpanel__popisek { display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; font-size: 11px; font-weight: 800; letter-spacing: .05em;
+    gap: 10px; font-size: var(--fs-1); font-weight: 800; letter-spacing: .05em;
     text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
 /* odkaz vedle nadpisu nesmí splynout s popiskem – je to akce, ne text */
 .quickpanel__popisek .linkbtn { text-transform: none; letter-spacing: 0;
-    font-size: 12px; padding: 3px 10px; }
+    font-size: var(--fs-1); padding: 3px 10px; }
 .quickpanel__kdo { display: flex; flex-direction: column; }
 /* Zaškrtávátka místo roletky: je vidět, komu vzkaz jde, bez rozbalování.
    Seznam roluje, ať formulář nepřeroste panel. */
@@ -3726,19 +3931,19 @@ main .linkbtn:hover,
 .quickpanel__hledej .field { padding-right: 30px; }
 .quickpanel__hledej button { position: absolute; right: 4px; top: 50%;
     transform: translateY(-50%); border: 0; background: none; cursor: pointer;
-    color: var(--muted); font-size: 16px; font-weight: 900; line-height: 1;
+    color: var(--muted); font-size: var(--fs-4); font-weight: 900; line-height: 1;
     padding: 4px 6px; }
 .quickpanel__hledej button:hover { color: var(--accent); }
 .quickpanel__lide label[hidden] { display: none !important; }
-.quickpanel__nic { grid-column: 1/-1; font-size: 12.5px; color: var(--muted);
+.quickpanel__nic { grid-column: 1/-1; font-size: var(--fs-2); color: var(--muted);
     padding: 6px 2px; }
 
 .quickpanel__lide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px; max-height: 210px; overflow-y: auto; padding: 2px; }
 @media (max-width: 620px) { .quickpanel__lide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .quickpanel__lide label { display: flex; align-items: center; gap: 6px; min-width: 0;
-    padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px;
-    background: var(--surface); font-size: 12.5px; cursor: pointer;
+    padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--r-pill);
+    background: var(--surface); font-size: var(--fs-2); cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quickpanel__lide label:has(input:checked) { background: var(--accent-tint);
     border-color: var(--accent-lt); color: var(--accent); font-weight: 700; }
@@ -3749,42 +3954,42 @@ main .linkbtn:hover,
 
 .quickpanel__oblibene { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
 .quickobl { display: inline-flex; align-items: center; border: 1px dashed var(--accent-lt);
-    border-radius: 99px; background: var(--surface); overflow: hidden; }
-.quickobl button { border: none; background: none; font: inherit; font-size: 12px;
+    border-radius: var(--r-pill); background: var(--surface); overflow: hidden; }
+.quickobl button { border: none; background: none; font: inherit; font-size: var(--fs-1);
     font-weight: 700; color: var(--accent); cursor: pointer; padding: 4px 10px; }
-.quickobl__x { color: var(--muted) !important; padding: 4px 8px 4px 2px !important; font-size: 14px !important; }
+.quickobl__x { color: var(--muted) !important; padding: 4px 8px 4px 2px !important; font-size: var(--fs-3) !important; }
 .quickobl__x:hover { color: var(--danger) !important; }
 
-.quickpanel__do { display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+.quickpanel__do { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2);
     font-weight: 700; color: var(--text-soft); }
 .quickpanel__do .field { flex: 1; min-width: 0; }
 .quickpanel__asap { display: flex; align-items: center; flex-wrap: wrap; gap: 7px;
-    font-size: 13px; cursor: pointer; }
+    font-size: var(--fs-2); cursor: pointer; }
 .quickpanel__asap input { accent-color: var(--accent); }
-.quickpanel__asap span { font-size: 11.5px; color: var(--muted); }
+.quickpanel__asap span { font-size: var(--fs-1); color: var(--muted); }
 
 /* ==================================================== SPRÁVA AUT =======
    Obsah panelu v pásu (sdílí s Quick TO-DO třídy .quickpanel*). Nahoře
    pracovní dny s přihlašováním na cestu do Brna, dole rezervace vozů. */
 
-.auta__nadpis { font-size: 11px; font-weight: 900; letter-spacing: .09em;
+.auta__nadpis { font-size: var(--fs-1); font-weight: 900; letter-spacing: .09em;
     text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
 
 .auta__den { border: 1px solid var(--line-soft); border-radius: var(--radius);
     padding: 7px 10px; margin-bottom: 6px; background: var(--surface); }
-.auta__denhlava { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.auta__denhlava { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); }
 .auta__denhlava b { text-transform: capitalize; }
 .auta__denhlava .linkbtn, .auta__plus { margin-left: auto; }
 .auta__plus { width: 26px; height: 26px; flex: none; border: 1px solid var(--accent-lt);
     border-radius: 50%; background: var(--accent-tint); color: var(--accent);
-    font-size: 16px; font-weight: 900; line-height: 1; cursor: pointer; }
+    font-size: var(--fs-4); font-weight: 900; line-height: 1; cursor: pointer; }
 .auta__plus:hover { background: var(--accent); color: #fff; }
 .auta__lide { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-.auta__clovek { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 99px;
+.auta__clovek { font-size: var(--fs-1); font-weight: 700; padding: 2px 9px; border-radius: var(--r-pill);
     background: var(--bg-soft); border: 1px solid var(--line); }
 .auta__clovek.je-ja { background: var(--accent-tint); border-color: var(--accent-lt); color: var(--accent); }
-.auta__prazdno { display: block; margin-top: 4px; font-size: 11.5px; color: var(--dim); }
-.auta__pocetlidi { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--muted);
+.auta__prazdno { display: block; margin-top: 4px; font-size: var(--fs-1); color: var(--dim); }
+.auta__pocetlidi { margin-left: auto; font-size: var(--fs-1); font-weight: 700; color: var(--muted);
     white-space: nowrap; }
 /* za počtem lidí následují tlačítka – ta už doprava netlačí */
 .auta__denhlava .linkbtn, .auta__plus { margin-left: 0; }
@@ -3794,27 +3999,27 @@ main .linkbtn:hover,
     background: var(--surface); border-color: var(--accent-lt); }
 .auta__clovek--pridat:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .auta__x { border: 0; background: none; color: var(--dim); cursor: pointer;
-    font-size: 13px; line-height: 1; padding: 0 0 0 5px; }
+    font-size: var(--fs-2); line-height: 1; padding: 0 0 0 5px; }
 .auta__x:hover { color: var(--danger); }
 
 .auta__vuz { border: 1px solid var(--line); border-radius: var(--radius);
     overflow: hidden; margin-bottom: 8px; background: var(--surface); }
 .auta__vuzhlava { display: flex; align-items: center; gap: 10px; width: 100%;
     padding: 9px 12px; border: 0; background: var(--bg-soft); font: inherit;
-    font-size: 13.5px; cursor: pointer; text-align: left; }
+    font-size: var(--fs-3); cursor: pointer; text-align: left; }
 .auta__vuzhlava:hover, .auta__vuzhlava.je-otevreny { background: var(--accent-tint); color: var(--accent); }
-.auta__pocet { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--muted); }
+.auta__pocet { margin-left: auto; font-size: var(--fs-1); font-weight: 700; color: var(--muted); }
 .auta__vuzhlava.je-otevreny .auta__pocet { color: var(--accent); }
 
 .auta__form { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px;
     border-top: 1px solid var(--line-soft); }
 .auta__radek { display: flex; gap: 8px; }
 .auta__radek label { flex: 1; display: flex; flex-direction: column; gap: 3px;
-    font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+    font-size: var(--fs-1); font-weight: 700; color: var(--muted); text-transform: uppercase; }
 
 .auta__seznam { border-top: 1px solid var(--line-soft); }
 .auta__rez { display: flex; align-items: baseline; gap: 8px; padding: 6px 12px;
-    font-size: 12.5px; border-bottom: 1px solid var(--line-soft); }
+    font-size: var(--fs-2); border-bottom: 1px solid var(--line-soft); }
 .auta__rez:last-child { border-bottom: 0; }
 .auta__rezkdy { flex: none; font-weight: 900; color: var(--accent);
     font-variant-numeric: tabular-nums; }
@@ -3827,8 +4032,8 @@ main .linkbtn:hover,
 
 .kraj { flex: 1 1 140px; padding: 9px 12px; border-radius: var(--radius);
     background: var(--surface); border: 1px solid var(--line-soft); }
-.kraj b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
-.kraj span { font-size: 11px; font-weight: 700; letter-spacing: .05em;
+.kraj b { display: block; font-size: var(--fs-4); font-variant-numeric: tabular-nums; }
+.kraj span { font-size: var(--fs-1); font-weight: 700; letter-spacing: .05em;
     text-transform: uppercase; color: var(--muted); }
 .kraj--minus b { color: var(--danger); }
 
@@ -3838,11 +4043,11 @@ main .linkbtn:hover,
     margin: 10px 0 4px; padding: 9px 12px; border-radius: var(--radius);
     background: var(--bg-soft); border: 1px solid var(--line-soft);
 }
-.hromadne__popis { font-size: 12.5px; font-weight: 800; }
+.hromadne__popis { font-size: var(--fs-2); font-weight: 800; }
 
 /* tabulka úkolů s budgetem – přes celou šířku, čitelné písmo */
-.bu { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--surface); }
-.bu th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+.bu { width: 100%; border-collapse: collapse; font-size: var(--fs-3); background: var(--surface); }
+.bu th { text-align: left; font-size: var(--fs-1); letter-spacing: .06em; text-transform: uppercase;
     color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .bu td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
 .bu input { width: 104px; text-align: right; font-variant-numeric: tabular-nums; min-height: 36px; }
@@ -3850,8 +4055,8 @@ main .linkbtn:hover,
 
 .mx-wrap { overflow-x: auto; }
 /* přes celou šířku karty – zmenšená na obsah se špatně četla */
-.mx { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--surface); }
-.mx th { font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+.mx { width: 100%; border-collapse: collapse; font-size: var(--fs-2); background: var(--surface); }
+.mx th { font-size: var(--fs-1); letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
     padding: 5px 7px; border: 1px solid var(--line-soft); background: var(--bg-soft);
     white-space: nowrap; }
 .mx td { border: 1px solid var(--line-soft); padding: 0; text-align: center; min-width: 52px; }
@@ -3871,7 +4076,7 @@ button.mx__bunka:hover { background: var(--accent-tint); }
 .mx td.mx__budget { min-width: 66px; padding: 3px 6px; text-align: right;
     font-variant-numeric: tabular-nums; font-weight: 700; background: var(--bg-soft); }
 .mx__budget input { width: 76px; min-height: 30px; padding: 3px 6px; text-align: right;
-    font-size: 12px; }
+    font-size: var(--fs-1); }
 .mx__budget--minus { color: var(--danger); }
 .mx__bunka--p0 { background: var(--p0-bg); color: var(--p0-fg); }
 .mx__bunka--p50 { background: var(--p50-bg); color: var(--p50-fg); }
@@ -3884,9 +4089,9 @@ button.mx__bunka:hover { background: var(--accent-tint); }
    (jeden člověk) – proto tady, a ne ve stylech jedné stránky. */
 
 .vt-wrap { overflow-x: auto; }
-.vt { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12.5px; }
+.vt { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--fs-2); }
 .vt th {
-    font-size: 11px; font-weight: 700; letter-spacing: .05em;
+    font-size: var(--fs-1); font-weight: 700; letter-spacing: .05em;
     color: var(--muted); padding: 6px 4px; border-bottom: 1px solid var(--line);
     text-align: center; white-space: nowrap;
 }
@@ -3908,10 +4113,10 @@ button.mx__bunka:hover { background: var(--accent-tint); }
 .vt--akorat { background: #d3ebdc; color: #111; }
 .vt--hodne  { background: #f6cfd6; color: #111; }
 .vt--abs    { background: #cfe9f3; color: #111; font-weight: 900; }
-.vt th.vt--dnes { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 6px; color: var(--accent); }
+.vt th.vt--dnes { box-shadow: inset 0 0 0 2px var(--accent); border-radius: var(--r); color: var(--accent); }
 
 /* barevný štítek v legendě pod mřížkou */
-.vt-leg-x { display: inline-block; padding: 1px 7px; border-radius: 4px;
+.vt-leg-x { display: inline-block; padding: 1px 7px; border-radius: var(--r-sm);
     margin-right: 4px; font-weight: 700; }
 
 /* ============================================== SKRYTÉ PENÍZE ==========
@@ -3927,9 +4132,9 @@ body.penize-videt .tajne__zastup { display: none; }
 .vyktile--tajne { position: relative; }
 .vyktile__oko {
     position: absolute; top: 6px; right: 8px;
-    border: 1px solid var(--line); border-radius: 99px;
+    border: 1px solid var(--line); border-radius: var(--r-pill);
     background: var(--surface); color: var(--muted);
-    font: inherit; font-size: 10.5px; font-weight: 700;
+    font: inherit; font-size: var(--fs-1); font-weight: 700;
     padding: 2px 9px; cursor: pointer;
 }
 .vyktile__oko:hover { color: var(--accent); border-color: var(--accent-lt); background: var(--accent-tint); }
@@ -3961,51 +4166,26 @@ body.penize-videt .tajne__zastup { display: none; }
     max-width: 760px; margin: 0 auto;
     padding: 12px 14px; border-radius: var(--radius-lg);
     background: var(--danger); color: #fff; box-shadow: var(--shadow-up);
-    font-size: 14px; line-height: 1.5;
+    font-size: var(--fs-3); line-height: 1.5;
 }
-.datachyba__info { display: block; margin-top: 4px; font-size: 12px; opacity: .85; }
+.datachyba__info { display: block; margin-top: 4px; font-size: var(--fs-1); opacity: .85; }
 .datachyba .datachyba__zavri { color: #fff; text-decoration: underline; margin-top: 6px; }
-
-/* počet nesplněných vzkazů na tlačítku v pásu */
-.siderail__odznak {
-    margin-left: auto; flex: none;
-    min-width: 20px; padding: 1px 6px;
-    border-radius: 99px;
-    background: #fff; color: var(--accent);
-    font-size: 11px; font-weight: 900; text-align: center;
-}
-.siderail__btn:hover .siderail__odznak { background: var(--accent); color: #fff; }
 
 /* podrobná řada procent v TO-DO na stránce úkolů (zapíná „% podrobně") */
 .subtask__kroky { grid-area: pct; display: flex; gap: 4px; flex-wrap: wrap; justify-self: end; }
 .subtask__krok {
     border: 1px solid rgba(0, 0, 0, .12);
     background: rgba(255, 255, 255, .7);
-    border-radius: 99px;
+    border-radius: var(--r-pill);
     padding: 3px 8px;
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 700;
     color: var(--text-soft);
     cursor: pointer;
 }
 .subtask__krok.je-aktivni { background: var(--accent); border-color: var(--accent); color: #fff; }
 .subtask__krok:disabled { cursor: default; opacity: .6; }
-
-/* Pás musí unést i nízkou obrazovku. Bez tohohle se při málo místě začne
-   smršťovat logo a řádky Stats (flex položky se ve výchozím stavu zmenší
-   pod svůj obsah) a pás vypadá rozbitě. Radši ať se roluje. */
-.siderail { overflow-y: auto; overscroll-behavior: contain; }
-.siderail__logo,
-.siderail__spodek,
-.siderail__mujden,
-.siderail__btn { flex: none; }
-.siderail__logo img { max-height: 104px; }
-/* na nízkých obrazovkách logo ještě o kus dolů – místo patří ovládání */
-@media (max-height: 820px) {
-    .siderail__logo { padding-bottom: 8px; }
-    .siderail__logo img { max-height: 72px; }
-}
 
 /* Splněno u Quick TO-DO – zelené tlačítko místo drobného zaškrtávátka */
 .quicksplnit {
@@ -4032,4 +4212,197 @@ body.penize-videt .tajne__zastup { display: none; }
 .ublok--okno .ublok__hlava { display: flex; align-items: center; justify-content: space-between; }
 @media (max-width: 720px) {
     .ublokOverlay { padding: 12px 8px; }
+}
+
+/* ========================================================= TELEFON ==== */
+/* Do 600 px (20. 10. 2026). Hlavička s přepínači, logem, ikonami a lištou
+   o dvanácti položkách v pěti řádcích brala víc než půl první obrazovky
+   (obsah začínal ~480 px z 844). Teď:
+     nahoře   jeden řádek 56 px – tři čárky, logo, ikony nástrojů
+              (nepřihlášenému „Přihlásit se"),
+     dole     spodní lišta: Domů · Výkazy · Úkoly · Quick TO-DO · Menu,
+     v Menu   pás se skupinami; první skupina „Stránky webu" nese to,
+              co je na PC v liště (ui.js → skupinaStranek).
+   Jméno, role a Odhlásit jsou na telefonu dole v pásu, „Zobrazit jako"
+   tamtéž (ui.js → placeNahled). Na PC se nic z toho neukazuje. */
+
+.spodnilista { display: none; }
+.passkup--telefon { display: none; }
+
+/* jen obrazovka – tisk z telefonu nesmí dostat odsazení pro lištu */
+@media screen and (max-width: 600px) {
+    .appbar__bandin,
+    .appbar--big .appbar__bandin {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 8px;
+        min-height: 56px;
+        padding: 6px 12px 6px 62px;
+    }
+    .appbar__burger { top: 6px; left: 10px; }
+    .appbar__logo { order: 0; width: auto; justify-content: flex-start; }
+    .appbar__logo img,
+    .appbar--big .appbar__logo img { height: 40px; }
+    .appbar__userbox { order: 1; width: auto; margin-left: auto; }
+    .toolrail { order: 2; gap: 4px; }
+    .toolbtn { height: 36px; padding: 0 7px; }
+    /* jméno a Odhlásit nese pás (Menu) – nahoře jen „Přihlásit se" */
+    .appbar__userbox .appbar__jmeno-mobil,
+    .appbar__userbox [data-logout] { display: none; }
+    /* stránky lišty jsou v Menu jako skupina „Stránky webu" */
+    .appbar__bar { display: none; }
+    .passkup--telefon { display: flex; }
+
+    /* podlišta (sourozenecké stránky) v jednom řádku, posouvá se do strany */
+    .subbar__in { padding: 6px 12px; gap: 8px; }
+    .subbar__left { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .subbar__left::-webkit-scrollbar { display: none; }
+    .subbar__cat { flex: none; }
+
+    /* spodní lišta – pět cílů na palec */
+    .spodnilista {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: var(--z-lista);
+        gap: 2px;
+        padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+        background: var(--surface);
+        border-top: 1px solid var(--line);
+        box-shadow: 0 -6px 18px -12px rgba(16, 20, 26, .3);
+    }
+    .spodnilista__btn {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 52px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 2px;
+        border: 0;
+        border-radius: var(--r);
+        background: none;
+        color: var(--text-soft);
+        font: inherit;
+        font-size: var(--fs-1);
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .spodnilista__btn svg { width: 22px; height: 22px; flex: none; }
+    .spodnilista__btn > span:not(.spodnilista__odznak) {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .spodnilista__btn[aria-current="page"] { color: var(--accent); background: var(--accent-tint); }
+    .spodnilista__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .spodnilista__odznak {
+        position: absolute;
+        top: 3px;
+        left: calc(50% + 5px);
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--r-pill);
+        background: var(--danger);
+        color: #fff;
+        font-size: var(--fs-1);
+        font-weight: 900;
+        line-height: 18px;
+        text-align: center;
+    }
+    /* obsah nesmí zajet pod lištu; „nahoru", hlášení chyby a toast nad ni */
+    body.ma-spodnilistu {
+        --spodek-listy: calc(64px + env(safe-area-inset-bottom));
+        padding-bottom: var(--spodek-listy);
+    }
+    body.ma-spodnilistu .totop,
+    body.ma-spodnilistu .datachyba { bottom: calc(var(--spodek-listy) + 8px); }
+    /* doklad v rámečku (faktury ?okno=1) a zvětšená tabule lištu nemají */
+    body.jen-okno .spodnilista,
+    body.deska-max .spodnilista { display: none; }
+    body.jen-okno.ma-spodnilistu,
+    body.deska-max.ma-spodnilistu { --spodek-listy: 0px; padding-bottom: 0; }
+}
+
+/* Dotyk: pás se ovládá prstem – řádky skupin aspoň 40–44 px vysoké
+   a vysunutý pás o kus širší. */
+@media (max-width: 1120px), (hover: none) {
+    .siderail { width: min(272px, 86vw); }
+}
+@media (hover: none) {
+    .passkup__hlava { min-height: 44px; }
+    .passkup__polozka { min-height: 40px; }
+}
+
+/* iPhone (i iPad) při ťuknutí do pole s písmem pod 16 px stránku přiblíží –
+   na dotyku mají proto všechna pole 16 px (i ta, která si stránka zmenšila
+   vloženým stylem). Jen dotyk: úzké okno na PC nepřibližuje a mini okno
+   (380 px) má zůstat drobné. */
+@media (pointer: coarse) {
+    .field,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    select,
+    textarea { font-size: 16px !important; }
+}
+
+/* ===================================================== ŠÍŘKY STRÁNEK ==== */
+/* Systém šířek jako v Asistentovi (20. 10. 2026). Stránka (.wrap) vyplní
+   místo vedle pásu; strop --sirka-stranky (2 200 px) platí jen pro
+   ultraširoký monitor – dřív byl 1 720 px a na 2 560 px zbývalo ~330 px
+   prázdna z každé strany. Šířku využívat víc sloupci, ne zvětšením
+   jednoho prvku:
+     .pohled-uzky    čtecí stránka o jednom sloupci (--sirka-cteci-stranky),
+     .mrizka-karet   karty v řádcích, sloupec nejméně --sloupec-min,
+     --sirka-cteni   řádek souvislého textu (~75 znaků),
+     --sirka-okna / --sirka-okna-siroke   okno uprostřed. */
+.pohled-uzky { max-width: var(--sirka-cteci-stranky); }
+.mrizka-karet {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--sloupec-min)), 1fr));
+    gap: var(--sp-5);
+    align-items: start;
+}
+.text-cteni { max-width: var(--sirka-cteni); }
+
+/* Quick TO-DO: vzkazy v mřížce místo úzkého sloupce (dřív 670 px). Stránka
+   má v <style> strop .qstranka 860 px – tady se ruší (main = vyšší váha). */
+main .qstranka { max-width: none; }
+.quickmriz {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr));
+    column-gap: var(--sp-6);
+    align-items: start;
+}
+
+/* Upozornění: seznam voleb přes celou šířku a skupiny voleb ve sloupcích
+   vedle sebe – místo sloupce ~470 px s prázdnem vedle. Hlavní vypínač
+   (krátká karta) zůstává úzký. Vložený styl karty má gap:0, proto se
+   mezera mezi sloupci dělá odsazením skupin. */
+main .upoz { max-width: none; }
+main .upoz > .card:not(#volby),
+main .upoz > p { max-width: 760px; }
+@media (min-width: 1280px) {
+    main #volby { display: block; columns: 2 480px; }
+    main #volby .upskupina { break-inside: avoid; padding-right: var(--sp-6); }
+}
+
+/* ================================================== NADPIS STRÁNKY ==== */
+/* Jedna velikost nadpisu stránky (dřív 20, 24 i 28 px podle stránky).
+   Nové stránky: <h2 class="nadpis-stranky">. Stávající mají nadpis
+   s vloženým stylem 20 nebo 24 px – dokud ho nepřevezmou, srovná je
+   pravidlo níž (vložený styl přebije jen !important). */
+.nadpis-stranky { font-size: var(--fs-nadpis); font-weight: 900; line-height: 1.2; }
+main h2[style*="font-size:20px"][style*="font-weight:900"],
+main h2[style*="font-size:24px"][style*="font-weight:900"] {
+    font-size: var(--fs-nadpis) !important;
+    line-height: 1.2 !important;
 }

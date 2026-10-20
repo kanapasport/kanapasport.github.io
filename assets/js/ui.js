@@ -203,7 +203,9 @@
             el = document.createElement("div");
             el.id = "kbToast";
             el.className = "no-print";
-            el.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translate(-50%,140%);" +
+            // --spodek-listy: na telefonu výška spodní lišty (app.css), jinak 0
+            el.style.cssText = "position:fixed;left:50%;bottom:calc(24px + var(--spodek-listy, 0px));" +
+                "transform:translate(-50%,140%);" +
                 "z-index:300;padding:13px 20px;border-radius:12px;color:#fff;font-size:14px;font-weight:700;" +
                 "box-shadow:0 18px 34px -14px rgba(0,0,0,.5);transition:transform .25s ease,opacity .25s ease;" +
                 "opacity:0;max-width:min(560px,calc(100vw - 32px));text-align:center";
@@ -424,9 +426,13 @@
            a pro úzké okno, kde žádný pás není. */
         document.querySelectorAll("[data-rail-ja]").forEach(box => {
             const role = UI.ROLES.find(r => r.id === UI.role()) || UI.ROLES.find(r => r.id === "student");
+            // iniciály do kolečka – „Jan Novák" → „JN"
+            const inicialy = String(window.KB_USER || "").trim().split(/\s+/)
+                .map(c => c.charAt(0)).join("").slice(0, 2).toUpperCase();
             box.innerHTML = window.KB_USER
-                ? "<b>" + esc(window.KB_USER) + "</b>" +
-                  '<span class="siderail__role">' + esc(role.title) + "</span>" +
+                ? '<span class="siderail__avatar" aria-hidden="true">' + esc(inicialy) + "</span>" +
+                  '<span class="siderail__kdo"><b>' + esc(window.KB_USER) + "</b>" +
+                  '<span class="siderail__role">' + esc(role.title) + "</span></span>" +
                   '<button type="button" class="siderail__odhlasit" data-logout>Odhlásit se</button>'
                 : '<button type="button" class="siderail__odhlasit" data-login>Přihlásit se</button>';
         });
@@ -457,6 +463,8 @@
             el.hidden = !prihlasen;
         });
 
+        // skupina pásu bez jediné viditelné položky se schová celá
+        srovnejSkupiny(true);
         paintNahled();
     };
 
@@ -1091,12 +1099,16 @@
                     /* hamburger: na dotyku a v úzkém okně vysouvá svislý pás,
                        který je tam jinak schovaný za okrajem obrazovky */
                     '<button type="button" class="appbar__burger no-print" data-pas-burger ' +
-                        'aria-label="Otevřít panel akcí">' +
+                        'aria-label="Otevřít panel akcí" aria-controls="kbPas" aria-expanded="false">' +
                         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">' +
                             '<path stroke-linecap="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16"/></svg>' +
                     "</button>" +
                     // vlevo nahoře přepínač náhledu – vykreslí se jen hlavnímu
-                    // správci, ostatním zůstane skrytý (paintUser)
+                    // správci, ostatním zůstane skrytý (paintUser). Obal
+                    // (display: contents) se na telefonu stěhuje do pásu
+                    // i s tím, co k přepínači přidá stránka (nástěnka:
+                    // Základní / Manažerská) – placeNahled.
+                    '<div class="appbar__vlevo" data-nahled-slot>' +
                     '<label class="appbar__nahled" data-nahled-box hidden>' +
                         '<span>Zobrazit jako</span>' +
                         '<select data-nahled>' +
@@ -1107,6 +1119,7 @@
                             '<option value="student">studenta</option>' +
                         "</select>" +
                     "</label>" +
+                    "</div>" +
                     // barvy webu jsou jen mezi ikonami nástrojů a jen pro
                     // hlavního správce – v pruhu je to zbytečně na očích
                     // stav synchronizace se ukazuje dole ve svislém pásu;
@@ -1133,7 +1146,9 @@
         bindHeader();
         bindSearch();
         mountRail();
+        mountSpodniLista();
         placeSearch();
+        placeNahled();
         UI.paintUser();
         UI.bindCloudStatus("[data-cloud-status]");
         stickyOffset();
@@ -1182,77 +1197,302 @@
 
     /* ------------------------------------------------------- svislý pás ---
        Logo (klik = domů), hledání a rychlé akce – jako v Caflou. Vykresluje
-       se na každé stránce; na úzkém okně a na dotyku ho CSS schová a hledání
-       se přestěhuje zpátky do lišty (placeSearch). */
+       se na každé stránce; na úzkém okně a na dotyku ho CSS schová za
+       levý okraj a vysouvá se třemi čárkami (na telefonu i „Menu" dole).
+
+       Pás po skupinách (20. 10. 2026). Starý pás byl vysoký 1 284–1 353 px
+       a na 1080p i 1440 × 900 byl „Nový výkaz", Nastavení i Odhlásit pod
+       okrajem obrazovky. Michal: „dal to klidně do nějakých skupinek, aby
+       nepotřeboval být rolovatelný … kliknout a vyjede mi ikonka stránek,
+       co jsou v té skupince". Proto:
+         nahoře  logo, hledání (jen kde je), + Nový výkaz, zkrácené Stats,
+         střed   skupiny – klik vysune jejich stránky; otevřená je vždy
+                 jen jedna a pás si ji pamatuje (každý prohlížeč zvlášť,
+                 telefon zvlášť od PC),
+         dole    jméno, role, Odhlásit a stav spojení.
+       Práva nesou položky samy (`need` = data-need, jinak jen přihlášený –
+       stejné jako dřív); skupina, ve které nic nezbude, se neukáže
+       (srovnejSkupiny). Odznak Quick TO-DO se na zavřené skupině ukáže jako
+       součet. Na desktopu se při nízkém okně roluje jen prostřední část se
+       skupinami – logo, Nový výkaz a Odhlásit zůstanou vždy vidět. */
+
+    const TELEFON = "(max-width: 600px)";
+    const jeTelefon = () => window.matchMedia(TELEFON).matches;
+
+    const cesta = (d) => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + d + '"/>';
+    /* Ikony, které v KB_ICONS (taxonomy.js) nejsou – stejný obrysový styl. */
+    const IKONY_PASU = {
+        slunce: cesta("M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"),
+        zvonek: cesta("M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"),
+        bublina: cesta("M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"),
+        penize: cesta("M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"),
+        kufr: cesta("M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"),
+        blesk: cesta("M13 10V3L4 14h7v7l9-11h-7z"),
+        okno: cesta("M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"),
+        foto: cesta("M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z") +
+              cesta("M15 13a3 3 0 11-6 0 3 3 0 016 0z"),
+        mrizka: cesta("M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"),
+        menu: cesta("M4 6h16M4 12h16M4 18h16"),
+        sipka: cesta("M19 9l-7 7-7-7"),
+        pozn: cesta("M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
+    };
+    const ikonaPasu = (nazev, trida) => '<svg' + (trida ? ' class="' + trida + '"' : "") +
+        ' fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
+        (IKONY_PASU[nazev] || (window.KB_ICONS || {})[nazev] || "") + "</svg>";
+
+    /* Co je v které skupině. `attr` = tlačítko, které otevírá panel nebo
+       okno (posluchače jsou navěšené na dokumentu, takže fungují i ve
+       sbalené skupině), `need` = právo, bez něj „jen přihlášený". */
+    const SKUPINY_PASU = [
+        { id: "den", nazev: "Můj den", ikona: "slunce", polozky: [
+            { nazev: "Moje úkoly", ikona: "tasks", href: "ukoly.html?moje=1" },
+            { nazev: "Quick TO-DO", ikona: "blesk", attr: "data-quick-otevri", odznak: "data-quick-pocet",
+              popis: "Napsat vzkaz – kolik vzkazů na tebe čeká, ukazuje číslo" },
+            { nazev: "Rychlý zápis", ikona: "calendar", attr: "data-ho-otevri",
+              popis: "Home office, volno, dovolená a doktor na pár kliknutí" },
+            { nazev: "Postup dne", ikona: "scan", href: "postup.html" },
+            { nazev: "Mini okno", ikona: "okno", attr: "data-mini-okno", need: "vykaz.otevrit",
+              popis: "Rychlý zápis hodin v malém okně (Alt+Shift+M)" }
+        ] },
+        { id: "tym", nazev: "Lidé a komunikace", ikona: "users", polozky: [
+            { nazev: "Porady", ikona: "bublina", href: "porady.html" },
+            { nazev: "Správa aut", ikona: "car", attr: "data-auta-otevri" }
+        ] },
+        { id: "zakazky", nazev: "Zakázky", ikona: "kufr", polozky: [
+            { nazev: "Seznam zakázek", ikona: "building", href: "zakazky.html" },
+            // zakládání projektů je manažerská práce
+            { nazev: "Nový projekt", ikona: "plus", href: "sprava.html#novy", need: "zakazky.manage" }
+        ] },
+        /* jen hlavní správce, majitel a asistentka (finance.view) */
+        { id: "penize", nazev: "Peníze", ikona: "penize", polozky: [
+            { nazev: "Faktury", ikona: "receipt", href: "faktury.html", need: "finance.view" },
+            { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" }
+        ] },
+        { id: "nastaveni", nazev: "Nastavení a nápověda", ikona: "cog", polozky: [
+            { nazev: "Nastavení", ikona: "cog", href: "nastaveni.html", need: "vykaz.view" },
+            // co komu chodí na e-mail – osobní nastavení
+            { nazev: "Upozornění", ikona: "zvonek", href: "upozorneni.html" },
+            { nazev: "Jak web používat", ikona: "library", href: "prirucka.html" }
+        ] }
+    ];
+
+    /* Na telefonu je horní lišta schovaná (dvanáct položek v pěti řádcích
+       zabíralo půl obrazovky) – její stránky jsou proto v pásu jako první
+       skupina. Na PC ji CSS neukazuje, tam je lišta nahoře. */
+    const IKONY_STRANEK = {
+        "vykazy.html": "clock", "ukoly.html": "tasks", "quicktodo.html": "blesk",
+        "kalendar.html": "calendar", "milniky.html": "flag", "navody.html": "library",
+        "poznamky.html": "pozn", "plany.html": "map", "fotky-bph.html": "foto",
+        "tabule.html": "board", "sprava.html": "building", "reporty.html": "chart"
+    };
+    const nazevStranky = (titulek) => {
+        const s = String(titulek || "").toLowerCase();
+        return (s.charAt(0).toUpperCase() + s.slice(1))
+            .replace(/to-do/g, "TO-DO").replace(/\bbph\b/g, "BPH");
+    };
+    const skupinaStranek = () => ({
+        id: "stranky", nazev: "Stránky webu", ikona: "mrizka", jenTelefon: true,
+        polozky: (window.KB_NAV || []).filter(p => p.href).map(p => ({
+            nazev: nazevStranky(p.title), href: p.href, need: p.need || "",
+            ikona: IKONY_STRANEK[p.href.split(/[?#]/)[0]] || p.icon || "mrizka",
+            verejne: !p.need          // jako v liště: bez práva je vidí každý
+        }))
+    });
+
+    /** Je odkaz stránka, na které právě jsme? Odkaz s # je akce (Nový projekt). */
+    function jeAktivniOdkaz(href) {
+        if (!href || href.indexOf("#") !== -1) return false;
+        const [soubor, dotaz] = href.split("?");
+        const ted = lastNav.active || location.pathname.split("/").pop() || "index.html";
+        if (soubor !== ted) return false;
+        if (!dotaz) return true;
+        const ma = new URLSearchParams(location.search);
+        return Array.from(new URLSearchParams(dotaz)).every(([k, v]) => ma.get(k) === v);
+    }
+
+    function polozkaPasu(p) {
+        const gate = p.need ? ' data-need="' + esc(p.need) + '" hidden'
+            : (p.verejne ? "" : " data-jen-prihlaseny hidden");
+        const popis = p.popis ? ' title="' + esc(p.popis) + '"' : "";
+        const vnitrek = ikonaPasu(p.ikona) + '<span class="passkup__text">' + esc(p.nazev) + "</span>" +
+            (p.odznak ? '<span class="siderail__odznak" ' + p.odznak + " hidden></span>" : "");
+        if (!p.href) {
+            return '<button type="button" class="passkup__polozka" ' + p.attr + gate + popis + ">" +
+                vnitrek + "</button>";
+        }
+        const aktivni = jeAktivniOdkaz(p.href);
+        return '<a class="passkup__polozka' + (aktivni ? " je-aktivni" : "") + '" href="' + esc(p.href) + '"' +
+            (aktivni ? ' aria-current="page"' : "") + gate + popis + ">" + vnitrek + "</a>";
+    }
+
+    function skupinaPasu(s) {
+        const id = "kbSkup-" + s.id;
+        const aktivni = s.polozky.some(p => jeAktivniOdkaz(p.href));
+        return '<div class="passkup' + (s.jenTelefon ? " passkup--telefon" : "") +
+                (aktivni ? " passkup--aktivni" : "") + '" data-skupina="' + esc(s.id) + '">' +
+            '<button type="button" class="passkup__hlava" id="' + id + '-hlava" aria-expanded="false"' +
+                ' aria-controls="' + id + '" data-skupina-prepni="' + esc(s.id) + '">' +
+                ikonaPasu(s.ikona) + '<span class="passkup__nazev">' + esc(s.nazev) + "</span>" +
+                // součet odznaků, dokud je skupina zavřená (jinak je vidět u položky)
+                '<span class="siderail__odznak passkup__soucet" data-skupina-soucet hidden' +
+                    ' title="Nesplněné vzkazy v Quick TO-DO"></span>' +
+                ikonaPasu("sipka", "passkup__sipka") +
+            "</button>" +
+            '<div class="passkup__polozky" id="' + id + '" role="group" aria-labelledby="' + id + '-hlava" hidden>' +
+                s.polozky.map(polozkaPasu).join("") +
+            "</div>" +
+        "</div>";
+    }
+
+    /* Která skupina je otevřená – pamatuje se v prohlížeči (volba vzhledu,
+       odhlášení ji nemaže). Telefon má vlastní klíč: tam je výchozí
+       „Stránky webu", na PC „Můj den" nebo skupina otevřené stránky. */
+    const SKUPINA_KEY = "kb-pas-skupina";
+    const klicSkupiny = () => SKUPINA_KEY + (jeTelefon() ? "-telefon" : "");
+    let skupinaOtevrena = "";
+
+    function vychoziSkupina() {
+        let ulozena = null;
+        try { ulozena = localStorage.getItem(klicSkupiny()); } catch (err) { /* soukromý režim */ }
+        if (ulozena === "-") return "";
+        // z prohlížeče jen holé id (jde do selektoru) a jen skupina, která v pásu je
+        const id = String(ulozena || "").replace(/[^a-z]/g, "");
+        if (id && document.querySelector('.siderail [data-skupina="' + id + '"]')) return id;
+        if (jeTelefon()) return "stranky";
+        const aktivni = document.querySelector(".siderail .passkup--aktivni:not(.passkup--telefon)");
+        return aktivni ? aktivni.dataset.skupina : "den";
+    }
+
+    function otevriSkupinu(id, ulozit) {
+        skupinaOtevrena = id || "";
+        document.querySelectorAll(".siderail [data-skupina]").forEach(sk => {
+            const otevrit = !!id && sk.dataset.skupina === id;
+            const hlava = sk.querySelector("[data-skupina-prepni]");
+            const polozky = sk.querySelector(".passkup__polozky");
+            if (hlava) hlava.setAttribute("aria-expanded", String(otevrit));
+            if (polozky) polozky.hidden = !otevrit;
+            sk.classList.toggle("je-otevrena", otevrit);
+        });
+        if (ulozit) {
+            try { localStorage.setItem(klicSkupiny(), id || "-"); } catch (err) { /* soukromý režim */ }
+        }
+        srovnejSkupiny();
+    }
+
+    /** Prázdné skupiny pryč, součty odznaků na zavřených skupinách. Volá se
+        po každém přepočtu práv (paintUser, `poPravech`) a po novém počtu vzkazů. */
+    function srovnejSkupiny(poPravech) {
+        // paintUser běží i dřív, než mountNav pás postaví – pak není co srovnávat
+        if (!document.querySelector(".siderail")) return;
+        document.querySelectorAll(".siderail [data-skupina]").forEach(sk => {
+            const polozky = Array.from(sk.querySelectorAll(".passkup__polozka")).filter(p => !p.hidden);
+            sk.hidden = !polozky.length;
+            const soucet = polozky.reduce((s, p) => {
+                const o = p.querySelector(".siderail__odznak");
+                return s + (o && !o.hidden ? (Number(o.textContent) || 0) : 0);
+            }, 0);
+            const el = sk.querySelector("[data-skupina-soucet]");
+            if (el) {
+                el.textContent = soucet;
+                el.hidden = !soucet || sk.classList.contains("je-otevrena");
+            }
+        });
+        /* Zapamatovaná skupina, na kterou člověk nemá právo (Peníze v náhledu
+           „Zobrazit jako" nebo po změně role) – místo prázdna se otevře
+           výchozí. Rozhoduje se až nad skutečnou rolí: při postavení pásu
+           jsou všechny položky ještě skryté a role se bere z prohlížeče. */
+        if (!poPravech || !window.KB_USER || !((window.KB && window.KB.users) || []).length) return;
+        const otevrena = skupinaOtevrena &&
+            document.querySelector('.siderail [data-skupina="' + skupinaOtevrena + '"]');
+        if (otevrena && otevrena.hidden && skupinaOtevrena !== "den") otevriSkupinu("den", false);
+    }
+
+    document.addEventListener("click", (event) => {
+        const hlava = event.target.closest && event.target.closest("[data-skupina-prepni]");
+        if (!hlava) return;
+        const id = hlava.dataset.skupinaPrepni;
+        otevriSkupinu(hlava.getAttribute("aria-expanded") === "true" ? "" : id, true);
+    });
 
     function mountRail() {
         if (document.querySelector(".siderail")) return;
         const rail = document.createElement("aside");
         rail.className = "siderail no-print";
+        rail.id = "kbPas";
+        rail.setAttribute("aria-label", "Panel akcí");
         rail.innerHTML =
             '<a class="siderail__logo" href="index.html" aria-label="Domů">' +
                 '<img src="Pasport_Kana_white.png" alt="Pasport Kaňa"></a>' +
             '<div data-rail-search></div>' +
+            // hlavní akce dne – vždy nahoře pod logem, nikdy pod okrajem
+            '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
+                ' data-need="vykaz.otevrit" hidden>' +
+                icon("plus") + "<span>Nový výkaz</span></a>" +
             // STATS – osobní stav, ne kopie lišty (viz komentář u renderMujDen)
             '<div class="siderail__mujden" data-rail-mujden hidden></div>' +
-            /* Provozní trojice Quick TO-DO / Správa aut / Home office –
-               vzkazy a plánování, které smí každý. Oddělená čarou z obou
-               stran (přání Michala 26. 8. 2026). */
-            '<div class="siderail__oddel"></div>' +
-            '<button type="button" class="siderail__btn" data-jen-prihlaseny hidden data-quick-otevri>' +
-                icon("tasks") + '<span>Quick TO-DO</span>' +
-                '<span class="siderail__odznak" data-quick-pocet hidden></span></button>' +
-            '<button type="button" class="siderail__btn" data-jen-prihlaseny hidden data-auta-otevri>' +
-                icon("car") + "<span>Správa aut</span></button>" +
-            '<button type="button" class="siderail__btn" data-jen-prihlaseny hidden data-ho-otevri>' +
-                icon("calendar") + "<span>Rychlý zápis</span></button>" +
-            '<a class="siderail__btn" href="postup.html" data-jen-prihlaseny hidden>' +
-                icon("scan") + "<span>Postup dne</span></a>" +
-            '<div class="siderail__oddel"></div>' +
-            '<a class="siderail__btn" href="prirucka.html" data-jen-prihlaseny hidden>' +
-                icon("library") + "<span>Jak web používat</span></a>" +
-            /* Jmenný seznam zakázek – to, co lidé hledali v Evidenci zakázek.
-               Vidí ho každý, i kdo na projekt přiřazený není (Michal 8. 10. 2026). */
-            '<a class="siderail__btn" href="zakazky.html" data-jen-prihlaseny hidden>' +
-                icon("building") + "<span>Seznam zakázek</span></a>" +
-            /* Zápisy z porad – čte je celý tým, píše manažer. Sedí pod
-               příručkou, protože je to taky „co si přečíst", ne práce
-               (přání Michala 2. 9. 2026). */
-            '<a class="siderail__btn" href="porady.html" data-jen-prihlaseny hidden>' +
-                icon("board") + "<span>Porady</span></a>" +
-            /* Co komu chodí na e-mail – osobní nastavení, proto u pásu
-               a ne ve Správě (ta je manažerská). */
-            '<a class="siderail__btn" href="upozorneni.html" data-jen-prihlaseny hidden>' +
-                icon("calendar") + "<span>Upozornění</span></a>" +
-            /* Hotovost v kanceláři vede asistentka; koukat smí jen hlavní
-               správce, majitel a asistentka (právo finance.view, Michal 24. 9.). */
-            '<a class="siderail__btn" href="pokladna.html" data-need="finance.view" hidden>' +
-                icon("building") + "<span>Pokladna</span></a>" +
-            /* Faktury: přijaté i vydané, QR k zaplacení – stejný okruh lidí
-               jako pokladna (finance.view). */
-            '<a class="siderail__btn" href="faktury.html" data-need="finance.view" hidden>' +
-                icon("receipt") + "<span>Faktury</span></a>" +
+            '<nav class="siderail__skupiny" aria-label="Stránky a akce po skupinách">' +
+                [skupinaStranek()].concat(SKUPINY_PASU).map(skupinaPasu).join("") +
+            "</nav>" +
             '<div class="siderail__spodek">' +
-                '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
-                    ' data-need="vykaz.otevrit" hidden>' +
-                    icon("plus") + "<span>Nový výkaz</span></a>" +
-                /* Mini okno – malé okno na rychlý zápis dnešních hodin
-                   (mini.html), otevře ho i Alt+Shift+M (UI.otevriMiniOkno). */
-                '<button type="button" class="siderail__btn" data-need="vykaz.otevrit" hidden' +
-                    ' data-mini-okno title="Rychlý zápis hodin v malém okně (Alt+Shift+M)">' +
-                    icon("clock") + "<span>Mini okno</span></button>" +
-                '<a class="siderail__btn" href="ukoly.html?moje=1" data-jen-prihlaseny hidden>' +
-                    icon("tasks") + "<span>Moje úkoly</span></a>" +
-                // zakládání projektů je manažerská práce, proto až za úkoly
-                '<a class="siderail__btn" href="sprava.html#novy" data-need="zakazky.manage" hidden>' +
-                    icon("building") + "<span>Nový projekt</span></a>" +
-                '<a class="siderail__btn" href="nastaveni.html" data-need="vykaz.view" hidden>' +
-                    icon("cog") + "<span>Nastavení</span></a>" +
+                // na telefonu sem přistěhuje placeNahled přepínač „Zobrazit jako"
+                '<div class="siderail__nahled" data-rail-nahled></div>' +
                 '<div class="siderail__ja" data-rail-ja></div>' +
                 '<div class="siderail__stav" data-cloud-status>Připojuji…</div>' +
             "</div>";
         document.body.insertBefore(rail, document.body.firstChild);
+        otevriSkupinu(vychoziSkupina(), false);
     }
+
+    /* ------------------------------------------- spodní lišta (telefon) ---
+       Do 600 px: pět nejčastějších cílů na palec – Domů, Výkazy, Úkoly,
+       Quick TO-DO (s odznakem) a Menu, které vysune pás. Na PC ji CSS
+       nevykreslí vůbec. Práva jako všude (data-need / jen přihlášený). */
+    function mountSpodniLista() {
+        if (document.querySelector(".spodnilista")) return;
+        // `celyNazev` – když se popisek do pětiny šířky telefonu nevejde celý
+        const odkaz = (href, ikona, nazev, gate, navic, celyNazev) => {
+            const aktivni = jeAktivniOdkaz(href);
+            return '<a class="spodnilista__btn" href="' + href + '"' + gate +
+                (celyNazev ? ' aria-label="' + esc(celyNazev) + '" title="' + esc(celyNazev) + '"' : "") +
+                (aktivni ? ' aria-current="page"' : "") + ">" +
+                ikonaPasu(ikona) + "<span>" + esc(nazev) + "</span>" + (navic || "") + "</a>";
+        };
+        const lista = document.createElement("nav");
+        lista.className = "spodnilista no-print";
+        lista.setAttribute("aria-label", "Hlavní stránky");
+        lista.innerHTML =
+            odkaz("index.html", "home", "Domů", "") +
+            odkaz("vykazy.html", "clock", "Výkazy", ' data-need="vykaz.otevrit" hidden') +
+            odkaz("ukoly.html", "tasks", "Úkoly", " data-jen-prihlaseny hidden") +
+            odkaz("quicktodo.html", "blesk", "Quick", " data-jen-prihlaseny hidden",
+                '<span class="spodnilista__odznak" data-quick-pocet hidden></span>', "Quick TO-DO") +
+            '<button type="button" class="spodnilista__btn" data-pas-burger aria-controls="kbPas"' +
+                ' aria-expanded="false">' + ikonaPasu("menu") + "<span>Menu</span></button>";
+        document.body.appendChild(lista);
+        document.body.classList.add("ma-spodnilistu");
+    }
+
+    /* Přepínač „Zobrazit jako" (jen hlavní správce) se do zkrácené hlavičky
+       telefonu nevejde – bydlí tam dole v pásu u jména. Stěhuje se celý
+       obal i s tím, co k němu přidala stránka; posluchače visí na dokumentu
+       nebo na prvcích samých, takže se nic neztratí. */
+    function placeNahled() {
+        const box = document.querySelector("[data-nahled-slot]");
+        const doPasu = document.querySelector("[data-rail-nahled]");
+        const doPruhu = document.querySelector(".appbar__bandin");
+        if (!box || !doPasu || !doPruhu) return;
+        if (jeTelefon()) {
+            if (box.parentElement !== doPasu) doPasu.appendChild(box);
+        } else if (box.parentElement !== doPruhu) {
+            doPruhu.insertBefore(box, doPruhu.querySelector(".appbar__userbox"));
+        }
+    }
+    try {
+        window.matchMedia(TELEFON).addEventListener("change", () => {
+            placeNahled();
+            if (document.querySelector(".siderail")) otevriSkupinu(vychoziSkupina(), false);
+        });
+    } catch (err) { /* starší prohlížeč – zůstane, jak se to vykreslilo */ }
 
     /* --------------------------------------- splnění Quick TO-DO --------
        Vzkaz se plní dvěma způsoby a obě stránky (panel v pásu i dlaždice
@@ -2500,8 +2740,10 @@
                 '<button type="button" class="chip' + (jenPozn ? " chip--active" : "") +
                     '" data-quick-rezim="poznamky">Poznámky</button>' +
             "</div>" +
+            /* Řádky jdou do mřížky – na stránce Quick TO-DO se na širokém
+               monitoru složí do sloupců místo jednoho úzkého pruhu. */
             (aktivni.length
-                ? aktivni.map(q => radek(q, !mojeRezim)).join("")
+                ? '<div class="quickmriz">' + aktivni.map(q => radek(q, !mojeRezim)).join("") + "</div>"
                 : '<div class="quickpanel__prazdno">' + (mojeRezim
                     ? "Žiješ šťastný život, nikdo po tobě nic nechce."
                     : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
@@ -2509,7 +2751,9 @@
                 ? '<button type="button" class="linkbtn" data-quick-splnene style="margin-top:14px">' +
                     (quickSplneneVidet ? "Skrýt historii" : "Splněné za poslední týden (" + splnene.length + ")") +
                   "</button>" +
-                  (quickSplneneVidet ? splnene.map(q => radek(q, !mojeRezim)).join("") : "")
+                  (quickSplneneVidet
+                      ? '<div class="quickmriz">' + splnene.map(q => radek(q, !mojeRezim)).join("") + "</div>"
+                      : "")
                 : "");
         document.querySelectorAll("[data-quick-seznam]").forEach(el => {
             el.innerHTML = seznamHtml;
@@ -2522,6 +2766,7 @@
             el.textContent = kolik;
             el.hidden = !kolik;
         });
+        srovnejSkupiny();
     }
 
     /* ------------------------------------------------------ správa aut ---
@@ -3235,6 +3480,24 @@
         }
     });
 
+    /* Stats v pásu jsou zkrácené na dvě čísla (Dnes, Týden) – podrobnosti
+       (moje úkoly, TO-DO, Quick TO-DO, nejbližší termín) se rozbalí klikem
+       a pás si to pamatuje. Plných šest řádků bralo ~200 px a byl to jeden
+       z důvodů, proč spodek pásu padal pod okraj obrazovky. */
+    const MUJDEN_KEY = "kb-pas-stats";
+    let mujdenOtevreny = false;
+    try { mujdenOtevreny = localStorage.getItem(MUJDEN_KEY) === "1"; } catch (err) { /* soukromý režim */ }
+
+    document.addEventListener("click", (event) => {
+        const tlacitko = event.target.closest && event.target.closest("[data-mujden-prepni]");
+        if (!tlacitko) return;
+        mujdenOtevreny = !mujdenOtevreny;
+        try { localStorage.setItem(MUJDEN_KEY, mujdenOtevreny ? "1" : "0"); } catch (err) { /* nevadí */ }
+        tlacitko.setAttribute("aria-expanded", String(mujdenOtevreny));
+        const vic = document.getElementById("kbMujdenVic");
+        if (vic) vic.hidden = !mujdenOtevreny;
+    });
+
     function renderMujDen() {
         const slot = document.querySelector("[data-rail-mujden]");
         if (!slot) return;
@@ -3263,22 +3526,31 @@
         const quickZbyva = (window.KB.quicktodo || [])
             .filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickVzal(q, uid) && q.proUid === uid).length;
 
-        const cislo = (h) => Number(h || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+        /* Dokud výkazy nedorazily, svítí „—" – nula by tvrdila, že člověk
+           dnes nic nezapsal (rešerše 19. 10.: pás na Celkovém přehledu). */
+        const prislo = window.KB.vykazyPrisly === true;
+        const cislo = (h) => prislo
+            ? Number(h || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) + " h" : "—";
         const czDatum = (i) => { const [, m, d] = i.split("-"); return Number(d) + ". " + Number(m) + "."; };
 
         slot.hidden = false;
         slot.innerHTML =
-            '<span class="siderail__nadpis">Stats</span>' +
-            '<div class="mujden__radek"><span>Dnes</span><b>' + cislo(hodinyDnes) + " h</b></div>" +
-            '<div class="mujden__radek"><span>Tento týden</span><b>' + cislo(hodinyTyden) + " h</b></div>" +
-            '<div class="mujden__radek"><span>Moje úkoly</span><b>' + mojeUkoly.length + "</b></div>" +
-            '<div class="mujden__radek"><span>TO-DO</span><b>' + todoZbyva + "</b></div>" +
-            '<div class="mujden__radek"><span>Quick TO-DO</span><b>' + quickZbyva + "</b></div>" +
-            (nejblizsi
-                ? '<a class="mujden__termin" href="ukoly.html?moje=1">' +
-                    "<span>Nejbližší termín · " + esc(czDatum(nejblizsi.termin)) + "</span>" +
-                    "<b>" + esc(nejblizsi.nazev || "") + "</b></a>"
-                : "");
+            '<button type="button" class="mujden__hlava" data-mujden-prepni aria-controls="kbMujdenVic"' +
+                ' aria-expanded="' + mujdenOtevreny + '" title="Stats – podrobnosti">' +
+                '<span class="mujden__cislo"><small>Dnes</small><b>' + esc(cislo(hodinyDnes)) + "</b></span>" +
+                '<span class="mujden__cislo"><small>Týden</small><b>' + esc(cislo(hodinyTyden)) + "</b></span>" +
+                ikonaPasu("sipka", "mujden__sipka") +
+            "</button>" +
+            '<div class="mujden__vic" id="kbMujdenVic"' + (mujdenOtevreny ? "" : " hidden") + ">" +
+                '<div class="mujden__radek"><span>Moje úkoly</span><b>' + esc(mojeUkoly.length) + "</b></div>" +
+                '<div class="mujden__radek"><span>TO-DO</span><b>' + esc(todoZbyva) + "</b></div>" +
+                '<div class="mujden__radek"><span>Quick TO-DO</span><b>' + esc(quickZbyva) + "</b></div>" +
+                (nejblizsi
+                    ? '<a class="mujden__termin" href="ukoly.html?moje=1">' +
+                        "<span>Nejbližší termín · " + esc(czDatum(nejblizsi.termin)) + "</span>" +
+                        "<b>" + esc(nejblizsi.nazev || "") + "</b></a>"
+                    : "") +
+            "</div>";
     }
 
     /* Hledání je jedno jediné pole. Na širokém okně bydlí v pásu, na úzkém
@@ -3312,10 +3584,15 @@
        třemi čárkami v pruhu se vysune, záclonou, Escape nebo proklikem
        v pásu se zase zavře. */
 
+    /* Tři čárky v pruhu i „Menu" ve spodní liště hlásí, jestli je pás venku. */
+    const oznacBurgery = (otevreno) => document.querySelectorAll("[data-pas-burger]")
+        .forEach(b => b.setAttribute("aria-expanded", String(otevreno)));
+
     function zavriPas() {
         document.body.classList.remove("pas-otevren");
         const zaclona = document.querySelector(".pas-zaclona");
         if (zaclona) zaclona.hidden = true;
+        oznacBurgery(false);
     }
 
     document.addEventListener("click", (e) => {
@@ -3329,15 +3606,18 @@
             const otevrit = !document.body.classList.contains("pas-otevren");
             document.body.classList.toggle("pas-otevren", otevrit);
             zaclona.hidden = !otevrit;
+            oznacBurgery(otevrit);
             return;
         }
         if (e.target.classList && e.target.classList.contains("pas-zaclona")) {
             zavriPas();
             return;
         }
-        // ťuknutí na akci v pásu pás rovnou zavře, ať nezůstane přes obsah
+        /* ťuknutí na akci v pásu pás rovnou zavře, ať nezůstane přes obsah;
+           rozbalení skupiny nebo Stats je jen listování v pásu – ten zůstane */
         if (document.body.classList.contains("pas-otevren") &&
-            e.target.closest && e.target.closest(".siderail a, .siderail button")) {
+            e.target.closest && e.target.closest(".siderail a, .siderail button") &&
+            !e.target.closest("[data-skupina-prepni], [data-mujden-prepni]")) {
             zavriPas();
         }
     });
