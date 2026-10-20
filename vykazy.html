@@ -696,6 +696,7 @@
         try { localStorage.setItem(CISLA_KLIC, zapnuto ? "1" : "0"); } catch (err) { /* nevadí */ }
         document.querySelectorAll("[data-cisla-projektu]").forEach(ch => { ch.checked = zapnuto; });
         obnovNabidkuProjektu();
+        naplnFiltry();          // pole projektu ve filtru má stejné popisky
     });
 
     /**
@@ -3776,17 +3777,112 @@
         } finally { dotahuji = false; }
     }
 
+    /* ------------------------------ člověk, projekt a firma ve filtru --
+       Lidí a projektů je víc, než se dá v roletce přečíst očima, a psát se
+       v ní nedalo („ať je ve výkazu vyhledávátko na lidi i na ten projekt",
+       Michal 20. 10. 2026). Je to stejný našeptávač jako u projektu ve
+       formuláři (KBUI.naseptavac: bez diakritiky a po slovech, myš, šipky,
+       Enter, Esc). Roletka pod ním dál drží hodnotu a filtr ji čte jako dřív.
+
+       „Všichni lidé" / „Všechny projekty" mají v roletce vlastní hodnotu
+       místo prázdné. Prázdnou volbu bere našeptávač jako nevyplněné pole:
+       v poli by bylo prázdno místo výběru a v nabídce by ta volba chyběla
+       zrovna tehdy, když platí. Do filtru jde dál "" – překládá se jen
+       tady a v posluchači změny (zRoletkyFiltru). */
+    const FILTR_VSE = "__vse__";
+    const zRoletkyFiltru = (hodnota) => hodnota === FILTR_VSE ? "" : hodnota;
+    /* Co se ve filtru schovává a ukazuje: obal našeptávače, ne roletka. */
+    const obalFiltru = (select) => select.closest("[data-hledac]") || select;
+
+    /**
+     * Postaví nabídku pole ve filtru a srovná s ní našeptávač. Volá se při
+     * každém vykreslení i při příchodu dat (lidé, projekty, firmy chodí až
+     * po prvním vykreslení). Nabídka, která se nezměnila, se nepřepisuje –
+     * jinak by každý došlý výkaz zavřel rozepsané hledání pod rukama.
+     *
+     * @param {HTMLSelectElement} select
+     * @param {Array} volby – názvy nebo { value, label }
+     * @param {string} hodnota – co je ve filtru ("" = všechno)
+     * @param {string} vse – popisek volby „všechno"
+     * @param {Object} nastaveni – popisky našeptávače (nazev, popis, prazdne)
+     * @param {Function} [popisek] – popisek hodnoty, která v nabídce chybí
+     */
+    function naplnHledaciFiltr(select, volby, hodnota, vse, nastaveni, popisek) {
+        const seznam = (volby || []).map(v =>
+            typeof v === "string" ? { value: v, label: v } : v);
+        /* Hodnota, která v nabídce není (člověk, co už nepracuje, z adresy
+           ?zapis=…), se přidá – jinak by pole hlásilo „Všichni lidé" a
+           tabulka přitom ukazovala jednoho. */
+        if (hodnota && !seznam.some(v => v.value === hodnota)) {
+            seznam.push({ value: hodnota, label: popisek ? popisek(hodnota) : hodnota });
+        }
+        const nabidka = '<option value="' + esc(FILTR_VSE) + '">' + esc(vse) + "</option>" +
+            V.options(seznam, null);
+        const chtena = hodnota || FILTR_VSE;
+        const obal = select.closest("[data-hledac]");
+        if (obal && select.filtrNabidka === nabidka && select.value === chtena) return;
+
+        /* Člověk v poli zrovna hledá a mezitím dorazila data: nabídka se
+           dosype, ale otevřený seznam i rozepsaný dotaz zůstanou. */
+        const vstup = obal && obal.querySelector("[data-hledac-vstup]");
+        const otevreno = !!vstup && document.activeElement === vstup &&
+            obal.classList.contains("hledac--otevreno");
+        const drive = select.options[select.selectedIndex];
+        const dotaz = otevreno && (!drive || vstup.value !== drive.textContent)
+            ? vstup.value : null;
+
+        if (select.filtrNabidka !== nabidka) {
+            select.innerHTML = nabidka;
+            select.filtrNabidka = nabidka;
+        }
+        select.value = chtena;
+        window.KBUI.naseptavac(select, nastaveni);
+
+        if (otevreno) {
+            if (dotaz !== null) {
+                vstup.value = dotaz;
+                vstup.dispatchEvent(new Event("input", { bubbles: true }));
+            } else {
+                vstup.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+            }
+        }
+    }
+
+    /* Našeptávač se otevírá při vstupu do pole. Po výběru ale kurzor
+       v poli zůstane, takže druhý klik do téhož pole nabídku neukázal
+       a psaní se přilepilo za vybraný název. Ve filtru se hledá často
+       několikrát po sobě – klik do zavřeného pole ho proto otevře stejně
+       jako první vstup (celý seznam, text označený k přepsání). */
+    const FILTR_HLEDACE = ["fOsoba", "fZakazka", "fFirma"];
+    document.addEventListener("click", (event) => {
+        const vstup = event.target.closest && event.target.closest("[data-hledac-vstup]");
+        const obal = vstup && vstup.closest("[data-hledac]");
+        const select = obal && obal.querySelector("select");
+        if (!select || FILTR_HLEDACE.indexOf(select.id) === -1) return;
+        if (obal.classList.contains("hledac--otevreno")) return;
+        vstup.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+
     function naplnFiltry() {
         /* Stránka je primárně „moje výkazy" – i manažerovi. Cizí lidi si
            nafiltruje, ale výchozí pohled je jeho vlastní práce, ne celá firma. */
-        $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
-            filtr.uid, "Všichni lidé");
-        $("fZakazka").innerHTML = V.options(nabidkaProjektu(), filtr.zakazka, "Všechny projekty");
-        $("fFirma").innerHTML = V.options(V.firmy(), filtr.firma, "Všechny firmy");
-        window.KBUI.naseptavac($("fFirma"), {
-            nazev: "Hledat firmu", popis: "Piš název nebo jeho část…",
-            prazdne: "Číselník firem je prázdný"
-        });
+        naplnHledaciFiltr($("fOsoba"),
+            V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
+            filtr.uid, "Všichni lidé",
+            { nazev: "Hledat člověka", popis: "Piš jméno nebo příjmení…",
+              prazdne: "Zatím žádní lidé" },
+            uid => V.osobaText((window.KB.vykazy || []).find(z => z.uid === uid) || { uid }));
+        /* Kdo vidí jen sebe, pole člověka nemá (databáze mu cizí stejně
+           nevydá). Role dorazí až s lidmi, proto se to srovnává pokaždé. */
+        obalFiltru($("fOsoba")).hidden = !window.KBUI.can("vykaz.view");
+        /* Stejná nabídka jako ve formuláři, včetně čísel projektů, když
+           si je člověk zapnul – hodnota zůstává název projektu. */
+        naplnHledaciFiltr($("fZakazka"), projektyVolby(), filtr.zakazka, "Všechny projekty",
+            { nazev: "Hledat projekt", popis: "Piš číslo nebo název projektu…",
+              prazdne: "Zatím žádné projekty" });
+        naplnHledaciFiltr($("fFirma"), V.firmy(), filtr.firma, "Všechny firmy",
+            { nazev: "Hledat firmu", popis: "Piš název nebo jeho část…",
+              prazdne: "Číselník firem je prázdný" });
         const stitek = $("filtrUkol");
         if (filtr.ukolId) {
             const u = (window.KB.ukoly || []).find(x => x.id === filtr.ukolId);
@@ -3839,7 +3935,7 @@
         const spravce = window.KBUI.can("vykaz.view");
         // manažer vidí peníze u všech, OSVČ a student u svého výkazu
         const penize = vidimPenize();
-        $("fOsoba").hidden = !spravce;
+        // pole člověka ve filtru schovává naplnFiltry níž (obal našeptávače)
         $("btnCsv").hidden = !spravce;
         $("dOsobaBox").hidden = !spravce;
 
@@ -5043,7 +5139,7 @@
          ["fFirma", "firma"], ["fCinnost", "cinnost"], ["fTech", "tech"]]
         .forEach(([id, klic]) => {
             $(id).addEventListener("change", () => {
-                filtr[klic] = $(id).value;
+                filtr[klic] = zRoletkyFiltru($(id).value);
                 if (klic === "od" || klic === "do") dotahniStarsi(filtr.od, filtr.do);
                 render();
             });
@@ -5158,6 +5254,10 @@
         window.KB.on("projekty-docs", obnovNabidkuProjektu);
         window.KB.on("zakazky", obnovNabidkuProjektu);
         window.KB.on("ukoly", obnovNabidkuProjektu);
+        /* Totéž pro pole projektu ve filtru přehledu: projekty chodí až po
+           prvním vykreslení a bez tohohle by se v něm hledalo jen
+           v záložním číselníku, dokud nepřijde nějaký výkaz. */
+        window.KB.on("projekty-docs", naplnFiltry);
         window.KB.on("vykazy-chyba", () => {
             window.KBUI.toast("Databáze výkazy nevydala – zkontroluj pravidla Firestore.", "error");
         });
