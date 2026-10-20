@@ -251,6 +251,34 @@
         .vyzva__text span { display: block; font-size: 13px; line-height: 1.55;
             color: var(--text-soft); margin-top: 2px; }
         .vyzva__tlacitka { display: flex; gap: 8px; flex: none; }
+
+        /* Nedávno potvrzeno: pod seznamem věcí k potvrzení v manažerských
+           dlaždicích. Potvrzená položka ze seznamu zmizí – tady je vidět
+           co, kdo a kdy ji odklepl (Michal 20. 10. 2026). Sbalí se klikem
+           na nadpis, volbu si pamatuje prohlížeč. */
+        .nedavno { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+        .nedavno__hlava { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 0;
+            border: none; background: none; font: inherit; font-size: 10.5px; font-weight: 900;
+            letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+            cursor: pointer; text-align: left; }
+        .nedavno__hlava:hover { color: var(--accent); }
+        .nedavno__sipka { display: inline-block; font-size: 13px; line-height: 1; transition: transform .15s; }
+        .nedavno__hlava[aria-expanded="false"] .nedavno__sipka { transform: rotate(-90deg); }
+        .nedavno__radek { display: block; min-width: 0; padding: 5px 2px;
+            border-bottom: 1px dashed var(--line-soft); text-decoration: none; color: inherit; }
+        .nedavno__radek:last-of-type { border-bottom: none; }
+        a.nedavno__radek:hover .nedavno__co { color: var(--accent); }
+        .nedavno__co, .nedavno__kdo { display: block; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+        .nedavno__co { font-size: 13px; }
+        .nedavno__kdo { font-size: 11.5px; color: var(--ok); margin-top: 1px; }
+        /* starší potvrzení bez uloženého jména */
+        .nedavno__kdo--bez { color: var(--muted); }
+        .nedavno__vic { display: block; font-size: 11.5px; color: var(--muted); padding: 4px 2px 0; }
+        /* Přehled rychlého zápisu: na telefonu by jméno potvrzujícího
+           vytlačilo jméno toho, kdo má volno – zůstane jen „(potvrzeno)",
+           celé jméno je v dlaždici Potvrzení dovolených. */
+        @media (max-width: 600px) { .rychly__kdo { display: none; } }
     </style>
 </head>
 <body>
@@ -571,6 +599,108 @@
     const mojeUid = () => (window.KB.currentUid ? window.KB.currentUid() : "") || "";
     const jmenoUid = (uid) => { const u = V.clovek(uid); return u ? V.jmeno(u) : ""; };
     const jeMuj = (u) => (u.prirazeni || []).indexOf(mojeUid()) !== -1;
+
+    /* ------------------------------------------- nedávno potvrzené ----
+       Potvrzená dovolená, úkol, milník i zaplacená faktura z dlaždice
+       zmizí – a nebylo pak vidět, kdo je odklepl a kdy (Michal 20. 10.
+       2026). Pod seznamem k potvrzení je proto sbalitelný oddíl s potvrzeními
+       za poslední týden. Kdo a kdy ukládá potvrzení samo (potvrdil +
+       potvrzenoMs, u úhrady uhradil + uhrazenoMs); bez času se položka
+       nedá zařadit do týdne, starší potvrzení bez jména je jen „potvrzeno". */
+    const NEDAVNO_DNI = 7;
+    const NEDAVNO_MAX = 5;
+    const NEDAVNO_KLIC = "kb-nedavno-sbalene";
+    const nedavnoOd = () => Date.now() - NEDAVNO_DNI * 24 * 3600 * 1000;
+    // sbalené oddíly – osobní volba, drží ji prohlížeč (bez něj jsou rozbalené)
+    let nedavnoSbalene = new Set();
+    try {
+        const ulozene = JSON.parse(localStorage.getItem(NEDAVNO_KLIC) || "[]");
+        if (Array.isArray(ulozene)) nedavnoSbalene = new Set(ulozene.map(String));
+    } catch (err) { /* soukromé okno – zůstane rozbalené */ }
+
+    /** Celé jméno toho, kdo potvrdil. V datech je jméno přihlášeného
+        (KB_USER: jméno a příjmení, kdo je v profilu nemá, ten e-mail) –
+        přes seznam lidí se z něj stane aktuální celé jméno. */
+    function celeJmeno(kdo) {
+        const text = String(kdo || "").trim();
+        if (!text) return "";
+        const male = text.toLowerCase();
+        const lide = window.KB.users || [];
+        const u = lide.find(x => x.id === text) ||
+            lide.find(x => V.jmeno(x).toLowerCase() === male) ||
+            lide.find(x => String(x.email || "").toLowerCase() === male);
+        return u ? V.jmeno(u) : text;
+    }
+
+    const dveCislice = (n) => String(n).padStart(2, "0");
+    /** Datum a čas celý – do bubliny („18. 10. 2026 14:32"). */
+    const casRazitko = (ms) => {
+        const d = new Date(ms);
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() + " " +
+            dveCislice(d.getHours()) + ":" + dveCislice(d.getMinutes());
+    };
+    /** V týdnu stačí „dnes 14:32", „včera 09:05" nebo „18. 10. 14:32". */
+    function kdyPotvrzeno(ms) {
+        const d = new Date(ms);
+        const cas = dveCislice(d.getHours()) + ":" + dveCislice(d.getMinutes());
+        const t = new Date();
+        const den = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        if (den === new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime()) return "dnes " + cas;
+        if (den === new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1).getTime()) return "včera " + cas;
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". " + cas;
+    }
+
+    /**
+     * Oddíl „Nedávno potvrzeno" pod seznamem k potvrzení.
+     * polozky: [{ ms, kdo, co (hotové HTML – všechno v něm už prošlo esc),
+     *             href, sloveso ("potvrdil(a)" | "označil(a)") }]
+     */
+    function nedavnoHtml(klic, nadpis, polozky) {
+        if (!polozky.length) return "";
+        const serazene = polozky.slice().sort((a, b) => b.ms - a.ms);
+        const otevreno = !nedavnoSbalene.has(klic);
+        const radky = serazene.slice(0, NEDAVNO_MAX).map(p => {
+            const jmeno = celeJmeno(p.kdo);
+            const sloveso = p.sloveso || "potvrdil(a)";
+            const kdo = jmeno ? sloveso + " " + jmeno : "potvrzeno";
+            const bublina = (jmeno ? sloveso.charAt(0).toUpperCase() + sloveso.slice(1) + " " + jmeno
+                : "Potvrzeno") + " · " + casRazitko(p.ms);
+            const znacka = p.href ? "a" : "div";
+            return "<" + znacka + ' class="nedavno__radek"' +
+                    (p.href ? ' href="' + esc(p.href) + '"' : "") + ' title="' + esc(bublina) + '">' +
+                '<span class="nedavno__co">' + p.co + "</span>" +
+                '<span class="nedavno__kdo' + (jmeno ? "" : " nedavno__kdo--bez") + '">✓ ' +
+                    esc(kdo) + " · " + esc(kdyPotvrzeno(p.ms)) + "</span>" +
+            "</" + znacka + ">";
+        }).join("");
+        const zbytek = serazene.length - NEDAVNO_MAX;
+        return '<div class="nedavno">' +
+            '<button type="button" class="nedavno__hlava" data-nedavno="' + esc(klic) + '"' +
+                ' aria-expanded="' + (otevreno ? "true" : "false") + '"' +
+                ' title="' + (otevreno ? "Sbalit" : "Rozbalit") + " – posledních " + NEDAVNO_DNI + ' dní">' +
+                '<span class="nedavno__sipka" aria-hidden="true">▾</span>' +
+                esc(nadpis) + " (" + esc(String(serazene.length)) + ")</button>" +
+            (otevreno
+                ? radky + (zbytek > 0
+                    ? '<span class="nedavno__vic">a ' + esc(V.pocet(zbytek,
+                        ["další starší", "další starší", "dalších starších"])) + " za týden</span>"
+                    : "")
+                : "") +
+        "</div>";
+    }
+
+    // sbalení / rozbalení – překreslí jen tu dlaždici, ke které oddíl patří
+    const NEDAVNO_DLAZDICE = { dovolene: () => renderDovolene(), kontrola: () => renderKontrola(),
+        uhrady: () => renderFakturyPlatby() };
+    document.addEventListener("click", (event) => {
+        const tlacitko = event.target.closest("[data-nedavno]");
+        if (!tlacitko) return;
+        const klic = tlacitko.dataset.nedavno;
+        if (nedavnoSbalene.has(klic)) nedavnoSbalene.delete(klic); else nedavnoSbalene.add(klic);
+        try { localStorage.setItem(NEDAVNO_KLIC, JSON.stringify(Array.from(nedavnoSbalene))); }
+        catch (err) { /* volba platí aspoň do obnovení stránky */ }
+        if (NEDAVNO_DLAZDICE[klic]) NEDAVNO_DLAZDICE[klic]();
+    });
 
     /**
      * Co karta ukáže. „Moje" jsou úkoly, kde je přihlášený v `prirazeni`.
@@ -994,10 +1124,16 @@
                 if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
                     let druh = TYP_NAZEV[k.typ] || "událost";
                     if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true) druh = NEPOTVRZENE[k.typ];
+                    /* u potvrzené dovolené / volna řekne bublina, kdo a kdy
+                       ji potvrdil – celým jménem (Michal 20. 10. 2026) */
+                    const potvrdil = NEPOTVRZENE[k.typ] && k.potvrzeno === true
+                        ? celeJmeno(k.potvrdil) : "";
                     radky.push({ barva: TYP_BARVA[k.typ] || TYP_BARVA.udalost,
                         text: TEXTOVE_TYPY.indexOf(k.typ || "udalost") !== -1
                             ? (k.text || druh) + (k.osoba ? " – " + k.osoba : "")
-                            : druh + " – " + (k.osoba || "") });
+                            : druh + " – " + (k.osoba || ""),
+                        bublina: potvrdil ? "Potvrdil(a) " + potvrdil +
+                            (k.potvrzenoMs ? " · " + casRazitko(k.potvrzenoMs) : "") : "" });
                 }
             });
             const jedou = (window.KB.auta || [])
@@ -1045,7 +1181,8 @@
                     den.radky.map(r =>
                         '<span class="row" style="gap:8px;padding:3px 0;font-size:14.5px">' +
                             '<i style="flex:none;width:9px;height:9px;border-radius:3px;background:' + r.barva + '"></i>' +
-                            '<span class="truncate">' + esc(r.text) + "</span></span>").join("") +
+                            '<span class="truncate"' + (r.bublina ? ' title="' + esc(r.bublina) + '"' : "") + ">" +
+                                esc(r.text) + "</span></span>").join("") +
                     "</div>" +
                 "</div>").join("")
             : '<span class="muted" style="font-size:14px">Nejbližších sedm dní je volných.</span>';
@@ -1119,7 +1256,16 @@
                         esc(k.id) + '">Potvrdit</button>' +
                 "</div>").join("")
             : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-              "Žádná dovolená nečeká na potvrzení.</div>");
+              "Žádná dovolená nečeká na potvrzení.</div>") +
+            nedavnoHtml("dovolene", "Nedávno potvrzeno", (window.KB.kalendar || [])
+                .filter(k => (k.typ === "dovolena" || k.typ === "volno") && k.potvrzeno === true &&
+                    Number(k.potvrzenoMs) >= nedavnoOd())
+                .map(k => ({
+                    ms: Number(k.potvrzenoMs), kdo: k.potvrdil, href: "kalendar.html",
+                    co: "<b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b> · " +
+                        (k.typ === "volno" ? "volno" : "dovolená") + " " + esc(czDatum(k.od)) +
+                        (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "")
+                })));
     }
 
     /* ------------------------------------------------------ faktury -----
@@ -1190,6 +1336,15 @@
             }).join("")
             : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
               "Do týdne není nic k zaplacení.</div>";
+        /* Kdo a kdy označil zaplaceno. Dlaždice je jen pro finance.view
+           (data-need i hlídka nahoře), částky sem schválně nejdou. */
+        box.innerHTML += nedavnoHtml("uhrady", "Nedávno zaplaceno", (window.KB.faktury || [])
+            .filter(f => f.uhrazeno && f.stav === "zaplacena" && Number(f.uhrazenoMs) >= nedavnoOd())
+            .map(f => ({
+                ms: Number(f.uhrazenoMs), kdo: f.uhradil, sloveso: "označil(a)",
+                href: "faktury.html?id=" + encodeURIComponent(f.id),
+                co: "<b>" + esc(fakturaNazev(f)) + "</b> · zaplaceno " + esc(czDatum(f.uhrazeno))
+            })));
 
         const pata = document.getElementById("fakturyPlatbyPata");
         if (pata) {
@@ -1245,9 +1400,13 @@
                   const d = new Date(kdy(f));
                   const zarazeni = f.typ === "vydana" ? "vydaná"
                       : (f.kategorie || "bez kategorie") + " · " + (f.projekt || "administrativa");
+                  // kdo doklad zkontroloval a zařadil – do bubliny, celým jménem
+                  const zaradil = celeJmeno(f.potvrdil);
                   return '<a class="row" href="faktury.html?id=' + encodeURIComponent(f.id) + '" style="gap:8px;' +
                           "padding:5px 2px;border-bottom:1px dashed var(--line-soft);font-size:13px;" +
-                          'text-decoration:none;color:inherit">' +
+                          'text-decoration:none;color:inherit"' +
+                          (zaradil ? ' title="' + esc("Zkontroloval(a) a zařadil(a) " + zaradil +
+                              (f.potvrzenoMs ? " · " + casRazitko(f.potvrzenoMs) : "")) + '"' : "") + ">" +
                       '<b style="flex:none;min-width:46px">' + esc(d.getDate() + ". " + (d.getMonth() + 1) + ".") + "</b>" +
                       '<span class="grow truncate">' + esc(fakturaNazev(f)) +
                           ' <span class="muted">· ' + esc(zarazeni) + "</span></span>" +
@@ -1330,13 +1489,9 @@
 
     /* --------------------------------- přehled rychlého zápisu ----------
        Vlastní manažerská dlaždice: kdo si na příštích 14 dní zaklikl HO,
-       volno nebo dovolenou. U potvrzené dovolené je zkratka toho, kdo ji
-       potvrdil – „Dovolená (potvrzeno MK)". */
-
-    function iniciály(jmeno) {
-        return String(jmeno || "").split(/\s+/)
-            .map(k => (k[0] || "").toUpperCase()).join("").slice(0, 3);
-    }
+       volno nebo dovolenou. U potvrzené dovolené je celé jméno toho, kdo
+       ji potvrdil, a v bublině i kdy – „Dovolená (potvrzeno: jméno příjmení)".
+       Dřív tu byly jen iniciály (do 20. 10. 2026). */
 
     function renderRychly() {
         const box = document.getElementById("rychlySeznam");
@@ -1355,10 +1510,14 @@
         box.innerHTML = radky.length
             ? radky.map(k => {
                 const potvrzovana = k.typ === "dovolena" || k.typ === "volno";
+                const potvrdil = potvrzovana && k.potvrzeno === true ? celeJmeno(k.potvrdil) : "";
                 const stav = !potvrzovana ? ""
                     : (k.potvrzeno === true
-                        ? ' <span style="color:var(--ok)">(potvrzeno ' +
-                            esc(iniciály(k.potvrdil)) + ")</span>"
+                        ? ' <span class="truncate" style="flex:0 1 auto;min-width:0;color:var(--ok)"' +
+                            (k.potvrzenoMs ? ' title="' + esc((potvrdil ? "Potvrdil(a) " + potvrdil
+                                : "Potvrzeno") + " · " + casRazitko(k.potvrzenoMs)) + '"' : "") + ">" +
+                            "(potvrzeno" + (potvrdil ? '<span class="rychly__kdo">: ' + esc(potvrdil) + "</span>" : "") +
+                            ")</span>"
                         : ' <span style="color:var(--warn)">(nepotvrzeno)</span>');
                 return '<div class="row" style="gap:8px;padding:5px 0;border-bottom:1px dashed var(--line-soft);font-size:13px">' +
                     '<b style="flex:none;min-width:74px">' + esc(czDatum(k.od)) + "</b>" +
@@ -1553,7 +1712,32 @@
                 ? '<button type="button" class="linkbtn" data-odbavene style="align-self:flex-start;margin-top:6px">' +
                     (ukazOdbavene ? "Skrýt " : "Zobrazit ") + "označené jako v pořádku (" + odbavene.length + ")</button>" +
                   (ukazOdbavene ? odbavene.map(ch => radek(ch, true)).join("") : "")
-                : "");
+                : "") +
+            nedavnoHtml("kontrola", "Nedávno potvrzeno", nedavnoUkolyMilniky());
+    }
+
+    /** Potvrzené hotové úkoly a splněné milníky za poslední týden. Milník,
+        který si manažer odškrtl sám (potvrdil = splnil), na potvrzení nikdy
+        nečekal – do přehledu nepatří. */
+    function nedavnoUkolyMilniky() {
+        const od = nedavnoOd();
+        const ukoly = (window.KB.ukoly || [])
+            .filter(u => u.stav === "hotovo" && u.potvrzeno === true && Number(u.potvrzenoMs) >= od)
+            .map(u => ({
+                ms: Number(u.potvrzenoMs), kdo: u.potvrdil,
+                href: "ukoly.html?vse=1&otevri=" + encodeURIComponent(u.id),
+                co: "<b>" + esc(u.nazev || "?") + "</b> · úkol" + (u.projekt ? " · " + esc(u.projekt) : "")
+            }));
+        const milniky = (window.KB.milniky || [])
+            .filter(m => m.hotovo && m.potvrzeno === true && Number(m.potvrzenoMs) >= od &&
+                String(m.potvrdil || "") !== String(m.hotovoKdo || ""))
+            .map(m => ({
+                ms: Number(m.potvrzenoMs), kdo: m.potvrdil, href: "milniky.html",
+                co: "<b>" + esc(m.cinnost || "?") + "</b> · milník" +
+                    (m.napln ? " " + esc(m.napln) : "") +
+                    (m.hotovoKdo ? " · splnil(a) " + esc(celeJmeno(m.hotovoKdo)) : "")
+            }));
+        return ukoly.concat(milniky);
     }
 
     /* ------------------------------------ výzva k upozornění na e-mail ---
