@@ -313,11 +313,10 @@ service cloud.firestore {
 
     // --- číselníky (zakázky, skupiny) jen správci ---
     match /artifacts/firemni-kb-app/public/data/meta/{docId} {
-      // Milníky si odškrtává i řadový člen („Splněno" u milníku, kde je
-      // v owners). Seznam je jedno pole v jednom dokumentu a pravidla
-      // neumí ohlídat změnu jediné položky – proto se u milníků věří
-      // každému členovi. Zbytek meta zůstává jen správcům.
-      allow write: if spravce() || (docId == 'milniky' && clen());
+      // Zapisuje jen správce. Výjimka pro starý dokument `meta/milniky`
+      // (kam smel psát každý člen) je pryč od 20. 10. 2026 – milníky žijí
+      // v private/milniky a starý dokument už nic nečte ani nepíše.
+      allow write: if spravce();
     }
 
     /* --- milníky (harmonogram odevzdání) ---------------------------------

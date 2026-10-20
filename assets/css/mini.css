@@ -1,0 +1,307 @@
+/* ==========================================================================
+   Mini okno (mini.html) – rychlý zápis dnešních hodin.
+   Tři podoby se stejným vzhledem: malá stránka, samostatné malé okno
+   (~380 × 700) a plovoucí okno (Document Picture-in-Picture, kořen
+   .mini se tam přestěhuje i se styly). Barvy jen z proměnných app.css.
+   ========================================================================== */
+
+.mini-telo { background: var(--bg); min-height: 100vh; }
+
+/* Přihlášení si mini řeší samo malým tlačítkem – velká brána webu
+   (ui.js paintGate) by se pod okno jen přilepila. */
+.mini-telo #kbGate { display: none; }
+
+.mini {
+    max-width: 440px;
+    min-height: 100vh;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+}
+/* V široké záložce je mini karta uprostřed, ne nudle přes celou šířku. */
+@media (min-width: 560px) {
+    .mini {
+        min-height: 0;
+        margin: 28px auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-up);
+        overflow: hidden;
+    }
+}
+.mini.mini--plovouci {
+    max-width: none;
+    min-height: 100vh;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* ---------------------------------------------------------- záhlaví */
+
+.mini__hlava {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--accent);
+    color: #fff;
+}
+.mini__logo { display: block; height: 28px; width: auto; flex: none; }
+.mini__hlavaakce { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.mini__hbtn {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, .45);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.mini__hbtn:hover, .mini__hbtn:focus-visible { background: rgba(255, 255, 255, .26); border-color: #fff; outline: none; }
+.mini__hbtn[hidden] { display: none; }
+
+/* ------------------------------------------------------------ tělo */
+
+.mini__telo { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 14px; }
+
+.mini__karta {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 12px;
+    min-width: 0;
+}
+.mini__zprava p { margin: 0 0 10px; font-size: 14px; color: var(--text-soft); line-height: 1.5; }
+.mini__zprava p:last-child { margin-bottom: 0; }
+
+.mini__nadpis {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+}
+.mini__nadpis span { margin-left: 4px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--muted); }
+
+.mini__plne { width: 100%; }
+.mini .field { min-height: 38px; padding: 7px 10px; }
+.mini .label { margin-bottom: 4px; }
+.mini__nepov { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--dim); }
+.mini__pole { margin-bottom: 10px; min-width: 0; }
+.mini__pole[hidden] { display: none; }
+
+/* -------------------------------------------------------------- dnes */
+
+.mini__denhlava { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mini__denhlava .mini__nadpis { margin-bottom: 6px; }
+.mini__soucet { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.mini__soucet b { font-size: 16px; font-weight: 900; color: var(--text); }
+.mini__soucet--plno b { color: var(--ok); }
+
+.mini__pruh { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; }
+.mini__pruh i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.mini__pruh--plno i { background: var(--ok); }
+
+.mini__pozn { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); }
+
+.mini__zaznamy { list-style: none; margin: 8px 0 0; padding: 0; }
+.mini__zaznam {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 6px 0;
+    border-top: 1px solid var(--line-soft);
+    font-size: 13px;
+}
+.mini__zaznam:first-child { border-top: none; }
+.mini__zaznam--absence { color: var(--muted); }
+.mini__zcas { font-variant-numeric: tabular-nums; color: var(--text-soft); white-space: nowrap; }
+.mini__zco { min-width: 0; }
+.mini__zco b, .mini__zco small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini__zco b { font-weight: 700; }
+.mini__zco small { font-size: 11.5px; color: var(--muted); }
+.mini__zhod { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mini__prazdne { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+
+/* ------------------------------------------------------------ zápis */
+
+.mini__vybrano {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--accent-tint);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.mini__vybrano:hover, .mini__vybrano:focus-visible { border-color: var(--accent); outline: none; }
+.mini__vybrano[hidden] { display: none; }
+.mini__vybrano--nic { background: var(--surface); border-style: dashed; }
+.mini__vybranotext { flex: 1; min-width: 0; }
+.mini__vybranotext b, .mini__vybranotext small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini__vybranotext b { font-size: 14px; font-weight: 800; }
+.mini__vybranotext small { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.mini__zmenit { flex: none; font-size: 12px; font-weight: 800; color: var(--accent); }
+
+.mini__vyber { margin-top: 6px; }
+.mini__vyber[hidden] { display: none; }
+.mini__volby {
+    margin-top: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+.mini__volby .mini__prazdne { margin: 0; padding: 10px; }
+.mini__skupina {
+    position: sticky;
+    top: 0;
+    padding: 5px 10px 3px;
+    background: var(--bg-soft);
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.mini__volba {
+    display: block;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-bottom: 1px solid var(--line-soft);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.mini__volba:last-child { border-bottom: none; }
+.mini__volba b, .mini__volba small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini__volba b { font-size: 13.5px; font-weight: 700; }
+.mini__volba small { font-size: 11.5px; color: var(--muted); }
+.mini__volba:hover, .mini__volba--akt { background: var(--accent-tint); }
+.mini__volba--vybrana b { color: var(--accent); }
+.mini__volba--cizi b { font-style: italic; }
+
+.mini__casy {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 10px;
+}
+.mini__cas { font-variant-numeric: tabular-nums; }
+.mini__hod {
+    min-width: 58px;
+    padding-bottom: 9px;
+    font-size: 14px;
+    font-weight: 900;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.mini__varovani {
+    margin: -4px 0 10px;
+    padding: 6px 9px;
+    border-radius: var(--radius);
+    background: var(--p50-bg);
+    color: var(--p50-fg);
+    font-size: 12px;
+    line-height: 1.4;
+}
+.mini__varovani[hidden] { display: none; }
+
+.mini__ho {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-soft);
+    cursor: pointer;
+}
+.mini__ho input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+
+.mini__volno {
+    margin: 0 0 8px;
+    padding: 6px 9px;
+    border-radius: var(--radius);
+    background: #fde8e8;
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    color: var(--danger);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.mini__hlaska { margin: 8px 0 0; min-height: 16px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.mini__hlaska--ok { color: var(--ok); font-weight: 700; }
+.mini__hlaska--warn { color: var(--warn); font-weight: 700; }
+.mini__hlaska--error { color: var(--danger); font-weight: 700; }
+
+/* ----------------------------------------------- Quick TO-DO a pata */
+
+.mini__quick { padding: 0; }
+.mini__quickbtn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--radius-lg);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 800;
+    text-align: left;
+    cursor: pointer;
+}
+.mini__quickbtn:hover, .mini__quickbtn:focus-visible { background: var(--accent-tint); outline: none; }
+.mini__quickbtn small { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--accent); }
+.mini__odznak {
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 11px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 12px;
+    text-align: center;
+}
+.mini__odznak--nula { background: var(--line); color: var(--muted); }
+
+.mini__pata { display: flex; justify-content: center; }
+
+/* místo mini okna, když je v plovoucím okně */
+.mini-zastup {
+    max-width: 440px;
+    margin: 40px auto;
+    padding: 0 16px;
+    text-align: center;
+    color: var(--text-soft);
+    font-size: 14px;
+}
+.mini-zastup[hidden] { display: none; }

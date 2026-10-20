@@ -1236,6 +1236,11 @@
                 '<a class="siderail__btn siderail__btn--hlavni" href="vykazy.html#novy"' +
                     ' data-need="vykaz.otevrit" hidden>' +
                     icon("plus") + "<span>Nový výkaz</span></a>" +
+                /* Mini okno – malé okno na rychlý zápis dnešních hodin
+                   (mini.html), otevře ho i Alt+Shift+M (UI.otevriMiniOkno). */
+                '<button type="button" class="siderail__btn" data-need="vykaz.otevrit" hidden' +
+                    ' data-mini-okno title="Rychlý zápis hodin v malém okně (Alt+Shift+M)">' +
+                    icon("clock") + "<span>Mini okno</span></button>" +
                 '<a class="siderail__btn" href="ukoly.html?moje=1" data-jen-prihlaseny hidden>' +
                     icon("tasks") + "<span>Moje úkoly</span></a>" +
                 // zakládání projektů je manažerská práce, proto až za úkoly
@@ -3444,6 +3449,38 @@
         if (event.key === "Escape") {
             document.querySelectorAll(".navitem.is-open").forEach(n => n.classList.remove("is-open"));
         }
+    });
+
+    /* -------------------------------------------------- mini okno ---
+       Malé okno na rychlý zápis dnešních hodin (mini.html, logika
+       v assets/js/mini.js). Otevírá se z pásu a zkratkou Alt+Shift+M –
+       Ctrl+Shift+M v Chromu a Edgi přepíná profil a ve Firefoxu zapíná
+       zobrazení pro mobil, proto ne ta. Okno „kb-mini" se nezakládá
+       podruhé: další otevření ho jen vytáhne dopředu i s rozepsaným
+       zápisem. V samotném mini okně (window.KB_MINI) si zkratku řeší
+       mini.js – vrací na celý web. */
+    UI.otevriMiniOkno = () => {
+        let okno = null;
+        try { okno = window.open("", "kb-mini", "popup,width=380,height=700"); } catch (err) { okno = null; }
+        if (!okno) {
+            UI.toast("Prohlížeč malé okno zablokoval – povol vyskakovací okna pro tenhle web.", "warn");
+            return;
+        }
+        try {
+            if (!/mini\.html$/.test(okno.location.pathname)) okno.location.href = "mini.html";
+        } catch (err) { /* okno s jiným původem – nech být */ }
+        try { okno.focus(); } catch (err) { /* nic */ }
+    };
+
+    document.addEventListener("click", (event) => {
+        if (event.target.closest && event.target.closest("[data-mini-okno]")) UI.otevriMiniOkno();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (window.KB_MINI || event.code !== "KeyM") return;
+        if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        UI.otevriMiniOkno();
     });
 
     // přihlášení a odhlášení – kdekoliv na stránce

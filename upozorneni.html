@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=284">
+    <link rel="stylesheet" href="assets/css/app.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -33,6 +33,18 @@
             margin-left: 20px; }
         .upvolba__popis::before { content: "/"; margin-right: 9px; opacity: .45; }
         .upvolba--vyp { opacity: .45; }
+        /* Dny v týdnu pod volbou „dnes nemám výkaz" – patří k ní, proto
+           bez čáry mezi nimi a odsazené pod její název. */
+        .upvolba--sdny { border-bottom: 0; padding-bottom: 4px; }
+        .updny { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+            padding: 0 2px 11px 25px; border-bottom: 1px solid var(--line-soft); }
+        .updny__popis { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+        .updny__den { display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+            padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px;
+            background: var(--surface); font-size: 12.5px; font-weight: 700; }
+        .updny__den:has(input:checked) { background: var(--accent-tint);
+            border-color: var(--accent-lt); color: var(--accent); }
+        .updny__den input { margin: 0; }
         .upstav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
         /* Jestli rozesílání vůbec jede. Bez toho si člověk zapne patnáct
@@ -96,10 +108,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=284"></script>
-<script src="assets/js/ui.js?v=284"></script>
-<script src="assets/js/vykazy.js?v=284"></script>
-<script type="module" src="assets/js/store.js?v=284"></script>
+<script src="assets/js/taxonomy.js?v=285"></script>
+<script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/vykazy.js?v=285"></script>
+<script type="module" src="assets/js/store.js?v=285"></script>
 
 <script>
 (function () {
@@ -143,6 +155,13 @@
         { skupina: "Výkazy", need: "vykaz.otevrit", polozky: [
             { id: "vykazChybi", nazev: "Nemám zapsaný výkaz za minulý týden",
               popis: "V pondělí ráno, dokud to nedoplním.", vychozi: true },
+            /* Denní připomínka – jen pro toho, kdo si ji sám zapne
+               (Michal 20. 10. 2026). `dny`: pod volbou se dají vybrat
+               dny v týdnu, kdo nechodí každý den (studenti, OSVČ). */
+            { id: "vykazDnes", nazev: "Dnes nemám zapsaný výkaz (v 16:30)",
+              popis: "V pracovní den, když ještě nic nemám zapsané. Nechodí o svátcích " +
+                  "ani když mám v kalendáři dovolenou, volno, nemoc nebo lékaře.",
+              vychozi: false, dny: true },
             { id: "dovolenaStav", nazev: "Moje dovolená byla potvrzená nebo zamítnutá",
               popis: "Jakmile s ní manažer pohne.", vychozi: true }
         ] },
@@ -208,9 +227,40 @@
                         '<span class="upvolba__text">' +
                             '<b class="upvolba__nazev">' + esc(p.nazev) + "</b>" +
                             '<span class="upvolba__popis">' + esc(p.popis) + "</span>" +
-                        "</span></label>").join("") +
+                        "</span></label>" +
+                    (p.dny ? dnyHtml(p.id, volby) : "")).join("") +
             "</div>").join("");
         srovnejVypnuto();
+        srovnejDny();
+    }
+
+    /* DNY V TÝDNU pod volbou s `dny`. Ukládají se jako další ano/ne volby
+       `<id>Den1` … `<id>Den5` (Po … Pá) – ukládání voleb (KB.ulozUpozorneni)
+       umí jen ano/ne. Výchozí jsou všechny dny; aspoň jeden musí zůstat. */
+    const DNY = ["Po", "Út", "St", "Čt", "Pá"];
+    const klicDne = (id, i) => id + "Den" + (i + 1);
+
+    function dnyHtml(id, volby) {
+        return '<div class="updny" data-dny-pro="' + esc(id) + '">' +
+            '<span class="updny__popis">Ve dny:</span>' +
+            DNY.map((nazev, i) => {
+                const k = klicDne(id, i);
+                return '<label class="updny__den"><input type="checkbox" data-volba="' + esc(k) +
+                    '" data-den-pro="' + esc(id) + '"' + (volby[k] === false ? "" : " checked") + ">" +
+                    esc(nazev) + "</label>";
+            }).join("") +
+        "</div>";
+    }
+
+    /** Dny jsou vidět jen u zapnuté volby. */
+    function srovnejDny() {
+        $("volby").querySelectorAll("[data-dny-pro]").forEach(box => {
+            const ch = $("volby").querySelector('[data-volba="' + box.dataset.dnyPro + '"]');
+            const zap = !!(ch && ch.checked);
+            box.hidden = !zap;
+            const label = ch && ch.closest(".upvolba");
+            if (label) label.classList.toggle("upvolba--sdny", zap);
+        });
     }
 
     /** Když je posílání vypnuté, je vidět, že se jednotlivé volby neuplatní. */
@@ -228,6 +278,10 @@
         mojeSkupiny().forEach(s => s.polozky.forEach(p => {
             const ch = $("volby").querySelector('[data-volba="' + p.id + '"]');
             if (ch) volby[p.id] = ch.checked;
+            if (p.dny) DNY.forEach((_, i) => {
+                const den = $("volby").querySelector('[data-volba="' + klicDne(p.id, i) + '"]');
+                if (den) volby[klicDne(p.id, i)] = den.checked;
+            });
         }));
 
         $("btnUloz").disabled = true;
@@ -304,7 +358,18 @@
         window.KBUI.mountNav({ active: "upozorneni.html" });
         $("btnUloz").addEventListener("click", uloz);
         $("upZapnuto").addEventListener("change", () => { upravovano = true; srovnejVypnuto(); });
-        $("volby").addEventListener("change", () => { upravovano = true; });
+        $("volby").addEventListener("change", (event) => {
+            upravovano = true;
+            const ch = event.target;
+            /* Poslední den nejde odškrtnout – bez dne by připomínka
+               nedávala smysl; kdo ji nechce, vypne celou volbu. */
+            if (ch.dataset.denPro && !ch.checked &&
+                    !$("volby").querySelector('[data-den-pro="' + ch.dataset.denPro + '"]:checked')) {
+                ch.checked = true;
+                window.KBUI.toast("Aspoň jeden den musí zůstat. Kdo připomínku nechce, vypne ji celou.");
+            }
+            srovnejDny();
+        });
 
         /* POZOR: KB.on je obyčejný addEventListener, takže posluchač dostane
            UDÁLOST, ne data. Dřív se do `nactene` ukládala ta událost – vždycky

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=284">
+    <link rel="stylesheet" href="assets/css/app.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -69,6 +69,54 @@
         .uz-blok ul { margin: 6px 0 0; padding-left: 18px; }
         .uz-blok li { margin: 2px 0; }
         .uz-dny { color: var(--muted); font-size: 12.5px; }
+
+        /* Týden v mřížce (20. 10. 2026): úkoly × dny. Na úzkém displeji se
+           posouvá do strany jen mřížka uvnitř svého rámu, ne celá stránka;
+           název úkolu při posunu drží na místě (jako Vytížení). */
+        #tyden { min-width: 0; }
+        .ty-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--line);
+            border-radius: var(--radius); }
+        .ty { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 600px;
+            font-size: 13px; background: var(--surface); }
+        .ty th, .ty td { padding: 6px; border-bottom: 1px solid var(--line-soft);
+            text-align: center; vertical-align: middle; }
+        .ty tbody tr:last-child td { border-bottom: none; }
+        .ty th { background: var(--bg-soft); font-size: 11px; font-weight: 900; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); white-space: nowrap;
+            border-bottom: 2px solid var(--line); }
+        .ty th:first-child, .ty td:first-child {
+            position: sticky; left: 0; z-index: 1; background: var(--surface);
+            text-align: left; min-width: 170px; max-width: 250px; border-right: 1px solid var(--line); }
+        .ty th:first-child { background: var(--bg-soft); }
+        .ty__ukol { font-weight: 700; line-height: 1.3; }
+        .ty__kde { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+        .ty__druh { margin-top: 4px; min-height: 0; padding: 3px 6px; font-size: 12px; }
+        .ty__projekt > td { background: var(--accent-tint); color: var(--accent); font-size: 11.5px;
+            font-weight: 900; letter-spacing: .04em; text-align: left; padding: 5px 8px; }
+        .ty__soucet { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 4px;
+            font-size: 11.5px; font-weight: 700; letter-spacing: 0; text-transform: none;
+            font-variant-numeric: tabular-nums; color: var(--muted); }
+        .ty th.ty--dnes { box-shadow: inset 0 -3px 0 var(--accent); color: var(--accent); }
+        .ty .ty--vik { background: var(--bg-soft); }
+        .ty .ty--zamceno { background: var(--bg-soft); }
+        .ty__bunka { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+        .ty__je { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .ty__vstup { width: 58px; min-height: 0; padding: 5px 4px; text-align: center;
+            font-variant-numeric: tabular-nums; }
+        .ty__vstup--chyba { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(185, 28, 28, .15); }
+        .ty__zamek { color: var(--dim); font-size: 12px; }
+        .ty__suma { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .ty__prazdno { padding: 22px 12px !important; color: var(--muted); text-align: center !important;
+            white-space: normal; }
+        /* na telefonu užší sloupec úkolu, ať je vedle něj vidět víc dnů;
+           tlačítka v hlavičce (manažer jich má čtyři) se zalomí na další
+           řádek, místo aby se mačkala do tří řádků textu */
+        @media (max-width: 620px) {
+            .ty th:first-child, .ty td:first-child { min-width: 128px; max-width: 150px; }
+            .ty__ukol { font-size: 12.5px; }
+            .hlavicka__akce { flex-wrap: wrap; }
+            .hlavicka__akce .btn { white-space: nowrap; }
+        }
 
         /* ZAROVNÁNÍ FORMULÁŘE. Automatické sloupce (auto-fit) si šířku braly
            podle obsahu, takže pole na sousedních řádcích nelícovala. Pevné
@@ -178,6 +226,9 @@
                 <!-- zaměstnanec: žádost o zápis do uzavřeného týdne (Michal 22. 9. 2026) -->
                 <button id="btnZadostZpetne" class="btn btn--ghost" hidden
                     title="Požádat manažera o zápis výkazu do uzavřeného týdne">Požádat o zpětný zápis</button>
+                <!-- vlastní hodiny celého týdne po úkolech naráz (20. 10. 2026) -->
+                <button id="btnTyden" class="btn btn--ghost"
+                    title="Doplnit hodiny celého týdne po úkolech v jedné mřížce">Týden v mřížce</button>
                 <button id="btnZapis" class="btn btn--primary">Přidat výkaz</button>
             </div>
         </div>
@@ -208,6 +259,33 @@
                 <div class="grow"></div>
                 <div class="small muted" id="denSoucet" style="font-variant-numeric:tabular-nums"></div>
                 <button type="button" id="btnUloz" class="btn btn--primary">Uložit</button>
+            </div>
+        </section>
+
+        <!-- ============================================ TÝDEN V MŘÍŽCE ==
+             Rychlé doplnění vlastního týdne: řádky = moje úkoly, sloupce =
+             dny. Do buňky se píšou jen NOVÉ hodiny navíc; uloží se jako
+             běžné zápisy stejnou cestou jako formulář (20. 10. 2026). -->
+        <section id="tyden" class="card col" style="padding:18px;gap:12px" hidden>
+            <div class="spread" style="gap:10px;flex-wrap:wrap">
+                <b style="font-size:16px">Týden v mřížce</b>
+                <div class="row" style="gap:6px;align-items:center">
+                    <button type="button" class="btn btn--ghost btn--sm" id="tyZpet" title="Předchozí týden">‹</button>
+                    <span id="tyRozsah" class="small" style="min-width:132px;text-align:center"></span>
+                    <button type="button" class="btn btn--ghost btn--sm" id="tyDal" title="Další týden">›</button>
+                    <button type="button" class="linkbtn" id="tyZavri" style="margin-left:6px">Zavřít</button>
+                </div>
+            </div>
+            <p class="small muted" style="margin:0;line-height:1.55">
+                Do buňky napiš jen hodiny <b>navíc</b> (třeba 2,5). Šedé číslo nad polem je to,
+                co už na úkolu ten den zapsané máš. Každá vyplněná buňka se uloží jako
+                samostatný zápis; čas od–do se dopočítá od tvého obvyklého začátku.
+            </p>
+            <div class="ty-wrap"><table class="ty" id="tyTabulka"></table></div>
+            <div class="row row--wrap" style="gap:10px;align-items:center">
+                <span id="tyStav" class="small muted" style="font-variant-numeric:tabular-nums"></span>
+                <div class="grow"></div>
+                <button type="button" id="tyUloz" class="btn btn--primary">Uložit týden</button>
             </div>
         </section>
 
@@ -495,10 +573,10 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=284"></script>
-<script src="assets/js/ui.js?v=284"></script>
-<script src="assets/js/vykazy.js?v=284"></script>
-<script type="module" src="assets/js/store.js?v=284"></script>
+<script src="assets/js/taxonomy.js?v=285"></script>
+<script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/vykazy.js?v=285"></script>
+<script type="module" src="assets/js/store.js?v=285"></script>
 
 <script>
 (function () {
@@ -1997,6 +2075,51 @@
     }
 
     /**
+     * Lidé (a s nimi role) dorazí z databáze až po načtení stránky. Formulář
+     * otevřený hned po startu – „+ Nový výkaz" ze svislého pásu vede na
+     * `vykazy.html#novy` – měl roletku „Kdo pracoval" prázdnou a zaměstnanec,
+     * který ji ani nevidí, pak nemohl uložit („Vyber, kdo pracoval").
+     * Dosype se, jakmile lidé dorazí; volba, kterou už někdo udělal, zůstává
+     * (`naplnOsoby` drží vybranou hodnotu). Když se člověk změnil (z prázdné
+     * na přihlášeného), srovná se i to, co na něm v otevřených záznamech
+     * visí – sazba, předvyplněný text absence a hlídka HO (20. 10. 2026).
+     */
+    function dosypOsoby() {
+        const pred = $("dOsoba").value;
+        const stara = vychoziSazba;
+        naplnOsoby();
+        if ($("dOsoba").value !== pred) {
+            srovnejSazby(stara);
+            obnovAbsenceTexty();
+            radkyBox().querySelectorAll("[data-polozka]").forEach(obnovHoHlasku);
+        }
+        /* Okno úpravy může otevřít proklik (`?upravit=ID`) dřív, než lidé
+           dorazí – prázdná roletka by uložila zápis bez člověka. */
+        if (!$("editOverlay").hidden && editId) {
+            const z = (window.KB.vykazy || []).find(v => v.id === editId) || {};
+            naplnEditOsoby($("eOsoba").value || z.uid || "", z);
+            srovnejPulhodiny();
+        }
+    }
+
+    /**
+     * Roletka „Kdo pracoval" v okně úpravy. Člověk, který v seznamu není
+     * (odešel, nebo seznam ještě nedorazil), se do ní přidá se jménem ze
+     * zápisu – jinak by se roletka postavila na prvního v seznamu a uložení
+     * by zápis tiše přepsalo jinému člověku.
+     */
+    function naplnEditOsoby(vybrany, z) {
+        const lide = V.lide();
+        let html = osobyOptions(lide, vybrany);
+        if (vybrany && !lide.some(u => u.id === vybrany)) {
+            const u = V.clovek(vybrany);
+            html = '<option value="' + esc(vybrany) + '" selected>' +
+                esc((u && V.jmeno(u)) || (z && z.osoba) || "neznámý člověk") + "</option>" + html;
+        }
+        $("eOsoba").innerHTML = html;
+    }
+
+    /**
      * Sazba člověka se propíše do řádků, které si ji ještě nepřepsaly ručně.
      * Ručně zadané číslo přebít nesmíme – proto se mění jen to, co je prázdné
      * nebo se rovná dosavadní výchozí hodnotě.
@@ -2934,6 +3057,25 @@
         if (!uid) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
 
         const polozky = prectiRadky().map(srovnejZapis);
+        /* Hlídky i samotné uložení jsou v `ulozZapisy` – stejnou cestou
+           ukládá i týdenní mřížka, ať se pravidla nikdy nerozejdou. */
+        if (!(await ulozZapisy(uid, polozky))) return;
+        radkyBox().innerHTML = "";
+        pridejBlok();
+    }
+
+    /**
+     * Jádro ukládání výkazů – formulář dne i týdenní mřížka.
+     *
+     * Dostane záznamy už srovnané (`srovnejZapis`) a s `_popis` pro hlášky.
+     * Zkontroluje je podle pravidel zápisu (časy, uzávěrka měsíce, týdenní
+     * lhůta se zpětným zápisem, druh vypracování, úkol) a uloží jako běžné
+     * výkazy: peníze, propis do Tabulek i aktivita jdou přes KB.saveVykaz /
+     * KB.saveMujVykaz, absence navíc do kalendáře.
+     *
+     * Vrací počet uložených záznamů; 0 = neuložilo se nic a hláška už padla.
+     */
+    async function ulozZapisy(uid, polozky) {
         /* Popis práce je NEPOVINNÝ (19. 8.) – povinný je druh vypracování
            a tam, kde projekt úkoly má, i úkol: zápis se váže k úkolu. */
         const chybny = polozky.find(p => {
@@ -2943,8 +3085,9 @@
             return !p.od || !p.do || window.KB.spocitejHodiny(p.od, p.do, p.pauza) <= 0;
         });
         if (chybny) {
-            return window.KBUI.toast(chybny._popis +
+            window.KBUI.toast(chybny._popis +
                 ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
+            return 0;
         }
         /* Uzavřený měsíc nepustí nic – ani zpětný zápis, ani projekt bez
            lhůty; pravidla databáze drží čáru natvrdo. Kontroluje se každý
@@ -2957,8 +3100,9 @@
                 return !!denPodCarou;
             });
             if (vUzavrenem) {
-                return window.KBUI.toast(vUzavrenem._popis + " (" + V.czDatum(denPodCarou) + "): " +
+                window.KBUI.toast(vUzavrenem._popis + " (" + V.czDatum(denPodCarou) + "): " +
                     MESIC_ZAVRENO, "warn");
+                return 0;
             }
         }
         /* Povolení zpětného zápisu je na konkrétní dny, proto se ptá každý
@@ -2968,17 +3112,17 @@
             const dny = p.absence ? pracovniDny(p.datum, p.datumDo) : [p.datum];
             return dny.find(d => poLhute(d) && !mamZpetnePovoleni(d)) || "";
         }).find(Boolean);
-        if (pozdni) return otevriLhutu(pozdni);
+        if (pozdni) { otevriLhutu(pozdni); return 0; }
         const bezDruhu = polozky.find(p => !p.absence && !p.rezie && !p.cinnost);
         if (bezDruhu) {
-            return window.KBUI.toast(bezDruhu._popis +
-                ": vyber druh vypracování.", "warn");
+            window.KBUI.toast(bezDruhu._popis + ": vyber druh vypracování.", "warn");
+            return 0;
         }
         const bezUkolu = polozky.find(p => !p.absence && !p.rezie && !p.ukolId &&
             mojeUkolyProjektu(p.zakazka).length);
         if (bezUkolu) {
-            return window.KBUI.toast(bezUkolu._popis +
-                ": vyber úkol – zápis se váže k úkolu.", "warn");
+            window.KBUI.toast(bezUkolu._popis + ": vyber úkol – zápis se váže k úkolu.", "warn");
+            return 0;
         }
         /* Prázdný popis dostane název úkolu, ať přehledy nečtou prázdno. */
         polozky.forEach(p => {
@@ -3020,12 +3164,520 @@
             window.KBUI.toast(kZapisu.length === 1
                 ? "Záznam uložen."
                 : "Uloženo " + V.pocet(kZapisu.length, ["záznam", "záznamy", "záznamů"]) + ".");
-            radkyBox().innerHTML = "";
-            pridejBlok();
+            return kZapisu.length;
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Uložení selhalo – zkus to prosím znovu.", "error");
+            return 0;
         }
+    }
+
+    /* =============================================== TÝDEN V MŘÍŽCE ====
+       Rychlé doplnění vlastního týdne. Rešerše z 19. 10. 2026: skoro
+       třetina zápisů vzniká víc než dva dny po práci a víc než třetina
+       nevisí na úkolu. Řádky = moje otevřené úkoly + úkoly, na které jsem
+       psal za posledních 14 dní; sloupce = dny. Do buňky se píšou jen NOVÉ
+       hodiny navíc – co už zapsané je, se ukazuje jen ke čtení.
+
+       Každá vyplněná buňka se uloží jako běžný zápis přes `ulozZapisy`,
+       tedy stejnými hlídkami a stejnou cestou jako formulář (peníze,
+       Tabulky, aktivita). Projekt, budova, patro, technologie a druh se
+       berou z úkolu; čas od je obvyklý začátek člověka, do = od + hodiny,
+       bez pauzy. Jen za sebe – i manažer tu píše jen svoje hodiny. */
+
+    const TY_ZACATEK = "08:00";     // kdo za 30 dní nic nezapsal
+    const TY_ZPET_TYDNU = 8;        // dál dozadu stejně všechno zavírá lhůta
+    const TY_DNY = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
+
+    let tyPondeli = "";             // pondělí zobrazeného týdne
+    let tyVikend = false;           // sobota a neděle rozbalené
+    const tyVstupy = {};            // "ukolId|datum" → napsaný text; přežije překreslení
+    const tyDruhy = {};             // ukolId → druh vybraný u úkolu, který druh nemá
+
+    const tyKlic = (ukolId, datum) => ukolId + "|" + datum;
+    const tyCislo = (h) => Number(h || 0).toLocaleString("cs-CZ", { maximumFractionDigits: 2 });
+
+    function posunDen(iso, dnu) {
+        const d = new Date(iso + "T00:00:00");
+        d.setDate(d.getDate() + dnu);
+        return isoDne(d);
+    }
+
+    /** Pondělí týdne, do kterého den patří. */
+    function pondeliTydne(iso) {
+        const d = new Date(iso + "T00:00:00");
+        d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+        return isoDne(d);
+    }
+
+    const tyDnyTydne = (pondeli) => [0, 1, 2, 3, 4, 5, 6].map(i => posunDen(pondeli, i));
+
+    /** „Po 20. 10." */
+    function tyDenText(iso) {
+        const d = new Date(iso + "T00:00:00");
+        return TY_DNY[(d.getDay() + 6) % 7] + " " + d.getDate() + ". " + (d.getMonth() + 1) + ".";
+    }
+
+    /** „08:30" → 510; cokoliv jiného → null. */
+    function minutyCasu(cas) {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(cas || "").trim());
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    }
+
+    const casZMinut = (min) => String(Math.floor(min / 60)).padStart(2, "0") + ":" +
+        String(min % 60).padStart(2, "0");
+
+    /**
+     * Hodiny napsané do buňky: „2,5" i „2.5" → 2.5. Prázdné a nula = nic (0).
+     * Po čtvrthodinách jako všude ve výkazech, nejvýš 16 h; jinak NaN.
+     */
+    function tyHodiny(text) {
+        const t = String(text === undefined || text === null ? "" : text).trim().replace(",", ".");
+        if (!t) return 0;
+        if (!/^(\d{1,2}(\.\d{1,2})?|\.\d{1,2})$/.test(t)) return NaN;
+        const h = Number(t);
+        if (h === 0) return 0;
+        return (h > 16 || Math.round(h * 4) !== h * 4) ? NaN : h;
+    }
+
+    /**
+     * Obvyklý začátek práce: medián toho, kdy člověk za posledních 30 dní
+     * začínal. U každého dne se bere jeho NEJDŘÍVĚJŠÍ zápis – medián přes
+     * všechny zápisy by odpolední práce táhla k poledni. Absence se
+     * nepočítá (celý den je 00:00). Bez zápisů 08:00.
+     */
+    function obvyklyZacatek(uid) {
+        const dnes = V.dnesISO();
+        const od = posunDen(dnes, -30);
+        const prvni = {};
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.uid !== uid || !z.datum || z.datum < od || z.datum > dnes) return;
+            if (z.absence === true || jeAbsence(z.zakazka)) return;
+            const m = minutyCasu(z.od);
+            if (m === null) return;
+            if (prvni[z.datum] === undefined || m < prvni[z.datum]) prvni[z.datum] = m;
+        });
+        const casy = Object.keys(prvni).map(k => prvni[k]).sort((a, b) => a - b);
+        // u sudého počtu dřívější z prostředních – je to čas, který člověk opravdu psal
+        return casy.length ? casZMinut(casy[Math.floor((casy.length - 1) / 2)]) : TY_ZACATEK;
+    }
+
+    /**
+     * Řádky mřížky: moje otevřené úkoly (přiřazené mně, ne hotové) a úkoly,
+     * na které jsem psal za posledních 14 dní nebo v zobrazeném týdnu –
+     * i hotové a cizí (výpomoc), jinak by jejich zapsané hodiny nebyly vidět.
+     * Seřazené po projektech a názvech.
+     */
+    function tyRadky(uid, dny) {
+        const dnes = V.dnesISO();
+        const od = posunDen(dnes, -14);
+        const ukoly = window.KB.ukoly || [];
+        const ids = [];
+        ukoly.forEach(u => {
+            if (u.stav !== "hotovo" && (u.prirazeni || []).indexOf(uid) !== -1) ids.push(u.id);
+        });
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.uid !== uid || !z.ukolId || ids.indexOf(z.ukolId) !== -1) return;
+            if ((z.datum >= od && z.datum <= dnes) || dny.indexOf(z.datum) !== -1) ids.push(z.ukolId);
+        });
+        return ids.map(id => ukoly.find(u => u.id === id))
+            // bez projektu by zápis neprošel; Web vidí jen jeho majitel
+            .filter(u => u && u.projekt && (u.projekt !== WEB_PRACE || jeMujWeb()))
+            .sort((a, b) => String(a.projekt).localeCompare(String(b.projekt), "cs") ||
+                String(a.nazev || "").localeCompare(String(b.nazev || ""), "cs"));
+    }
+
+    /**
+     * Proč přihlášený nesmí do mřížky zapsat den `datum` na projekt
+     * `zakazka`; "" = smí. Stejná pravidla jako formulář (`ulozZapisy`):
+     * manažera lhůta ani uzávěrka nezastaví; ostatní zastaví uzavřený
+     * měsíc vždycky a uzavřený týden, když nemají zpětný zápis a projekt
+     * uzávěrku má. Navíc budoucí dny se tu nepíšou nikomu.
+     */
+    function tyZamek(datum, zakazka) {
+        if (datum > V.dnesISO()) return "Budoucí den – hodiny se píšou, až je odpracuješ.";
+        if (window.KBUI.can("vykaz.view")) return "";
+        if (podCarou(datum)) {
+            return "Měsíc je uzavřený (uzávěrka do " + uzavrenoDo() + ") – oprava přes Nahlásit chybu.";
+        }
+        if (poLhute(datum) && !mamZpetnePovoleni(datum) && !bezUzaverky(zakazka)) {
+            return "Týden je uzavřený – zapisuje se do pondělí půlnoci týdne následujícího." +
+                " Požádej o zpětný zápis.";
+        }
+        return "";
+    }
+
+    /**
+     * Stav mřížky pro přihlášeného: řádky, co už je zapsané (po úkolech
+     * a dnech, po dnech celkem), vyplněné buňky a součty nových hodin.
+     * Buňka nese `hodiny` (NaN = nesmysl) a `zamek` (proč nejde zapsat).
+     */
+    function tyStav(uid, dny) {
+        const radky = tyRadky(uid, dny);
+        const naUkolu = {}, zaDen = {}, casy = {};
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.uid !== uid || dny.indexOf(z.datum) === -1) return;
+            // den počítá všechno, i absenci a zápisy bez úkolu – jde proti fondu
+            const h = Number(z.hodiny) || 0;
+            zaDen[z.datum] = (zaDen[z.datum] || 0) + h;
+            if (!z.ukolId) return;
+            const k = tyKlic(z.ukolId, z.datum);
+            naUkolu[k] = (naUkolu[k] || 0) + h;
+            if (z.od && z.do) (casy[k] = casy[k] || []).push(z.od + "–" + z.do);
+        });
+
+        const bunky = [];
+        const noveDen = {}, noveRadek = {};
+        let spatne = 0, zamcene = 0, pocet = 0, hodin = 0;
+        // pořadí řádek po řádku – zápisy téhož dne se pak řadí jako řádky
+        radky.forEach(u => dny.forEach(datum => {
+            const text = tyVstupy[tyKlic(u.id, datum)];
+            if (text === undefined || !String(text).trim()) return;
+            const b = { u: u, datum: datum, text: String(text), hodiny: tyHodiny(text),
+                        zamek: tyZamek(datum, u.projekt) };
+            bunky.push(b);
+            if (isNaN(b.hodiny)) { spatne++; return; }
+            if (!b.hodiny) return;
+            if (b.zamek) { zamcene++; return; }
+            noveDen[datum] = (noveDen[datum] || 0) + b.hodiny;
+            noveRadek[u.id] = (noveRadek[u.id] || 0) + b.hodiny;
+            pocet++;
+            hodin += b.hodiny;
+        }));
+        return { radky, naUkolu, zaDen, casy, bunky, noveDen, noveRadek,
+                 spatne, zamcene, pocet, hodin };
+    }
+
+    /**
+     * Časy od–do pro nové zápisy. Den začíná obvyklým začátkem a zápisy
+     * téhož dne jdou za sebou (druhý začne, kde první skončil). Čas, který
+     * ten den už zabírá dřívější zápis, se přeskočí – nový zápis nesmí
+     * padnout přes starý, překryv hlásí kontrola zápisů. Celodenní absence
+     * (00:00–23:59) čas nezabírá, je jen evidenční.
+     * Vrací buňky doplněné o `od` a `do`, nebo o `chyba`, když se nevejdou.
+     */
+    function tyCasy(uid, bunky, zacatek) {
+        const start = minutyCasu(zacatek) !== null ? minutyCasu(zacatek) : minutyCasu(TY_ZACATEK);
+        const dny = bunky.map(b => b.datum);
+        const zabrano = {};
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.uid !== uid || dny.indexOf(z.datum) === -1) return;
+            if (z.od === CELY_DEN_OD && z.do === CELY_DEN_DO) return;
+            const a = minutyCasu(z.od), b = minutyCasu(z.do);
+            if (a === null || b === null || a === b) return;
+            // přes půlnoc: ten den zabírá čas až do konce dne
+            (zabrano[z.datum] = zabrano[z.datum] || []).push([a, b > a ? b : 24 * 60]);
+        });
+        const kurzor = {};
+        return bunky.map(b => {
+            const delka = Math.round(b.hodiny * 60);
+            const obsazeno = zabrano[b.datum] = zabrano[b.datum] || [];
+            let od = kurzor[b.datum] !== undefined ? kurzor[b.datum] : start;
+            for (let posun = true, pojistka = 0; posun && pojistka < 500; pojistka++) {
+                posun = false;
+                obsazeno.forEach(([a, k]) => {
+                    if (od < k && od + delka > a) { od = k; posun = true; }
+                });
+            }
+            if (od + delka > 24 * 60 - 1) return Object.assign({}, b, { chyba: "nevejde se do dne" });
+            obsazeno.push([od, od + delka]);
+            kurzor[b.datum] = od + delka;
+            return Object.assign({}, b, { od: casZMinut(od), do: casZMinut(od + delka) });
+        });
+    }
+
+    /** Má člověk na ten den nahlášený home office (Rychlý zápis)? Jako `obnovHoHlasku`. */
+    function hoNahlaseno(uid, datum) {
+        return (window.KB.kalendar || []).some(k => k.typ === "homeoffice" && k.uid === uid &&
+            (k.od || "") <= datum && datum <= (k.do || k.od || ""));
+    }
+
+    /**
+     * Zápis z buňky – v té podobě, kterou formulář přečte (`ctiPolozku`
+     * + hlavička výkazu), když se v něm vybere úkol: projekt a firma podle
+     * projektu úkolu, budova, patro a technologie z úkolu (podíly rovným
+     * dílem), druh z úkolu, popis z pater a technologií, jinak název úkolu,
+     * sazba podle projektu. Srovná se stejně jako zápis z formuláře.
+     */
+    function tyZaznam(b, uid) {
+        const u = b.u;
+        const patra = V.casti(u.patro || "");
+        const techy = V.casti(u.technologie || "");
+        const popis = [patra.join(", "), techy.join(", ")].filter(Boolean).join(" · ");
+        return srovnejZapis({
+            nazev: popis || u.nazev || "",
+            nazevAuto: true,
+            zakazka: u.projekt || "",
+            projekt: "",
+            firma: firmaProjektu(u.projekt || ""),
+            cinnost: u.druh || tyDruhy[u.id] || "",
+            technologie: techy.join(", "),
+            podilTech: V.podily("", Math.max(1, techy.length)).join(","),
+            datum: b.datum,
+            datumDo: "",
+            ukolId: u.id,
+            budova: u.budova || "",
+            patro: patra.join(", "),
+            podilPatra: V.podily("", Math.max(1, patra.length)).join(","),
+            od: b.od,
+            do: b.do,
+            hodinyVolba: 0,
+            hodinyPevne: 0,
+            celyden: false,
+            pauza: 0,
+            obed: false,
+            ho: hoNahlaseno(uid, b.datum),
+            km: 0,
+            sazba: V.sazbaProZapis(uid, u.projekt || ""),
+            absencePlacena: false,
+            poznamka: "",
+            _popis: "Úkol „" + (u.nazev || "") + "“ (" + tyDenText(b.datum) + ")"
+        });
+    }
+
+    function otevriTyden() {
+        if (!tyPondeli) tyPondeli = pondeliTydne(V.dnesISO());
+        $("tyden").hidden = false;
+        vykresliTyden();
+        $("tyden").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function vykresliTyden() {
+        const tabulka = $("tyTabulka");
+        if (!tabulka || $("tyden").hidden) return;
+        const uid = mojeUid();
+        const dnes = V.dnesISO();
+        if (!tyPondeli) tyPondeli = pondeliTydne(dnes);
+        const dny = tyDnyTydne(tyPondeli);
+        $("tyZpet").disabled = tyPondeli <= posunDen(pondeliTydne(dnes), -7 * TY_ZPET_TYDNU);
+        $("tyDal").disabled = tyPondeli >= pondeliTydne(dnes);
+        $("tyRozsah").textContent = tyDenText(dny[0]) + " – " + V.czDatum(dny[6]);
+
+        // kurzor v rozepsané buňce přežije překreslení – data chodí průběžně
+        const akt = document.activeElement;
+        const drzim = akt && tabulka.contains(akt) && akt.dataset && akt.dataset.tyUkol
+            ? { u: akt.dataset.tyUkol, d: akt.dataset.tyDen,
+                a: akt.selectionStart, b: akt.selectionEnd } : null;
+
+        const s = tyStav(uid, dny);
+        const pracovni = dny.slice(0, 5), vikend = dny.slice(5);
+        const sloupce = 1 + 5 + (tyVikend ? 2 : 1) + 1;
+
+        const hlavaDne = (d) => {
+            const svatek = window.KBUI.svatek ? window.KBUI.svatek(d) : "";
+            const zamek = tyZamek(d, "");
+            const tridy = [(d === dnes ? "ty--dnes" : ""),
+                (vikend.indexOf(d) !== -1 || svatek ? "ty--vik" : "")].filter(Boolean).join(" ");
+            const titulek = [svatek, zamek].filter(Boolean).join(" · ");
+            const popis = esc(tyDenText(d));
+            return '<th' + (tridy ? ' class="' + esc(tridy) + '"' : "") +
+                (titulek ? ' title="' + esc(titulek) + '"' : "") + ">" +
+                (tyVikend && vikend.indexOf(d) !== -1
+                    ? '<button type="button" class="linkbtn" data-ty-vikend title="Sbalit sobotu a neděli">' +
+                      popis + "</button>"
+                    : popis) +
+                '<br><span class="ty__soucet" data-ty-soucet="' + esc(d) + '"></span></th>';
+        };
+
+        const bunka = (u, d) => {
+            const k = tyKlic(u.id, d);
+            const je = s.naUkolu[k] || 0;
+            const zamek = tyZamek(d, u.projekt);
+            const text = tyVstupy[k] || "";
+            const tridy = [(vikend.indexOf(d) !== -1 ? "ty--vik" : ""),
+                (zamek ? "ty--zamceno" : "")].filter(Boolean).join(" ");
+            const titulek = zamek || (je ? "Už zapsáno " + V.hod(je) +
+                (s.casy[k] ? " (" + s.casy[k].join(", ") + ")" : "") : "");
+            return "<td" + (tridy ? ' class="' + esc(tridy) + '"' : "") +
+                (titulek ? ' title="' + esc(titulek) + '"' : "") + '><div class="ty__bunka">' +
+                (je ? '<span class="ty__je">' + esc(V.hod(je)) + "</span>" : "") +
+                /* Zamčený den pole nemá. Když tam z dřívějška zůstalo číslo
+                   (den se mezitím zavřel), pole zůstane červené, ať jde
+                   smazat – uložit to nepůjde. */
+                (zamek && !text
+                    ? '<span class="ty__zamek">–</span>'
+                    : '<input type="text" class="field ty__vstup" inputmode="decimal" autocomplete="off"' +
+                      ' placeholder="+" data-ty-ukol="' + esc(u.id) + '" data-ty-den="' + esc(d) + '"' +
+                      (zamek ? ' data-ty-zamek="1"' : "") + ' value="' + esc(text) + '"' +
+                      ' aria-label="' + esc("Nové hodiny – " + (u.nazev || "") + ", " + tyDenText(d)) + '">') +
+                "</div></td>";
+        };
+
+        /* Sbalený víkend: co už je zapsané v sobotu a v neděli, plus kolik
+           je tam napsáno a čeká na uložení. */
+        const bunkaVikend = (u) => {
+            const je = vikend.reduce((n, d) => n + (s.naUkolu[tyKlic(u.id, d)] || 0), 0);
+            const ceka = vikend.reduce((n, d) => {
+                const h = tyHodiny(tyVstupy[tyKlic(u.id, d)]);
+                return n + (h > 0 ? h : 0);
+            }, 0);
+            return '<td class="ty--vik"><div class="ty__bunka">' +
+                (je ? '<span class="ty__je">' + esc(V.hod(je)) + "</span>" : "") +
+                (ceka ? '<span class="ty__je" style="color:var(--accent)">+' + esc(V.hod(ceka)) + "</span>" : "") +
+                "</div></td>";
+        };
+
+        const hlava = "<thead><tr>" +
+            '<th>Úkol<br><span class="ty__soucet" data-ty-tyden></span></th>' +
+            pracovni.map(hlavaDne).join("") +
+            (tyVikend
+                ? vikend.map(hlavaDne).join("")
+                : '<th class="ty--vik"><button type="button" class="linkbtn" data-ty-vikend' +
+                  ' title="Rozbalit sobotu a neděli">So–Ne +</button>' +
+                  '<br><span class="ty__soucet" data-ty-soucet-vikend></span></th>') +
+            "<th>Týden</th></tr></thead>";
+
+        let telo = "";
+        if (!s.radky.length) {
+            telo = '<tr><td class="ty__prazdno" colspan="' + esc(sloupce) + '">' +
+                "Nemáš žádný otevřený úkol ani zápis na úkol za posledních 14 dní." +
+                " Výkaz bez úkolu zapiš přes „Přidat výkaz“.</td></tr>";
+        }
+        let projekt = null;
+        s.radky.forEach(u => {
+            if (u.projekt !== projekt) {
+                projekt = u.projekt;
+                telo += '<tr class="ty__projekt"><td colspan="' + esc(sloupce) + '">' +
+                    esc(projekt) + "</td></tr>";
+            }
+            const cizi = (u.prirazeni || []).indexOf(uid) === -1;
+            const kde = [u.budova, u.patro, u.technologie, u.druh].filter(Boolean).join(" · ");
+            telo += "<tr><td>" +
+                '<span class="ty__ukol">' + esc(u.nazev || "Bez názvu") + "</span>" +
+                (cizi ? ' <span class="tag" title="Úkol má přiřazený někdo jiný"' +
+                    ' style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">' +
+                    "výpomoc</span>" : "") +
+                (u.stav === "hotovo" ? ' <span class="tag">hotovo</span>' : "") +
+                (kde ? '<span class="ty__kde">' + esc(kde) + "</span>" : "") +
+                /* Úkol bez druhu vypracování: zápis ho potřebuje (jako formulář),
+                   tak se vybere tady – platí pro všechny buňky řádku. */
+                (u.druh || jeRezie(u.projekt) ? "" :
+                    '<select class="field ty__druh" data-ty-druh="' + esc(u.id) + '"' +
+                    ' aria-label="Druh vypracování" title="Úkol nemá druh vypracování – vyber ho">' +
+                    V.options(cinnostiProjektu(u.projekt, tyDruhy[u.id] || ""), tyDruhy[u.id] || "",
+                        "— druh —") + "</select>") +
+                "</td>" +
+                pracovni.map(d => bunka(u, d)).join("") +
+                (tyVikend ? vikend.map(d => bunka(u, d)).join("") : bunkaVikend(u)) +
+                '<td class="ty__suma" data-ty-radek="' + esc(u.id) + '"></td>' +
+            "</tr>";
+        });
+
+        tabulka.innerHTML = hlava + "<tbody>" + telo + "</tbody>";
+        tyObnovSoucty(s);
+
+        if (drzim) {
+            const el = Array.from(tabulka.querySelectorAll("[data-ty-ukol]"))
+                .find(x => x.dataset.tyUkol === drzim.u && x.dataset.tyDen === drzim.d);
+            if (el) {
+                el.focus();
+                try { el.setSelectionRange(drzim.a, drzim.b); } catch (err) { /* nevadí */ }
+            }
+        }
+    }
+
+    /**
+     * Součty bez překreslení – při psaní do buňky se mřížka nepřestavuje,
+     * jinak by na telefonu poskakovala klávesnice. Den: zapsáno + nové
+     * proti fondu (svátek a víkend fond nemají), řádek: celý týden.
+     */
+    function tyObnovSoucty(stav) {
+        const tabulka = $("tyTabulka");
+        if (!tabulka || $("tyden").hidden) return;
+        const dny = tyDnyTydne(tyPondeli);
+        const s = stav || tyStav(mojeUid(), dny);
+        const den = (d) => (s.zaDen[d] || 0) + (s.noveDen[d] || 0);
+        // stejné meze jako mřížka Vytížení
+        const barva = (h) => h > 8 ? "vt--hodne" : h >= 7 ? "vt--akorat" : h > 0 ? "vt--malo" : "";
+
+        tabulka.querySelectorAll("[data-ty-soucet]").forEach(el => {
+            const d = el.dataset.tySoucet;
+            const h = den(d);
+            const fond = V.fondHodin(d, d);
+            el.textContent = fond ? tyCislo(h) + " / " + tyCislo(fond) + " h" : (h ? V.hod(h) : "–");
+            el.className = "ty__soucet " + barva(h);
+        });
+        tabulka.querySelectorAll("[data-ty-soucet-vikend]").forEach(el => {
+            const h = den(dny[5]) + den(dny[6]);
+            el.textContent = h ? V.hod(h) : "–";
+            el.className = "ty__soucet " + (h ? "vt--hodne" : "");
+        });
+        tabulka.querySelectorAll("[data-ty-tyden]").forEach(el => {
+            const h = dny.reduce((n, d) => n + den(d), 0);
+            el.textContent = tyCislo(h) + " / " + tyCislo(V.fondHodin(dny[0], dny[6])) + " h";
+        });
+        tabulka.querySelectorAll("[data-ty-radek]").forEach(el => {
+            const id = el.dataset.tyRadek;
+            const h = dny.reduce((n, d) => n + (s.naUkolu[tyKlic(id, d)] || 0), 0) +
+                (s.noveRadek[id] || 0);
+            el.textContent = h ? V.hod(h) : "–";
+        });
+        tabulka.querySelectorAll("[data-ty-ukol]").forEach(el => {
+            const h = tyHodiny(el.value);
+            el.classList.toggle("ty__vstup--chyba", isNaN(h) || (!!el.dataset.tyZamek && h > 0));
+            // důvod zámku nese buňka; vlastní bublina pole jen u nesmyslu
+            el.title = isNaN(h) ? "Hodiny po čtvrthodinách, nejvýš 16 – třeba 2,5" : "";
+        });
+
+        const stavText = s.spatne
+            ? "Chybné číslo v " + V.pocet(s.spatne, ["buňce", "buňkách", "buňkách"]) +
+              " – hodiny po čtvrthodinách, nejvýš 16 (třeba 2,5)."
+            : s.zamcene
+                ? "Zamčený den v " + V.pocet(s.zamcene, ["buňce", "buňkách", "buňkách"]) +
+                  " – smaž tam číslo, uložit nepůjde."
+                : s.pocet
+                    ? "Nové: " + V.pocet(s.pocet, ["zápis", "zápisy", "zápisů"]) + ", " + V.hod(s.hodin)
+                    : "Zatím nic nového.";
+        $("tyStav").textContent = stavText;
+    }
+
+    async function ulozTyden() {
+        const uid = mojeUid();
+        if (!uid) return window.KBUI.toast("Nejsi přihlášený.", "warn");
+        const dny = tyDnyTydne(tyPondeli);
+        const s = tyStav(uid, dny);
+        const popis = (b) => "Úkol „" + (b.u.nazev || "") + "“ (" + tyDenText(b.datum) + ")";
+
+        const spatna = s.bunky.find(b => isNaN(b.hodiny));
+        if (spatna) {
+            return window.KBUI.toast(popis(spatna) + ": hodiny po čtvrthodinách, nejvýš 16 – třeba 2,5.", "warn");
+        }
+        const zamcena = s.bunky.find(b => b.hodiny > 0 && b.zamek);
+        if (zamcena) return window.KBUI.toast(popis(zamcena) + ": " + zamcena.zamek, "warn");
+        const nove = s.bunky.filter(b => b.hodiny > 0);
+        if (!nove.length) return window.KBUI.toast("V mřížce nejsou žádné nové hodiny.", "warn");
+        const bezDruhu = nove.find(b => !b.u.druh && !tyDruhy[b.u.id] && !jeRezie(b.u.projekt));
+        if (bezDruhu) {
+            return window.KBUI.toast(popis(bezDruhu) + ": úkol nemá druh vypracování – vyber ho u úkolu.", "warn");
+        }
+        const sCasy = tyCasy(uid, nove, obvyklyZacatek(uid));
+        const nevejde = sCasy.find(b => b.chyba);
+        if (nevejde) {
+            return window.KBUI.toast(popis(nevejde) + ": do dne se už nevejde – zkrať hodiny.", "warn");
+        }
+
+        // shrnutí před uložením – po dnech, s časy, které se zapíšou
+        const radkyDnu = dny.map(d => {
+            const tam = sCasy.filter(b => b.datum === d);
+            if (!tam.length) return "";
+            return tyDenText(d) + ": " + V.pocet(tam.length, ["zápis", "zápisy", "zápisů"]) + ", " +
+                V.hod(tam.reduce((n, b) => n + b.hodiny, 0)) + " (" +
+                tam.map(b => b.od + "–" + b.do).join(", ") + ")";
+        }).filter(Boolean);
+        const hodin = sCasy.reduce((n, b) => n + b.hodiny, 0);
+        if (!confirm("Založí se " + V.pocet(sCasy.length, ["zápis", "zápisy", "zápisů"]) + ", " +
+            V.hod(hodin) + ".\n\n" + radkyDnu.join("\n"))) return;
+
+        $("tyUloz").disabled = true;
+        let ulozeno = 0;
+        try {
+            ulozeno = await ulozZapisy(uid, sCasy.map(b => tyZaznam(b, uid)));
+        } finally {
+            $("tyUloz").disabled = false;
+        }
+        // uložené buňky se vyprázdní; zapsané hodiny pak ukáže šedé číslo
+        if (ulozeno) nove.forEach(b => { delete tyVstupy[tyKlic(b.u.id, b.datum)]; });
+        vykresliTyden();
     }
 
     /* ======================================================== FILTRY ==== */
@@ -3443,7 +4095,7 @@
         editId = id;
         $("btnSmaz").hidden = !smimSmazat(z);
         $("eDatum").value = z.datum || "";
-        $("eOsoba").innerHTML = osobyOptions(V.lide(), z.uid);
+        naplnEditOsoby(z.uid, z);
         srovnejPulhodiny();
 
         /* Výkaz si příznak „celý den" nenese – pozná se z časů 00:00–23:59.
@@ -3479,6 +4131,9 @@
         }
 
         const uid = $("eOsoba").value;
+        /* Prázdná roletka by manažerovi uložila zápis bez člověka.
+           Zaměstnanci uid doplní KB.saveMujVykaz sám (vždy jeho). */
+        if (!uid && menimSazbu()) return window.KBUI.toast("Vyber, kdo pracoval.", "warn");
         const u = V.clovek(uid);
         const jmeno = u ? V.jmeno(u) : (puvodni.osoba || "");
         const datum = $("eDatum").value;
@@ -3744,14 +4399,19 @@
     // živý přepočet – jeden posluchač na celou stránku, ať se nemusí navazovat
     // na každé nově vzniklé pole zvlášť
     /** Doplní firmu podle propojení projekt → firma z nastavení. */
-    function doplnFirmu(kontejner, atribut, projekt) {
+    /** Firma, které se projekt fakturuje – formulář i týdenní mřížka. */
+    function firmaProjektu(projekt) {
         /* Mapa projekt → firma je od 1. 9. 2026 tajná (zákaznická databáze),
            takže ji zaměstnanec nemá. Firmu si vezme z vlastního projektu –
            ten čte, protože je na něm přiřazený. */
         const doc = (window.KB.projektyDocs || []).find(x => (x.nazev || "") === projekt);
         // režie se fakturuje vždycky nám samotným
-        const firma = jeRezie(projekt) ? REZIE_FIRMA
+        return jeRezie(projekt) ? REZIE_FIRMA
             : ((window.KB.firmaMap || {})[projekt] || (doc && doc.firma) || "");
+    }
+
+    function doplnFirmu(kontejner, atribut, projekt) {
+        const firma = firmaProjektu(projekt);
         const select = kontejner.querySelector('[' + atribut + '="firma"]');
         if (!select) return;
         /* Bez firmy se roletka vyprázdní – dřív v ní visela firma
@@ -4143,11 +4803,58 @@
             novyZapis();
             $("zapis").scrollIntoView({ behavior: "smooth", block: "start" });
         });
-        // rychlá akce „Nový výkaz" ze svislého pásu vede rovnou do formuláře
-        if (location.hash === "#novy") {
-            $("zapis").hidden = false;
-            novyZapis();
-        }
+        /* ---- Týden v mřížce ---- */
+        $("btnTyden").addEventListener("click", () => {
+            if ($("tyden").hidden) otevriTyden();
+            else $("tyden").hidden = true;
+        });
+        $("tyZavri").addEventListener("click", () => { $("tyden").hidden = true; });
+        const tyPosun = (tydnu) => {
+            tyPondeli = posunDen(tyPondeli || pondeliTydne(V.dnesISO()), 7 * tydnu);
+            // starší týden než živé okno se dotáhne (jinak by chyběly zapsané hodiny)
+            dotahniStarsi(tyPondeli, posunDen(tyPondeli, 6));
+            vykresliTyden();
+        };
+        $("tyZpet").addEventListener("click", () => tyPosun(-1));
+        $("tyDal").addEventListener("click", () => tyPosun(1));
+        $("tyUloz").addEventListener("click", ulozTyden);
+        $("tyTabulka").addEventListener("input", (event) => {
+            const el = event.target;
+            if (!el.dataset || !el.dataset.tyUkol) return;
+            tyVstupy[tyKlic(el.dataset.tyUkol, el.dataset.tyDen)] = el.value;
+            tyObnovSoucty();
+        });
+        $("tyTabulka").addEventListener("change", (event) => {
+            const el = event.target;
+            if (!el.dataset || !el.dataset.tyDruh) return;
+            tyDruhy[el.dataset.tyDruh] = el.value;
+        });
+        $("tyTabulka").addEventListener("click", (event) => {
+            if (!event.target.closest("[data-ty-vikend]")) return;
+            tyVikend = !tyVikend;
+            vykresliTyden();
+        });
+        /* Data chodí průběžně – zapsané hodiny, úkoly, zámky (zpětný zápis,
+           uzávěrka, role). Napsaná čísla drží `tyVstupy`, takže překreslení
+           nic nesmaže; zavřená mřížka se nepřekresluje vůbec. */
+        ["vykazy", "ukoly", "users", "zpetne", "uzaverka", "projekty-docs"].forEach(udalost =>
+            window.KB.on(udalost, vykresliTyden));
+        document.addEventListener("kb-role", vykresliTyden);
+
+        /* Rychlá akce „Nový výkaz" ze svislého pásu vede rovnou do formuláře
+           (`#novy`), odkaz na týdenní mřížku na ni (`#tyden`). Na téhle
+           stránce se po kliknutí v pásu mění jen kotva, stránka se znovu
+           nenačte – proto i `hashchange`. Kotva se hned uklidí, jinak by
+           druhé kliknutí na stejný odkaz nic neudělalo. */
+        const zapisZAdresy = () => {
+            const kotva = location.hash;
+            if (kotva !== "#novy" && kotva !== "#tyden") return;
+            history.replaceState(null, "", location.pathname + location.search);
+            if (kotva === "#novy") $("btnZapis").click();
+            else otevriTyden();
+        };
+        window.addEventListener("hashchange", zapisZAdresy);
+        zapisZAdresy();
         $("btnZapisZavri").addEventListener("click", () => { $("zapis").hidden = true; });
         $("btnPlus").addEventListener("click", () => {
             const pole = doPoleProjektu(pridejBlok().querySelector('[data-z="zakazka"]'));
@@ -4325,6 +5032,10 @@
            mu v otevřeném formuláři zůstala nula (Michal 13. 10. 2026). */
         window.KB.on("moje-sazba", () => nastavVychoziSazbu(true));
         window.KB.on("users", render);
+        /* Roletka „Kdo pracoval" se dosype, až lidé dorazí – stejně jako
+           nabídka projektů níž. S rolí manažer dostane místo sebe všechny. */
+        window.KB.on("users", dosypOsoby);
+        document.addEventListener("kb-role", dosypOsoby);
         window.KB.on("zakazky", naplnFiltry);
         /* Nabídka projektů v otevřeném formuláři se dosype, až data
            dorazí – bez toho šlo vybírat jen ze záložního číselníku. */

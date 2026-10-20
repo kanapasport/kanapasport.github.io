@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=284">
+    <link rel="stylesheet" href="assets/css/app.css?v=285">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -232,6 +232,18 @@
         .akt { display: flex; flex-direction: column; gap: 1px; }
         .akt__cas { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
         .akt__text { font-size: 13.5px; line-height: 1.55; }
+
+        /* Výzva k nastavení upozornění na e-mail – stejná hlavička jako
+           ostatní dlaždice, ale přes celou šířku a jen tak vysoká, kolik
+           je textu: v polovině by rozhodila dvojice úkoly – TO-DO pod ní. */
+        .nastenka__karta--vyzva { grid-column: 1 / -1; height: auto; }
+        .vyzva { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap;
+            overflow: visible; }
+        .vyzva__text { flex: 1 1 320px; min-width: 0; }
+        .vyzva__text b { display: block; font-size: 15px; font-weight: 900; }
+        .vyzva__text span { display: block; font-size: 13px; line-height: 1.55;
+            color: var(--text-soft); margin-top: 2px; }
+        .vyzva__tlacitka { display: flex; gap: 8px; flex: none; }
     </style>
 </head>
 <body>
@@ -253,6 +265,25 @@
     <section id="nastenka" class="wrap" style="padding-top:22px">
         <!-- všechny dlaždice stejně velké; delší obsah roluje uvnitř -->
         <div class="nastenka">
+            <!-- výzva k upozornění na e-mail: jen pro toho, kdo si je ještě
+                 nikdy neuložil; „Teď ne" ji schová na 30 dní (Michal 20. 10. 2026) -->
+            <div class="card nastenka__karta nastenka__karta--vyzva" id="wUpozVyzva" hidden>
+                <div class="nastenka__hlava" data-otevri="upozorneni.html" title="Otevřít nastavení upozornění">
+                    <b>Upozornění na e-mail</b>
+                </div>
+                <div class="nastenka__telo vyzva">
+                    <div class="vyzva__text">
+                        <b>Nastav si upozornění na e-mail</b>
+                        <span>Nový úkol nebo Quick TO-DO, blížící se termín, zmínka v poradě,
+                            připomínka nezapsaného výkazu – vybereš si sám, co ti má chodit.
+                            Dokud nastavení neuložíš, nepřijde nic.</span>
+                    </div>
+                    <div class="vyzva__tlacitka">
+                        <a class="btn btn--primary btn--sm" href="upozorneni.html">Nastavit</a>
+                        <button type="button" class="btn btn--ghost btn--sm" data-upoz-tedne>Teď ne</button>
+                    </div>
+                </div>
+            </div>
             <div class="card nastenka__karta" id="wUkoly">
                 <div class="nastenka__hlava" data-otevri="ukoly.html?moje=1" title="Otevřít úkoly">
                     <b>Zadané úkoly</b>
@@ -384,11 +415,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=284"></script>
-<script src="assets/js/doc.js?v=284"></script>
-<script src="assets/js/ui.js?v=284"></script>
-<script src="assets/js/vykazy.js?v=284"></script>
-<script type="module" src="assets/js/store.js?v=284"></script>
+<script src="assets/js/taxonomy.js?v=285"></script>
+<script src="assets/js/doc.js?v=285"></script>
+<script src="assets/js/ui.js?v=285"></script>
+<script src="assets/js/vykazy.js?v=285"></script>
+<script type="module" src="assets/js/store.js?v=285"></script>
 
 <script>
 (function () {
@@ -1518,6 +1549,51 @@
                 : "");
     }
 
+    /* ------------------------------------ výzva k upozornění na e-mail ---
+       Upozornění jsou dobrovolná a rozesílač zná jen toho, kdo si je na
+       stránce Upozornění uložil. Kdo to nikdy neudělal (jeho dokument
+       v private/upozorneni/lide neexistuje), tomu se tu ukáže výzva.
+       „Teď ne" ji schová na 30 dní v tomhle prohlížeči.
+       Čtení: jeden odběr vlastního dokumentu. Jakmile je vidět, že
+       nastavení existuje, prohlížeč si to zapamatuje a příště se odběr
+       vůbec nezapíná; během odložení taky ne. */
+
+    const UPOZ_ODLOZENO_KLIC = () => "kb-upoz-vyzva-" + mojeUid();
+    const UPOZ_ULOZENO_KLIC = () => "kb-upoz-ulozeno-" + mojeUid();
+    const UPOZ_ODLOZIT_DNI = 30;
+    let upozSledovanoPro = "";
+    let upozPrislo = false;
+    let upozSkrytoTed = false;    // „Teď ne“ i bez localStorage
+
+    function ctiPamet(klic) {
+        try { return localStorage.getItem(klic); } catch (err) { return null; }
+    }
+    function pisPamet(klic, hodnota) {
+        try { localStorage.setItem(klic, hodnota); } catch (err) {}
+    }
+    const upozOdlozeno = () => Number(ctiPamet(UPOZ_ODLOZENO_KLIC())) > Date.now();
+    const upozZnameUlozene = () => ctiPamet(UPOZ_ULOZENO_KLIC()) === "1";
+
+    function zapniUpozVyzvu() {
+        const uid = mojeUid();
+        if (!uid || upozSledovanoPro === uid) return;
+        if (upozZnameUlozene() || upozOdlozeno()) return;
+        upozSledovanoPro = uid;
+        window.KB.watchUpozorneni();
+    }
+
+    function renderUpozVyzva() {
+        const karta = document.getElementById("wUpozVyzva");
+        if (!karta) return;
+        const uid = mojeUid();
+        const ulozeno = !!window.KB.upozorneni;
+        if (uid && ulozeno) pisPamet(UPOZ_ULOZENO_KLIC(), "1");
+        /* Ukázat až po odpovědi databáze – „nic nepřišlo" ještě neznamená
+           „nic tam není". */
+        karta.hidden = !(uid && upozPrislo && upozSledovanoPro === uid && !ulozeno &&
+            !upozSkrytoTed && !upozZnameUlozene() && !upozOdlozeno());
+    }
+
     /* ----------------------------------------------------- co je nového ---
        Po přihlášení jedno okno doprostřed: úkoly nově přiřazené mně a quick
        to-do, které přišly od minulé návštěvy. Hranice „od kdy je to nové"
@@ -1684,7 +1760,8 @@
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
             renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola();
-            renderDovolene(); renderRychly(); renderFaktury(); nactiKontrolaOk(); };
+            renderDovolene(); renderRychly(); renderFaktury(); nactiKontrolaOk();
+            zapniUpozVyzvu(); renderUpozVyzva(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         pripravRezimy();
@@ -1718,6 +1795,14 @@
         window.KB.on("quicktodo", () => { prisloQuick = true; novinkyZkus(); });
         document.getElementById("btnNovinkyZavri").addEventListener("click", () => {
             document.getElementById("novinkyOverlay").hidden = true;
+        });
+
+        // výzva k upozornění na e-mail
+        window.KB.on("upozorneni", () => { upozPrislo = true; renderUpozVyzva(); });
+        document.querySelector("[data-upoz-tedne]").addEventListener("click", () => {
+            upozSkrytoTed = true;
+            pisPamet(UPOZ_ODLOZENO_KLIC(), String(Date.now() + UPOZ_ODLOZIT_DNI * 86400000));
+            renderUpozVyzva();
         });
 
         /* „Přizpůsobit" (schovávání dlaždic) je pryč – nikdo to nepoužíval
