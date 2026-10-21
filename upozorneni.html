@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=295">
+    <link rel="stylesheet" href="assets/css/app.css?v=296">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -80,6 +80,7 @@
             line-height: 1.6; }
         .upntfy__qrtext a { word-break: break-all; }
         .upntfy .upvolba { border-bottom: 0; padding: 4px 2px; }
+        .upntfy__telefon { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     </style>
 </head>
 <body>
@@ -160,11 +161,20 @@
                         — server nech výchozí <b>ntfy.sh</b>.</li>
                     <li>Povol aplikaci upozornění a dej tady <b>Poslat zkušební upozornění</b>.</li>
                 </ol>
+                <!-- QR podle telefonu (Michal 21. 10. 2026: na iPhonu QR otevřel
+                     Safari). Aplikace ntfy umí odkaz ntfy:// otevřít jen na
+                     Androidu; na iPhonu QR otevře tuhle stránku v telefonu,
+                     kde jde téma zkopírovat a vložit do aplikace. -->
+                <div class="upntfy__telefon" role="group" aria-label="Jaký máš telefon">
+                    <span class="small muted">QR kód pro:</span>
+                    <button type="button" class="chip" data-ntfy-tel="iphone">iPhone</button>
+                    <button type="button" class="chip" data-ntfy-tel="android">Android</button>
+                </div>
                 <div class="upntfy__qr">
                     <div id="ntfyQr" class="upntfy__qrobr"></div>
                     <div class="upntfy__qrtext">
-                        Téma si do telefonu přeneseš i QR kódem — naskenuj ho fotoaparátem.
-                        Odkaz: <a id="ntfyOdkaz" href="#" target="_blank" rel="noopener noreferrer"></a>
+                        <span id="ntfyQrNavod"></span>
+                        <br>Odkaz: <a id="ntfyOdkaz" href="#" target="_blank" rel="noopener noreferrer"></a>
                     </div>
                 </div>
                 <label class="upvolba">
@@ -190,10 +200,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=295"></script>
-<script src="assets/js/ui.js?v=295"></script>
-<script src="assets/js/vykazy.js?v=295"></script>
-<script type="module" src="assets/js/store.js?v=295"></script>
+<script src="assets/js/taxonomy.js?v=296"></script>
+<script src="assets/js/ui.js?v=296"></script>
+<script src="assets/js/vykazy.js?v=296"></script>
+<script type="module" src="assets/js/store.js?v=296"></script>
 
 <script>
 (function () {
@@ -462,6 +472,22 @@
        Ukládá KB.ulozNtfy ve store.js; dokud ji web nemá, část jen varuje.
        Téma se NIKDY nepíše do konzole ani do aktivit. */
     const NTFY = "https://ntfy.sh";
+    /* Pro jaký telefon kreslit QR – pamatuje se; na iPhonu/Androidu podle zařízení. */
+    const NTFY_TEL_KLIC = "kb_ntfy_telefon";
+    let ntfyTelefon = /Android/i.test(navigator.userAgent) ? "android" : "iphone";
+    try {
+        const ulozeny = localStorage.getItem(NTFY_TEL_KLIC);
+        if ((ulozeny === "iphone" || ulozeny === "android") && !/iPhone|iPad|Android/i.test(navigator.userAgent)) {
+            ntfyTelefon = ulozeny;
+        }
+    } catch (err) { /* úložiště nejde – zůstane odhad */ }
+    document.addEventListener("click", (event) => {
+        const b = event.target.closest("[data-ntfy-tel]");
+        if (!b) return;
+        ntfyTelefon = b.dataset.ntfyTel === "android" ? "android" : "iphone";
+        try { localStorage.setItem(NTFY_TEL_KLIC, ntfyTelefon); } catch (err) { /* nevadí */ }
+        vykresliNtfy();
+    });
     const TEMA_VZOR = /^[A-Za-z0-9_-]{12,64}$/;
     let ntfyPrace = false;
     let ntfyQrPro = "";
@@ -534,12 +560,28 @@
             return;
         }
         $("ntfyTema").textContent = tema;
-        const odkaz = NTFY + "/" + tema;
+        /* Android: ntfy://server/téma otevře aplikaci a téma rovnou přidá.
+           iPhone: aplikace odkazy neumí – QR vede na tuhle stránku, v telefonu
+           se pak dá Kopírovat a vložit do aplikace (+). */
+        const android = ntfyTelefon === "android";
+        const odkaz = android
+            ? "ntfy://" + NTFY.replace(/^https:\/\//, "") + "/" + tema + "?display=" + encodeURIComponent("Pasport Kaňa")
+            : location.origin + location.pathname + "#ntfyKarta";
+        document.querySelectorAll("[data-ntfy-tel]").forEach(b => {
+            const zap = b.dataset.ntfyTel === ntfyTelefon;
+            b.classList.toggle("chip--active", zap);
+            b.setAttribute("aria-pressed", zap ? "true" : "false");
+        });
+        $("ntfyQrNavod").textContent = android
+            ? "Naskenuj fotoaparátem – otevře se rovnou aplikace ntfy a téma se přidá samo."
+            : "Aplikace ntfy na iPhonu odkaz z QR neotevře (umí to jen Android). QR otevře tuhle " +
+              "stránku v telefonu: tam dej Kopírovat u tématu a v aplikaci ntfy ho vlož přes +.";
         $("ntfyOdkaz").href = odkaz;
         $("ntfyOdkaz").textContent = odkaz;
         $("ntfyOstatni").checked = !(nactene && nactene.ntfyOstatni === false);
         ["ntfyOstatni", "btnNtfyVypnout", "btnNtfyTest"].forEach(id => { $(id).disabled = !umi || ntfyPrace; });
-        if (ntfyQrPro !== tema) { ntfyQrPro = tema; kresliQr(odkaz, tema); }
+        const klicQr = tema + "|" + ntfyTelefon;
+        if (ntfyQrPro !== klicQr) { ntfyQrPro = klicQr; kresliQr(odkaz, klicQr); }
     }
 
     /** Uložení přes store – chyba se do konzole píše bez dat (mohlo by v nich být téma). */
