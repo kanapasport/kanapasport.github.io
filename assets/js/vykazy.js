@@ -475,6 +475,273 @@
         };
     };
 
+    /* ------------------------------------------- ekonomika zakázky ------
+       Jeden výpočet pro kartu Ekonomika ve Správě i pro upozornění na
+       manažerské nástěnce – kdyby si to každá stránka počítala po svém,
+       ukazovaly by brzy jiná procenta (Michal 21. 10. 2026).
+
+       Jak se počítá (stejně to musí zopakovat Apps Script, až bude posílat
+       upozornění e-mailem):
+
+       • rozpočet   = KB.rozpocty[název zakázky].kc (Kč bez DPH); stránka
+                      smí podstrčit rozepsanou hodnotu z pole (volby.rozpocet)
+       • práce      = součet uložené `castka` všech zápisů zakázky
+                      (zakazka NEBO projekt = název), bez absencí; den po dni
+                      z uložených částek, nikdy hodiny × průměrná sazba.
+                      Hodiny stejně (`hodiny`).
+       • externí    = ruční externí náklady projektu (finance.naklady[].castka)
+                      + přijaté faktury s tímto projektem (jen když je stránka
+                      dostala – vidí je jen finance; volby.faktury, jinak se
+                      nepočítají vůbec), viz V.fakturaNaklad
+       • čerpáno    = zaokrouhlená práce + zaokrouhlené externí náklady
+       • zbývá      = rozpočet − čerpáno
+       • čerpání %  = čerpáno / rozpočet × 100 (bez rozpočtu žádné)
+       • hotovo %   = plnění úkolů zakázky (V.hotovoUkolu): % TO-DO úkolu
+                      (V.pctUkolu) vážené budgetem úkolu (budgetKc); úkoly
+                      bez budgetu váhu nemají. Když budget nemá žádný úkol,
+                      je to prostý průměr. Stejně jako buňka matice plnění.
+       • předbíhá   = čerpání % − hotovo % (obojí zaokrouhlené na celá
+                      procenta, jak se ukazují); varuje se nad 20 bodů
+       • tempo      = práce ze zápisů s datem v posledních 28 dnech včetně
+                      dneška ÷ 28 = Kč za den. Externí náklady se do tempa
+                      nepočítají – jsou jednorázové a prognózu by rozhodily.
+       • prognóza   = dnes + ⌈zbývá ÷ tempo⌉ dní, jen když tempo > 0
+                      a něco zbývá; tempo 0 = „při dnešním tempu nedojde“.
+       • úroveň     = čerpání ≥ 100 % „pres“, ≥ 80 % „pozor“, jinak „ok“.
+
+       Výnosy (vydané faktury) a marže tu schválně nejsou – vydané faktury
+       zatím na webu nežijí (rozhodnutí 21. 10. 2026). */
+
+    V.PRAH_POZOR = 80;        // % čerpání – oranžově
+    V.PRAH_PRES = 100;        // % čerpání – červeně
+    V.PRAH_PREDBIHA = 20;     // procentní body, o které čerpání předbíhá hotovost
+    V.TEMPO_DNI = 28;         // okno tempa čerpání (4 týdny)
+
+    /** Posun data ISO o celé dny (bez starostí o letní čas – počítá se v poledne). */
+    V.posunIso = (iso, dni) => {
+        const d = new Date(iso + "T12:00:00");
+        d.setDate(d.getDate() + dni);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+               "-" + String(d.getDate()).padStart(2, "0");
+    };
+
+    /** Patří zápis k zakázce? Podle názvu zakázky nebo části – stejně jako rozpad. */
+    V.zapisZakazky = (z, nazev) => !!nazev && !!z &&
+        ((z.zakazka || "") === nazev || (z.projekt || "") === nazev);
+
+    /** Úkoly zakázky – podle id projektu, starší podle názvu. */
+    V.ukolyZakazky = (nazev, projektId, ukoly) =>
+        (ukoly || window.KB.ukoly || []).filter(u =>
+            (projektId && u.projektId === projektId) || (nazev && u.projekt === nazev));
+
+    /** Budget úkolu v Kč z tajné kolekce budgetů (jen manažeři). */
+    V.budgetUkolu = (u, budgety) =>
+        Number(((budgety || window.KB.ukolBudgety || {})[u && u.id] || {}).budgetKc) || 0;
+
+    /**
+     * Hotovo skupiny úkolů v %: % TO-DO vážená budgetem úkolu; když budget
+     * nemá žádný z nich, prostý průměr. Bez úkolů null – hotovost neznáme.
+     */
+    V.hotovoUkolu = (ukoly, budgety) => {
+        const seznam = ukoly || [];
+        if (!seznam.length) return null;
+        let vaha = 0, soucet = 0;
+        seznam.forEach(u => {
+            const w = V.budgetUkolu(u, budgety);
+            vaha += w;
+            soucet += V.pctUkolu(u) * w;
+        });
+        return Math.round(vaha ? soucet / vaha
+            : seznam.reduce((x, u) => x + V.pctUkolu(u), 0) / seznam.length);
+    };
+
+    /**
+     * Přijatá faktura jako náklad zakázky v Kč bez DPH; null = nepočítá se.
+     * Základ (castkaBez, u rozpisu součet základů) + poplatky mimo DPH, cizí
+     * měna jen s kurzem. Dobropis odečítá. Vynechá se vydaná faktura,
+     * nezkontrolovaný koncept z inboxu a zálohová faktura (náklad nese až
+     * vyúčtování, jinak by se počítal dvakrát).
+     */
+    V.fakturaNaklad = (f) => {
+        if (!f || f.typ !== "prijata") return null;
+        if (f.zdroj === "inbox" && (f.stav || "nova") === "nova") return null;
+        if (f.druhDokladu === "zalohova") return null;
+        let zaklad = Number(f.castkaBez) || 0;
+        if (!zaklad && Array.isArray(f.rozpisDph)) {
+            zaklad = f.rozpisDph.reduce((x, r) => x + (Number(r && r.zaklad) || 0), 0);
+        }
+        zaklad += Number(f.poplatky) || 0;
+        const kc = (!f.mena || f.mena === "CZK") ? zaklad : zaklad * (Number(f.kurz) || 0);
+        return f.druhDokladu === "dobropis" ? -Math.abs(kc) : kc;
+    };
+
+    /** Procento s ochranou proti dělení nulou; null = nejde spočítat. */
+    const procento = (cast, celek) => celek > 0 ? cast / celek * 100 : null;
+    const celaPct = (pct) => pct === null || pct === undefined ? null : Math.round(pct);
+    const uroven = (pct) => pct === null ? "" :
+        pct >= V.PRAH_PRES ? "pres" : pct >= V.PRAH_POZOR ? "pozor" : "ok";
+
+    /**
+     * Ekonomika jedné zakázky. Volby (všechny nepovinné):
+     *   rozpocet   – Kč; jinak V.rozpocet(nazev).kc
+     *   projektId  – id projektu (úkoly se hledají podle id i názvu)
+     *   naklady    – ruční externí náklady [{ castka }]
+     *   faktury    – seznam faktur, které stránka smí ukázat; null = nepočítat
+     *   vykazy, ukoly, budgety – jinak z KB (stránka může podat předtříděné)
+     *   dnes       – ISO datum (testy); konec – konec zakázky pro prognózu
+     *   zacatek    – začátek zakázky: starší než okno výkazů = neúplné
+     */
+    V.ekonomikaZakazky = (nazev, volby) => {
+        volby = volby || {};
+        const KB = window.KB || {};
+        const dnes = volby.dnes || V.dnesISO();
+        const rozpocet = volby.rozpocet !== undefined && volby.rozpocet !== null
+            ? Math.max(0, Number(volby.rozpocet) || 0)
+            : V.rozpocet(nazev).kc;
+        const budgety = volby.budgety || KB.ukolBudgety || {};
+        const ukoly = V.ukolyZakazky(nazev, volby.projektId, volby.ukoly || KB.ukoly || []);
+        const ukolMapa = new Map(ukoly.map(u => [u.id, u]));
+        const vsechnyUkoly = new Map((volby.ukoly || KB.ukoly || []).map(u => [u.id, u]));
+
+        /* ---- práce z výkazů: uložené částky, den po dni ---- */
+        const tempoOd = V.posunIso(dnes, -(V.TEMPO_DNI - 1));
+        let praceKc = 0, praceHod = 0, tempoKc = 0;
+        const techPrace = new Map();
+        (volby.vykazy || KB.vykazy || []).forEach(z => {
+            if (z.absence === true || !V.zapisZakazky(z, nazev)) return;
+            const kc = Number(z.castka) || 0;
+            const h = Number(z.hodiny) || 0;
+            praceKc += kc;
+            praceHod += h;
+            if (z.datum && z.datum >= tempoOd && z.datum <= dnes) tempoKc += kc;
+            // rozpuštění do technologií stejně jako matice plnění
+            V.rozpadZapisu(z, ukolMapa.get(z.ukolId) || vsechnyUkoly.get(z.ukolId)).forEach(d => {
+                if (!d.tech) return;
+                const o = techPrace.get(d.tech) || { castka: 0, hodiny: 0 };
+                o.castka += kc * d.dil;
+                o.hodiny += h * d.dil;
+                techPrace.set(d.tech, o);
+            });
+        });
+
+        /* ---- externí náklady: ruční řádky + přijaté faktury s projektem ---- */
+        const nakladyRucne = (volby.naklady || []).reduce((x, n) => x + (Number(n && n.castka) || 0), 0);
+        const fakturyZapocteny = Array.isArray(volby.faktury);
+        let nakladyFaktury = 0, fakturPocet = 0;
+        if (fakturyZapocteny) {
+            volby.faktury.forEach(f => {
+                if (!f || (f.projekt || "") !== nazev) return;
+                const kc = V.fakturaNaklad(f);
+                if (kc === null) return;
+                nakladyFaktury += kc;
+                fakturPocet++;
+            });
+        }
+
+        /* Zaokrouhluje se PŘED sčítáním – dlaždice vedle sebe musí sedět
+           na korunu (stejně jako krajíc rozpočtu). */
+        const prace = Math.round(praceKc);
+        const externi = Math.round(nakladyRucne) + Math.round(nakladyFaktury);
+        const cerpano = prace + externi;
+        const zbyva = rozpocet - cerpano;
+        const cerpaniPct = procento(cerpano, rozpocet);
+        const hotovoPct = V.hotovoUkolu(ukoly, budgety);
+        const predbiha = (cerpaniPct === null || hotovoPct === null) ? null
+            : celaPct(cerpaniPct) - hotovoPct;
+
+        /* ---- tempo a prognóza ---- */
+        const tempoDen = tempoKc / V.TEMPO_DNI;
+        let prognoza;
+        if (!rozpocet) prognoza = { stav: "bez-rozpoctu" };
+        else if (zbyva <= 0) prognoza = { stav: "vycerpano" };
+        else if (tempoDen <= 0) prognoza = { stav: "nedojde" };
+        else {
+            const dni = Math.ceil(zbyva / tempoDen);
+            prognoza = dni > 3650 ? { stav: "nedojde", dni: dni }
+                : { stav: "datum", dni: dni, datum: V.posunIso(dnes, dni) };
+            if (prognoza.datum && volby.konec) prognoza.predKoncem = prognoza.datum < volby.konec;
+        }
+
+        /* ---- rozpad po technologiích: kde je budget technologie nebo
+           úkoly s budgetem. Budget = rozpočet technologie (Správa → matice),
+           když není, součet budgetů úkolů té technologie. ---- */
+        const techRozpocty = ((KB.rozpocty || {})[nazev] || {}).techBudgetyKc || {};
+        const techy = [];
+        ukoly.forEach(u => { if (u.technologie && techy.indexOf(u.technologie) === -1) techy.push(u.technologie); });
+        Object.keys(techRozpocty).forEach(t => { if (t && techy.indexOf(t) === -1) techy.push(t); });
+        const technologie = techy.map(t => {
+            const jejich = ukoly.filter(u => u.technologie === t);
+            const zUkolu = jejich.reduce((x, u) => x + V.budgetUkolu(u, budgety), 0);
+            const budget = Number(techRozpocty[t]) || zUkolu;
+            const p = techPrace.get(t) || { castka: 0, hodiny: 0 };
+            const kc = Math.round(p.castka);
+            const pct = procento(kc, budget);
+            const hotovo = V.hotovoUkolu(jejich, budgety);
+            return {
+                tech: t, budget: budget, zdrojBudgetu: Number(techRozpocty[t]) ? "technologie" : "ukoly",
+                cerpano: kc, hodiny: Math.round(p.hodiny * 10) / 10,
+                cerpaniPct: pct, hotovoPct: hotovo, ukolu: jejich.length,
+                predbiha: (pct === null || hotovo === null) ? null : celaPct(pct) - hotovo,
+                uroven: uroven(pct)
+            };
+        }).filter(r => r.budget > 0)
+          .sort((a, b) => (b.cerpaniPct || 0) - (a.cerpaniPct || 0) || a.tech.localeCompare(b.tech, "cs"));
+
+        const okno = KB.vykazyOknoOd || "";
+        return {
+            nazev: nazev,
+            rozpocet: rozpocet,
+            prace: prace,
+            praceHodiny: Math.round(praceHod * 10) / 10,
+            nakladyRucne: Math.round(nakladyRucne),
+            nakladyFaktury: Math.round(nakladyFaktury),
+            fakturPocet: fakturPocet,
+            fakturyZapocteny: fakturyZapocteny,
+            externi: externi,
+            cerpano: cerpano,
+            zbyva: zbyva,
+            cerpaniPct: cerpaniPct,
+            hotovoPct: hotovoPct,
+            ukolu: ukoly.length,
+            predbiha: predbiha,
+            predbihaVarovani: predbiha !== null && predbiha > V.PRAH_PREDBIHA,
+            uroven: uroven(cerpaniPct),
+            tempoOd: tempoOd,
+            tempo28: Math.round(tempoKc),
+            tempoDen: tempoDen,
+            prognoza: prognoza,
+            technologie: technologie,
+            oknoOd: okno,
+            neuplne: !!okno && !!volby.zacatek && volby.zacatek < okno
+        };
+    };
+
+    /**
+     * Čerpání jednoho úkolu: budget úkolu (Kč) proti uloženým částkám zápisů
+     * s jeho `ukolId` (bez absencí) – stejně jako sloupec Vyfakturováno ve
+     * Správě. Hotovo = % TO-DO úkolu.
+     */
+    V.cerpaniUkolu = (u, volby) => {
+        volby = volby || {};
+        const budget = V.budgetUkolu(u, volby.budgety);
+        let kc = 0, h = 0;
+        (volby.vykazy || window.KB.vykazy || []).forEach(z => {
+            if (z.absence === true || !u || z.ukolId !== u.id) return;
+            kc += Number(z.castka) || 0;
+            h += Number(z.hodiny) || 0;
+        });
+        const cerpano = Math.round(kc);
+        const pct = procento(cerpano, budget);
+        const hotovo = u ? V.pctUkolu(u) : 0;
+        const predbiha = pct === null ? null : celaPct(pct) - hotovo;
+        return {
+            budget: budget, cerpano: cerpano, hodiny: Math.round(h * 10) / 10,
+            cerpaniPct: pct, hotovoPct: hotovo, predbiha: predbiha,
+            predbihaVarovani: predbiha !== null && predbiha > V.PRAH_PREDBIHA,
+            uroven: uroven(pct)
+        };
+    };
+
     /* Zápis může mít až tři technologie – kdo na jednom patře kreslí
        kanalizaci a vodu zároveň, nemá to psát na dva výkazy. V databázi
        leží spojené do „KAN, VOD, SLB" (tak to jde i do Tabulek Google);
@@ -633,7 +900,7 @@
 
         (window.KB.vykazy || []).forEach(z => {
             if (z.absence === true) return;
-            if ((z.zakazka || "") !== nazev && (z.projekt || "") !== nazev) return;
+            if (!V.zapisZakazky(z, nazev)) return;
             const castka = Number(z.castka) || 0;
             const hodiny = Number(z.hodiny) || 0;
             celkem += castka; hodinCelkem += hodiny;

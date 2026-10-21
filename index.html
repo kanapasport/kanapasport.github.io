@@ -412,6 +412,14 @@
                 </div>
                 <div id="kontrolaSeznam" class="nastenka__telo col" style="gap:6px"></div>
             </div>
+            <!-- rozpočty: zakázky nad 80 % čerpání a čerpání, které předbíhá
+                 hotovost. Jen procenta, žádné částky – nástěnka bývá vidět. -->
+            <div class="card nastenka__karta nastenka__karta--man" id="wRozpocty" data-need="vykaz.view" hidden>
+                <div class="nastenka__hlava" data-otevri="sprava.html" title="Otevřít správu projektů">
+                    <b>Rozpočty</b>
+                </div>
+                <div id="rozpoctySeznam" class="nastenka__telo col" style="gap:6px"></div>
+            </div>
             <!-- „kdo tu byl" a aktivita až na konci – přání Michala z 20. 8. -->
             <div class="card nastenka__karta" id="wOnline">
                 <div class="nastenka__hlava" data-otevri="reporty.html" data-jen-need="vykaz.view" title="Otevřít historii">
@@ -799,7 +807,7 @@
 
     const REZIM_KLIC = "kb-nastenka-rezim";
     const MANAZERSKE_DLAZDICE = ["wDovolene", "wRychly", "wFakturyPlatby", "wFakturyNove",
-        "wKontrola", "wAktivita"];
+        "wKontrola", "wRozpocty", "wAktivita"];
 
     function rezimNastenky() {
         try { return localStorage.getItem(REZIM_KLIC) || "zakladni"; }
@@ -819,6 +827,8 @@
         });
         const box = document.getElementById("rezimBox");
         if (box) box.hidden = !manazer;
+        // dlaždice Rozpočty si data dočte, až když je opravdu vidět
+        renderRozpocty();
     }
 
     function pripravRezimy() {
@@ -1536,6 +1546,133 @@
               "Na příštích čtrnáct dní si nikdo nic nezaklikl.</div>";
     }
 
+    /* ------------------------------------------------------- rozpočty ----
+       Zakázky, které čerpají aspoň 80 % rozpočtu (od 100 % červeně), a zakázky
+       i úkoly, kde čerpání předbíhá hotovost o víc než 20 procentních bodů
+       („VZT – B1 2NP: čerpáno 70 %, hotovo 40 %“). Počítá to společné
+       V.ekonomikaZakazky / V.cerpaniUkolu ve vykazy.js – stejná čísla jako
+       karta Ekonomika ve Správě. Jen procenta a data, žádné částky.
+
+       Čtení: výkazy s částkami, rozpočty, úkoly a projekty čte manažerská
+       nástěnka i bez téhle dlaždice. Navíc jen to, bez čeho to nejde, a až
+       když je dlaždice opravdu vidět (režim Manažerská): budgety úkolů
+       (jeden odběr) a externí náklady otevřených zakázek s rozpočtem, na
+       které se pracuje (jedno čtení na zakázku za načtení stránky). Faktury
+       jen tomu, kdo je tu čte stejně (finance.view). */
+
+    let rozpoctyBudgetyChci = false;
+    const nakladyZakazek = new Map();       // id projektu → náklady (null = čte se)
+    let rozpoctyCasovac = null;
+
+    const rozpoctyVidet = () => window.KBUI.can("vykaz.view") && rezimNastenky() === "manazerska";
+
+    /** Překreslení posbírá víc událostí naráz (výkazy, úkoly, budgety…). */
+    function renderRozpocty() {
+        clearTimeout(rozpoctyCasovac);
+        rozpoctyCasovac = setTimeout(kresliRozpocty, 80);
+    }
+
+    function nactiNakladyZakazky(id) {
+        if (!id || nakladyZakazek.has(id)) return;
+        nakladyZakazek.set(id, null);
+        window.KB.loadProjektFinance(id)
+            .then(f => { nakladyZakazek.set(id, Array.isArray(f && f.naklady) ? f.naklady : []); renderRozpocty(); })
+            .catch(err => { console.warn("Externí náklady zakázky se nenačetly:", err); nakladyZakazek.set(id, []); });
+    }
+
+    function kresliRozpocty() {
+        const box = document.getElementById("rozpoctySeznam");
+        if (!box) return;
+        if (!rozpoctyVidet()) { box.innerHTML = ""; return; }
+        if (!rozpoctyBudgetyChci) { rozpoctyBudgetyChci = true; window.KB.watchUkolyBudgety(); }
+
+        const rozpocty = window.KB.rozpocty || {};
+        const projekty = window.KB.projektyDocs || [];
+        const podleId = new Map(projekty.map(p => [p.id, p]));
+        const podleNazvu = new Map();
+        projekty.forEach(p => { if (p.nazev && !podleNazvu.has(p.nazev)) podleNazvu.set(p.nazev, p); });
+
+        // zápisy po zakázkách a po úkolech naráz – ne celé výkazy pro každou znovu
+        const poZakazkach = new Map(), poUkolech = new Map();
+        const pridej = (mapa, klic, z) => {
+            if (!klic) return;
+            if (!mapa.has(klic)) mapa.set(klic, []);
+            mapa.get(klic).push(z);
+        };
+        (window.KB.vykazy || []).forEach(z => {
+            if (z.absence === true) return;
+            pridej(poZakazkach, z.zakazka, z);
+            if (z.projekt && z.projekt !== z.zakazka) pridej(poZakazkach, z.projekt, z);
+            pridej(poUkolech, z.ukolId, z);
+        });
+        const faktury = window.KBUI.can("finance.view") ? (window.KB.faktury || []) : null;
+        const pct = (x) => Math.round(x || 0) + " %";
+
+        const nalezy = [];
+        let hlidano = 0;
+        Object.keys(rozpocty).forEach(nazev => {
+            const p = podleNazvu.get(nazev);
+            if (!p || p.uzavreno === true || !(Number((rozpocty[nazev] || {}).kc) > 0)) return;
+            hlidano++;
+            const zapisy = poZakazkach.get(nazev);
+            // bez odvedené práce není co hlídat („0 % z rozpočtu" nikomu nic neřekne)
+            if (!zapisy || !zapisy.length) return;
+            nactiNakladyZakazky(p.id);
+            const e = V.ekonomikaZakazky(nazev, { projektId: p.id, vykazy: zapisy, faktury: faktury,
+                naklady: nakladyZakazek.get(p.id) || [], konec: p.konec || "" });
+            if (e.uroven !== "pres" && e.uroven !== "pozor" && !e.predbihaVarovani) return;
+            const g = e.prognoza || {};
+            nalezy.push({
+                poradi: e.uroven === "pres" ? 0 : e.uroven === "pozor" ? 1 : 2,
+                cislo: e.cerpaniPct || 0,
+                uroven: e.uroven === "pres" ? "pres" : "pozor",
+                stitek: e.uroven === "ok" ? "PŘEDBÍHÁ" : "ROZPOČET",
+                text: nazev + ": čerpáno " + pct(e.cerpaniPct) +
+                    (e.hotovoPct !== null ? ", hotovo " + e.hotovoPct + " %" : "") +
+                    (g.stav === "datum" ? " · dojde kolem " + czDatum(g.datum) : ""),
+                href: "sprava.html?id=" + encodeURIComponent(p.id)
+            });
+        });
+
+        (window.KB.ukoly || []).forEach(u => {
+            const p = (u.projektId && podleId.get(u.projektId)) || podleNazvu.get(u.projekt || "");
+            if (!p || p.uzavreno === true || !V.budgetUkolu(u)) return;
+            const c = V.cerpaniUkolu(u, { vykazy: poUkolech.get(u.id) || [] });
+            if (!c.predbihaVarovani) return;
+            nalezy.push({
+                poradi: 3, cislo: c.predbiha, uroven: c.uroven === "pres" ? "pres" : "pozor",
+                stitek: "ÚKOL",
+                text: (u.nazev || "?") + " (" + (p.nazev || "") + "): čerpáno " + pct(c.cerpaniPct) +
+                    ", hotovo " + c.hotovoPct + " %",
+                href: "sprava.html?id=" + encodeURIComponent(p.id)
+            });
+        });
+
+        nalezy.sort((a, b) => a.poradi - b.poradi || b.cislo - a.cislo);
+        const LIMIT = 30;
+        const radek = (n) => {
+            const barva = n.uroven === "pres" ? "var(--danger)" : "var(--warn)";
+            const tint = n.uroven === "pres" ? "var(--danger-tint)" : "var(--warn-tint)";
+            return '<div class="kontrola__radek" style="background:' + tint + ";border-color:" + barva + '">' +
+                '<a class="kontrola__odkaz" href="' + esc(n.href) + '" title="Otevřít ve Správě projektů">' +
+                    '<span class="kontrola__datum" style="color:' + barva + '">' + esc(n.stitek) + "</span>" +
+                    "<span>" + esc(n.text) + "</span></a>" +
+            "</div>";
+        };
+        box.innerHTML = nalezy.length
+            ? nalezy.slice(0, LIMIT).map(radek).join("") +
+              (nalezy.length > LIMIT
+                  ? '<div class="tiny muted" style="padding:4px 2px">' +
+                    esc("…a " + V.pocet(nalezy.length - LIMIT, ["další", "další", "dalších"])) + "</div>"
+                  : "")
+            : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
+              (hlidano
+                  ? esc("V pořádku – žádná zakázka nečerpá přes " + V.PRAH_POZOR + " % rozpočtu a čerpání " +
+                        "nikde nepředbíhá hotovost o víc než " + V.PRAH_PREDBIHA + " bodů (hlídané zakázky s rozpočtem: " +
+                        hlidano + ").")
+                  : "Žádná otevřená zakázka nemá rozpočet.") + "</div>";
+    }
+
     /* ------------------------------------------ upozornění pro kontrolu ---
        Tři kontroly nad výkazy: přes 14 hodin za den, dva zápisy přes sebe
        a práce v den celodenní absence. Většinou je dlaždice prázdná –
@@ -1986,6 +2123,10 @@
             renderKontrola(); });   // potvrzování splněných milníků
         window.KB.on("vykazy", renderKontrola);
         window.KB.on("faktury", renderFaktury);
+        // dlaždice Rozpočty: výkazy s částkami, rozpočty, úkoly, budgety, projekty
+        ["vykazy", "vykazy-meta", "ukoly", "ukoly-budgety", "projekty-docs", "faktury", "users"]
+            .forEach(udalost => window.KB.on(udalost, renderRozpocty));
+        document.addEventListener("kb-role", renderRozpocty);
 
         // okno „Co je nového" – až když dorazí úkoly i vzkazy, ne dřív
         window.KB.on("ukoly", () => { prisloUkoly = true; novinkyZkus(); });
