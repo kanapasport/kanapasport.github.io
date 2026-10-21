@@ -922,7 +922,8 @@
                            začínal osamocenou tečkou. */
                         [ mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?"),
                           q.projekt ? esc(q.projekt) : "",
-                          termin(q)
+                          termin(q),
+                          esc(window.KBUI.quickOpakovani(q))      // „↻ každý týden"
                         ].filter(Boolean).join(" · ") +
                         // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
                         (spoluucast(q).length
@@ -1066,7 +1067,10 @@
         if (hotovoBtn) {
             const q = (window.KB.quicktodo || []).find(x => x.id === hotovoBtn.dataset.quickHotovo);
             // společné se odškrtne za všechny, „každý sám" jen za mě – viz KBUI
-            if (q) window.KBUI.quickPrepni(q, !hotovoBtn.dataset.zpet)
+            const splnit = !hotovoBtn.dataset.zpet;
+            if (q) window.KBUI.quickPrepni(q, splnit)
+                // u opakovaného vzkazu říct, kdy přijde další
+                .then(() => { if (splnit && q.opakovani) window.KBUI.toast(window.KBUI.quickHlaskaSplneno(q)); })
                 .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
             return;
         }
@@ -1088,8 +1092,11 @@
             return;
         }
         if (hlava.hasAttribute("data-otevri-todo")) {
+            /* Rovnou ten úkol (?otevri=), ne seznam projektu – stránka Úkoly
+               ho rozbalí a ukáže, i když je cizí (dřív se otevřely jen
+               „Moje úkoly" a cizí úkol, který člověk vidí, tam nebyl). */
             const u = seznamUkolu().find(x => x.id === vybranyUkol);
-            location.href = u ? "ukoly.html?zak=" + encodeURIComponent(window.KBUI.slug(u.projekt || "")) : cil;
+            location.href = u ? "ukoly.html?otevri=" + encodeURIComponent(u.id) : cil;
             return;
         }
         location.href = cil;
@@ -1981,7 +1988,8 @@
         try {
             await window.KB.ulozUkolPostup(u.id, todo, hotovo ? "hotovo" : "otevreny",
                 puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
-            if (hotovo) window.KBUI.toast("Úkol je hotový. 🎉");
+            // všechna TO-DO na 100 % = úkol se sám přepnul na „čeká na potvrzení"
+            if (hotovo) window.KBUI.toast("Úkol je hotový – čeká na potvrzení manažerem. 🎉");
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Zápis se nepovedl.", "error");

@@ -149,6 +149,9 @@
         /* milník, který už má svůj úkol */
         .milpil--ukol { background: var(--surface); color: var(--accent); border-color: var(--line); }
         .milpil--ukol::before { border-radius: 1px; }
+        /* jediný zpracovatel má v den termínu dovolenou / jinou nepřítomnost */
+        .milpil--dovolena { background: var(--warn-tint); color: var(--warn); border-color: #e8c877; cursor: help; }
+        .milpil--dovolena::before { border-radius: 1px; transform: rotate(45deg); }
 
         /* typ milníku: tečka v barvě typu + slovo */
         .mtyp {
@@ -1296,7 +1299,8 @@
                             : "") +
                         (skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "") +
                         (muzeMenit && ukolMilniku(item)
-                            ? '<span class="milpil milpil--ukol">úkol</span>' : "") + "</td>" +
+                            ? '<span class="milpil milpil--ukol">úkol</span>' : "") +
+                        stitekNepritomnosti(item) + "</td>" +
                     '<td data-l="Zpracovatel">' + lideHtml(item, ja, true) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum" data-l="Termín"><b>' + t.text + "</b>" +   /* t.text je bezpečný: datum nebo vlastní značka */
@@ -1475,7 +1479,8 @@
                 splneno ? '<span class="milpil">' +
                     (m.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>" : "",
                 k.muzeMenit && skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "",
-                k.muzeMenit && ukolMilniku(m) ? '<span class="milpil milpil--ukol">úkol</span>' : ""
+                k.muzeMenit && ukolMilniku(m) ? '<span class="milpil milpil--ukol">úkol</span>' : "",
+                stitekNepritomnosti(m)
             ].join("");
 
             const info = [
@@ -1984,10 +1989,13 @@
         const zmena = zmenaSplneni(byl);
         /* Splněný milník ve výchozím pohledu z výpisu zmizí – řekneme to rovnou,
            ať to nevypadá, že se místo uložení něco smazalo. */
+        // manažerovo odškrtnutí platí rovnou – odškrtne i úkol z milníku
+        const ukol = window.KBUI.can("milnik.manage") && !byl.hotovo ? ukolMilniku(byl) : null;
         const hlaska = byl && byl.hotovo
             ? "Milník vrácen mezi rozdělané."
             : (window.KBUI.can("milnik.manage")
                 ? "Milník označen jako splněný." +
+                  (ukol && ukol.milnikId === byl.id && ukol.stav !== "hotovo" ? " Navázaný úkol je hotový." : "") +
                   // zůstává vidět se zapnutým přepínačem i v pohledech, které splněné ukazují
                   (ukazatSplnene || (zalozka === "harmonogram" && pohled !== "nadchazejici")
                       ? "" : " Uvidíš ho přes „Zobrazit splněné“.")
@@ -2033,6 +2041,19 @@
         const nazev = nazevUkolu(m);
         return nazev ? ukoly.find(u => (u.nazev || "").trim() === nazev &&
             (u.projekt || "").trim() === String(m.zakazka || "").trim()) : null;
+    }
+
+    /**
+     * Štítek „termín v dovolené": jediný zpracovatel má v den termínu
+     * celodenní nepřítomnost v kalendáři (V.nepritomnostVTermin). Jen u
+     * nesplněného milníku a jen když člověk termín vidí (`m.datum` je prázdné,
+     * když termín patří kolegovi nebo ještě není zveřejněný).
+     */
+    function stitekNepritomnosti(m) {
+        if (!m || m.hotovo || !m.datum) return "";
+        const n = window.KBVYK.nepritomnostVTermin(m.owners, m.datum);
+        return n ? '<span class="milpil milpil--dovolena" title="' + esc(n.popis) + '">' +
+            esc(n.stitek) + "</span>" : "";
     }
 
     const projektZakazky = (nazev) => (window.KB.projektyDocs || [])
@@ -2162,8 +2183,12 @@
     function potvrdJeden(id, btn) {
         if (!window.KBUI.can("milnik.manage")) return;
         if (btn) btn.disabled = true;
+        // potvrzený milník odškrtne i svůj úkol (KB.ulozSplneniMilniku)
+        const m = najdiMilnik(id);
+        const ukol = m ? ukolMilniku(m) : null;
         window.KB.potvrdMilnik(id)
-            .then(() => window.KBUI.toast("Milník potvrzen."))
+            .then(() => window.KBUI.toast("Milník potvrzen." +
+                (ukol && ukol.milnikId === id && ukol.stav !== "hotovo" ? " Navázaný úkol je hotový." : "")))
             .catch(() => { if (btn) btn.disabled = false;
                 window.KBUI.toast("Potvrzení selhalo.", "error"); });
     }
@@ -2451,6 +2476,8 @@
         document.addEventListener("kb-role", zapniSledovani);
         window.KB.on("milniky", render);
         window.KB.on("users", render);
+        // štítek „termín v dovolené" stojí na kalendáři
+        window.KB.on("kalendar", render);
         window.KB.on("ukoly", render);
         window.KB.on("projekty-docs", render);
         zapniSledovani();

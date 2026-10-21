@@ -274,6 +274,50 @@
         return Math.round(todo.reduce((sum, t) => sum + (Number(t.pct) || 0), 0) / todo.length);
     };
 
+    /* ------------------------------------------- termín v nepřítomnosti ---
+       Štítek u úkolu a milníku, když JEDINÝ zpracovatel má v den termínu
+       celodenní nepřítomnost (rešerše 19. 10. 2026, nápad 9). Nepřítomnost
+       se bere z kalendáře (`public/data/kalendar`) – tam končí dovolená
+       a volno z Rychlého zápisu i absence zapsaná ve výkazu (zdroj „vykaz").
+       Kalendář čte každý člen, takže štítek uvidí každý, kdo vidí úkol;
+       u milníku jen ten, kdo vidí termín (bez termínu není štítek).
+       Částečná absence (lékař na dvě hodiny) termín nepřekazí – nepočítá se. */
+    const NEPRITOMNOST_STITEK = {
+        dovolena: "termín v dovolené", volno: "termín ve volnu", nemoc: "v den termínu nepřítomen",
+        doktor: "v den termínu nepřítomen", skoleni: "v den termínu na školení"
+    };
+    const NEPRITOMNOST_DRUH = {
+        dovolena: "dovolenou", volno: "volno", nemoc: "nemoc", doktor: "lékaře", skoleni: "školení"
+    };
+
+    /**
+     * Má jediný zpracovatel v den termínu celodenní nepřítomnost?
+     * `kalendar` je nepovinný (jinak KB.kalendar).
+     * @returns {null | {typ, uid, stitek, popis}}
+     */
+    V.nepritomnostVTermin = (zpracovatele, termin, kalendar) => {
+        const lide = (Array.isArray(zpracovatele) ? zpracovatele : []).filter(Boolean);
+        const den = String(termin || "");
+        if (lide.length !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(den)) return null;
+        const uid = lide[0];
+        const zaznam = (kalendar || (window.KB && window.KB.kalendar) || []).find(k =>
+            k && k.uid === uid && NEPRITOMNOST_STITEK[k.typ] && k.celyDen !== false &&
+            String(k.od || "") <= den && den <= String(k.do || k.od || ""));
+        if (!zaznam) return null;
+        const kdo = V.clovek(uid);
+        const jmeno = (kdo ? V.jmeno(kdo) : "") || zaznam.osoba || "Zpracovatel";
+        const rozsah = zaznam.do && zaznam.do !== zaznam.od
+            ? V.czDatum(zaznam.od) + " – " + V.czDatum(zaznam.do) : V.czDatum(zaznam.od);
+        const nepotvrzena = (zaznam.typ === "dovolena" || zaznam.typ === "volno") && zaznam.potvrzeno !== true;
+        return {
+            typ: zaznam.typ,
+            uid: uid,
+            stitek: NEPRITOMNOST_STITEK[zaznam.typ],
+            popis: jmeno + " má v den termínu " + NEPRITOMNOST_DRUH[zaznam.typ] +
+                " (" + rozsah + (nepotvrzena ? ", ještě nepotvrzeno" : "") + ")."
+        };
+    };
+
     /**
      * Patří patro do budovy? Číselník projektu může mít `patraBudov`,
      * třeba { "Datový sál": ["G62"] }. Patro, které v mapě není, platí ve

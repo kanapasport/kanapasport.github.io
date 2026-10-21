@@ -391,6 +391,7 @@ try {
             quickOdbery.forEach(stop => { try { stop(); } catch (e) {} });
             quickOdbery = []; quickPrijate = []; quickPrijateSkupina = [];
             quickOdeslane = []; KB.quicktodo = [];
+            quickPrislo.skupina = quickPrislo.prijate = quickPrislo.odeslane = false;
             zrusPoznamky();
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
@@ -694,6 +695,9 @@ let quickOdbery = [];
 let quickPrijate = [];
 let quickPrijateSkupina = [];
 let quickOdeslane = [];
+/* Které ze tří dotazů už odpověděly – hlídka opakování rozhoduje až nad
+   úplným seznamem, jinak by kopii, kterou zrovna nevidí, založila znovu. */
+const quickPrislo = { skupina: false, prijate: false, odeslane: false };
 
 function slejQuick() {
     const mapa = new Map();
@@ -703,6 +707,42 @@ function slejQuick() {
             || (a.doKdy || "9999").localeCompare(b.doKdy || "9999")
             || (b.ms || 0) - (a.ms || 0));
     emit("quicktodo", KB.quicktodo);
+    hlidkaOpakovaniQuick();
+}
+
+/**
+ * Další Quick TO-DO opakované řady po splnění. Zakládá ho ZADAVATEL –
+ * pravidla pustí založit vzkaz jen pod vlastním `odKoho`. Splní-li ho
+ * adresát, kopii založí prohlížeč zadavatele, jakmile má web otevřený
+ * (hlídka níž; Quick TO-DO poslouchá každá stránka). Idempotentní: pevné
+ * id kopie, kontrola v načtených vzkazech, pak `nasledovnikId`.
+ * @returns {Promise<string>} id kopie, nebo ""
+ */
+KB.zalozDalsiQuick = async (q) => {
+    if (authReady) await authReady;
+    const uid = KB.currentUid();
+    if (!db || !q || !uid || q.odKoho !== uid || q.hotovo !== true || q.nasledovnikId) return "";
+    const n = nasledovnikQuick(q, Date.now());
+    if (!n || zakladaNasledovnika.has(n.id)) return "";
+    zakladaNasledovnika.add(n.id);
+    try {
+        // zadavatel vidí všechny své vzkazy (dotaz odKoho), takže hotová kopie by tu byla
+        if (!(KB.quicktodo || []).some(x => x.id === n.id)) await KB.saveQuickTodo(n.id, n.data);
+        await setDoc(quickDoc(q.id), { nasledovnikId: n.id }, { merge: true });
+        return n.id;
+    } finally {
+        zakladaNasledovnika.delete(n.id);
+    }
+};
+
+function hlidkaOpakovaniQuick() {
+    if (!quickPrislo.skupina || !quickPrislo.prijate || !quickPrislo.odeslane) return;
+    const uid = KB.currentUid();
+    if (!uid) return;
+    (KB.quicktodo || []).forEach(q => {
+        if (!q.opakovani || q.odKoho !== uid || q.hotovo !== true || q.nasledovnikId) return;
+        KB.zalozDalsiQuick(q).catch(err => console.warn("Další opakovaný Quick TO-DO se nezaložil:", err));
+    });
 }
 
 KB.watchQuickTodo = async () => {
@@ -715,14 +755,17 @@ KB.watchQuickTodo = async () => {
        vlastní dokument. Sléváme je podle id, takže se nezdvojí. */
     quickOdbery.push(onSnapshot(query(quickCol(), where("proUids", "array-contains", uid)), (s) => {
         quickPrijateSkupina = []; s.forEach(d => quickPrijateSkupina.push({ id: d.id, ...d.data() }));
+        quickPrislo.skupina = true;
         slejQuick();
     }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
     quickOdbery.push(onSnapshot(query(quickCol(), where("proUid", "==", uid)), (s) => {
         quickPrijate = []; s.forEach(d => quickPrijate.push({ id: d.id, ...d.data() }));
+        quickPrislo.prijate = true;
         slejQuick();
     }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
     quickOdbery.push(onSnapshot(query(quickCol(), where("odKoho", "==", uid)), (s) => {
         quickOdeslane = []; s.forEach(d => quickOdeslane.push({ id: d.id, ...d.data() }));
+        quickPrislo.odeslane = true;
         slejQuick();
     }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
 };
@@ -801,6 +844,14 @@ KB.saveQuickTodo = async (id, data) => {
             datum: String(data.opravaVykazu.datum || "").slice(0, 10)
         };
     }
+    /* Opakování (21. 10. 2026) – jen když ho volající posílá. Odškrtnutí
+       posílá celý vzkaz zpátky, takže se nic neztratí; kdo vzkaz zakládá
+       bez opakování, nic navíc nezapíše. Další kopii po splnění zakládá
+       KB.zalozDalsiQuick. */
+    if ("opakovani" in data) zapis.opakovani = jeOpakovani(data.opakovani) ? data.opakovani : "";
+    if ("opakovaniDen" in data) zapis.opakovaniDen = Number(data.opakovaniDen) || 0;
+    if ("opakovaniKoren" in data) zapis.opakovaniKoren = String(data.opakovaniKoren || "").slice(0, 80);
+    if ("opakovanyZ" in data) zapis.opakovanyZ = String(data.opakovanyZ || "").slice(0, 80);
 
     await setDoc(quickDoc(id), zapis, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
@@ -1842,9 +1893,51 @@ KB.smazMilnik = async (id) => {
 KB.ulozSplneniMilniku = async (id, patch) => {
     if (authReady) await authReady;
     requireDb();
+    const m = (KB.milniky || []).find(x => x.id === id);
     await updateDoc(milnikSeznamDoc(id), Object.assign({}, patch, {
         updatedMs: Date.now(), updatedBy: window.KB_USER || ""
     }));
+    /* Milník potvrzený manažerem (potvrzení odškrtnutí od kolegy i manažerovo
+       vlastní odškrtnutí, které platí rovnou) odškrtne i úkol, který z něj
+       vznikl přes „Udělat úkoly z milníků" (`milnikId`). `potvrzeno: true`
+       pravidla pustí jen manažerovi. Chyba úkolu nesmí shodit milník. */
+    const splneny = patch && patch.hotovo !== false && (patch.hotovo === true || !!(m && m.hotovo));
+    if (patch && patch.potvrzeno === true && splneny && jsemManazer()) {
+        await KB.dokonciUkolyMilniku(id)
+            .catch(err => console.warn("Úkol z milníku se neodškrtl:", err));
+    }
+};
+
+/**
+ * Úkoly navázané na milník (`milnikId`) označí hotové a rovnou potvrzené –
+ * potvrdil je manažer tím, že potvrdil milník. TO-DO jdou na 100 % stejně
+ * jako u „Označit hotové". Hledá se dotazem do databáze, ne v `KB.ukoly`:
+ * stránka nemusí mít načtené úkoly všech. Jen manažer.
+ * @returns {Promise<number>} kolik úkolů se odškrtlo
+ */
+KB.dokonciUkolyMilniku = async (milnikId) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!milnikId || !jsemManazer()) return 0;
+    const snap = await getDocs(query(ukolyCol(), where("milnikId", "==", milnikId)));
+    const kdo = window.KB_USER || "";
+    let hotovo = 0;
+    for (const d of snap.docs) {
+        const u = d.data() || {};
+        if (u.stav === "hotovo" && u.potvrzeno === true) continue;
+        const ted = Date.now();
+        await setDoc(ukolDoc(d.id), {
+            todo: (Array.isArray(u.todo) ? u.todo : []).map(t =>
+                (t && t.vypnuto !== true && (Number(t.pct) || 0) !== 100)
+                    ? Object.assign({}, t, { pct: 100, by: kdo, ms: ted }) : t),
+            stav: "hotovo",
+            potvrzeno: true, potvrdil: kdo, potvrzenoMs: ted,
+            updatedMs: ted, updatedBy: kdo
+        }, { merge: true });
+        KB.zapisAktivitu("ukol", "odškrtl úkol " + (u.nazev || d.id) + " – milník je potvrzený");
+        hotovo++;
+    }
+    return hotovo;
 };
 
 /** Manažer potvrzuje milník, který si přiřazený člověk odškrtl sám. */
@@ -3672,7 +3765,180 @@ KB.loadRozpocty = async () => {
            nazev, druh:"ArcGIS|Focení|Skeny|Tabulky", technologie:"SLN",
            budova:"G61", patro:"1NP", prirazeni:[uid], termin:"2026-09-30",
            budgetHodin: 120, stav:"otevreny|hotovo",
-           todo:[{ id, text, pct, by, ms }], poznamka }                     */
+           todo:[{ id, text, pct, by, ms }], poznamka,
+           opakovani:"|tyden|14dni|mesic", opakovaniDen, opakovaniKoren,
+           opakovanyZ, nasledovnikId }                                       */
+
+/* ------------------------------------------ opakování a stav úkolu ----
+   Čisté funkce bez databáze – test (NASTROJE\web\testy\test_opakovani.js)
+   si úsek mezi značkami OPAKOVANI-ZACATEK a OPAKOVANI-KONEC vyřízne
+   a pustí v Node. Nic odsud proto nesmí sahat na KB ani na Firestore.
+
+   OPAKOVÁNÍ (rešerše 19. 10. 2026, nápad 16): úkol i Quick TO-DO může mít
+   `opakovani` = "tyden" | "14dni" | "mesic". Po splnění vznikne kopie
+   s DALŠÍM TERMÍNEM POČÍTANÝM OD PŮVODNÍHO TERMÍNU (ne od dne splnění)
+   a s vynulovaným TO-DO. Kopie má pevné id `<kořen>_o<termín>`, takže
+   ji dvojklik, druhá záložka ani druhý manažer nezaloží podruhé; starý
+   záznam si navíc pamatuje `nasledovnikId`.
+   U „každý měsíc" se drží den v měsíci z prvního termínu (`opakovaniDen`):
+   31. 1. → 28. 2. → 31. 3., ne 28. 3. */
+/* OPAKOVANI-ZACATEK */
+const OPAKOVANI_DNY = { tyden: 7, "14dni": 14, mesic: 0 };
+const OPAKOVANI_POPIS = { tyden: "každý týden", "14dni": "každých 14 dní", mesic: "každý měsíc" };
+
+/** Je to platná volba opakování (prázdná = neopakuje se)? */
+function jeOpakovani(op) {
+    return Object.prototype.hasOwnProperty.call(OPAKOVANI_DNY, op);
+}
+
+/**
+ * Další termín po `iso` podle opakování. `den` = den v měsíci, na kterém
+ * měsíční opakování stojí (jinak den z `iso`). Neplatný vstup → "".
+ */
+function dalsiTermin(iso, op, den) {
+    const s = String(iso || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !jeOpakovani(op)) return "";
+    const r = Number(s.slice(0, 4)), m = Number(s.slice(5, 7)), d = Number(s.slice(8, 10));
+    let datum;
+    if (op === "mesic") {
+        const chci = Math.min(31, Math.max(1, Number(den) || d));
+        // poslední den PŘÍŠTÍHO měsíce (m je 1–12, Date.UTC chce 0–11)
+        const posledni = new Date(Date.UTC(r, m + 1, 0)).getUTCDate();
+        datum = new Date(Date.UTC(r, m, Math.min(chci, posledni)));
+    } else {
+        datum = new Date(Date.UTC(r, m - 1, d + OPAKOVANI_DNY[op]));
+    }
+    return datum.toISOString().slice(0, 10);
+}
+
+/** Jsou všechna zapnutá TO-DO na 100 %? (Bez zapnutých položek ne.) */
+function todoVseHotovo(todo) {
+    const aktivni = (Array.isArray(todo) ? todo : []).filter(t => t && t.vypnuto !== true);
+    return aktivni.length > 0 && aktivni.every(t => (Number(t.pct) || 0) === 100);
+}
+
+/**
+ * Odhad „Celkem" (`celkem: true`) patří jen úkolu bez skutečného rozpadu.
+ * Jakmile úkol dostane opravdové TO-DO položky, odhad se odebere – vedle
+ * nich by se s nimi průměroval a plnění by lhalo.
+ */
+function bezOdhaduCelkem(todo) {
+    const seznam = Array.isArray(todo) ? todo : [];
+    const skutecne = seznam.filter(t => !(t && t.celkem === true));
+    return skutecne.length ? skutecne : seznam;
+}
+
+/** Pevné id další kopie: kořen řady + termín. */
+function idNasledovnika(puvodni, termin) {
+    return String(puvodni.opakovaniKoren || puvodni.id) + "_o" + termin;
+}
+
+/** Den v měsíci, na kterém řada stojí (z prvního termínu). */
+function denRady(zaznam, termin) {
+    return Number(zaznam.opakovaniDen) || Number(String(termin || "").slice(8, 10)) || 0;
+}
+
+/**
+ * Další úkol opakované řady: { id, data } nebo null. TO-DO se vynuluje
+ * (bez poznámek a bez odhadu Celkem), vypnuté položky zůstanou vypnuté.
+ * Vazba na milník se nekopíruje – milník má jen jeden úkol.
+ */
+function nasledovnikUkolu(u, ted, kdo) {
+    if (!u || !u.id || !jeOpakovani(u.opakovani)) return null;
+    const den = denRady(u, u.termin);
+    const termin = dalsiTermin(u.termin, u.opakovani, den);
+    if (!termin) return null;
+    const todo = (Array.isArray(u.todo) ? u.todo : [])
+        .filter(t => t && t.celkem !== true)
+        .map((t, i) => Object.assign({ id: "td_" + ted + "_" + i, text: String(t.text || ""),
+            pct: 0, by: "", ms: 0 }, t.vypnuto === true ? { vypnuto: true } : {}));
+    return {
+        id: idNasledovnika(u, termin),
+        data: {
+            importId: "", projektId: u.projektId || "", projekt: u.projekt || "",
+            nazev: u.nazev || "Bez názvu", druh: u.druh || "", technologie: u.technologie || "",
+            milnikId: "", budova: u.budova || "", patro: u.patro || "",
+            prirazeni: Array.isArray(u.prirazeni) ? u.prirazeni.slice() : [],
+            termin: termin, stav: "otevreny", todo: todo, historie: [],
+            poznamka: u.poznamka || "",
+            opakovani: u.opakovani, opakovaniDen: den,
+            opakovaniKoren: String(u.opakovaniKoren || u.id), opakovanyZ: u.id,
+            createdMs: ted, createdBy: kdo || "", updatedMs: ted, updatedBy: kdo || ""
+        }
+    };
+}
+
+/** Další Quick TO-DO opakované řady: { id, data } nebo null. */
+function nasledovnikQuick(q, ted) {
+    if (!q || !q.id || !jeOpakovani(q.opakovani)) return null;
+    const den = denRady(q, q.doKdy);
+    const doKdy = dalsiTermin(q.doKdy, q.opakovani, den);
+    if (!doKdy) return null;
+    const komu = (Array.isArray(q.proUids) && q.proUids.length) ? q.proUids.slice()
+        : (q.proUid ? [q.proUid] : []);
+    return {
+        id: idNasledovnika(q, doKdy),
+        data: {
+            text: q.text || "", proUids: komu, proUid: komu[0] || "",
+            odKoho: q.odKoho || "", odKohoJmeno: q.odKohoJmeno || "",
+            doKdy: doKdy, asap: false, projekt: q.projekt || "",
+            rezim: q.rezim === "kazdy" ? "kazdy" : "",
+            hotoviUids: [], hotovo: false, hotovoKdo: "", hotovoMs: 0,
+            poznamka: q.poznamka || "", hlidka: "", ms: ted,
+            opakovani: q.opakovani, opakovaniDen: den,
+            opakovaniKoren: String(q.opakovaniKoren || q.id), opakovanyZ: q.id
+        }
+    };
+}
+/* OPAKOVANI-KONEC */
+
+KB.OPAKOVANI_POPIS = OPAKOVANI_POPIS;
+KB.dalsiTerminOpakovani = dalsiTermin;
+KB.todoVseHotovo = todoVseHotovo;
+
+/* Kopie, které se právě zakládají – druhé kolo hlídky (snapshot přijde
+   dřív, než se na starý záznam zapíše `nasledovnikId`) je přeskočí. */
+const zakladaNasledovnika = new Set();
+
+/**
+ * Další úkol opakované řady po splnění. Zakládá ho MANAŽER – úkoly smí
+ * zakládat jen on (spodní pravidlo pro `private`) a zaměstnanec smí na
+ * úkolu měnit jen `todo` a `stav`. Když úkol odškrtne zaměstnanec, kopii
+ * založí prohlížeč nejbližšího manažera, který má otevřené úkoly všech
+ * (nástěnka, Úkoly, Správa) – hlídka níž. Idempotentní: pevné id kopie
+ * a kontrola v databázi, pak `nasledovnikId` na starém úkolu.
+ * @returns {Promise<string>} id kopie, nebo "" (nic se nezaložilo)
+ */
+KB.zalozDalsiUkol = async (u) => {
+    if (authReady) await authReady;
+    if (!db || !u || u.stav !== "hotovo" || u.nasledovnikId || !jsemManazer()) return "";
+    const n = nasledovnikUkolu(u, Date.now(), window.KB_USER || "");
+    if (!n || zakladaNasledovnika.has(n.id)) return "";
+    zakladaNasledovnika.add(n.id);
+    try {
+        const snap = await getDoc(ukolDoc(n.id));
+        if (!snap.exists()) {
+            await setDoc(ukolDoc(n.id), n.data);
+            KB.zapisAktivitu("ukol", "založil další opakovaný úkol " + n.data.nazev +
+                " (termín " + n.data.termin + ")", "Systém");
+        }
+        await setDoc(ukolDoc(u.id), { nasledovnikId: n.id }, { merge: true });
+        return n.id;
+    } finally {
+        zakladaNasledovnika.delete(n.id);
+    }
+};
+
+/** Hlídka opakovaných úkolů – běží u manažera nad tím, co má načtené. */
+function hlidkaOpakovaniUkolu() {
+    if (!db || !auth || !auth.currentUser || !jsemManazer()) return;
+    (KB.ukoly || []).forEach(u => {
+        if (!u.opakovani || u.stav !== "hotovo" || u.nasledovnikId) return;
+        KB.zalozDalsiUkol(u).catch(err => console.warn("Další opakovaný úkol se nezaložil:", err));
+    });
+}
+// role přijde se seznamem lidí – úkoly můžou dorazit dřív
+KB.on("users", hlidkaOpakovaniUkolu);
 
 function sledujUkoly(jenSve) {
     if (!db || !auth || !auth.currentUser) return;
@@ -3685,6 +3951,7 @@ function sledujUkoly(jenSve) {
         // nejbližší termín nahoře, bez termínu na konec
         KB.ukoly.sort((a, b) => (a.termin || "9999").localeCompare(b.termin || "9999"));
         emit("ukoly", KB.ukoly);
+        hlidkaOpakovaniUkolu();
     }, (err) => console.error("Chyba čtení úkolů:", err));
 }
 
@@ -3756,18 +4023,28 @@ KB.newUkolId = () => "ukl_" + Date.now() + "_" + Math.floor(Math.random() * 1000
 KB.saveUkol = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
-    await setDoc(ukolDoc(id), {
+    /* Odhad Celkem jen u úkolu bez skutečného rozpadu (viz bezOdhaduCelkem) –
+       platí pro Správu, Úkoly i import, ať se to nehlídá na třech místech. */
+    const todo = bezOdhaduCelkem(Array.isArray(data.todo) ? data.todo : []);
+    /* Pole, která se zapisují JEN když je volající posílá. Úprava úkolu
+       ve Správě nebo v Úkolech je nezná a dřív by je merge přepsal na
+       prázdno – úkol z milníku tak po úpravě přišel o `milnikId`
+       a potvrzení milníku by ho pak nenašlo. */
+    const jenKdyzJsou = {};
+    /* Z jakého milníku harmonogramu úkol vznikl. U VZT se práce nedělí
+       po patrech, ale po milnících – jeden milník = jeden úkol, a podle
+       tohohle pole se pozná, který už svůj úkol má, aby nevznikl dvakrát
+       (Michal 9. 10. 2026). Nový úkol bez něj dostane prázdné. */
+    if ("milnikId" in data) jenKdyzJsou.milnikId = data.milnikId || "";
+    if ("opakovani" in data) jenKdyzJsou.opakovani = jeOpakovani(data.opakovani) ? data.opakovani : "";
+    if ("opakovaniDen" in data) jenKdyzJsou.opakovaniDen = Number(data.opakovaniDen) || 0;
+    await setDoc(ukolDoc(id), Object.assign({
         importId:  data.importId || "",     // odkud byl převzat ze starého postupu práce
         projektId: data.projektId || "",
         projekt:   data.projekt || "",
         nazev:     data.nazev || "Bez názvu",
         druh:      data.druh || "",
         technologie: data.technologie || "",
-        /* Z jakého milníku harmonogramu úkol vznikl. U VZT se práce
-           nedělí po patrech, ale po milnících – jeden milník = jeden
-           úkol, a podle tohohle pole se pozná, který už svůj úkol má,
-           aby nevznikl dvakrát (Michal 9. 10. 2026). */
-        milnikId:  data.milnikId || "",
         budova:    data.budova || "",
         patro:     data.patro || "",
         prirazeni: Array.isArray(data.prirazeni) ? data.prirazeni : [],
@@ -3777,14 +4054,16 @@ KB.saveUkol = async (id, data) => {
            budget a rezerva proto leží ve vedlejším dokumentu
            `private/ukoly/budgety/{id}`, který čtou jen manažeři.
            Stejný trik jako výkazy (zaznamy × castky). */
-        stav:      data.stav || "otevreny",
-        todo:      Array.isArray(data.todo) ? data.todo : [],
+        /* Všechna TO-DO na 100 % = úkol je hotový a čeká na potvrzení
+           manažerem (pravidlo „sám se přepne", rešerše 19. 10. 2026). */
+        stav:      todoVseHotovo(todo) ? "hotovo" : (data.stav || "otevreny"),
+        todo:      todo,
         poznamka:  data.poznamka || "",
         createdMs: data.createdMs || Date.now(),
         createdBy: data.createdBy || window.KB_USER || "",
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
-    }, { merge: true });
+    }, jenKdyzJsou), { merge: true });
     KB.zapisAktivitu("ukol", "uložil úkol " + (data.nazev || "") +
         (data.projekt ? " (" + data.projekt + ")" : ""));
     return id;
@@ -3848,6 +4127,10 @@ KB.ulozUkolPostup = async (id, todo, stav, zmena, popis) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     };
+    /* Všechna zapnutá TO-DO na 100 % → úkol se sám přepne na hotový, tedy
+       „čeká na potvrzení" manažerem (dřív se to značilo ručně tlačítkem
+       Označit hotové). Hlídá se tady, ať to platí odkudkoliv se píše. */
+    if (todoVseHotovo(payload.todo)) stav = "hotovo";
     if (stav !== undefined) payload.stav = stav;
     /* Historie zapsání přímo v úkolu: kdo, kdy, z kolika na kolik procent.
        Drží se posledních 80 kroků – starší nikdo nedohledává a dokument
