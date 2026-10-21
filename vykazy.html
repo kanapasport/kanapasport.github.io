@@ -3687,6 +3687,11 @@
 
     /* ======================================================== FILTRY ==== */
 
+    /* Období po otevření stránky i po Resetu: „Tento měsíc" – na první
+       pohled je vidět, kolik je zatím udělané (a fakturované) za měsíc
+       (Michal 21. 10. 2026). */
+    const VYCHOZI_OBDOBI = "mesic";
+
     function nastavObdobi(druh) {
         const meze = V.obdobi(druh);
         filtr.od = meze.od;
@@ -3757,10 +3762,14 @@
         filtr.uid = vychoziOsoba();     // zpátky na „moje výkazy", ne na celou firmu
         window.KBUI.setSearch("");
         document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
-        document.querySelector('[data-obdobi="vse"]').classList.add("chip--active");
+        document.querySelector('[data-obdobi="' + VYCHOZI_OBDOBI + '"]').classList.add("chip--active");
         // až TADY: výchozí zvýraznění výš by jinak přebilo rozsah z adresy
+        const adresaUzHotova = filtrZAdresyHotov;
         nastavFiltrZAdresy();
-        nastavObdobi("vse");       // render si zavolá samo
+        /* Když si teď rozsah nastavila adresa (?zapis= den, ?ukolFiltr= vše),
+           výchozí měsíc by ho přepsal a čip by ukazoval něco jiného. */
+        if (!adresaUzHotova && filtrZAdresyHotov) return;
+        nastavObdobi(VYCHOZI_OBDOBI);       // render si zavolá samo
     }
 
     /* Živě se drží jen posledních pár měsíců (viz store.js); starší období
@@ -4845,9 +4854,11 @@
         // nabídka časů po čtvrthodinách – jedna pro celou stránku
         document.body.insertAdjacentHTML("beforeend", V.casDatalist());
         paintSubbar();
-        /* Výchozí je „Vše" – měsíc schovával starší zápisy a lidi mysleli,
-           že se jim ztratily (přání Michala 24. 8. 2026). */
-        nastavObdobi("vse");
+        /* Výchozí je „Tento měsíc" (Michal 21. 10. 2026): po otevření je
+           hned vidět, kolik je zatím odpracováno a fakturováno za měsíc.
+           (Od 24. 8. 2026 tu bylo „Vše".) Odkazy ?zapis= a ?ukolFiltr=
+           si rozsah nastaví samy v nastavFiltrZAdresy – úkol dál celý. */
+        nastavObdobi(VYCHOZI_OBDOBI);
 
         $("lhutaZavri").addEventListener("click", () => { $("lhutaOverlay").hidden = true; });
         $("lhutaOverlay").addEventListener("click", (event) => {
@@ -5135,7 +5146,7 @@
                 nastavObdobi(chip.dataset.obdobi);
             });
         });
-        document.querySelector('[data-obdobi="vse"]').classList.add("chip--active");
+        document.querySelector('[data-obdobi="' + VYCHOZI_OBDOBI + '"]').classList.add("chip--active");
 
         [["fOd", "od"], ["fDo", "do"], ["fOsoba", "uid"], ["fZakazka", "zakazka"],
          ["fFirma", "firma"], ["fCinnost", "cinnost"], ["fTech", "tech"]]

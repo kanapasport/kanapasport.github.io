@@ -146,6 +146,12 @@
         .mrad__meta { font-size: var(--fs-1); color: var(--muted); overflow-wrap: anywhere; }
         .mrad__akce { grid-area: akce; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
         .mrad--hotovo .mrad__napln { text-decoration: line-through; }
+        /* Splněné ukázané přepínačem „Zobrazit splněné" mezi tím, co se
+           chystá – ztlumené, ať nepřebíjí rozdělanou práci (21. 10. 2026). */
+        .mrad--ztlumeny, .milniky tr.milnik--ztlumeny > td { opacity: .62; }
+        /* U pár milníků je filtr k ničemu a schová se – přepínač splněných
+           ale zůstává vidět vždycky. */
+        #filtrRow.filtr--jen-splnene > :not(#btnSplnene) { display: none; }
         @media (max-width: 640px) {
             .mrad { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px;
                 grid-template-areas: "vyber datum akce" ". hlavni hlavni"; }
@@ -221,6 +227,10 @@
         <select id="fKdo" class="field" style="max-width:210px" aria-label="Zpracovatel"></select>
         <button type="button" class="chip" data-prep="moje">Jen moje</button>
         <button type="button" class="chip" data-prep="skryte" data-need="milnik.manage" hidden>Jen nezveřejněné</button>
+        <!-- Splněné milníky (Michal 21. 10. 2026): přepínač je vidět vždycky,
+             i s vybraným člověkem a v Harmonogramu. Ukáže splněné v jejich
+             týdnu, ztlumeně; volba se pamatuje. Text a počet píše render(). -->
+        <button type="button" class="chip" id="btnSplnene" aria-pressed="false">Zobrazit splněné</button>
         <button type="button" class="chip" id="btnFiltrPryc" hidden>Zrušit filtr</button>
     </div>
 
@@ -410,6 +420,19 @@
         if (z === "vypis" || z === "harmonogram") zalozka = z;
     } catch (err) { /* úložiště nejde – zůstane výchozí */ }
 
+    /* Přepínač „Zobrazit splněné" (Michal 21. 10. 2026): splněné milníky
+       se ukážou přímo v pohledu – ve výpisu v jejich týdnu, v Harmonogramu
+       mezi nadcházejícími – ztlumeně a se štítkem. Pamatuje se jen v tomhle
+       prohlížeči; v soukromém okně úložiště nemusí fungovat. */
+    const SPLNENE_KLIC = "kb_milniky_splnene";
+    let ukazatSplnene = false;
+    try { ukazatSplnene = localStorage.getItem(SPLNENE_KLIC) === "1"; }
+    catch (err) { /* úložiště nejde – zůstane vypnuté */ }
+
+    /* Splněný = hotový a ne čekající na potvrzení. „Čeká" je jen výslovné
+       `potvrzeno: false`; čekající je vidět vždycky, ten přepínač neřídí. */
+    const jeSplneny = (m) => !!m.hotovo && m.potvrzeno !== false;
+
     const DEN = 86400000;
     const OKNO_DNI = 7;     // jak daleko dozadu se milník ještě bere jako aktuální
 
@@ -588,8 +611,11 @@
         /* Splněný, ale manažerem nepotvrzený milník v nadcházejících
            ZŮSTÁVÁ (se štítkem „čeká na potvrzení") – zmizí až potvrzením.
            „Čeká" je jen výslovné `potvrzeno: false` od nového kódu; staré
-           splněné milníky pole nemají a berou se jako dávno odsouhlasené. */
-        return vsechny.filter(m => (!m.hotovo || m.potvrzeno === false) && !jeStary(m));
+           splněné milníky pole nemají a berou se jako dávno odsouhlasené.
+           Se zapnutým „Zobrazit splněné" jsou mezi nimi i všechny splněné
+           (ztlumené), řazené podle data jako ostatní. */
+        return vsechny.filter(m => (ukazatSplnene && jeSplneny(m)) ||
+            ((!m.hotovo || m.potvrzeno === false) && !jeStary(m)));
     }
 
     /** Barva termínu podle toho, jak je blízko – splněný je vždycky zelený. */
@@ -676,6 +702,23 @@
         $("btnFiltrPryc").hidden = !(hledat || filTyp || filCin || filKdo || jenMoje || jenSkryte);
     }
 
+    /**
+     * Přepínač „Zobrazit splněné (N)". N = splněné v tom, co prošlo filtrem
+     * (s vybraným člověkem tedy jeho). Pohledy Harmonogramu Minulý měsíc,
+     * Všechny splněné a Můj postup ukazují splněné vždycky – tam je
+     * přepínač zapnutý a nedá se vypnout, uložená volba se nemění.
+     */
+    function paintSplnene(vsechny, harmonogram) {
+        const btn = $("btnSplnene");
+        const vzdy = harmonogram && pohled !== "nadchazejici";
+        const zapnuto = vzdy || ukazatSplnene;
+        btn.textContent = "Zobrazit splněné (" + vsechny.filter(jeSplneny).length + ")";
+        btn.classList.toggle("chip--active", zapnuto);
+        btn.setAttribute("aria-pressed", zapnuto ? "true" : "false");
+        btn.disabled = vzdy;
+        btn.title = vzdy ? "V tomhle pohledu jsou splněné milníky vidět vždycky." : "";
+    }
+
     /** Pruh se zakázkami – stejný princip jako filtr v úkolovníku. */
     function paintZakRow() {
         const jmena = [];
@@ -750,9 +793,13 @@
         }
 
         paintFiltr(vsechny);
-        $("filtrRow").hidden = vsechny.length < 6;   // u pár milníků je filtr k ničemu
+        /* U pár milníků je filtr k ničemu – schová se, ale přepínač
+           splněných zůstane (třída filtr--jen-splnene). */
+        $("filtrRow").hidden = !vsechny.length;
+        $("filtrRow").classList.toggle("filtr--jen-splnene", vsechny.length < 6);
         vsechny = vsechny.filter(m => projdeFiltrem(m, ja));
         filtrovane = vsechny;
+        paintSplnene(vsechny, harmonogram);
         paintUkolyBtn(muzeMenit);
 
         /* Vykreslený je vždycky jen jeden pohled – hromadný výběr hledá
@@ -854,6 +901,8 @@
                 const typ = typMilniku(item);
                 return '<tr class="' + t.trida + " mtr--" + esc(typ) + (muj && !item.hotovo ? " milnik--muj" : "") +
                         (skryty ? " milnik--skryty" : "") + (sloupecVyberu ? " kt-vybiratelny" : "") +
+                        // splněný mezi nadcházejícími (přepínač) – ztlumený
+                        (pohled === "nadchazejici" && jeSplneny(item) ? " milnik--ztlumeny" : "") +
                         '" data-mid="' + esc(item.id) + '">' +
                     (sloupecVyberu
                         ? '<td class="kt-vyber">' + vyber.box(item.id, (item.cinnost || "") + " – " + (item.napln || "")) + "</td>"
@@ -865,7 +914,9 @@
                         (item.hotovo
                             ? (item.potvrzeno === false
                                 ? '<span class="milpil milpil--ceka">splněno – čeká na potvrzení</span>'
-                                : '<span class="milpil">splněno</span>')
+                                // potvrzený manažerem „potvrzeno", starší bez pole „splněno"
+                                : '<span class="milpil">' +
+                                    (item.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>")
                             : "") +
                         (skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "") +
                         (muzeMenit && ukolMilniku(item)
@@ -910,10 +961,13 @@
         const tydny = new Map();
         vsechny.forEach(m => {
             /* „Čeká" je jen výslovné `potvrzeno: false` – staré splněné pole
-               nemají a berou se jako dávno odsouhlasené (stejně jako jinde). */
-            if (m.hotovo && m.potvrzeno !== false) { hotove.push(m); return; }
+               nemají a berou se jako dávno odsouhlasené (stejně jako jinde).
+               Splněné jsou sbalené dole; se zapnutým „Zobrazit splněné" jdou
+               do svého týdne (i minulého), bez data k „Bez termínu". */
+            const splneny = jeSplneny(m);
+            if (splneny && !ukazatSplnene) { hotove.push(m); return; }
             if (!m.datum) { bezTerminu.push(m); return; }
-            if (m.datum < dnes) { (m.hotovo ? cekaPozde : pozde).push(m); return; }
+            if (!splneny && m.datum < dnes) { (m.hotovo ? cekaPozde : pozde).push(m); return; }
             const po = pondeli(m.datum);
             if (!tydny.has(po)) tydny.set(po, []);
             tydny.get(po).push(m);
@@ -921,12 +975,15 @@
         hotove.sort((a, b) => (b.datum || "").localeCompare(a.datum || "") ||
                               (Number(b.hotovoMs) || 0) - (Number(a.hotovoMs) || 0));
 
-        const nadchazejicich = Array.from(tydny.values()).reduce((n, r) => n + r.length, 0);
+        // počty jsou stejné se zapnutým i vypnutým přepínačem splněných
+        const nesplnenych = (radky) => radky.filter(m => !jeSplneny(m)).length;
+        const nadchazejicich = Array.from(tydny.values()).reduce((n, r) => n + nesplnenych(r), 0);
+        const splnenych = vsechny.filter(jeSplneny).length;
         $("pocty").textContent = vsechny.length
             ? [pozde.length ? pozde.length + " po termínu" : "",
                nadchazejicich + " od dneška dál",
-               bezTerminu.length ? bezTerminu.length + " bez termínu" : "",
-               hotove.length ? hotove.length + " splněno" : ""].filter(Boolean).join(" · ") + "."
+               nesplnenych(bezTerminu) ? nesplnenych(bezTerminu) + " bez termínu" : "",
+               splnenych ? splnenych + " splněno" : ""].filter(Boolean).join(" · ") + "."
             : "";
         $("empty").textContent = hledat || filTyp || filCin || filKdo || jenMoje || jenSkryte
             ? "Filtru neodpovídá žádný milník."
@@ -942,7 +999,9 @@
                 const n = radky.filter(m => typMilniku(m) === t).length;
                 return n ? pocet(n, TYPY_MILNIKU[t].tvary) : "";
             }).filter(Boolean);
-            return pocet(radky.length, MILNIK) + (typy.length > 1 ? " · " + typy.join(", ") : "");
+            const hotovych = ukazatSplnene ? radky.length - nesplnenych(radky) : 0;
+            return pocet(radky.length, MILNIK) + (typy.length > 1 ? " · " + typy.join(", ") : "") +
+                (hotovych ? " · " + hotovych + " splněno" : "");
         };
 
         const blok = (o) => {
@@ -973,7 +1032,9 @@
         }
         Array.from(tydny.keys()).sort().forEach(po => {
             const tydnu = Math.round((new Date(po + "T00:00:00") - new Date(tento + "T00:00:00")) / (7 * DEN));
-            const nazev = tydnu === 0 ? "Tento týden" : (tydnu === 1 ? "Příští týden" : "Týden " + cisloTydne(po));
+            // minulé týdny jsou tu jen se zapnutým „Zobrazit splněné"
+            const nazev = tydnu === 0 ? "Tento týden" : (tydnu === 1 ? "Příští týden"
+                : (tydnu === -1 ? "Minulý týden" : "Týden " + cisloTydne(po)));
             casti.push(blok({ nazev: nazev, radky: tydny.get(po),
                 popis: kratkeDatum(po) + " – " + kratkeDatum(posunISO(po, 6)) + " · " + popisBloku(tydny.get(po)) }));
         });
@@ -986,7 +1047,7 @@
             casti.push(blok({ klic: "hotove", sbaleny: true, radky: hotove,
                 nazev: "Splněné", popis: popisBloku(hotove) }));
         }
-        if (!pozde.length && !cekaPozde.length && !tydny.size) {
+        if (!pozde.length && !cekaPozde.length && !nadchazejicich) {
             casti.unshift('<div class="card small muted" style="padding:14px 16px">' +
                 "Od dneška dál se nic nechystá – žádný nesplněný milník s termínem.</div>");
         }
@@ -1022,7 +1083,9 @@
             const stitky = [
                 jeNovy(m) ? '<span class="milpil milpil--novy">nový</span>' : "",
                 ceka ? '<span class="milpil milpil--ceka">čeká na potvrzení</span>' : "",
-                splneno ? '<span class="milpil">splněno</span>' : "",
+                // potvrzený manažerem „potvrzeno", starší bez pole „splněno"
+                splneno ? '<span class="milpil">' +
+                    (m.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>" : "",
                 k.muzeMenit && skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "",
                 k.muzeMenit && ukolMilniku(m) ? '<span class="milpil milpil--ukol">úkol</span>' : ""
             ].join("");
@@ -1040,6 +1103,8 @@
             const popis = [m.cinnost, skupinaText(m), m.napln].filter(Boolean).join(" – ");
             return '<div class="mrad mrad--' + esc(typ) + stav + (muj && !m.hotovo ? " mrad--muj" : "") +
                     (skryty ? " mrad--skryty" : "") + (m.hotovo ? " mrad--hotovo" : "") +
+                    // splněný ukázaný přepínačem mezi rozdělanými – ztlumený
+                    (splneno && ukazatSplnene ? " mrad--ztlumeny" : "") +
                     '" data-mid="' + esc(m.id) + '" data-vyber-radek>' +
                 (k.muzeMenit ? '<span class="mrad__vyber">' + vyber.box(m.id, popis) + "</span>" : "") +
                 '<span class="mrad__datum"><b>' + esc(datum) + "</b>" +
@@ -1530,7 +1595,9 @@
             ? "Milník vrácen mezi rozdělané."
             : (window.KBUI.can("milnik.manage")
                 ? "Milník označen jako splněný." +
-                  (pohled === "splnene" ? "" : " Najdeš ho v pohledu Všechny splněné.")
+                  // zůstává vidět se zapnutým přepínačem i v pohledech, které splněné ukazují
+                  (ukazatSplnene || (zalozka === "harmonogram" && pohled !== "nadchazejici")
+                      ? "" : " Uvidíš ho přes „Zobrazit splněné“.")
                 : "Milník označen jako splněný – v seznamu zůstává, dokud ho manažer nepotvrdí.");
         /* Zpět vrátí přesně to, co bylo (i kdo a kdy). Potvrzení si nechává
            manažer – kolegovi by ho pravidla databáze nevrátila. */
@@ -1902,6 +1969,13 @@
         $("btnFiltrPryc").addEventListener("click", () => {
             hledat = ""; filTyp = ""; filCin = ""; filKdo = ""; jenMoje = false; jenSkryte = false;
             $("fHledat").value = "";
+            render();
+        });
+        // „Zobrazit splněné" není filtr, ale volba pohledu – Zrušit filtr ji nechává
+        $("btnSplnene").addEventListener("click", () => {
+            ukazatSplnene = !ukazatSplnene;
+            try { localStorage.setItem(SPLNENE_KLIC, ukazatSplnene ? "1" : "0"); }
+            catch (err) { /* nevadí – volba jen nepřežije zavření */ }
             render();
         });
 
