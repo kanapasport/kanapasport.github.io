@@ -68,7 +68,10 @@
         .ud--doktor { background: #00695c; }
         .ud--dovolena { background: #0d7d3f; }
         .ud--nemoc { background: #c8102e; }
-        .ud--skoleni { background: #8a2be2; }
+        /* Školení jako nepřítomnost (z výkazu) i školení jako akce (kurz pro
+           vybrané lidi, Michal 21. 10. 2026) mají stejnou fialovou – obojí
+           je „školení" a ve filtru je to jeden druh. */
+        .ud--skoleni, .ud--skoleniAkce { background: #8a2be2; }
         .ud--homeoffice { background: #0e7490; }
         .ud--volno { background: #6b8e23; }
         .ud--ukol { background: #c26a00; }
@@ -192,6 +195,8 @@
             <label class="filtr__druh"><input type="checkbox" data-druh="schuzka"><i class="ud--schuzka"></i>Schůzky</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="dovolena"><i class="ud--dovolena"></i>Dovolené</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="nemoc"><i class="ud--nemoc"></i>Nemoci</label>
+            <!-- „Školení" zapíná i vypíná obojí: nepřítomnost z výkazu i školení
+                 založené jako akce (skoleniAkce) – viz DRUH_FILTRU. -->
             <label class="filtr__druh"><input type="checkbox" data-druh="skoleni"><i class="ud--skoleni"></i>Školení</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="homeoffice"><i class="ud--homeoffice"></i>Home office</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="volno"><i class="ud--volno"></i>Volno</label>
@@ -233,6 +238,7 @@
                         <option value="udalost">Firemní akce</option>
                         <option value="teams">Teams call</option>
                         <option value="schuzka">Schůzka</option>
+                        <option value="skoleniAkce">Školení — kurz</option>
                     </select></label>
                 <label class="pole"><span class="popisek">Od dne</span>
                     <input type="date" id="uOd" class="field"></label>
@@ -296,6 +302,7 @@
                     <option value="udalost">Firemní akce</option>
                     <option value="teams">Teams call — online</option>
                     <option value="schuzka">Schůzka — osobně</option>
+                    <option value="skoleniAkce">Školení — kurz pro vybrané lidi</option>
                 </select></label>
             <label class="pole"><span class="popisek">Co se koná</span>
                 <input type="text" id="akText" class="field" maxlength="120"
@@ -388,11 +395,13 @@
        řádku („Dovolená – Jan Novák"), takže se píše jako začátek věty. */
     const DRUHY = { udalost: "Firemní akce", doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
         skoleni: "Školení", homeoffice: "Home office", volno: "Volno",
-        teams: "Teams call", schuzka: "Schůzka" };
+        teams: "Teams call", schuzka: "Schůzka", skoleniAkce: "Školení" };
     /* Druhy, u kterých je v mřížce vlastní název místo názvu druhu – jsou
-       to domluvené věci, ne stavy člověka. „Teams call" a „Schůzka" se
-       chovají jako firemní akce, jen mají svou barvu. */
-    const TEXTOVE = ["udalost", "teams", "schuzka"];
+       to domluvené věci, ne stavy člověka. „Teams call", „Schůzka"
+       a školení založené jako akce (`skoleniAkce`, Michal 21. 10. 2026) se
+       chovají jako firemní akce, jen mají svou barvu. Pozor: `skoleni` bez
+       „Akce" je NEPŘÍTOMNOST člověka zrcadlená z výkazu – to je jiná věc. */
+    const TEXTOVE = ["udalost", "teams", "schuzka", "skoleniAkce"];
     const jeTextova = (typ) => TEXTOVE.indexOf(typ || "udalost") !== -1;
     const DNY_KRATCE = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
     const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
@@ -437,6 +446,12 @@
     const VYCHOZI_DRUHY = { udalost: true, doktor: true, dovolena: true, nemoc: true, skoleni: true,
         homeoffice: true, volno: true, ukol: true, milnik: true,
         teams: true, schuzka: true };
+    /* Druhy, které ve filtru nemají vlastní zaškrtávátko, ale jedou s jiným.
+       Školení-akce a školení-nepřítomnost jsou pro čtenáře kalendáře obojí
+       „školení" a mají stejnou barvu – dvě stejně fialová políčka v legendě
+       by jen mátla. Proto ani nemá vlastní klíč ve VYCHOZI_DRUHY: zapíná ho
+       klíč `skoleni`, takže i dřív uložený filtr platí pro oba naráz. */
+    const DRUH_FILTRU = { skoleniAkce: "skoleni" };
 
     function vychoziFiltr() {
         return { druhy: Object.assign({}, VYCHOZI_DRUHY), kdo: "" };
@@ -465,7 +480,7 @@
 
     /* Neznámý druh (starší zápis s jinou hodnotou `typ`) se schová jen tehdy,
        když ho někdo výslovně vypnul – jinak by se ztratil beze stopy. */
-    const druhZapnut = (druh) => filtr.druhy[druh] !== false;
+    const druhZapnut = (druh) => filtr.druhy[DRUH_FILTRU[druh] || druh] !== false;
 
     /** Srovná zaškrtávátka podle uloženého filtru. */
     function pouzijFiltr() {
@@ -1091,16 +1106,22 @@
         function srovnejDruhAkce() {
             const typ = $("akTyp").value;
             $("akNadpis").textContent = typ === "teams" ? "Nový Teams call"
-                : typ === "schuzka" ? "Nová schůzka" : "Nová firemní akce";
+                : typ === "schuzka" ? "Nová schůzka"
+                : typ === "skoleniAkce" ? "Nové školení" : "Nová firemní akce";
             $("akText").placeholder = typ === "teams" ? "s kým a o čem — např. MUNI, koordinace"
                 : typ === "schuzka" ? "s kým a kde — např. CEITEC, kontrolní den"
+                : typ === "skoleniAkce" ? "jaký kurz a kde — např. BOZP, školení ArcGIS"
                 : "grilovačka, porada, teambuilding…";
             /* Hovor ani schůzka celý den netrvají – rovnou se nabídnou časy.
-               Přepnout zpátky na celý den jde pořád. */
-            if (typ !== "udalost" && $("akCely").checked) {
+               Přepnout zpátky na celý den jde pořád. Školení bývá i na celý
+               den, to se nechává, jak je. */
+            if ((typ === "teams" || typ === "schuzka") && $("akCely").checked) {
                 $("akCely").checked = false;
                 $("akCasyBox").hidden = false;
             }
+            /* Školení je kurz pro vybrané lidi – rovnou se nabídne jejich
+               výběr. „Všichni" jde pořád zvolit. */
+            if (typ === "skoleniAkce") nastavKomu("vybrani");
         }
         $("akTyp").addEventListener("change", srovnejDruhAkce);
 
