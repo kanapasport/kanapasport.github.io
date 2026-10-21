@@ -164,6 +164,141 @@
     V.ABSENCE = ["Dovolená", "Volno", "Nemoc", "Doktor", "Školení"];
     V.jeAbsence = (nazev) => V.ABSENCE.indexOf(String(nazev || "").trim()) !== -1;
 
+    /* ----------------------------------------------- duplicity firem ----
+       Po importu adresáře z Pohody (19. 10. 2026) se ukázalo, jak snadno
+       je jedna firma v číselníku dvakrát: jednou „X, s.r.o.", podruhé
+       „X s. r. o.", u lidí obrácené pořadí jména a příjmení. Dvě firmy
+       jsou proto nejspíš jedna, když mají
+         • stejné IČO – porovnávají se jen číslice („CZ 012 345 67" je
+           totéž co „01234567") a bez úvodních nul (staré IČO se psalo
+           bez nich),
+         • stejný název po očištění – bez diakritiky, mezer, interpunkce,
+           velikosti písmen a právní formy na konci (s.r.o., spol. s r.o.,
+           a.s., v.o.s., k.s., z.s., z.ú., o.p.s., s.p., a spol.); platí
+           i stejná slova v jiném pořadí.
+       Funkce jsou čisté (bez KB a DOM), hlídá je
+       NASTROJE\web\testy\test_firmy_duplicity.js. Slučovat firmy web
+       neumí – na název je navázaný `firmaMap`, projekty i výkazy. */
+
+    /* Právní formy jako slova po rozsekání názvu. Odebírají se jen z konce
+       a nikdy celý název – „Atlas" ani „AS" o nic nepřijdou. Delší tvary
+       první, ať „spol s r o" nezůstane jako „spol". */
+    const PRAVNI_FORMY = [
+        "spolecnost s rucenim omezenym", "verejna obchodni spolecnost",
+        "komanditni spolecnost", "akciova spolecnost",
+        "spol s r o", "spol s ro", "spol sro", "a spol",
+        "s r o", "s ro", "sr o", "sro", "spol",
+        "o p s", "ops", "v o s", "vos",
+        "a s", "as", "k s", "z s", "z u", "s p"
+    ].map(f => f.split(" "));
+
+    /** IČO jen z číslic a bez úvodních nul; "" = žádné (prázdné se s ničím neshoduje). */
+    V.klicIco = (ico) => String(ico == null ? "" : ico).replace(/\D+/g, "").replace(/^0+/, "");
+
+    /** Slova názvu: malá písmena bez diakritiky, bez interpunkce a právní formy na konci. */
+    V.slovaFirmy = (nazev) => {
+        const slova = String(nazev == null ? "" : nazev).toLowerCase()
+            .normalize("NFD").replace(/[̀-ͯ]/g, "")
+            .split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+        let odebrano = true;
+        while (odebrano) {
+            odebrano = false;
+            for (const forma of PRAVNI_FORMY) {
+                const n = forma.length;
+                const konec = slova.length - n;
+                if (konec > 0 && forma.every((slovo, i) => slova[konec + i] === slovo)) {
+                    slova.splice(konec, n);
+                    odebrano = true;
+                    break;
+                }
+            }
+        }
+        return slova;
+    };
+
+    /** Název po očištění, slova slitá dohromady („AB Stav" = „ABStav"); "" = nic k porovnání. */
+    V.normalizujNazevFirmy = (nazev) => V.slovaFirmy(nazev).join("");
+
+    /* Druhý klíč: slova seřazená („Novák Jan" = „Jan Novák"). Jednoslovný
+       název ho nepotřebuje – stačí mu první klíč. */
+    const klicSlov = (slova) => (slova.length > 1 ? slova.slice().sort().join(" ") : "");
+
+    const klicFirmy = (nazev, detail) => {
+        const slova = V.slovaFirmy(nazev);
+        return { ico: V.klicIco(detail && detail.ico), nazev: slova.join(""), slova: klicSlov(slova) };
+    };
+    const podobnyNazev = (a, b) => (!!a.nazev && a.nazev === b.nazev) || (!!a.slova && a.slova === b.slova);
+
+    /**
+     * Které JINÉ firmy z číselníku vypadají jako ta ve formuláři.
+     * @param {{nazev: string, ico: string}} firma  co je zrovna napsané
+     * @param {string[]} firmy    názvy v číselníku (V.firmy())
+     * @param {Object} detaily    název → { ico, … } (KB.firmyDetail)
+     * @param {string} [krome]    vlastní název upravované firmy – sama se sebou se neporovnává
+     * @returns {{ico: string[], nazev: string[]}} stejné IČO / podobný název
+     *          (firma se stejným IČO už mezi podobnými názvy není)
+     */
+    V.podobneFirmy = (firma, firmy, detaily, krome) => {
+        const ja = klicFirmy(firma && firma.nazev, { ico: firma && firma.ico });
+        const vysledek = { ico: [], nazev: [] };
+        const videno = new Set();
+        (firmy || []).forEach(jmeno => {
+            if (!jmeno || jmeno === krome || videno.has(jmeno)) return;
+            videno.add(jmeno);
+            const ona = klicFirmy(jmeno, (detaily || {})[jmeno]);
+            if (ja.ico && ja.ico === ona.ico) vysledek.ico.push(jmeno);
+            else if (podobnyNazev(ja, ona)) vysledek.nazev.push(jmeno);
+        });
+        return vysledek;
+    };
+
+    /**
+     * Možné duplicity v celém číselníku – pro přehled manažera. Firmy
+     * spojené stejným IČO nebo podobným názvem tvoří jednu skupinu, i přes
+     * prostředníka (A ~ B názvem, B ~ C IČO → A, B, C).
+     * @returns {Array<{firmy: string[], ico: string[], nazev: boolean}>}
+     *   ico = IČO (jen číslice), která ve skupině mají aspoň dvě firmy;
+     *   nazev = aspoň dvě firmy pojí podobný název.
+     *   Skupiny se shodným IČO jsou první, pak podle abecedy.
+     */
+    V.skupinyDuplicitFirem = (firmy, detaily) => {
+        const jmena = Array.from(new Set((firmy || []).filter(Boolean)));
+        const klice = jmena.map(j => klicFirmy(j, (detaily || {})[j]));
+        const rodic = jmena.map((_, i) => i);
+        const koren = (i) => { while (rodic[i] !== i) { rodic[i] = rodic[rodic[i]]; i = rodic[i]; } return i; };
+        const spoj = (a, b) => { rodic[koren(a)] = koren(b); };
+
+        // po skupinách stejného klíče, ne každý s každým
+        const podle = (vlastnost) => {
+            const mapa = new Map();
+            klice.forEach((k, i) => {
+                if (!k[vlastnost]) return;
+                if (!mapa.has(k[vlastnost])) mapa.set(k[vlastnost], []);
+                mapa.get(k[vlastnost]).push(i);
+            });
+            return Array.from(mapa.entries()).filter(([, ii]) => ii.length > 1);
+        };
+        const icoSkupiny = podle("ico");
+        const nazevSkupiny = podle("nazev").concat(podle("slova"));
+        icoSkupiny.concat(nazevSkupiny).forEach(([, ii]) => ii.slice(1).forEach(i => spoj(ii[0], i)));
+
+        const skupiny = new Map();
+        const skupina = (i) => {
+            const k = koren(i);
+            if (!skupiny.has(k)) skupiny.set(k, { firmy: [], ico: [], nazev: false });
+            return skupiny.get(k);
+        };
+        jmena.forEach((j, i) => skupina(i).firmy.push(j));      // samotáři vypadnou ve filtru níž
+        icoSkupiny.forEach(([ico, ii]) => skupina(ii[0]).ico.push(ico));
+        nazevSkupiny.forEach(([, ii]) => { skupina(ii[0]).nazev = true; });
+
+        const abc = (a, b) => a.localeCompare(b, "cs");
+        return Array.from(skupiny.values())
+            .filter(s => s.firmy.length > 1)
+            .map(s => ({ firmy: s.firmy.sort(abc), ico: s.ico.sort(), nazev: s.nazev }))
+            .sort((a, b) => (b.ico.length ? 1 : 0) - (a.ico.length ? 1 : 0) || abc(a.firmy[0], b.firmy[0]));
+    };
+
     /* ---------------------------------------------- zůstatky člověka ----
        Kolik zbývá dovolené a kolik je naběháno přesčasů. Počítá se od data,
        které je u člověka nastavené (Nastavení → Dovolená a přesčasy) –

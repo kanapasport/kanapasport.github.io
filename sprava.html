@@ -179,6 +179,19 @@
             color: var(--warn); white-space: nowrap; }
         .ekopruh__mez--100 em { right: auto; left: 4px; color: var(--danger); }
         .ekopruh__cislo { text-align: right; font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+
+        /* Okno Nová firma: upozornění na možnou duplicitu (stejné IČO
+           červeně, podobný název žlutě) – stejný vzhled jako ve Správě firem. */
+        .dupvar { display: flex; flex-direction: column; gap: 8px; }
+        .dupvar[hidden] { display: none; }
+        .dupvar__radek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+            padding: 9px 12px; border: 1px solid var(--warn); border-radius: var(--r);
+            background: var(--warn-tint); font-size: var(--fs-2); line-height: 1.45; }
+        .dupvar__radek--ico { border-color: var(--danger); background: var(--danger-tint); }
+        .dupvar__text { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+        .dupvar__akce { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
+        .dupvar__akce .btn { max-width: 100%; white-space: normal; text-align: left;
+            overflow-wrap: anywhere; padding-top: 6px; padding-bottom: 6px; }
     </style>
 </head>
 <body>
@@ -818,12 +831,13 @@
      Malé okno nad oknem projektu i nad panelem Údajů – ať se kvůli jedné
      firmě nemusí odcházet do Správy firem. -->
 <div id="firmaOverlay" hidden style="position:fixed;inset:0;background:rgba(11,13,16,.55);z-index:130;display:flex;align-items:center;justify-content:center;padding:18px">
-    <div class="card col" style="padding:22px;max-width:420px;width:100%;gap:12px">
+    <div class="card col" style="padding:22px;max-width:420px;width:100%;gap:12px;max-height:calc(100vh - 36px);overflow-y:auto">
         <b style="font-size:var(--fs-4)">Nová firma</b>
         <label class="pole"><span class="popisek">Název</span>
             <input type="text" id="fnNazev" class="field" placeholder="Firma s.r.o."></label>
         <label class="pole"><span class="popisek">IČO (nepovinné)</span>
             <input type="text" id="fnIco" class="field" inputmode="numeric"></label>
+        <div id="fnDup" class="dupvar" role="status" aria-live="polite" hidden></div>
         <p class="tiny muted" style="margin:0;line-height:1.5">
             Firma se rovnou přidá do číselníku a nabídne se i u ostatních
             projektů a ve výkazech. Zbytek údajů se doplní ve Správě firem.
@@ -3273,32 +3287,91 @@
         firmaProPole = idPole;
         $("fnNazev").value = "";
         $("fnIco").value = "";
+        vykresliDuplicituFirmy();
         $("firmaOverlay").hidden = false;
         $("fnNazev").focus();
+    }
+
+    /* Možná duplicita (bod 30 rešerše) – stejná pravidla jako ve Správě
+       firem (V.podobneFirmy ve vykazy.js). Místo „otevřít" se tu nabízí
+       rovnou použít existující firmu: kvůli tomu se okno otvíralo. */
+    const vycetFirem = (firmy) => firmy.map(f => "„" + f + "“").join(", ");
+    const duplicitaNoveFirmy = () => V.podobneFirmy(
+        { nazev: $("fnNazev").value.trim(), ico: $("fnIco").value },
+        V.firmy(), window.KB.firmyDetail || {});
+
+    function vykresliDuplicituFirmy() {
+        const krabice = $("fnDup");
+        const dup = duplicitaNoveFirmy();
+        if (!dup.ico.length && !dup.nazev.length) {
+            krabice.hidden = true;
+            krabice.innerHTML = "";
+            return;
+        }
+        const pouzij = (firmy) => firmy.map(f =>
+            '<button type="button" class="btn btn--ghost btn--sm" data-pouzij-firmu="' + esc(f) + '">' +
+            "Použít " + esc("„" + f + "“") + "</button>").join("");
+        const radek = (trida, text, firmy) =>
+            '<div class="dupvar__radek' + trida + '"><span class="dupvar__text"><b>' + esc(text) + "</b></span>" +
+            '<span class="dupvar__akce">' + pouzij(firmy) + "</span></div>";
+        krabice.innerHTML =
+            (dup.ico.length ? radek(" dupvar__radek--ico",
+                (dup.ico.length === 1 ? "Firma s tímhle IČO už existuje: " : "Firmy s tímhle IČO už existují: ") +
+                vycetFirem(dup.ico), dup.ico) : "") +
+            (dup.nazev.length ? radek("",
+                (dup.nazev.length === 1 ? "Podobný název má už firma " : "Podobný název mají už firmy ") +
+                vycetFirem(dup.nazev), dup.nazev) : "");
+        krabice.hidden = false;
+    }
+
+    /* Roletky se překreslují z číselníku, a ten dorazí až odběrem –
+       proto se firma rovnou dopíše jako vybraná volba. */
+    function vyberFirmuVPoli(nazev) {
+        const pole = $(firmaProPole);
+        if (!pole) return;
+        if (!pole.querySelector('option[value="' + CSS.escape(nazev) + '"]')) {
+            pole.insertAdjacentHTML("beforeend",
+                '<option value="' + esc(nazev) + '">' + esc(nazev) + "</option>");
+        }
+        pole.value = nazev;
+        pole.dispatchEvent(new Event("change", { bubbles: true }));
+        // našeptávač si drží vlastní text – musí se dozvědět o nové firmě
+        obnovFirmuVyber(pole);
+    }
+
+    function pouzijExistujiciFirmu(nazev) {
+        if (!nazev) return;
+        $("firmaOverlay").hidden = true;
+        vyberFirmuVPoli(nazev);
+        window.KBUI.toast("Vybraná firma " + nazev + ".");
     }
 
     async function ulozNovouFirmu() {
         const nazev = $("fnNazev").value.trim();
         if (!nazev) return window.KBUI.toast("Doplň název firmy.", "warn");
+        // stejné IČO projde jen po výslovném potvrzení, podobný název jen varuje
+        const dup = duplicitaNoveFirmy();
+        if (dup.ico.length && !(await window.KBUI.potvrd({
+                nadpis: (dup.ico.length === 1 ? "Firma s tímhle IČO už existuje: "
+                                              : "Firmy s tímhle IČO už existují: ") + vycetFirem(dup.ico),
+                text: "V číselníku by pak byly dvě firmy se stejným IČO a projekty i výkazy by se " +
+                      "mezi ně rozdělily. Obvykle je lepší použít tu existující – tlačítko je v okně.",
+                ano: "Přidat i tak", ne: "Nepřidávat", nebezpecne: true }))) return;
         $("fnUlozit").disabled = true;
         try {
             const ico = $("fnIco").value.trim();
             const vlozena = await window.KB.pridejFirmu(nazev, ico ? { ico: ico } : null);
             $("firmaOverlay").hidden = true;
-            /* Roletky se překreslují z číselníku, a ten dorazí až odběrem –
-               proto se nová firma rovnou dopíše jako vybraná volba. */
-            const pole = $(firmaProPole);
-            if (pole) {
-                if (!pole.querySelector('option[value="' + CSS.escape(vlozena) + '"]')) {
-                    pole.insertAdjacentHTML("beforeend",
-                        '<option value="' + esc(vlozena) + '">' + esc(vlozena) + "</option>");
-                }
-                pole.value = vlozena;
-                pole.dispatchEvent(new Event("change", { bubbles: true }));
-                // našeptávač si drží vlastní text – musí se dozvědět o nové firmě
-                obnovFirmuVyber(pole);
+            vyberFirmuVPoli(vlozena);
+            // KB.pridejFirmu vrátí existující firmu, když se liší jen velikostí písmen
+            if (dup.ico.concat(dup.nazev).indexOf(vlozena) !== -1) {
+                window.KBUI.toast("Firma " + vlozena + " už v číselníku je – je vybraná.");
+            } else if (dup.nazev.length && !dup.ico.length) {
+                window.KBUI.toast("Firma " + vlozena + " přidána. Podobný název má i " +
+                    vycetFirem(dup.nazev) + ".", "warn");
+            } else {
+                window.KBUI.toast("Firma " + vlozena + " přidána.");
             }
-            window.KBUI.toast("Firma " + vlozena + " přidána.");
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Firmu se nepodařilo přidat.", "error");
@@ -3533,6 +3606,11 @@
         $("nZrusit").addEventListener("click", () => { $("novyOverlay").hidden = true; });
         $("fnUlozit").addEventListener("click", ulozNovouFirmu);
         $("fnZrusit").addEventListener("click", () => { $("firmaOverlay").hidden = true; });
+        ["fnNazev", "fnIco"].forEach(id => $(id).addEventListener("input", vykresliDuplicituFirmy));
+        $("fnDup").addEventListener("click", (e) => {
+            const b = e.target.closest("[data-pouzij-firmu]");
+            if (b) pouzijExistujiciFirmu(b.dataset.pouzijFirmu);
+        });
         // Enter v názvu firmy = přidat; okno je malé, tlačítko je zbytečná cesta
         $("fnNazev").addEventListener("keydown", (e) => {
             if (e.key === "Enter") { e.preventDefault(); ulozNovouFirmu(); }
