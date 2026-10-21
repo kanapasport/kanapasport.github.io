@@ -51,6 +51,12 @@
             background: var(--accent-tint); color: var(--accent); border: 1px solid var(--accent-lt); }
         /* úkol bez lidí je chyba v zadání, ne stav – proto varovná barva */
         .osoba--nikdo { background: transparent; color: var(--warn); border-color: var(--warn); }
+        /* štítky stavu: čeká na potvrzení, termín v dovolené jediného člověka */
+        .osoba--ceka, .osoba--dovolena { background: var(--warn-tint); color: var(--warn); border-color: #e8c877; }
+        .osoba--dovolena { cursor: help; }
+        /* poznámka pod termínem v okně úkolu (dovolená, další opakování) */
+        .terminInfo { margin-top: -4px; font-size: var(--fs-1); line-height: 1.5; color: var(--text-soft); }
+        .terminInfo b { color: var(--warn); }
         /* TO-DO řádky (.subtask z app.css) si nesou vlastní odsazení i linku,
            proto jdou přes celou šířku a patička se od nich oddělí sama */
         .ukol__pata { display: flex; align-items: center; justify-content: space-between;
@@ -208,6 +214,16 @@
             <label><span class="label">Budova</span><select id="uBudova" class="field"></select></label>
             <label><span class="label">Patro</span><select id="uPatro" class="field"></select></label>
             <label><span class="label">Termín</span><input type="date" id="uTermin" class="field"></label>
+            <!-- Po splnění vznikne kopie s dalším termínem (od tohohle termínu,
+                 ne ode dne splnění) a s vynulovaným TO-DO. -->
+            <label><span class="label">Opakovat</span>
+                <select id="uOpakovani" class="field">
+                    <option value="">ne</option>
+                    <option value="tyden">každý týden</option>
+                    <option value="14dni">každých 14 dní</option>
+                    <option value="mesic">každý měsíc</option>
+                </select></label>
+            <p id="uTerminInfo" class="terminInfo fmr__cely" hidden></p>
             <!-- Název přes celý řádek schválně: skládá se z hodnot nad ním
                  a bývá nejdelší text formuláře, v úzké buňce by se usekl. -->
             <label class="fmr__cely"><span class="label">Název (doplní se sám, jde přepsat)</span>
@@ -300,6 +316,10 @@
     const params = new URLSearchParams(location.search);
     let pohled = params.get("moje") ? "moje" : (params.get("zak") ? "zak" : "moje");
     const zakSlug = params.get("zak") || "";
+    /* ?otevri=ID – proklik na jeden úkol (nástěnka, Správa, milníky, výkazy).
+       Ten úkol je ve výpisu vždycky, ať je pohled a filtr jakýkoliv: dřív
+       výchozí „Moje úkoly" cizí úkol schoval a odkaz nic neotevřel. */
+    const otevriId = params.get("otevri") || "";
     let editovanyId = "";
     const historieOtevrena = new Set();   // u kterých úkolů je rozbalená historie
     let sledovaniZapnuto = false;
@@ -409,6 +429,7 @@
     function vybrane() {
         const uid = window.KB.currentUid();
         return (window.KB.ukoly || []).filter(u => {
+            if (otevriId && u.id === otevriId) return true;     // proklik na tenhle úkol
             /* Bez zaškrtnutí se schovávají jen hotové POTVRZENÉ manažerem –
                hotové čekající na potvrzení musí zůstat na očích. */
             if (!$("fHotove").checked && u.stav === "hotovo" && u.potvrzeno === true
@@ -603,6 +624,10 @@
         const smiPsat = jeManazer() || (u.prirazeni || []).indexOf(uid) !== -1;
         const otevreny = otevrene.has(u.id);
         const meta = [u.druh, u.technologie, u.budova, u.patro].filter(Boolean).join(" · ");
+        /* Jediný zpracovatel má v den termínu dovolenou (nebo jinou celodenní
+           nepřítomnost) – u hotového úkolu už je to jedno. */
+        const nepritomen = u.stav !== "hotovo" ? V.nepritomnostVTermin(u.prirazeni, u.termin) : null;
+        const opakovani = (window.KB.OPAKOVANI_POPIS || {})[u.opakovani] || "";
 
         return '<div class="ukol' + (u.stav === "hotovo" ? " ukol--hotovo" : "") + '" id="ukol-' + esc(u.id) + '"' +
                 ' data-ukol="' + esc(u.id) + '" data-vyber-radek>' +
@@ -612,13 +637,18 @@
                     '<div class="ukol__radek">' +
                         '<span class="ukol__nazev">' + esc(u.nazev) + "</span>" +
                         (u.stav === "hotovo" && u.potvrzeno !== true
-                            ? '<span class="osoba" title="Hotové od zaměstnance – čeká na potvrzení manažerem" ' +
-                                'style="background:#fff3d6;color:#9a6b00;border-color:#e8c877">čeká na potvrzení</span>'
+                            ? '<span class="osoba osoba--ceka" title="Všechna TO-DO jsou hotová – čeká na potvrzení manažerem">' +
+                                "čeká na potvrzení</span>"
+                            : "") +
+                        (nepritomen
+                            ? '<span class="osoba osoba--dovolena" title="' + esc(nepritomen.popis) + '">' +
+                                esc(nepritomen.stitek) + "</span>"
                             : "") +
                         lideHtml(u) +
                     "</div>" +
                     '<div class="ukol__meta">' + esc(meta) +
                         (u.termin ? (meta ? " · " : "") + "termín " + esc(V.czDatum(u.termin)) : "") +
+                        (opakovani ? ((meta || u.termin) ? " · " : "") + "↻ " + esc(opakovani) : "") +
                     "</div></div>" +
                 /* Zápis výkazu je nejčastější důvod, proč se člověk k úkolu
                    vrací – proto stojí rovnou v hlavičce, ne až v patě uvnitř.
@@ -882,6 +912,19 @@
        Přiřazený člověk smí měnit jen `todo` a `stav` – přesně to posílá
        KB.ulozUkolPostup, aby zápis prošel pravidly databáze. */
 
+    /**
+     * Všechna TO-DO právě došla na 100 % – úkol se sám přepnul na „čeká na
+     * potvrzení" (KB.ulozUkolPostup). Řekne se to, ať to nikoho nepřekvapí,
+     * a u opakovaného úkolu i to, kdy přijde další.
+     */
+    function ohlasHotovo(u) {
+        if (!u || u.stav === "hotovo") return;
+        const dalsi = u.opakovani && window.KB.dalsiTerminOpakovani
+            ? window.KB.dalsiTerminOpakovani(u.termin, u.opakovani, u.opakovaniDen) : "";
+        window.KBUI.toast("Všechna TO-DO jsou na 100 % – úkol čeká na potvrzení manažerem." +
+            (dalsi ? " Další opakování dostane termín " + V.czDatum(dalsi) + "." : ""));
+    }
+
     async function zapisPct(ukolId, todoId, pct) {
         const u = najdiUkol(ukolId);
         if (!u) return;
@@ -893,6 +936,7 @@
         try {
             await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
                 puvodni ? { text: puvodni.text, z: Number(puvodni.pct) || 0, na: pct } : null);
+            if (hotovo) ohlasHotovo(u);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Zápis se nepovedl – postup zapisuje jen přiřazený člověk.", "error");
@@ -941,6 +985,7 @@
             // do historie i se stavem před prvním klikem (0 %, u hotového 100 %)
             await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
                 { text: CELKEM_TEXT, z: pctUkolu(u), na: pct });
+            if (hotovo) ohlasHotovo(u);
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Zápis se nepovedl – plnění zapisuje jen přiřazený člověk.", "error");
@@ -1077,6 +1122,8 @@
         $("uDruh").value = u ? u.druh || "ArcGIS/Kreslení" : "ArcGIS/Kreslení";
         prepniProjekt(u);
         $("uTermin").value = u ? u.termin || "" : "";
+        $("uOpakovani").value = (u && window.KB.OPAKOVANI_POPIS && window.KB.OPAKOVANI_POPIS[u.opakovani])
+            ? u.opakovani : "";
         $("uNazev").value = u ? u.nazev || "" : "";
         /* Odhad Celkem do řádků nepatří – není to krok práce. Při uložení
            s TO-DO položkami se odebere (viz ulozUkol), proto se tu oznámí. */
@@ -1098,7 +1145,34 @@
         $("tvorba").hidden = false;
         document.body.style.overflow = "hidden";   // pod oknem se neroluje
         if (!u) doplnNazev();
+        obnovTerminInfo();
         $("uProjekt").focus();
+    }
+
+    /**
+     * Poznámka pod termínem v okně úkolu: jediný vybraný člověk má v den
+     * termínu dovolenou (nebo jinou celodenní nepřítomnost) a u opakovaného
+     * úkolu, kdy bude další. Kalendář čte každý člen, takže to platí pro
+     * každého, kdo úkoly zakládá.
+     */
+    function obnovTerminInfo() {
+        const termin = $("uTermin").value;
+        const op = $("uOpakovani").value;
+        const lide = Array.from($("uLide").querySelectorAll("input:checked")).map(ch => ch.value);
+        const nep = V.nepritomnostVTermin(lide, termin);
+        // u upravovaného úkolu se stejným termínem platí den, na kterém řada stojí
+        const puv = najdiUkol(editovanyId);
+        const den = puv && puv.termin === termin ? puv.opakovaniDen : 0;
+        const dalsi = op && termin && window.KB.dalsiTerminOpakovani
+            ? window.KB.dalsiTerminOpakovani(termin, op, den) : "";
+        const casti = [];
+        if (nep) casti.push("<b>" + esc(nep.stitek.charAt(0).toUpperCase() + nep.stitek.slice(1)) +
+            ":</b> " + esc(nep.popis));
+        if (op && !termin) casti.push("<b>Opakovaný úkol potřebuje termín</b> – další se počítá od něj.");
+        else if (dalsi) casti.push("Po splnění vznikne kopie s termínem " + esc(V.czDatum(dalsi)) +
+            " a s TO-DO od nuly.");
+        $("uTerminInfo").innerHTML = casti.join("<br>");
+        $("uTerminInfo").hidden = !casti.length;
     }
 
     /**
@@ -1194,6 +1268,11 @@
         if (!projektNazev) return void window.KBUI.toast("Vyber projekt.", "warn");
         const nazev = $("uNazev").value.trim();
         if (!nazev) return void window.KBUI.toast("Úkol potřebuje název.", "warn");
+        const opakovani = $("uOpakovani").value;
+        const termin = $("uTermin").value;
+        if (opakovani && !termin) {
+            return void window.KBUI.toast("Opakovaný úkol potřebuje termín – další se počítá od něj.", "warn");
+        }
 
         const puvodni = najdiUkol(editovanyId);
         const projektDoc = (window.KB.projektyDocs || []).find(p => p.nazev === projektNazev);
@@ -1245,10 +1324,17 @@
                    zahazovala, takže úkol založený z matice o ni po první
                    úpravě přišel a vypadl z matice i ze souhrnů. */
                 technologie: $("uTech").value,
+                /* Vazba na milník se při úpravě drží – dřív ji uložení smazalo
+                   a potvrzení milníku pak úkol nenašlo. */
+                milnikId: puvodni ? (puvodni.milnikId || "") : "",
                 budova: $("uBudova").value === "celá stavba" ? "" : $("uBudova").value,
                 patro: $("uPatro").value,
                 prirazeni: Array.from($("uLide").querySelectorAll("input:checked")).map(ch => ch.value),
-                termin: $("uTermin").value,
+                termin: termin,
+                /* Opakování; den v měsíci, na kterém řada stojí, platí jen
+                   dokud se termín nezmění – nový termín ho určí znovu. */
+                opakovani: opakovani,
+                opakovaniDen: puvodni && puvodni.termin === termin ? (puvodni.opakovaniDen || 0) : 0,
                 // budget se už nikde nezadává; u starších úkolů se jen přenese dál
                 budgetHodin: puvodni ? puvodni.budgetHodin : 0,
                 stav: puvodni ? puvodni.stav : "otevreny",
@@ -1325,6 +1411,10 @@
         ["uProjekt", "uTech", "uBudova", "uPatro"].forEach(id =>
             $(id).addEventListener("change", obnovSablony));
 
+        // termín, opakování a lidé → poznámka o dovolené a dalším termínu
+        ["input", "change"].forEach(typ => $("uTermin").addEventListener(typ, obnovTerminInfo));
+        $("uOpakovani").addEventListener("change", obnovTerminInfo);
+        $("uLide").addEventListener("change", obnovTerminInfo);
         $("uDruh").addEventListener("change", doplnNazev);
         $("uProjekt").addEventListener("change", () => { prepniProjekt(null); doplnNazev(); });
         ["uTech", "uBudova", "uPatro"].forEach(id => $(id).addEventListener("change", doplnNazev));
@@ -1470,6 +1560,7 @@
                 const zapnout = Array.from(boxy).some(ch => !ch.checked);
                 boxy.forEach(ch => { ch.checked = zapnout; });
                 vse.textContent = zapnout ? "zrušit výběr" : "vybrat vše";
+                if (vse.dataset.vse === "uLide") obnovTerminInfo();
                 return;
             }
             const hotovo = event.target.closest("[data-hotovo]");
@@ -1536,6 +1627,8 @@
         document.addEventListener("kb-role", start);
         window.KB.on("ukoly", vykresli);
         window.KB.on("users", vykresli);
+        // štítek „termín v dovolené" stojí na kalendáři
+        window.KB.on("kalendar", vykresli);
         window.KB.on("projekty-docs", vykresliOblibene);
         /* Číselník budov, pater a technologií chodí spolu se zakázkami – po
            jeho příchodu se přesypou roletky i v otevřeném formuláři, aby
@@ -1548,11 +1641,17 @@
         /* Proklik z „HOTOVO?" na nástěnce: ?otevri=ID úkol rovnou rozbalí
            a sroluje na něj – manažer ho nemá hledat očima. Čeká se, až
            úkol dorazí z databáze a vykreslí se (posluchač je zapsaný AŽ ZA
-           vykresli, takže běží nad hotovým výpisem). */
-        const otevriId = params.get("otevri");
+           vykresli, takže běží nad hotovým výpisem). Úkol drží ve výpisu
+           vybrane(); cizí úkol navíc přepne pohled na Všechny, ať je jasné,
+           proč je mezi ostatními – úkoly smí číst každý člen. */
         let najeto = false;
         const najedNaOtevreny = () => {
             if (najeto) return;
+            const u = najdiUkol(otevriId);
+            if (u && pohled === "moje" && (u.prirazeni || []).indexOf(window.KB.currentUid()) === -1) {
+                pohled = "vse";
+                vykresli();
+            }
             const prvek = document.getElementById("ukol-" + otevriId);
             if (!prvek) return;                    // data nebo výpis ještě nedoběhly
             najeto = true;

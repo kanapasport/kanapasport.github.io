@@ -670,9 +670,19 @@
                     <select id="nuDruh" class="field"></select></label>
                 <label class="pole"><span class="popisek">Termín</span>
                     <input type="date" id="nuTermin" class="field"></label>
+                <!-- po splnění vznikne kopie s dalším termínem a TO-DO od nuly -->
+                <label class="pole"><span class="popisek">Opakovat</span>
+                    <select id="nuOpakovani" class="field">
+                        <option value="">ne</option>
+                        <option value="tyden">každý týden</option>
+                        <option value="14dni">každých 14 dní</option>
+                        <option value="mesic">každý měsíc</option>
+                    </select></label>
                 <label class="pole"><span class="popisek">Budget (Kč)</span>
                     <input type="text" id="nuBudget" class="field" inputmode="numeric"
                            data-penize placeholder="0"></label>
+                <!-- dovolená jediného člověka v den termínu, další opakování -->
+                <p id="nuTerminInfo" class="tiny fmr__cely" style="margin:0;line-height:1.5;color:var(--text-soft)" hidden></p>
             </div>
             <div>
                 <span class="popisek">Kdo na úkolu dělá</span>
@@ -685,6 +695,8 @@
                 </div>
                 <textarea id="nuTodo" class="field" rows="5"
                     placeholder="Zákres stěn&#10;Kontrola s podklady&#10;Finální úklid vrstvy"></textarea></label>
+            <!-- odhad „Celkem" z úkolu bez rozpadu – v řádcích není, jen se tu oznámí -->
+            <p id="nuCelkemInfo" class="tiny muted" style="margin:6px 0 0" hidden></p>
         </div>
         <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
             <span id="nuOsy" class="tiny muted"></span>
@@ -2655,11 +2667,13 @@
         $("nuNazev").value = bezOs ? "" : budova + " – " + tech + " – " + patro;
         $("nuDruh").innerHTML = V.options(seznamZTextu($("fDruhy").value).length ? seznamZTextu($("fDruhy").value) : V.cinnosti(), "ArcGIS/Kreslení", "— vyber —");
         $("nuTermin").value = "";
+        $("nuOpakovani").value = "";
         $("nuBudget").value = "";
         $("nuOsy").textContent = bezOs
             ? "Projekt " + (p.nazev || "")
             : "Projekt " + (p.nazev || "") + " · " + budova + " · " + tech + " · " + patro;
         $("nuTodo").value = "";
+        $("nuCelkemInfo").hidden = true;
 
         // bez os není co nabízet – šablony visí na technologii a na patře
         if (bezOs) {
@@ -2675,10 +2689,41 @@
         const predem = bezOs ? []
             : Object.keys(mapa).filter(uid => (mapa[uid] || []).indexOf(tech) !== -1);
         naplnDialogLidi(p, predem);
+        obnovNuTerminInfo();
 
         $("bunkaOverlay").hidden = true;
         $("ukolOverlay").hidden = false;
         $("nuNazev").focus();
+    }
+
+    /* Odhad „Celkem" (`celkem: true`) – plnění úkolu bez TO-DO rozpadu, které
+       se zaklikává na stránce Úkoly. Do řádků TO-DO nepatří: není to krok
+       práce, a kdyby tam zůstal, uložil by se vedle nových položek a průměr
+       by lhal (Celkem 75 % + tři nové na nule = 19 %). */
+    const jeCelkem = (t) => !!t && t.celkem === true;
+
+    /**
+     * Poznámka pod termínem: jediný vybraný člověk má v den termínu
+     * dovolenou (nebo jinou celodenní nepřítomnost) a u opakovaného úkolu,
+     * kdy bude další.
+     */
+    function obnovNuTerminInfo() {
+        const termin = $("nuTermin").value;
+        const op = $("nuOpakovani").value;
+        const lide = Array.from($("nuLide").querySelectorAll("input:checked")).map(ch => ch.value);
+        const nep = V.nepritomnostVTermin(lide, termin);
+        const puv = upravovanyUkolId ? (window.KB.ukoly || []).find(x => x.id === upravovanyUkolId) : null;
+        const den = puv && puv.termin === termin ? puv.opakovaniDen : 0;
+        const dalsi = op && termin && window.KB.dalsiTerminOpakovani
+            ? window.KB.dalsiTerminOpakovani(termin, op, den) : "";
+        const casti = [];
+        if (nep) casti.push('<b style="color:var(--warn)">' +
+            esc(nep.stitek.charAt(0).toUpperCase() + nep.stitek.slice(1)) + ":</b> " + esc(nep.popis));
+        if (op && !termin) casti.push('<b style="color:var(--warn)">Opakovaný úkol potřebuje termín</b> – další se počítá od něj.');
+        else if (dalsi) casti.push("Po splnění vznikne kopie s termínem " + esc(V.czDatum(dalsi)) +
+            " a s TO-DO od nuly.");
+        $("nuTerminInfo").innerHTML = casti.join("<br>");
+        $("nuTerminInfo").hidden = !casti.length;
     }
 
     /* Šablony: rozpad se nevypisuje ručně. Tlačítko se ukáže, jen když pro
@@ -2714,12 +2759,23 @@
         $("nuNazev").value = u.nazev || "";
         $("nuDruh").innerHTML = V.options(V.cinnosti(), u.druh || "", "— vyber —");
         $("nuTermin").value = u.termin || "";
+        $("nuOpakovani").value = (window.KB.OPAKOVANI_POPIS || {})[u.opakovani] ? u.opakovani : "";
         window.KBUI.nastavPenize($("nuBudget"), b.budgetKc);
         $("nuOsy").textContent = "Projekt " + (p.nazev || "") +
             [u.budova, u.technologie, u.patro].filter(Boolean).map(x => " · " + x).join("");
-        $("nuTodo").value = (u.todo || []).map(t => t.text || "").join("\n");
+        /* Odhad Celkem do řádků nepatří – při uložení s položkami se odebere
+           (zalozNovyUkol), proto se tu jen oznámí. */
+        $("nuTodo").value = (u.todo || []).filter(t => !jeCelkem(t)).map(t => t.text || "").join("\n");
+        const celkem = (u.todo || []).find(jeCelkem);
+        $("nuCelkemInfo").hidden = !celkem;
+        $("nuCelkemInfo").textContent = celkem
+            ? "Plnění zapsané bez rozpadu (Celkem): " + (Number(celkem.pct) || 0) + " %. " +
+              "Když sem napíšeš TO-DO položky, Celkem se při uložení odebere " +
+              "a plnění se bude počítat jen z nich."
+            : "";
         nabidniSablony(p, u.budova || "", u.technologie || "", u.patro || "");
         naplnDialogLidi(p, u.prirazeni || []);
+        obnovNuTerminInfo();
 
         $("bunkaOverlay").hidden = true;
         $("patroOverlay").hidden = true;
@@ -2836,10 +2892,16 @@
         if (!p || !novyUkolOsy) return;
         const nazev = $("nuNazev").value.trim();
         if (!nazev) return void window.KBUI.toast("Úkol potřebuje název.", "warn");
+        const termin = $("nuTermin").value;
+        const opakovani = $("nuOpakovani").value;
+        if (opakovani && !termin) {
+            return void window.KBUI.toast("Opakovaný úkol potřebuje termín – další se počítá od něj.", "warn");
+        }
 
         /* Úprava jede stejným dialogem: saveUkol zapisuje celý dokument,
            takže se TO-DO, stav a původ musí poslat znovu – jinak by je
-           uložení smazalo. */
+           uložení smazalo. (Vazbu na milník `milnikId` saveUkol nechá být,
+           když ji volající neposílá.) */
         const stavajici = upravovanyUkolId
             ? (window.KB.ukoly || []).find(x => x.id === upravovanyUkolId) : null;
 
@@ -2848,6 +2910,8 @@
             const id = upravovanyUkolId || window.KB.newUkolId();
             await window.KB.saveUkol(id, {
                 importId: stavajici ? stavajici.importId : "",
+                // vazba na milník se při úpravě drží (dřív ji uložení smazalo)
+                milnikId: stavajici ? (stavajici.milnikId || "") : "",
                 projektId: p.id,
                 projekt: p.nazev || "",
                 nazev: nazev,
@@ -2856,18 +2920,26 @@
                 budova: novyUkolOsy.budova,
                 patro: novyUkolOsy.patro,
                 prirazeni: Array.from($("nuLide").querySelectorAll("input:checked")).map(ch => ch.value),
-                termin: $("nuTermin").value,
+                termin: termin,
+                /* Opakování; den v měsíci, na kterém řada stojí, platí jen
+                   dokud se termín nezmění. */
+                opakovani: opakovani,
+                opakovaniDen: stavajici && stavajici.termin === termin ? (stavajici.opakovaniDen || 0) : 0,
                 stav: stavajici ? stavajici.stav : "otevreny",
                 /* Řádek textarey = položka TO-DO. Při úpravě se položky
                    párují podle textu, ať zapsaná procenta nepadají – nový
-                   řádek začíná na nule, smazaný řádek položku odebere. */
+                   řádek začíná na nule, smazaný řádek položku odebere.
+                   Odhad Celkem žije jen do chvíle, než úkol dostane
+                   skutečné položky – s nimi se odebere sám; bez řádků
+                   zůstává (úprava názvu nebo termínu ho nesmaže). */
                 todo: (function () {
                     const radky = $("nuTodo").value.split("\n")
                         .map(t => t.trim()).filter(Boolean);
                     const stareTodo = stavajici ? (stavajici.todo || []) : [];
                     if (!radky.length) return stareTodo;   // prázdné pole TO-DO nemaže
+                    const stareBezCelkem = stareTodo.filter(t => !jeCelkem(t));
                     return radky.map(text =>
-                        stareTodo.find(t => t.text === text) ||
+                        stareBezCelkem.find(t => t.text === text) ||
                         { id: "td_" + Math.random().toString(36).slice(2),
                           text: text, pct: 0, by: "", ms: 0 });
                 })(),
@@ -3749,6 +3821,10 @@
         $("patroZavri").addEventListener("click", () => { $("patroOverlay").hidden = true; });
         $("nuZrus").addEventListener("click", () => { $("ukolOverlay").hidden = true; });
         $("nuUloz").addEventListener("click", zalozNovyUkol);
+        // termín, opakování a lidé → poznámka o dovolené a dalším termínu
+        ["input", "change"].forEach(typ => $("nuTermin").addEventListener(typ, obnovNuTerminInfo));
+        $("nuOpakovani").addEventListener("change", obnovNuTerminInfo);
+        $("nuLide").addEventListener("change", obnovNuTerminInfo);
         $("bunkaZavri").addEventListener("click", () => { $("bunkaOverlay").hidden = true; });
         $("bunkaNovy").addEventListener("click", () => { if (bunkaKlic) otevriNovyUkol(bunkaKlic); });
         /* Zápis v tabulce budgetů nemá shazovat ochranu formuláře projektu –

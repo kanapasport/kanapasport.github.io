@@ -2143,6 +2143,23 @@
         return kopie;
     };
 
+    /** „↻ každý týden" u opakovaného vzkazu, jinak prázdno. */
+    UI.quickOpakovani = (q) => {
+        const popis = q && q.opakovani && ((window.KB && window.KB.OPAKOVANI_POPIS) || {})[q.opakovani];
+        return popis ? "↻ " + popis : "";
+    };
+
+    /**
+     * Hláška po odškrtnutí. U opakovaného vzkazu řekne, kdy přijde další –
+     * zakládá ho prohlížeč zadavatele (KB.zalozDalsiQuick), u vlastního
+     * vzkazu hned, u cizího, až má zadavatel web otevřený.
+     */
+    UI.quickHlaskaSplneno = (q) => {
+        const dalsi = q && q.opakovani && window.KB && window.KB.dalsiTerminOpakovani
+            ? window.KB.dalsiTerminOpakovani(q.doKdy, q.opakovani, q.opakovaniDen) : "";
+        return dalsi ? "Splněno. Další opakování: do " + czDatumKratke(dalsi) + "." : "Splněno.";
+    };
+
     /** Odškrtnutí i vrácení – podle režimu sáhne na správné pole. */
     UI.quickPrepni = (q, hotovo) => {
         const uid = window.KB.currentUid();
@@ -2617,6 +2634,17 @@
                             '<label class="quickpanel__do">Do:' +
                                 '<input type="date" class="field" data-quick-kdy aria-label="Do kdy">' +
                             "</label>" +
+                            /* Opakování (21. 10. 2026): po splnění vznikne
+                               stejný vzkaz s dalším termínem, počítaným od
+                               termínu „Do", ne ode dne splnění. */
+                            '<label class="quickpanel__do">Opakovat:' +
+                                '<select class="field" data-quick-opakovani aria-label="Opakovat">' +
+                                    '<option value="">ne</option>' +
+                                    '<option value="tyden">každý týden</option>' +
+                                    '<option value="14dni">každých 14 dní</option>' +
+                                    '<option value="mesic">každý měsíc</option>' +
+                                "</select>" +
+                            "</label>" +
                         "</div>" +
                         '<label class="quickpanel__asap">' +
                             '<input type="checkbox" data-quick-asap> <b>Udělej co nejdříve</b>' +
@@ -2773,7 +2801,8 @@
                 [ mujVzkaz ? "Zadal jsem" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
                   q.projekt ? esc(q.projekt) : "",
                   q.asap ? "co nejdříve" : "",
-                  q.doKdy ? "do " + esc(czDatumKratke(q.doKdy)) : ""
+                  q.doKdy ? "do " + esc(czDatumKratke(q.doKdy)) : "",
+                  esc(UI.quickOpakovani(q))
                 ].filter(Boolean).join(" · ") +
                 (hotovoMne ? ' · <b style="color:var(--ok)">splněno</b>' : "") +
             "</div>" +
@@ -3086,7 +3115,19 @@
            pro sebe je jiný záměr než vzkaz kolegovi a dřív se nedala uložit
            vůbec (bez vybraného člověka to hlásilo chybu). Seznam i řazení
            staví UI.lideDoVyberu, ať je stejný i jinde. */
-        if (!komu.querySelector("input")) UI.lideDoVyberu(komu, true);
+        /* Seznam se staví jednou – ale ZNOVU, když mezitím dorazil seznam
+           lidí: první vykreslení mohlo přijít dřív (vzkazy před lidmi)
+           a v „Komu" pak zůstalo jen „Jen pro mě" (našlo se 21. 10. 2026).
+           Zaškrtnutí se přenesou. */
+        const pocetLidi = String((window.KB.users || []).length);
+        if (!komu.querySelector("input") || komu.dataset.lidi !== pocetLidi) {
+            const zaskrtnuti = Array.from(komu.querySelectorAll("input:checked")).map(ch => ch.value);
+            UI.lideDoVyberu(komu, true);
+            komu.querySelectorAll("input").forEach(ch => {
+                if (zaskrtnuti.indexOf(ch.value) !== -1) ch.checked = true;
+            });
+            komu.dataset.lidi = pocetLidi;
+        }
         vykresliOblibene();
         profiltrujLidi(panel);
         const projektSel = panel.querySelector("[data-quick-projekt]");
@@ -3176,7 +3217,8 @@
                           q.projekt ? esc(q.projekt) : "",
                           q.asap ? '<span class="quickrad__asap">co nejdříve</span>' : "",
                           q.doKdy ? '<span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
-                            esc(czDatumKratke(q.doKdy)) + "</span>" : ""
+                            esc(czDatumKratke(q.doKdy)) + "</span>" : "",
+                          esc(UI.quickOpakovani(q))
                         ].filter(Boolean).join(" · ") +
                         (ostatni.length ? "<br>Spoluúčast: " + esc(ostatni.join(", ")) +
                             (q.rezim === "kazdy" ? " · každý sám" : "") : "") +
@@ -3923,7 +3965,7 @@
             if (q) {
                 const hotovo = !hotovoBtn.dataset.zpet;
                 UI.quickPrepni(q, hotovo)
-                    .then(() => UI.toast(hotovo ? "Splněno." : "Vráceno mezi nesplněné.", undefined, {
+                    .then(() => UI.toast(hotovo ? UI.quickHlaskaSplneno(q) : "Vráceno mezi nesplněné.", undefined, {
                         // vrací se nad čerstvým vzkazem – mezitím ho mohl odškrtnout i někdo další
                         zpet: () => UI.quickPrepni((window.KB.quicktodo || [])
                             .find(x => x.id === q.id) || q, !hotovo)
@@ -3947,6 +3989,11 @@
         const kazdy = panel.querySelector("[data-quick-kazdy]").checked;
         const doKdy = panel.querySelector("[data-quick-kdy]").value;
         const projekt = panel.querySelector("[data-quick-projekt]").value;
+        const opakovani = panel.querySelector("[data-quick-opakovani]").value;
+        // další termín se počítá od termínu – bez něj (i u „co nejdříve") není od čeho
+        if (opakovani && (asap || !doKdy)) {
+            return UI.toast("Opakovaný vzkaz potřebuje termín „Do“ – další se počítá od něj.", "warn");
+        }
 
         try {
             /* Jeden vzkaz pro všechny vybrané. Ve společném režimu ho kdokoliv
@@ -3957,7 +4004,8 @@
                 doKdy: asap ? "" : doKdy,   // „co nejdříve" termín nemá
                 asap: asap,
                 rezim: kazdy ? "kazdy" : "",
-                projekt: projekt
+                projekt: projekt,
+                opakovani: opakovani
             });
 
             /* Obrázky až po vzkazu – pravidla se u nich ptají rodičovského
@@ -3977,6 +4025,7 @@
             panel.querySelector("[data-quick-kdy]").value = "";
             panel.querySelector("[data-quick-asap]").checked = false;
             panel.querySelector("[data-quick-kazdy]").checked = false;
+            panel.querySelector("[data-quick-opakovani]").value = "";
             panel.querySelector("[data-quick-projekt]").value = "";
             panel.querySelectorAll("[data-quick-komu] input:checked")
                 .forEach(ch => { ch.checked = false; });
@@ -3984,10 +4033,11 @@
             profiltrujLidi(panel);
 
             const jenJa = komu.length === 1 && komu[0] === window.KB.currentUid();
-            UI.toast(jenJa ? "Poznámka uložena jen pro tebe."
+            const opak = opakovani ? " Opakuje se " + ((window.KB.OPAKOVANI_POPIS || {})[opakovani] || "") + "." : "";
+            UI.toast((jenJa ? "Poznámka uložena jen pro tebe."
                 : komu.length === 1 ? "Quick to-do zadáno."
                 : (kazdy ? "Zadáno " + komu.length + " lidem – každý si odškrtne sám."
-                    : "Společný quick to-do zadán " + komu.length + " lidem."));
+                    : "Společný quick to-do zadán " + komu.length + " lidem.")) + opak);
         } catch (err) {
             console.error(err);
             UI.toast("Odeslání selhalo.", "error");
