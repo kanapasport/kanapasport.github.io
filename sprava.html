@@ -150,6 +150,35 @@
 
         .jehotov { border-color: var(--ok); }
         .jehotov--zap { background: #0f5533; border-color: #0f5533; }
+
+        /* ---------------------------------------------- ekonomika zakázky ---
+           Dlaždice jsou sdílený .kraj z app.css; pruh čerpání a hotovosti
+           má společné měřítko a svislé hranice 80 % a 100 %. */
+        .eko { display: flex; flex-direction: column; gap: 12px; }
+        .eko .kraj small { display: block; margin-top: 3px; font-size: var(--fs-1); color: var(--muted);
+            line-height: 1.45; font-variant-numeric: tabular-nums; }
+        .kraj--pozor b { color: var(--warn); }
+        .ekopruh { display: grid; grid-template-columns: 74px minmax(0, 1fr) 48px; gap: 10px 10px;
+            align-items: center; padding: 12px 12px 22px; background: var(--surface);
+            border: 1px solid var(--line-soft); border-radius: var(--radius); }
+        .ekopruh__popis { font-size: var(--fs-1); font-weight: 700; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); }
+        .ekopruh__draha { position: relative; height: 12px; background: var(--bg); border-radius: var(--r-pill); }
+        .ekopruh__vypln { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--r-pill);
+            background: var(--ok); }
+        .ekopruh__vypln--pozor { background: var(--warn); }
+        .ekopruh__vypln--pres { background: var(--danger); }
+        .ekopruh__vypln--hotovo { background: var(--accent); }
+        .ekopruh__mez { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px;
+            background: var(--warn); }
+        .ekopruh__mez--100 { background: var(--danger); }
+        /* popisky hranic se rozbíhají od sebe (80 doleva, 100 doprava),
+           ať se na úzkém pruhu v telefonu nepřekryjí */
+        .ekopruh__mez em { position: absolute; top: 100%; right: 4px;
+            margin-top: 3px; font-style: normal; font-size: var(--fs-1); font-weight: 700;
+            color: var(--warn); white-space: nowrap; }
+        .ekopruh__mez--100 em { right: auto; left: 4px; color: var(--danger); }
+        .ekopruh__cislo { text-align: right; font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
@@ -320,10 +349,24 @@
                                         data-novafirma="pZakaznik" title="Přidat firmu do číselníku">+</button>
                                 </span></label>
                         </div>
-                        <!-- co z rozpočtu ubraly hodiny a co externí náklady -->
-                        <div id="krajicRozpocet" class="row row--wrap"
-                             style="gap:10px;margin-top:12px" hidden></div>
+                        </div>
+                    </section>
 
+                    <!-- ---------------------------------------- ekonomika zakázky --
+                         Rozpočet proti čerpání (práce z výkazů + externí náklady)
+                         a proti hotovosti úkolů. Dřív tu byl jen krajíc rozpočtu
+                         (rozpočet / výkazy / náklady / zbývá) – karta ho nahradila.
+                         Za tečkami jako rozpočet: odkryje ji stejné „…" a po
+                         přepnutí projektu se zase schová. -->
+                    <section class="sblok">
+                        <div class="sblok__hlava"><span class="sblok__stitek">Ekonomika</span></div>
+                        <div class="sblok__telo">
+                        <div id="ekoSkryto" class="row row--wrap" style="gap:10px;align-items:center">
+                            <button type="button" id="btnEkoUkaz" class="btn btn--ghost"
+                                style="letter-spacing:.2em" title="Zobrazit rozpočet a čerpání">…</button>
+                            <span class="small muted">Rozpočet, čerpání a prognóza se ukážou na „…“.</span>
+                        </div>
+                        <div id="ekonomika" class="eko" hidden></div>
                         </div>
                     </section>
 
@@ -1218,13 +1261,17 @@
     function schovejRozpocet() {
         $("poleRozpocet").hidden = true;
         $("poleRozpocetSkryty").hidden = false;
-        $("krajicRozpocet").hidden = true;
+        $("ekonomika").hidden = true;
+        $("ekoSkryto").hidden = false;
+        vykresliEkonomiku();          // schovaná karta nenese v DOM žádné částky
     }
 
     function ukazRozpocet() {
         $("poleRozpocet").hidden = false;
         $("poleRozpocetSkryty").hidden = true;
-        $("krajicRozpocet").hidden = false;
+        $("ekonomika").hidden = false;
+        $("ekoSkryto").hidden = true;
+        vykresliEkonomiku();
     }
 
     /** Zaškrtávátka lidí – stejná podoba jako v Údajích projektu. */
@@ -1437,8 +1484,8 @@
     function vykresliNaklady() {
         const box = $("naklady");
         if (!box) return;
-        // náklady se načítají zvlášť – krajíc rozpočtu se s nimi musí srovnat
-        vykresliRozpocetKrajic();
+        // náklady se načítají zvlášť – karta Ekonomika se s nimi musí srovnat
+        vykresliEkonomiku();
         $("nkFirmy").innerHTML = V.firmy().map(f =>
             '<option value="' + esc(f) + '">').join("");
 
@@ -1518,29 +1565,161 @@
        na přepínač režimu, kde se `vykresliBudget` nevolá. */
     let maticniRozpad = null;
 
-    /* Krajíc rozpočtu: kolik z něj snědly hodiny ve výkazech, kolik externí
-       náklady a co zbývá. Externí náklad je pro zakázku stejná díra jako
-       odpracovaná hodina – do 4. 9. 2026 se nikde neodečítal (Michal). */
-    function vykresliRozpocetKrajic() {
-        const box = $("krajicRozpocet");
+    /* ------------------------------------------------ ekonomika zakázky --
+       Karta v Údajích: rozpočet / čerpáno (práce z výkazů + externí
+       náklady) / zbývá / čerpání proti hotovosti, pruh s hranicemi 80
+       a 100 %, prognóza podle tempa posledních 4 týdnů a rozpad po
+       technologiích. Počítá to společné V.ekonomikaZakazky ve vykazy.js –
+       stejné číslo jako upozornění na manažerské nástěnce. Externí náklad
+       je pro zakázku stejná díra jako odpracovaná hodina (Michal 4. 9. 2026).
+
+       Přijaté faktury s projektem se započítají jen na přání a jen tomu,
+       kdo faktury vidí (finance.view) – Správa je jinak nečte a načtení
+       všech faktur kvůli jedné kartě by bylo zbytečné čtení. */
+    let fakturyEko = false;          // faktury si vyžádal (a dorazily)
+    let fakturyEkoChteno = false;
+
+    function zapocitejFaktury() {
+        if (!window.KBUI.can("finance.view") || fakturyEkoChteno) return;
+        fakturyEkoChteno = true;
+        window.KB.on("faktury", () => { fakturyEko = true; vykresliEkonomiku(); });
+        window.KB.watchFaktury();
+        vykresliEkonomiku();
+    }
+
+    function ekonomikaProjektu(p) {
+        const nazev = p.nazev || "";
+        return V.ekonomikaZakazky(nazev, {
+            /* rozepsaný rozpočet z pole platí hned, ať je vidět dopad */
+            rozpocet: window.KBUI.penize($("fKc")) || (V.rozpocet(nazev).kc || 0),
+            projektId: p.id,
+            naklady: nakladyProId === p.id ? nakladyProjektu : [],
+            faktury: (fakturyEko && window.KBUI.can("finance.view")) ? (window.KB.faktury || []) : null,
+            zacatek: p.zacatek || "",
+            konec: p.konec || ""
+        });
+    }
+
+    const ekoPct = (pct) => pct === null || pct === undefined ? "–" : Math.round(pct) + " %";
+
+    /** Pruh čerpání a hotovosti na společném měřítku s hranicemi 80 a 100 %. */
+    function ekoPruhHtml(e) {
+        const cerpani = e.cerpaniPct || 0;
+        // měřítko aspoň do 120 %, ať je hranice 100 % vidět i s rezervou
+        const skala = Math.min(200, Math.max(120, Math.ceil(cerpani / 10) * 10));
+        const sirka = (pct) => Math.max(0, Math.min(100, pct / skala * 100)).toFixed(2) + "%";
+        const meze = (popisky) => [V.PRAH_POZOR, V.PRAH_PRES].map(m =>
+            '<span class="ekopruh__mez' + (m >= V.PRAH_PRES ? " ekopruh__mez--100" : "") +
+                '" style="left:' + esc(sirka(m)) + '">' +
+                (popisky ? "<em>" + esc(m) + " %</em>" : "") + "</span>").join("");
+        const radek = (popis, pct, trida, popisky) =>
+            '<span class="ekopruh__popis">' + esc(popis) + "</span>" +
+            '<div class="ekopruh__draha">' +
+                '<div class="ekopruh__vypln ' + esc(trida) + '" style="width:' + esc(sirka(pct || 0)) + '"></div>' +
+                meze(popisky) +
+            "</div>" +
+            '<b class="ekopruh__cislo">' + esc(ekoPct(pct)) + "</b>";
+        return '<div class="ekopruh" role="img" aria-label="' +
+            esc("Čerpáno " + ekoPct(e.cerpaniPct) + " rozpočtu, hotovo " + ekoPct(e.hotovoPct)) + '">' +
+            radek("Čerpáno", e.cerpaniPct, "ekopruh__vypln--" + (e.uroven || "ok"), false) +
+            radek("Hotovo", e.hotovoPct, "ekopruh__vypln--hotovo", true) +
+            "</div>";
+    }
+
+    function ekoPrognozaHtml(e) {
+        const g = e.prognoza || {};
+        const tempo = " (" + V.kc(e.tempo28) + " za poslední 4 týdny)";
+        if (g.stav === "bez-rozpoctu") {
+            return "Zakázka nemá rozpočet – vyplň ho výš v bloku Rozpočet, fakturace a části.";
+        }
+        if (g.stav === "vycerpano") {
+            return '<b style="color:var(--danger)">Rozpočet je vyčerpaný</b>' +
+                (e.zbyva < 0 ? " – přečerpáno o " + esc(V.kc(-e.zbyva)) : "") + ".";
+        }
+        if (g.stav === "nedojde") {
+            return g.dni ? "Při dnešním tempu" + esc(tempo) + " rozpočet nedojde ani za deset let."
+                : "Za poslední 4 týdny se na zakázce nic nevykázalo – při dnešním tempu rozpočet nedojde.";
+        }
+        return "Při dnešním tempu" + esc(tempo) + " dojde rozpočet kolem <b>" +
+            esc(V.czDatum(g.datum)) + "</b>" +
+            (g.predKoncem ? ' – <span style="color:var(--danger);font-weight:700">dřív, než má zakázka skončit (' +
+                esc(V.czDatum(vybranyProjekt().konec || "")) + ")</span>" : "") + ".";
+    }
+
+    function ekoTechHtml(e) {
+        if (!e.technologie.length) return "";
+        const barva = (u) => u === "pres" ? "var(--danger)" : u === "pozor" ? "var(--warn)" : "inherit";
+        return '<div><div class="popisek" style="margin:0 0 6px">Po technologiích</div>' +
+            '<div style="overflow-x:auto"><table class="pt pt--cist"><thead><tr>' +
+            '<th>Technologie</th><th class="num">Budget</th><th class="num">Čerpáno</th>' +
+            '<th class="num">Čerpání</th><th class="num">Hotovo</th><th></th></tr></thead><tbody>' +
+            e.technologie.map(r =>
+                "<tr><td><b>" + esc(r.tech) + "</b></td>" +
+                '<td class="num" title="' + esc(r.zdrojBudgetu === "technologie"
+                    ? "rozpočet technologie (Plnění projektu)" : "součet budgetů úkolů") + '">' +
+                    esc(V.kc(r.budget)) + "</td>" +
+                '<td class="num">' + esc(V.kc(r.cerpano)) + "</td>" +
+                '<td class="num" style="font-weight:700;color:' + barva(r.uroven) + '">' +
+                    esc(ekoPct(r.cerpaniPct)) + "</td>" +
+                '<td class="num">' + esc(ekoPct(r.hotovoPct)) + "</td>" +
+                '<td class="tiny" style="color:var(--warn);font-weight:700">' +
+                    (r.predbiha !== null && r.predbiha > V.PRAH_PREDBIHA
+                        ? esc("předbíhá o " + r.predbiha + " b.") : "") + "</td></tr>").join("") +
+            "</tbody></table></div></div>";
+    }
+
+    function vykresliEkonomiku() {
+        const box = $("ekonomika");
         if (!box) return;
         const p = vybranyProjekt();
-        if (!p) { box.innerHTML = ""; return; }
-        const nazev = p.nazev || "";
-        const strop = window.KBUI.penize($("fKc")) || (V.rozpocet(nazev).kc || 0);
-        /* Zaokrouhluje se PŘED odečtením, ne až při vypsání – jinak dlaždice
-           vedle sebe nesedí o korunu a vypadá to jako chyba v součtu. */
-        const vykazy = Math.round(V.rozpadProjektu(nazev).celkem);
-        const naklady = Math.round(nakladyProjektu.reduce((x, n) => x + (Number(n.castka) || 0), 0));
-        const zbyva = strop - vykazy - naklady;
-        const dlazdice = (popis, hodnota, minus) =>
-            '<div class="kraj' + (minus ? " kraj--minus" : "") + '"><b>' +
-            V.kc(hodnota) + "</b><span>" + popis + "</span></div>";
+        /* Schovaná karta nenese v DOM žádná čísla – Správa bývá na promítačce. */
+        if (!p || box.hidden || !window.KBUI.can("vykaz.view")) { box.innerHTML = ""; return; }
+        const e = ekonomikaProjektu(p);
+        const dlazdice = (popis, hodnota, pod, trida) =>
+            '<div class="kraj' + (trida ? " " + trida : "") + '"><b>' + hodnota + "</b><span>" +
+            esc(popis) + "</span>" + (pod ? "<small>" + pod + "</small>" : "") + "</div>";
+        const pctTrida = e.uroven === "pres" ? "kraj--minus" : e.uroven === "pozor" ? "kraj--pozor" : "";
+
+        const finance = window.KBUI.can("finance.view");
+        const poznamky = [
+            "Práce = uložené částky z výkazů (den po dni, bez absencí). Externí náklady = řádky " +
+                "v Plnění projektu → Externí náklady" +
+                (e.fakturyZapocteny ? " + přijaté faktury s tímto projektem (" +
+                    esc(V.pocet(e.fakturPocet, ["faktura", "faktury", "faktur"])) + ", bez DPH)" : "") +
+                ". Hotovo = TO-DO úkolů vážené jejich budgetem.",
+            "Výnosy z vydaných faktur zatím nejsou na webu – marže se proto nepočítá."
+        ];
+        if (e.neuplne) {
+            poznamky.push("Výkazy před " + esc(V.czDatum(e.oknoOd)) + " se tu nepočítají – web je drží " +
+                "živě jen za poslední měsíce; čerpání může být ve skutečnosti vyšší.");
+        }
+
         box.innerHTML =
-            dlazdice("Rozpočet projektu", strop) +
-            dlazdice("Přiděleno ve výkazech", vykazy) +
-            dlazdice("Externí náklady", naklady) +
-            dlazdice("Zbývá z rozpočtu", zbyva, zbyva < 0);
+            '<div class="row row--wrap" style="gap:10px;align-items:stretch">' +
+                dlazdice("Rozpočet", e.rozpocet ? esc(V.kc(e.rozpocet)) : "nezadán") +
+                dlazdice("Čerpáno", esc(V.kc(e.cerpano)),
+                    "práce " + esc(V.kc(e.prace)) + " · " + esc(V.hod(e.praceHodiny)) +
+                    "<br>externí " + esc(V.kc(e.externi)) +
+                    (e.fakturyZapocteny && e.nakladyFaktury ? " (z toho faktury " + esc(V.kc(e.nakladyFaktury)) + ")" : "")) +
+                dlazdice("Zbývá", e.rozpocet ? esc(V.kc(e.zbyva)) : "–", "", e.zbyva < 0 ? "kraj--minus" : "") +
+                dlazdice("Čerpání / hotovo", esc(ekoPct(e.cerpaniPct)) + " / " + esc(ekoPct(e.hotovoPct)),
+                    e.ukolu ? "" : "zakázka nemá úkoly – hotovost neznáme", pctTrida) +
+            "</div>" +
+            (e.rozpocet ? ekoPruhHtml(e) : "") +
+            '<p class="small" style="margin:0;line-height:1.6">' + ekoPrognozaHtml(e) + "</p>" +
+            (e.predbihaVarovani
+                ? '<p class="small" style="margin:0;line-height:1.6;color:var(--warn);font-weight:700">' +
+                  esc("Čerpání předbíhá hotovost o " + e.predbiha + " procentních bodů (čerpáno " +
+                      ekoPct(e.cerpaniPct) + ", hotovo " + ekoPct(e.hotovoPct) + ").") + "</p>"
+                : "") +
+            ekoTechHtml(e) +
+            '<div class="tiny muted" style="line-height:1.6">' + poznamky.join("<br>") +
+                (finance && !fakturyEkoChteno
+                    ? '<br><button type="button" class="linkbtn" id="btnEkoFaktury">Započítat i přijaté ' +
+                      "faktury s tímto projektem</button>"
+                    : "") +
+                (finance && fakturyEkoChteno && !fakturyEko ? "<br>Faktury se načítají…" : "") +
+            "</div>";
     }
 
     function vykresliBudget(p, force) {
@@ -1553,7 +1732,7 @@
             document.activeElement.closest("#budgetUkoly, #matice")) return;
 
         nactiNaklady(p);
-        vykresliRozpocetKrajic();
+        vykresliEkonomiku();
         const budgety = window.KB.ukolBudgety || {};
         const ukoly = ukolyProjektu(p);
         const osy = osyProjektu(p);
@@ -3342,6 +3521,12 @@
         $("btnNovyUkolProjekt").addEventListener("click", () => otevriNovyUkol(""));
         $("nZalozit").addEventListener("click", zalozProjekt);
         $("btnRozpocetUkaz").addEventListener("click", ukazRozpocet);
+        // karta Ekonomika: stejné „…" jako rozpočet, rozepsaný rozpočet hned
+        $("btnEkoUkaz").addEventListener("click", ukazRozpocet);
+        $("fKc").addEventListener("input", vykresliEkonomiku);
+        $("ekonomika").addEventListener("click", (event) => {
+            if (event.target.closest("#btnEkoFaktury")) zapocitejFaktury();
+        });
         ["nSlozkaP", "nCislo", "nNazev"].forEach(id =>
             $(id).addEventListener("input", nahledSlozky));
         $("nSlozkaP").addEventListener("change", nahledSlozky);
