@@ -26,6 +26,33 @@
         .prjbtn.je-vybrany { background: var(--accent-tint); border-color: var(--accent-lt); }
         .prjbtn b { display: block; font-size: var(--fs-2); font-weight: 800; line-height: 1.3; }
         .prjbtn span { display: block; font-size: var(--fs-1); color: var(--muted); margin-top: 1px; }
+        a.prjbtn { color: inherit; text-decoration: none; }
+        .prjbtn .dupznacka { font-style: normal; font-weight: 700; color: var(--warn); }
+
+        /* Přepínač seznamu: všechny firmy × možné duplicity (bod 30 rešerše).
+           Ukáže se, jen když nějaká duplicita je. */
+        .seznam__filtr { display: flex; flex-wrap: wrap; gap: 6px; }
+        .seznam__filtr .chip { padding: 4px 12px; font-size: var(--fs-1); }
+        .seznam__filtr .chip em { font-style: normal; opacity: .65; margin-left: 5px; }
+        .seznam__filtr .chip--dup:not(.chip--active) { border-color: var(--warn); color: var(--warn); }
+        .seznam__pozn { margin: 0; padding: 0 2px; line-height: 1.5; }
+        .seznam__skupina { font-size: var(--fs-1); font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--warn); padding: 10px 10px 2px; }
+        .seznam__skupina--ico { color: var(--danger); }
+        .seznam__skupina:first-child { padding-top: 2px; }
+
+        /* Upozornění na možnou duplicitu přímo pod poli – stejné IČO
+           červeně (uložení se zeptá), podobný název žlutě (jen varuje). */
+        .dupvar { display: flex; flex-direction: column; gap: 8px; }
+        .dupvar[hidden] { display: none; }
+        .dupvar__radek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+            padding: 9px 12px; border: 1px solid var(--warn); border-radius: var(--r);
+            background: var(--warn-tint); font-size: var(--fs-2); line-height: 1.45; }
+        .dupvar__radek--ico { border-color: var(--danger); background: var(--danger-tint); }
+        .dupvar__text { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+        .dupvar__akce { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
+        .dupvar__akce .btn { max-width: 100%; white-space: normal; text-align: left;
+            overflow-wrap: anywhere; padding-top: 6px; padding-bottom: 6px; }
 
         .popisek { display: block; font-size: var(--fs-1); font-weight: 700; letter-spacing: .05em;
             text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
@@ -77,6 +104,12 @@
             <!-- ------------------------------------------------ seznam firem -->
             <aside class="card col seznam">
                 <input type="search" id="hledat" class="field" placeholder="Hledat firmu…">
+                <div id="seznamFiltr" class="seznam__filtr" hidden></div>
+                <p id="dupPozn" class="tiny muted seznam__pozn" hidden>
+                    Firmy se stejným IČO nebo se stejným názvem po očištění (bez diakritiky,
+                    mezer, interpunkce a právní formy). Sloučit je web neumí – na název
+                    jsou navázané projekty a výkazy. Firmu bez projektů jde odebrat.
+                </p>
                 <div id="seznamVypis" class="seznam__vypis"></div>
                 <span class="tiny muted" id="pocet"></span>
             </aside>
@@ -116,6 +149,7 @@
                             <label class="pole fmr__cely"><span class="popisek">Adresa</span>
                                 <input type="text" id="fAdresa" class="field"></label>
                         </div>
+                        <div id="dupVarovani" class="dupvar" role="status" aria-live="polite" hidden></div>
                         </div>
                     </section>
 
@@ -176,26 +210,127 @@
     let vybrana = "";        // název vybrané firmy ("" = nic)
     let novaFirma = false;   // zakládá se nová, ještě není v seznamu
     let dotknuto = false;    // rozepsaná změna se nepřepisuje daty z databáze
+    let rezim = "vse";       // seznam: "vse" = všechny firmy, "duplicity" = možné duplicity
+    /* firmy.html?firma=<název> otevře rovnou tu firmu (odkazy z přehledu
+       duplicit jdou otevřít i do nové karty). Čeká se, až dorazí číselník. */
+    let zAdresy = new URLSearchParams(location.search).get("firma") || "";
 
     const detail = (nazev) => (window.KB.firmyDetail || {})[nazev] || {};
+    const vycet = (firmy) => firmy.map(f => "„" + f + "“").join(", ");
+    const odkazFirmy = (f) => "firmy.html?firma=" + encodeURIComponent(f);
+
+    /* Duplicity (bod 30 rešerše): čisté funkce ve vykazy.js, tady se jen
+       ukazují. IČO je v `firmyDetail` – kdo ho nečte, porovnává jen názvy. */
+    const skupinyDuplicit = () => V.skupinyDuplicitFirem(V.firmy(), window.KB.firmyDetail || {});
+    const podobneFormulari = () => V.podobneFirmy(
+        { nazev: $("fNazev").value.trim(), ico: $("fIco").value },
+        V.firmy(), window.KB.firmyDetail || {}, novaFirma ? "" : vybrana);
 
     /* ------------------------------------------------------------- seznam */
 
     function vykresliSeznam() {
         const hledane = ($("hledat").value || "").trim().toLowerCase();
+        const sedi = (f) => !hledane || f.toLowerCase().indexOf(hledane) !== -1;
+        const skupiny = skupinyDuplicit();
+        const vDuplicite = new Set();
+        skupiny.forEach(s => s.firmy.forEach(f => vDuplicite.add(f)));
+        if (!skupiny.length) rezim = "vse";
+
+        $("seznamFiltr").hidden = !skupiny.length;
+        $("seznamFiltr").innerHTML = [["vse", "Všechny", V.firmy().length, ""],
+                                      ["duplicity", "Možné duplicity", skupiny.length, " chip--dup"]]
+            .map(([klic, nazev, pocet, trida]) =>
+                '<button type="button" class="chip' + trida + (rezim === klic ? " chip--active" : "") +
+                '" data-rezim="' + klic + '" aria-pressed="' + (rezim === klic) + '">' +
+                esc(nazev) + "<em>" + esc(pocet) + "</em></button>").join("");
+        $("dupPozn").hidden = rezim !== "duplicity";
+
+        if (rezim === "duplicity") {
+            // skupina zůstane celá, když hledání sedí aspoň na jednu její firmu
+            const vidim = skupiny.filter(s => s.firmy.some(sedi));
+            $("seznamVypis").innerHTML = vidim.map(s => {
+                const duvod = s.ico.length
+                    ? "Stejné IČO" + (s.nazev ? " · podobný název" : "")
+                    : "Podobný název";
+                return '<div class="seznam__skupina' + (s.ico.length ? " seznam__skupina--ico" : "") + '">' +
+                    esc(duvod) + "</div>" +
+                    s.firmy.map(f => {
+                        const d = detail(f);
+                        const pod = [d.ico ? "IČO " + d.ico : "bez IČO",
+                            V.pocet(projektyFirmy(f).length, ["projekt", "projekty", "projektů"])].join(" · ");
+                        return '<a class="prjbtn' + (f === vybrana ? " je-vybrany" : "") +
+                            '" href="' + esc(odkazFirmy(f)) + '" data-firma="' + esc(f) + '"><b>' + esc(f) + "</b>" +
+                            "<span>" + esc(pod) + "</span></a>";
+                    }).join("");
+            }).join("") || '<div class="tiny muted" style="padding:8px 10px">Hledání nic nenašlo.</div>';
+            $("pocet").textContent = V.pocet(vidim.length, ["skupina", "skupiny", "skupin"]) + " možných duplicit";
+            return;
+        }
+
         const firmy = V.firmy()
-            .filter(f => !hledane || f.toLowerCase().indexOf(hledane) !== -1)
+            .filter(sedi)
             .sort((a, b) => a.localeCompare(b, "cs"));
 
         $("seznamVypis").innerHTML = firmy.map(f => {
             const d = detail(f);
             const pod = [d.kontakt, d.ico ? "IČO " + d.ico : ""].filter(Boolean).join(" · ");
+            const dup = vDuplicite.has(f) ? '<em class="dupznacka">možná duplicita</em>' : "";
             return '<button type="button" class="prjbtn' + (f === vybrana ? " je-vybrany" : "") +
                 '" data-firma="' + esc(f) + '"><b>' + esc(f) + "</b>" +
-                (pod ? "<span>" + esc(pod) + "</span>" : "") + "</button>";
+                (pod || dup ? "<span>" + esc(pod) + (pod && dup ? " · " : "") + dup + "</span>" : "") + "</button>";
         }).join("") || '<div class="tiny muted" style="padding:8px 10px">Zatím žádná firma.</div>';
 
         $("pocet").textContent = V.pocet(firmy.length, ["firma", "firmy", "firem"]);
+    }
+
+    /* ------------------------------------------------ upozornění u polí ----
+       Při psaní názvu a IČO: stejné IČO červeně, podobný název žlutě,
+       u každé nalezené firmy odkaz, který ji otevře. */
+
+    function vykresliVarovani() {
+        const krabice = $("dupVarovani");
+        const dup = podobneFormulari();
+        if (!dup.ico.length && !dup.nazev.length) {
+            krabice.hidden = true;
+            krabice.innerHTML = "";
+            return;
+        }
+        const otevri = (firmy) => firmy.map(f =>
+            '<a class="btn btn--ghost btn--sm" href="' + esc(odkazFirmy(f)) + '" data-otevri-firmu="' + esc(f) + '">' +
+            "Otevřít " + esc("„" + f + "“") + "</a>").join("");
+        const radek = (trida, text, firmy) =>
+            '<div class="dupvar__radek' + trida + '"><span class="dupvar__text"><b>' + esc(text) + "</b></span>" +
+            '<span class="dupvar__akce">' + otevri(firmy) + "</span></div>";
+        krabice.innerHTML =
+            (dup.ico.length ? radek(" dupvar__radek--ico",
+                (dup.ico.length === 1 ? "Firma s tímhle IČO už existuje: " : "Firmy s tímhle IČO už existují: ") +
+                vycet(dup.ico), dup.ico) : "") +
+            (dup.nazev.length ? radek("",
+                (dup.nazev.length === 1 ? "Podobný název má už firma " : "Podobný název mají už firmy ") +
+                vycet(dup.nazev), dup.nazev) : "");
+        krabice.hidden = false;
+    }
+
+    /** Otevře jinou firmu (z upozornění nebo přehledu duplicit). */
+    async function otevriFirmu(nazev) {
+        if (!nazev || V.firmy().indexOf(nazev) === -1) return;
+        /* U nové firmy, kde je napsaný jen název a IČO, se není čeho bát –
+           to je právě ta duplicita. Jinak by se rozepsané údaje ztratily. */
+        const jenKlic = novaFirma && ["fDic", "fAdresa", "fKontakt", "fEmail", "fTelefon", "fPoznamka"]
+            .every(id => !$(id).value.trim());
+        if (dotknuto && !jenKlic && !(await window.KBUI.potvrd({
+                nadpis: "Zahodit rozepsané údaje?",
+                text: "Otevře se firma „" + nazev + "“ a to, co je teď ve formuláři, se neuloží.",
+                ano: "Otevřít", ne: "Zůstat" }))) return;
+        vybrana = nazev;
+        novaFirma = false;
+        dotknuto = false;
+        $("stav").textContent = "";
+        vykresli();
+        // telefon a úzké okno: údaje jsou pod seznamem, ať je člověk vidí
+        if (window.matchMedia && window.matchMedia("(max-width: 980px)").matches) {
+            $("panel").scrollIntoView({ block: "start", behavior: "smooth" });
+        }
     }
 
     /* -------------------------------------------------------------- panel */
@@ -212,7 +347,8 @@
             ? "Vyplň údaje a ulož."
             : V.pocet(naProjektech.length, ["projekt", "projekty", "projektů"]);
 
-        if (dotknuto) return;
+        // rozepsaný formulář se nepřepisuje, upozornění ale může přibýt (dorazilo IČO)
+        if (dotknuto) return void vykresliVarovani();
 
         const d = detail(vybrana);
         $("fNazev").value = novaFirma ? "" : (vybrana || "");
@@ -230,6 +366,7 @@
             '<span class="tiny muted">Zatím na žádném projektu.</span>';
 
         $("btnSmaz").hidden = novaFirma;
+        vykresliVarovani();
     }
 
     /** Projekty, kterým se fakturuje téhle firmě. */
@@ -255,6 +392,23 @@
         if (!stary && seznam.indexOf(novyNazev) !== -1) {
             return void window.KBUI.toast("Firma „" + novyNazev + "“ už v seznamu je.", "warn");
         }
+
+        /* Možná duplicita: stejné IČO uložení zastaví, dokud to člověk
+           výslovně nepotvrdí; podobný název jen varuje (upozornění pod poli
+           a hláška po uložení). Ptá se jen u nové firmy a při změně IČO –
+           dvojice, která stejné IČO sdílí dávno, se při každé opravě telefonu
+           znovu neptá; najde se v přehledu Možné duplicity. */
+        const dup = podobneFormulari();
+        const icoJine = !stary || V.klicIco(detail(stary).ico) !== V.klicIco($("fIco").value);
+        if (dup.ico.length && icoJine && !(await window.KBUI.potvrd({
+                nadpis: (dup.ico.length === 1 ? "Firma s tímhle IČO už existuje: "
+                                              : "Firmy s tímhle IČO už existují: ") + vycet(dup.ico),
+                text: "V číselníku by pak byly dvě firmy se stejným IČO a projekty i výkazy by se " +
+                      "mezi ně rozdělily. Obvykle je lepší otevřít tu existující – odkaz je pod poli.",
+                ano: "Uložit i tak", ne: "Neukládat", nebezpecne: true }))) {
+            return void $("dupVarovani").scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        const varujNazev = !dup.ico.length && dup.nazev.length && (!stary || stary !== novyNazev);
 
         // přejmenování: v seznamu se nahradí, nová se přidá na konec
         const novySeznam = stary
@@ -293,7 +447,8 @@
             dotknuto = false;
             $("stav").textContent = "Uloženo.";
             vykresli();
-            window.KBUI.toast("Firma uložena.");
+            if (varujNazev) window.KBUI.toast("Firma uložena. Podobný název má i " + vycet(dup.nazev) + ".", "warn");
+            else window.KBUI.toast("Firma uložena.");
         } catch (err) {
             console.error(err);
             $("stav").textContent = "";
@@ -338,6 +493,15 @@
         $("obsah").hidden = !smi;
         if (!smi) return;
 
+        if (zAdresy && V.firmy().indexOf(zAdresy) !== -1) {
+            vybrana = zAdresy;
+            novaFirma = false;
+            dotknuto = false;
+            zAdresy = "";
+            // jen jednou – po přepnutí na jinou firmu by obnovení stránky skočilo zpátky
+            try { history.replaceState(null, "", location.pathname); } catch (err) { /* nevadí */ }
+        }
+
         // firmy chodí s číselníkem zakázek, ten se posílá všem přihlášeným
         vykresliSeznam();
         vykresliPanel();
@@ -350,13 +514,35 @@
 
         $("hledat").addEventListener("input", vykresliSeznam);
 
+        // odkaz s Ctrl / Shift / prostředním tlačítkem otevře firmu v nové kartě
+        const doNoveKarty = (event) => event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1;
+
         $("seznamVypis").addEventListener("click", (event) => {
             const tlacitko = event.target.closest("[data-firma]");
             if (!tlacitko) return;
+            if (tlacitko.tagName === "A") {
+                if (doNoveKarty(event)) return;
+                event.preventDefault();
+                return void otevriFirmu(tlacitko.dataset.firma);
+            }
             vybrana = tlacitko.dataset.firma;
             novaFirma = false;
             dotknuto = false;
             vykresli();
+        });
+
+        $("seznamFiltr").addEventListener("click", (event) => {
+            const chip = event.target.closest("[data-rezim]");
+            if (!chip || chip.dataset.rezim === rezim) return;
+            rezim = chip.dataset.rezim;
+            vykresliSeznam();
+        });
+
+        $("dupVarovani").addEventListener("click", (event) => {
+            const odkaz = event.target.closest("[data-otevri-firmu]");
+            if (!odkaz || doNoveKarty(event)) return;
+            event.preventDefault();
+            otevriFirmu(odkaz.dataset.otevriFirmu);
         });
 
         $("btnNova").addEventListener("click", () => {
@@ -370,6 +556,7 @@
 
         // jakmile někdo do formuláře sáhne, data z databáze mu ho nepřepíšou
         $("panel").addEventListener("input", () => { dotknuto = true; });
+        ["fNazev", "fIco"].forEach(id => $(id).addEventListener("input", vykresliVarovani));
         $("btnUloz").addEventListener("click", uloz);
         $("btnSmaz").addEventListener("click", smaz);
 
@@ -380,6 +567,8 @@
             vykresli();
         });
         window.KB.on("zakazky", vykresli);
+        // IČO a kontakty jsou ve zvláštním dokumentu – můžou dorazit až po seznamu
+        window.KB.on("firmy-detail", vykresli);
         window.KB.on("projekty-docs", vykresli);
         window.KB.on("users", vykresli);
         vykresli();
