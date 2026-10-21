@@ -1706,7 +1706,9 @@
         mrizka: cesta("M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"),
         menu: cesta("M4 6h16M4 12h16M4 18h16"),
         sipka: cesta("M19 9l-7 7-7-7"),
-        pozn: cesta("M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z")
+        pozn: cesta("M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"),
+        // přístroj na stativu (Vybavení)
+        stativ: cesta("M9 6a3 3 0 106 0 3 3 0 00-6 0zM12 9v4m0 0l-6 8m6-8l6 8m-6-8v8")
     };
     const ikonaPasu = (nazev, trida) => '<svg' + (trida ? ' class="' + trida + '"' : "") +
         ' fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
@@ -1728,7 +1730,9 @@
         ] },
         { id: "tym", nazev: "Lidé a komunikace", ikona: "users", polozky: [
             { nazev: "Porady", ikona: "bublina", href: "porady.html" },
-            { nazev: "Správa aut", ikona: "car", attr: "data-auta-otevri" }
+            { nazev: "Správa aut", ikona: "car", attr: "data-auta-otevri" },
+            { nazev: "Vybavení", ikona: "stativ", attr: "data-vybaveni-otevri",
+              popis: "Rezervace přístrojů – kdo má který přístroj a kdy" }
         ] },
         { id: "zakazky", nazev: "Zakázky", ikona: "kufr", polozky: [
             { nazev: "Seznam zakázek", ikona: "building", href: "zakazky.html" },
@@ -3765,6 +3769,57 @@
                 .catch(() => UI.toast("Zrušení se nepovedlo.", "error"));
             return;
         }
+    });
+
+    /* ------------------------------------------------------- vybavení ---
+       Rezervace přístrojů (skenery, dálkoměry, notebooky…) – panel jako
+       Správa aut. Kód je ve vlastním souboru assets/js/vybaveni.js a načte
+       se až prvním otevřením z pásu: většina návštěv webu ho nepotřebuje.
+       S ním i nabídka ⋯ (nabidka.js + .css), pokud ji stránka sama nemá.
+       Verze (?v=) se bere z ui.js na téže stránce – po zvednutí verze tak
+       nepřijde starý soubor z mezipaměti. */
+
+    const verzeWebu = () => {
+        const s = document.querySelector('script[src*="assets/js/ui.js"]');
+        const m = s && /[?&]v=([^&#]+)/.exec(s.getAttribute("src") || "");
+        return m ? m[1] : "";
+    };
+    const nacitaneSoubory = {};
+
+    /** Načte skript nebo styl webu (cesta od kořene, např. "assets/js/x.js"). */
+    UI.nactiSoubor = (cesta) => {
+        if (nacitaneSoubory[cesta]) return nacitaneSoubory[cesta];
+        nacitaneSoubory[cesta] = new Promise((hotovo, chyba) => {
+            const v = verzeWebu();
+            const adresa = cesta + (v ? "?v=" + encodeURIComponent(v) : "");
+            const css = /\.css$/.test(cesta);
+            const el = document.createElement(css ? "link" : "script");
+            if (css) { el.rel = "stylesheet"; el.href = adresa; } else { el.src = adresa; }
+            el.onload = () => hotovo();
+            el.onerror = () => {
+                delete nacitaneSoubory[cesta];
+                el.remove();
+                chyba(new Error("Nenačetl se soubor " + cesta));
+            };
+            document.head.appendChild(el);
+        });
+        return nacitaneSoubory[cesta];
+    };
+
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest || !event.target.closest("[data-vybaveni-otevri]")) return;
+        const nacist = [];
+        if (!window.KBNabidka) nacist.push(UI.nactiSoubor("assets/js/nabidka.js"));
+        if (!document.querySelector('link[href*="assets/css/nabidka.css"]')) {
+            nacist.push(UI.nactiSoubor("assets/css/nabidka.css"));
+        }
+        if (!window.KBVybaveni) nacist.push(UI.nactiSoubor("assets/js/vybaveni.js"));
+        Promise.all(nacist).then(
+            () => window.KBVybaveni.otevri(),
+            (err) => {
+                console.error(err);
+                UI.toast("Vybavení se nenačetlo – zkus obnovit stránku.", "error");
+            });
     });
 
     document.addEventListener("click", async (event) => {

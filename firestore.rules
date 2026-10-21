@@ -494,6 +494,32 @@ service cloud.firestore {
                                                 || resource.data.zapsalUid == request.auth.uid));
     }
 
+    // --- vybavení: rezervace přístrojů (skenery, dálkoměry, notebooky…) ---
+    // Seznam přístrojů je dokument public/data/meta/vybaveni – zapisuje ho
+    // jen manažer (pravidlo pro meta výš), tady nic dalšího nepotřebuje.
+    // Rezervace vidí celá firma (blanket `read` výš), jako auta. Založí si
+    // ji každý sám za sebe; upravit a zrušit ji smí autor a manažer.
+    match /artifacts/firemni-kb-app/public/data/vybaveni/{id} {
+      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
+      allow update: if spravce() || (clen()
+                       && resource.data.uid == request.auth.uid
+                       && request.resource.data.uid == request.auth.uid);
+      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+    }
+
+    /* Zámky dnů: jeden dokument na přístroj a den, id = "<přístroj>_<den>".
+       Web ukládá rezervaci transakcí spolu se zámky všech jejích dnů, takže
+       druhá rezervace téhož přístroje na týž den by musela zámek přepsat –
+       a to nesmí nikdo, ani manažer. Zámek se jen zakládá a s rezervací
+       maže (21. 10. 2026). */
+    match /artifacts/firemni-kb-app/public/data/vybaveni-dny/{id} {
+      allow create: if clen()
+                       && id == request.resource.data.pristrojId + '_' + request.resource.data.den
+                       && (spravce() || request.resource.data.uid == request.auth.uid);
+      allow update: if false;
+      allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
+    }
+
     // --- kdo je právě na webu: každý píše jen svůj otisk ---
     match /artifacts/firemni-kb-app/public/data/pritomnost/{uid} {
       allow write: if clen() && request.auth.uid == uid;
