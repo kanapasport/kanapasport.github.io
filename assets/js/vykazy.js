@@ -1397,4 +1397,274 @@
         odkaz.click();
         URL.revokeObjectURL(url);
     };
+
+    /* ================================================== TÝDNY A DNY ====
+       Čisté funkce bez DOM – testuje je NASTROJE\web\testy\ (Node).
+       Počítá se v poledne, ať změna času nikdy neposune den. */
+
+    const jeIso = (x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x || ""));
+    const isoZData = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+        "-" + String(d.getDate()).padStart(2, "0");
+
+    /** Pondělí týdne, do kterého den patří („2026-10-22" → „2026-10-19"). */
+    V.pondeli = (iso) => {
+        const d = new Date(iso + "T12:00:00");
+        d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+        return isoZData(d);
+    };
+
+    /**
+     * Týden podle ISO 8601 („2026-W43"): týden začíná pondělím a patří do
+     * roku, ve kterém leží jeho čtvrtek – 1. 1. 2027 (pátek) je ještě
+     * „2026-W53". Klíč týdne u kontroly výkazů.
+     */
+    V.isoTyden = (iso) => {
+        const d = new Date(iso + "T12:00:00");
+        d.setDate(d.getDate() - (d.getDay() + 6) % 7 + 3);          // čtvrtek týdne
+        const rok = d.getFullYear();
+        const ctvrty = new Date(rok, 0, 4, 12);                      // 4. 1. je vždy v 1. týdnu
+        const tyden = 1 + Math.round(((d - ctvrty) / 864e5 - 3 + (ctvrty.getDay() + 6) % 7) / 7);
+        return rok + "-W" + String(tyden).padStart(2, "0");
+    };
+
+    /** „13.–19. 10." – týden lidsky, bez roku. */
+    V.tydenText = (pondeli) => {
+        const ne = V.posunIso(pondeli, 6);
+        const [, m1, d1] = pondeli.split("-").map(Number);
+        const [, m2, d2] = ne.split("-").map(Number);
+        return m1 === m2 ? d1 + ".–" + d2 + ". " + m2 + "."
+                         : d1 + ". " + m1 + ". – " + d2 + ". " + m2 + ".";
+    };
+
+    /* ------------------------------------------------- kontrola týdne ----
+       Značka „zkontrolováno" u týdne člověka (store.js: KB.kontrolaTydne,
+       KB.ulozKontroluTydne). Dává ji manažer ve Výkazech a ve Vytížení
+       týmu (Týdny); nic nezamyká. */
+
+    /** Značka týdne, do kterého patří den `iso`, nebo null. */
+    V.kontrolaTydne = (uid, iso) => (uid && jeIso(iso) && window.KB && window.KB.kontrolaTydne)
+        ? window.KB.kontrolaTydne(uid, V.isoTyden(iso)) : null;
+
+    /** „Zkontrolováno – Jméno, 21. 10. 2026" do bubliny. */
+    V.kontrolaTitulek = (z) => {
+        if (!z) return "";
+        const d = new Date(Number(z.ms) || 0);
+        return "Zkontrolováno" + (z.kdo ? " – " + z.kdo : "") +
+            (Number(z.ms) > 0 ? ", " + d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() : "");
+    };
+
+    /**
+     * Přepne značku týdne (manažer). Hláška s „Zpět". Vrací true/false.
+     * `pondeli` = pondělí týdne, `jmeno` jen do hlášky a do aktivit.
+     */
+    V.prepniKontroluTydne = async (uid, pondeli, jmeno) => {
+        const KB = window.KB, UI = window.KBUI;
+        if (!uid || !jeIso(pondeli) || !KB || !KB.ulozKontroluTydne || !UI.can("vykaz.view")) return false;
+        const tyden = V.isoTyden(pondeli);
+        const bylo = !!V.kontrolaTydne(uid, pondeli);
+        const zmen = (ano) => KB.ulozKontroluTydne(uid, pondeli, tyden, ano, jmeno || "");
+        try {
+            await zmen(!bylo);
+            UI.toast((bylo ? "Značka zrušena: " : "Týden zkontrolován: ") +
+                (jmeno ? jmeno + ", " : "") + V.tydenText(pondeli), undefined, { zpet: () => zmen(bylo) });
+            return true;
+        } catch (err) {
+            console.error(err);
+            UI.toast("Uložení se nepovedlo.", "error");
+            return false;
+        }
+    };
+
+    /** Odpracovaná práce, ne absence (dovolená, nemoc, doktor…). */
+    const jePrace = (z) => !!z && z.absence !== true && !V.jeAbsence(z.zakazka);
+
+    /** „08:30" → 510; cokoliv jiného → null. */
+    const minutyCasu = (cas) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(cas || "").trim());
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+
+    /* ======================================== NÁVRHY ZÁPISU (jako minule) ==
+       Rešerše 19. 10. 2026 (Michal schválil 21. 10. 2026): kdo dělá týden na
+       jednom patře, píše každý den totéž. Web proto nabídne poslední den
+       se zápisem jako NÁVRH – uložit ho musí člověk sám. */
+
+    /**
+     * Poslední den PŘED `den`, kdy člověk `uid` zapsal nějakou práci
+     * (absence se nepočítá – po dovolené se navrhne poslední pracovní den),
+     * a jeho pracovní zápisy toho dne seřazené podle začátku.
+     * @returns {{den: string, zapisy: Array}|null}
+     */
+    V.navrhJakoMinule = (zaznamy, uid, den) => {
+        if (!uid || !jeIso(den)) return null;
+        let zdroj = "";
+        (zaznamy || []).forEach(z => {
+            if (!jePrace(z) || z.uid !== uid || !jeIso(z.datum) || z.datum >= den) return;
+            if (z.datum > zdroj) zdroj = z.datum;
+        });
+        if (!zdroj) return null;
+        const zapisy = (zaznamy || []).filter(z => jePrace(z) && z.uid === uid && z.datum === zdroj)
+            .sort((a, b) => String(a.od || "").localeCompare(String(b.od || "")));
+        return { den: zdroj, zapisy: zapisy };
+    };
+
+    /**
+     * Úkoly k rychlému přidání: na čem člověk `uid` pracoval od pondělí
+     * minulého týdne do dne před `den`. Hotové úkoly ne (hodiny na hotový
+     * úkol hlásí kontrola podezřelých zápisů) a úkol musí mít projekt.
+     * Seřazené podle odpracovaných hodin, nejvýš `kolik` (8).
+     * @returns {Array<{ukol: Object, hodin: number, dni: number, posledni: string}>}
+     */
+    V.navrhyUkolu = (zaznamy, uid, den, ukoly, kolik) => {
+        if (!uid || !jeIso(den)) return [];
+        const od = V.posunIso(V.pondeli(den), -7);
+        const mapa = {};
+        (zaznamy || []).forEach(z => {
+            if (!jePrace(z) || z.uid !== uid || !z.ukolId || !jeIso(z.datum)) return;
+            if (z.datum < od || z.datum >= den) return;
+            const m = mapa[z.ukolId] || (mapa[z.ukolId] = { hodin: 0, dny: {}, posledni: "" });
+            m.hodin += Number(z.hodiny) || 0;
+            m.dny[z.datum] = true;
+            if (z.datum > m.posledni) m.posledni = z.datum;
+        });
+        const podleId = {};
+        (ukoly || []).forEach(u => { if (u && u.id) podleId[u.id] = u; });
+        return Object.keys(mapa)
+            .map(id => ({ ukol: podleId[id], hodin: Math.round(mapa[id].hodin * 100) / 100,
+                          dni: Object.keys(mapa[id].dny).length, posledni: mapa[id].posledni }))
+            .filter(x => x.ukol && x.ukol.stav !== "hotovo" && x.ukol.projekt)
+            .sort((a, b) => b.hodin - a.hodin || b.posledni.localeCompare(a.posledni) ||
+                String(a.ukol.nazev || "").localeCompare(String(b.ukol.nazev || ""), "cs"))
+            .slice(0, Number(kolik) > 0 ? Number(kolik) : 8);
+    };
+
+    /* ================================================ PODEZŘELÉ ZÁPISY ====
+       Seznam k odkliknutí pro manažera – dlaždice Upozornění pro kontrolu
+       na nástěnce (rešerše 19. 10. 2026, bod 5). Bere jen posledních
+       14 dní: starší věci řeší uzávěrka měsíce, ne denní kontrola.
+
+         hodiny   den nad 10 h práce (absence se nepočítá)
+         prekryv  dva zápisy téhož člověka v jednom dni přes sebe
+         absence  práce v den celodenní absence
+         hotovy   hodiny na úkol, který byl ten den už hotový
+         vypomoc  zápis na cizí úkol (výpomoc) bez vlastní poznámky
+
+       Klíč položky (`klic`) si pamatuje odkliknutí „V pořádku" – u starších
+       druhů je stejný jako dřív, ať odkliknuté nevyskočí znovu. */
+
+    V.PRAH_DEN_HODIN = 10;
+    V.PODEZRELE_DNI = 14;
+
+    /**
+     * Den, od kterého byl úkol JISTĚ hotový: den poslední změny hotového
+     * úkolu. Kdy přesně hotovo vzniklo, úkol nenese (zaměstnanec smí zapsat
+     * jen todo/stav/historii) – ale od poslední změny se nic nestalo, takže
+     * v ten den už hotový byl. Kontrola pak hlásí jen zápisy na dny PO něm:
+     * spíš něco nenahlásí, než aby hlásila falešně. Úkol, který není
+     * hotový, nebo nemá čas změny → "".
+     */
+    V.ukolHotovyOd = (u) => {
+        if (!u || u.stav !== "hotovo" || !(Number(u.updatedMs) > 0)) return "";
+        return isoZData(new Date(Number(u.updatedMs)));
+    };
+
+    /** Napsal člověk k zápisu něco svého? Poznámka nebo popis práce, který
+        nedoplnil web sám (místo, název úkolu). */
+    const vlastniText = (z, u) => {
+        if (String(z.poznamka || "").trim()) return true;
+        const t = String(z.nazev || "").trim();
+        if (!t || z.nazevAuto === true) return false;
+        return t !== String((u && u.nazev) || "").trim();
+    };
+
+    /**
+     * Podezřelé zápisy za posledních `dni` dní (včetně `dnes`).
+     * @param {Array} zaznamy  výkazy (KB.vykazy)
+     * @param {Object} [volby] { dnes, dni, prah, ukoly }
+     * @returns {Array<{klic, druh, uid, datum, zapis, duvod, hodiny?, ukolId?}>}
+     *   seřazené od nejnovějšího dne; jména doplní stránka
+     */
+    V.podezreleZapisy = (zaznamy, volby) => {
+        const v = volby || {};
+        const dnes = jeIso(v.dnes) ? v.dnes : V.dnesISO();
+        const dni = Number(v.dni) > 0 ? Number(v.dni) : V.PODEZRELE_DNI;
+        const prah = Number(v.prah) > 0 ? Number(v.prah) : V.PRAH_DEN_HODIN;
+        const ukoly = v.ukoly || (window.KB && window.KB.ukoly) || [];
+        const od = V.posunIso(dnes, -(dni - 1));
+        const podleId = {};
+        ukoly.forEach(u => { if (u && u.id) podleId[u.id] = u; });
+
+        const out = [];
+        const uz = {};
+        const pridej = (p) => { if (!uz[p.klic]) { uz[p.klic] = true; out.push(p); } };
+        const dny = {};
+
+        (zaznamy || []).forEach(z => {
+            if (!z || !z.uid || !jeIso(z.datum) || z.datum < od || z.datum > dnes) return;
+            const k = z.uid + "|" + z.datum;
+            const den = dny[k] || (dny[k] = { uid: z.uid, datum: z.datum, prace: [], absenceCely: false, hodiny: 0 });
+            if (!jePrace(z)) {
+                if (z.od === "00:00" && z.do === "23:59") den.absenceCely = true;
+                return;
+            }
+            den.prace.push(z);
+            den.hodiny += Number(z.hodiny) || 0;
+
+            const u = z.ukolId ? podleId[z.ukolId] : null;
+            if (!u) return;
+            const hotovyOd = V.ukolHotovyOd(u);
+            if (hotovyOd && z.datum > hotovyOd) {
+                pridej({ klic: k + "|hotovy|" + u.id, druh: "hotovy", uid: z.uid, datum: z.datum,
+                    zapis: z.id || "", ukolId: u.id,
+                    duvod: "hodiny na úkol „" + (u.nazev || "?") + "“, který už byl hotový" +
+                        " (nejpozději od " + V.czDatum(hotovyOd) + ")" });
+            }
+            if ((u.prirazeni || []).indexOf(z.uid) === -1 && !vlastniText(z, u)) {
+                pridej({ klic: "vypomoc|" + (z.id || k), druh: "vypomoc", uid: z.uid, datum: z.datum,
+                    zapis: z.id || "", ukolId: u.id,
+                    duvod: "výpomoc na cizí úkol „" + (u.nazev || "?") + "“ bez poznámky" });
+            }
+        });
+
+        Object.keys(dny).forEach(k => {
+            const den = dny[k];
+            /* Odkaz míří na konkrétní zápis. U nálezu přes celý den stačí
+               kterýkoliv, výkazy ukážou celý den (i sousední zápis). */
+            const prvni = den.prace[0] || {};
+            const hodiny = Math.round(den.hodiny * 100) / 100;
+            if (hodiny > prah) {
+                pridej({ klic: k + "|hodiny", druh: "hodiny", uid: den.uid, datum: den.datum,
+                    zapis: prvni.id || "", hodiny: hodiny,
+                    duvod: String(hodiny).replace(".", ",") + " h za jeden den (víc než " + prah + " h)" });
+            }
+            if (den.absenceCely && den.prace.length) {
+                pridej({ klic: k + "|absence", druh: "absence", uid: den.uid, datum: den.datum,
+                    zapis: prvni.id || "", duvod: "výkaz práce v den celodenní absence" });
+            }
+            /* Překryv: podle začátku, a s tím, co ZATÍM končí nejpozději –
+               jen se sousedem by 8–16 a 15–17 za kratším 9–10 prošlo. Práce
+               přes půlnoc zabírá den do konce. Jeden den = jedno hlášení. */
+            const sCasy = den.prace
+                .map(z => ({ z: z, a: minutyCasu(z.od), b: minutyCasu(z.do) }))
+                .filter(x => x.a !== null && x.b !== null && x.a !== x.b)
+                .map(x => ({ z: x.z, a: x.a, b: x.b > x.a ? x.b : 24 * 60 }))
+                .sort((p, q) => p.a - q.a || p.b - q.b);
+            let nejdel = null;
+            for (let i = 0; i < sCasy.length; i++) {
+                const x = sCasy[i];
+                if (nejdel && x.a < nejdel.b) {
+                    pridej({ klic: k + "|prekryv", druh: "prekryv", uid: den.uid, datum: den.datum,
+                        zapis: x.z.id || "",
+                        duvod: "dva zápisy přes sebe (" + nejdel.z.od + "–" + nejdel.z.do + " a " +
+                            x.z.od + "–" + x.z.do + ")" });
+                    break;
+                }
+                if (!nejdel || x.b > nejdel.b) nejdel = x;
+            }
+        });
+
+        const PORADI = { hodiny: 0, prekryv: 1, absence: 2, hotovy: 3, vypomoc: 4 };
+        return out.sort((a, b) => b.datum.localeCompare(a.datum) ||
+            String(a.uid).localeCompare(String(b.uid)) || PORADI[a.druh] - PORADI[b.druh]);
+    };
 })();

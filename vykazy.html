@@ -186,6 +186,34 @@
         .polozka--rezie .polozka__grid > div:has([data-f="cinnost"]),
         .polozka--rezie .polozka__grid > div:has([data-f="technologie"]),
         .polozka--rezie .polozka__ukolvyber { display: none; }
+
+        /* NÁVRHY ZÁPISU (21. 10. 2026): „Jako minule" a čipy s úkoly, na
+           kterých člověk dělal od minulého pondělí. Jen předvyplní formulář –
+           uloží se až tlačítkem Uložit. */
+        .navrhy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+            padding: 10px 12px; border-radius: var(--radius);
+            background: var(--bg-soft); border: 1px dashed var(--line); }
+        .navrhy[hidden] { display: none; }
+        .navrhy__popis { font-size: var(--fs-1); font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted); }
+        .navrhy__zdroj { font-weight: 400; color: var(--muted); }
+        .navrhy__cip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* „jako minule" pod dnem v hlavičce týdenní mřížky */
+        .ty .ty__minule { margin-top: 4px; padding: 1px 7px; font-size: var(--fs-1); font-weight: 700;
+            letter-spacing: 0; text-transform: none; }
+
+        /* KONTROLA TÝDNŮ (21. 10. 2026): manažer u jednoho člověka označí
+           týden jako zkontrolovaný, člověk u svých výkazů vidí, co prošlo. */
+        .kty { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; }
+        .kty[hidden] { display: none; }
+        .kty__nadpis { font-size: var(--fs-1); font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+        .kty__tyden--ano { background: var(--ok-tint); color: var(--ok); border-color: var(--ok); }
+        .kty__tyden--ano:hover { background: var(--ok-tint); color: var(--ok); border-color: var(--ok);
+            filter: brightness(.96); }
+        .kty__tag { background: var(--ok-tint); color: var(--ok); text-transform: none; letter-spacing: 0; }
+        .kty__tag[hidden] { display: none; }
+        .kty__pozn { flex-basis: 100%; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -253,6 +281,9 @@
                 </div>
             </div>
 
+            <!-- návrhy: „Jako minule" a úkoly z minulého týdne (21. 10. 2026) -->
+            <div id="navrhy" class="navrhy" hidden></div>
+
             <div id="radky"></div>
 
             <div class="row row--wrap" style="gap:10px">
@@ -269,7 +300,11 @@
              běžné zápisy stejnou cestou jako formulář (20. 10. 2026). -->
         <section id="tyden" class="card col" style="padding:18px;gap:12px" hidden>
             <div class="spread" style="gap:10px;flex-wrap:wrap">
-                <b style="font-size:var(--fs-4)">Týden v mřížce</b>
+                <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
+                    <b style="font-size:var(--fs-4)">Týden v mřížce</b>
+                    <!-- týden prošel manažer (kontrola týdnů, 21. 10. 2026) -->
+                    <span id="tyKontrola" class="tag kty__tag" hidden>✓ Zkontrolováno manažerem</span>
+                </div>
                 <div class="row" style="gap:6px;align-items:center">
                     <button type="button" class="btn btn--ghost btn--sm" id="tyZpet" title="Předchozí týden">‹</button>
                     <span id="tyRozsah" class="small" style="min-width:132px;text-align:center"></span>
@@ -321,6 +356,12 @@
                 <button type="button" id="btnCsv" class="btn btn--ghost btn--sm">Stáhnout CSV</button>
             </div>
         </div>
+
+        <!-- Kontrola týdnů: manažer u jednoho člověka označí týden jako
+             zkontrolovaný; člověk u svých výkazů vidí, které týdny prošly.
+             Nic nezamyká – zámkem je uzávěrka (21. 10. 2026). Stojí hned
+             pod filtry: patří k tomu, čí týden se zrovna prochází. -->
+        <div id="kontrolaTydnu" class="card kty" hidden></div>
 
         <div id="souhrn" class="vyksum"></div>
 
@@ -1714,7 +1755,7 @@
             (jeRezie(d.zakazka || "") ? " zblok--rezie" : "") + '" data-zblok>' +
             '<div class="zblok__hlava">' +
                 '<div class="zblok__stitek">Výkaz</div>' +
-                '<button type="button" class="linkbtn" data-zodeber hidden>Odebrat výkaz</button>' +
+                '<button type="button" class="linkbtn linkbtn--tmavy" data-zodeber hidden>Odebrat výkaz</button>' +
             "</div>" +
 
             '<div class="zblok__grid">' +
@@ -2049,6 +2090,7 @@
         naplnOsoby();
         radkyBox().innerHTML = "";
         pridejBlok();
+        vykresliNavrhy();
         const prvni = doPoleProjektu(radkyBox().querySelector('[data-z="zakazka"]'));
         if (prvni) prvni.focus();
     }
@@ -3067,6 +3109,7 @@
         if (!(await ulozZapisy(uid, polozky))) return;
         radkyBox().innerHTML = "";
         pridejBlok();
+        vykresliNavrhy();
     }
 
     /**
@@ -3175,6 +3218,240 @@
             window.KBUI.toast("Uložení selhalo – zkus to prosím znovu.", "error");
             return 0;
         }
+    }
+
+    /* ================================================= NÁVRHY ZÁPISU ====
+       „Jako minule": záznamy člověka z jeho POSLEDNÍHO dne se zápisem práce
+       (stejné úkoly, projekty, firmy, druh, místo, časy, pauza, oběd, km)
+       se připraví do formuláře jako NÁVRH pro vybraný den. Nic se neukládá
+       samo – člověk návrh upraví a uloží tlačítkem jako vždycky (stejnou
+       cestou `ulozZapisy`, se všemi hlídkami). Absence se nekopírují, popis
+       práce taky ne (patří ke dni) – doplní se z místa nebo úkolu.
+       Pod tím čipy s úkoly, na kterých dělal od minulého pondělí – klik
+       přidá záznam na ten úkol. Na zavřený nebo budoucí den se návrh
+       nenabízí (rešerše 19. 10. 2026, bod 1; Michal schválil 21. 10. 2026). */
+
+    /** Den, pro který se navrhuje: datum prvního záznamu ve formuláři, jinak dnes. */
+    function navrhDen() {
+        const pole = radkyBox().querySelector('[data-f="datum"]');
+        return (pole && /^\d{4}-\d{2}-\d{2}$/.test(pole.value)) ? pole.value : V.dnesISO();
+    }
+
+    /** Proč se na den nic nenavrhuje; "" = navrhuje se. Stejné hlídky jako
+        `ulozZapisy` (manažera lhůta ani uzávěrka nezastaví), navíc budoucnost. */
+    function navrhZamek(den) {
+        if (den > V.dnesISO()) return "budoucí den";
+        if (window.KBUI.can("vykaz.view")) return "";
+        if (podCarou(den)) return "uzavřený měsíc";
+        if (poLhute(den) && !mamZpetnePovoleni(den)) return "uzavřený týden";
+        return "";
+    }
+
+    /** Je ve formuláři už něco vyplněného? (Pak se návrh jen s dovolením.) */
+    const formularRozepsany = () => prectiRadky().some(p => p.zakazka || p.ukolId || p.nazev);
+
+    /** Návrh „jako minule" pro den – jen zápisy, které jdou ve formuláři vybrat. */
+    function navrhMinule(uid, den) {
+        const n = V.navrhJakoMinule(window.KB.vykazy || [], uid, den);
+        if (!n) return null;
+        const nabidka = nabidkaProjektu();
+        const ukoly = window.KB.ukoly || [];
+        let vynechano = 0;
+        const zapisy = n.zapisy.filter(z => {
+            const u = z.ukolId ? ukoly.find(x => x.id === z.ukolId) : null;
+            /* Projekt mimo nabídku (uzavřený, už ne můj) ani hotový úkol se
+               nenavrhují – zápis by na ně stejně psát neměl. */
+            const ok = nabidka.indexOf(z.zakazka || "") !== -1 && !(u && u.stav === "hotovo");
+            if (!ok) vynechano++;
+            return ok;
+        });
+        return zapisy.length ? { den: n.den, zapisy: zapisy, vynechano: vynechano } : null;
+    }
+
+    function vykresliNavrhy() {
+        const box = $("navrhy");
+        if (!box) return;
+        if ($("zapis").hidden) { box.hidden = true; return; }
+        const uid = $("dOsoba").value;
+        const den = navrhDen();
+        const zamek = uid ? navrhZamek(den) : "nevybraný člověk";
+        const minule = zamek ? null : navrhMinule(uid, den);
+        // úkol už ve formuláři vybraný se znovu nenabízí
+        const veFormulari = prectiRadky().map(p => p.ukolId).filter(Boolean);
+        const ukoly = zamek ? [] : V.navrhyUkolu(window.KB.vykazy || [], uid, den, window.KB.ukoly || [], 8)
+            .filter(x => veFormulari.indexOf(x.ukol.id) === -1 &&
+                (x.ukol.projekt !== WEB_PRACE || jeMujWeb()));
+        if (!minule && !ukoly.length) { box.hidden = true; box.innerHTML = ""; return; }
+        box.hidden = false;
+        const pocet = minule ? minule.zapisy.length : 0;
+        box.innerHTML =
+            (minule
+                ? '<button type="button" class="btn btn--ghost btn--sm" data-navrh-minule title="' +
+                      esc("Připraví " + V.pocet(pocet, ["záznam", "záznamy", "záznamů"]) + " z " +
+                          V.czDatum(minule.den) + " jako návrh na " + V.czDatum(den) +
+                          ". Uloží se, až ho zkontroluješ a dáš Uložit.") + '">' +
+                      "Jako minule " + '<span class="navrhy__zdroj">(' + esc(tyDenText(minule.den)) +
+                      " · " + esc(V.pocet(pocet, ["záznam", "záznamy", "záznamů"])) + ")</span></button>"
+                : "") +
+            (ukoly.length
+                ? '<span class="navrhy__popis">Rychle přidat</span>' +
+                  ukoly.map(x => '<button type="button" class="chip navrhy__cip" data-navrh-ukol="' +
+                      esc(x.ukol.id) + '" title="' + esc(x.ukol.projekt + " · od minulého pondělí " +
+                          V.hod(x.hodin) + " (" + V.pocet(x.dni, ["den", "dny", "dní"]) + ")") + '">+ ' +
+                      esc(x.ukol.nazev || "Úkol") + "</button>").join("")
+                : "");
+    }
+
+    /** Zápis z minula jako data pro `polozkaHtml` – pro den `den`. */
+    function navrhZaznamu(z, den, uid, zakazka) {
+        return {
+            ukolId: z.ukolId || "", cinnost: z.cinnost || "",
+            technologie: z.technologie || "", podilTech: z.podilTech || "",
+            budova: z.budova || "", patro: z.patro || "", podilPatra: z.podilPatra || "",
+            datum: den, od: z.od || "", do: z.do || "", hodiny: Number(z.hodiny) || 0,
+            pauza: Number(z.pauza) || 0, obed: z.obed === true, km: Number(z.km) || 0,
+            nazev: "", sazba: V.sazbaProZapis(uid, zakazka) || vychoziSazba,
+            _zakazkaBloku: zakazka
+        };
+    }
+
+    async function pouzijJakoMinule() {
+        const uid = $("dOsoba").value;
+        const den = navrhDen();
+        if (!uid || navrhZamek(den)) return;
+        const minule = navrhMinule(uid, den);
+        if (!minule) return;
+        if (formularRozepsany() && !(await window.KBUI.potvrd({
+                nadpis: "Nahradit rozepsaný výkaz návrhem?",
+                text: "Ve formuláři už něco je. Návrh podle " + V.czDatum(minule.den) +
+                    " ho nahradí – nic se zatím neukládá.",
+                ano: "Nahradit" }))) return;
+
+        // projekt + firma = jeden výkaz (blok), stejně jako při ručním psaní
+        const skupiny = [];
+        minule.zapisy.forEach(z => {
+            const klic = (z.zakazka || "") + "|" + (z.firma || "");
+            let sk = skupiny.find(x => x.klic === klic);
+            if (!sk) skupiny.push(sk = { klic: klic, zakazka: z.zakazka || "", firma: z.firma || "", zapisy: [] });
+            sk.zapisy.push(z);
+        });
+
+        radkyBox().innerHTML = "";
+        skupiny.forEach(sk => {
+            radkyBox().insertAdjacentHTML("beforeend", zblokHtml({ zakazka: sk.zakazka, firma: sk.firma }));
+            const blok = bloky().pop();
+            const kam = blok.querySelector("[data-polozky]");
+            sk.zapisy.forEach(z => kam.insertAdjacentHTML("beforeend",
+                polozkaHtml(navrhZaznamu(z, den, uid, sk.zakazka), { odebrat: true, sDatem: true })));
+            ozivVybery(blok);
+            // projekt, který má firmu ve Správě, ji určuje (a zamkne) – jako při výběru
+            if (firmaProjektu(sk.zakazka)) doplnFirmu(blok, "data-z", sk.zakazka);
+            polozkyBloku(blok).forEach((box, i) => {
+                const z = sk.zapisy[i];
+                const sel = box.querySelector('[data-f="ukolId"]');
+                /* Nabídka úkolů bez zúžení místem – „1NP, 2NP" by úkol na 1NP
+                   jinak odsunulo mezi cizí. */
+                if (sel && z.ukolId) {
+                    sel.innerHTML = ukolOptions(sk.zakazka, z.ukolId);
+                    sel.value = z.ukolId;
+                    obnovUkolVyber(sel);
+                }
+                zamkniPodleUkolu(box);
+                srovnejVsechnyOsy(box);
+                predvyplnMisto(box);
+                prepocti(box);
+            });
+        });
+        precisluj();
+        vykresliNavrhy();
+        /* Kurzor se nikam nestaví: pole času se při vstupu vyprázdní (kvůli
+           nabídce časů) a návrh by pak vypadal, že čas nepřevzal. */
+        window.KBUI.toast("Návrh podle " + tyDenText(minule.den) + " – zkontroluj ho a ulož." +
+            (minule.vynechano ? " Vynecháno " + V.pocet(minule.vynechano, ["záznam", "záznamy", "záznamů"]) +
+                " (hotový úkol nebo projekt mimo nabídku)." : ""));
+    }
+
+    /** Čip úkolu: přidá záznam na ten úkol – do výkazu téhož projektu,
+        do prázdného výkazu, nebo do nového. */
+    function pridejUkolZNavrhu(id) {
+        const u = (window.KB.ukoly || []).find(x => x.id === id);
+        const den = navrhDen();
+        if (!u || !u.projekt || navrhZamek(den)) return;
+        let blok = bloky().find(b => ctiZblok(b).zakazka === u.projekt) ||
+                   bloky().find(b => !ctiZblok(b).zakazka) || null;
+        if (!blok) blok = pridejBlok();
+        const sel = blok.querySelector('[data-z="zakazka"]');
+        if (sel && sel.value !== u.projekt) {
+            if (!Array.from(sel.options).some(o => o.value === u.projekt)) {
+                sel.insertAdjacentHTML("beforeend",
+                    '<option value="' + esc(u.projekt) + '">' + esc(u.projekt) + "</option>");
+            }
+            sel.value = u.projekt;
+            // jako výběr rukou: firma, nabídka úkolů, druhů a míst podle projektu
+            sel.dispatchEvent(new Event("input", { bubbles: true }));
+            obnovProjektVyber(sel);
+        }
+        // volný záznam výkazu (bez úkolu i popisu), jinak další
+        let box = polozkyBloku(blok).find(b => { const p = ctiPolozku(b); return !p.ukolId && !p.nazev; });
+        if (!box) box = pridejPolozku(blok);
+        const datum = box.querySelector('[data-f="datum"]');
+        if (datum) datum.value = den;
+        const ukolSel = box.querySelector('[data-f="ukolId"]');
+        if (ukolSel) {
+            ukolSel.innerHTML = ukolOptions(u.projekt, u.id);
+            ukolSel.value = u.id;
+            obnovUkolVyber(ukolSel);
+        }
+        zamkniPodleUkolu(box);
+        srovnejVsechnyOsy(box);
+        predvyplnMisto(box);
+        obnovHoHlasku(box);
+        obnovLhutu(box);
+        prepocti(box);
+        precisluj();
+        vykresliNavrhy();
+        // začátek navazuje na předchozí záznam – zbývá napsat konec
+        const konecPrace = box.querySelector('[data-f="do"]');
+        if (konecPrace && !konecPrace.value) konecPrace.focus();
+    }
+
+    /* ============================================== KONTROLA TÝDNŮ ====
+       Pruh nad výpisem, když jsou vidět výkazy JEDNOHO člověka. Manažer
+       (vykaz.view) týden označí jako zkontrolovaný nebo značku zruší;
+       člověk u svých výkazů vidí týdny, které manažer prošel. Týdny se
+       berou z výpisu (nejnovější první, nejvýš 8). Nic nezamyká – zámkem
+       je uzávěrka (rešerše 19. 10. 2026, bod 4; Michal schválil 21. 10.). */
+
+    function vykresliKontroluTydnu(uid, zaznamy, manazer) {
+        const box = $("kontrolaTydnu");
+        if (!box) return;
+        if (!uid || !window.KB.kontrolaTydne) { box.hidden = true; box.innerHTML = ""; return; }
+        const dnes = V.dnesISO();
+        const pondeli = [];
+        (zaznamy || []).forEach(z => {
+            if (z.uid !== uid || !z.datum || z.datum > dnes) return;
+            const po = V.pondeli(z.datum);
+            if (pondeli.indexOf(po) === -1) pondeli.push(po);
+        });
+        const tydny = pondeli.sort().reverse().slice(0, 8)
+            .map(po => ({ po: po, z: V.kontrolaTydne(uid, po) }));
+        const ukaz = manazer ? tydny : tydny.filter(t => t.z);
+        if (!ukaz.length) { box.hidden = true; box.innerHTML = ""; return; }
+        box.hidden = false;
+        box.innerHTML = '<span class="kty__nadpis">' +
+                (manazer ? "Kontrola týdnů" : "Zkontrolováno manažerem") + "</span>" +
+            ukaz.map(t => manazer
+                ? '<button type="button" class="chip kty__tyden' + (t.z ? " kty__tyden--ano" : "") + '"' +
+                      ' data-kty-po="' + esc(t.po) + '" aria-pressed="' + (t.z ? "true" : "false") + '"' +
+                      ' title="' + esc(t.z ? V.kontrolaTitulek(t.z) + ". Klik značku zruší."
+                                           : "Označit týden " + V.tydenText(t.po) + " jako zkontrolovaný") + '">' +
+                      (t.z ? "✓ " : "") + esc(V.tydenText(t.po)) + "</button>"
+                : '<span class="tag kty__tag" title="' + esc(V.kontrolaTitulek(t.z)) + '">✓ ' +
+                      esc(V.tydenText(t.po)) + "</span>").join("") +
+            (manazer
+                ? '<span class="tiny muted kty__pozn">Klik označí týden jako zkontrolovaný (zelený ✓) nebo značku' +
+                  " zruší. Nic nezamyká – zámek je uzávěrka; člověk značku uvidí u svých výkazů.</span>"
+                : "");
     }
 
     /* =============================================== TÝDEN V MŘÍŽCE ====
@@ -3440,6 +3717,35 @@
         });
     }
 
+    /**
+     * „Jako minule" v mřížce: hodiny po úkolech z posledního dne se zápisem
+     * práce před dnem `datum` – jen do řádků, které mřížka má, a jen když je
+     * den otevřený, pracovní a zatím prázdný (nic zapsaného ani napsaného).
+     * Vrací { den, bunky: [{ klic, hodiny }], vynechano } nebo null.
+     * Časy, pauza a příplatky se do mřížky nevejdou – na ty je formulář.
+     */
+    function tyMinule(uid, datum, stav) {
+        const den = new Date(datum + "T12:00:00").getDay();
+        if (!uid || den === 0 || den === 6) return null;
+        if (window.KBUI.svatek && window.KBUI.svatek(datum)) return null;
+        if (tyZamek(datum, "")) return null;
+        if ((stav.zaDen[datum] || 0) > 0) return null;
+        if (stav.radky.some(u => String(tyVstupy[tyKlic(u.id, datum)] || "").trim())) return null;
+        const n = V.navrhJakoMinule(window.KB.vykazy || [], uid, datum);
+        if (!n) return null;
+        const hodiny = {};
+        let vynechano = 0;
+        n.zapisy.forEach(z => {
+            const u = z.ukolId ? stav.radky.find(r => r.id === z.ukolId) : null;
+            if (!u || u.stav === "hotovo" || tyZamek(datum, u.projekt)) { vynechano++; return; }
+            hodiny[u.id] = (hodiny[u.id] || 0) + (Number(z.hodiny) || 0);
+        });
+        const bunky = Object.keys(hodiny)
+            .map(id => ({ klic: tyKlic(id, datum), hodiny: Math.min(16, Math.round(hodiny[id] * 4) / 4) }))
+            .filter(b => b.hodiny > 0);
+        return bunky.length ? { den: n.den, bunky: bunky, vynechano: vynechano } : null;
+    }
+
     function otevriTyden() {
         if (!tyPondeli) tyPondeli = pondeliTydne(V.dnesISO());
         $("tyden").hidden = false;
@@ -3457,6 +3763,10 @@
         $("tyZpet").disabled = tyPondeli <= posunDen(pondeliTydne(dnes), -7 * TY_ZPET_TYDNU);
         $("tyDal").disabled = tyPondeli >= pondeliTydne(dnes);
         $("tyRozsah").textContent = tyDenText(dny[0]) + " – " + V.czDatum(dny[6]);
+        // týden už prošel manažer (kontrola týdnů)
+        const kontrola = V.kontrolaTydne(uid, tyPondeli);
+        $("tyKontrola").hidden = !kontrola;
+        $("tyKontrola").title = kontrola ? V.kontrolaTitulek(kontrola) : "";
 
         // kurzor v rozepsané buňce přežije překreslení – data chodí průběžně
         const akt = document.activeElement;
@@ -3481,7 +3791,13 @@
                     ? '<button type="button" class="linkbtn" data-ty-vikend title="Sbalit sobotu a neděli">' +
                       popis + "</button>"
                     : popis) +
-                '<br><span class="ty__soucet" data-ty-soucet="' + esc(d) + '"></span></th>';
+                '<br><span class="ty__soucet" data-ty-soucet="' + esc(d) + '"></span>' +
+                /* „jako minule" jen u prázdného otevřeného pracovního dne */
+                (tyMinule(uid, d, s)
+                    ? '<br><button type="button" class="linkbtn ty__minule" data-ty-minule="' + esc(d) + '"' +
+                      ' title="Doplní do dne hodiny po úkolech z posledního dne se zápisem – uloží se až s týdnem">' +
+                      "jako minule</button>"
+                    : "") + "</th>";
         };
 
         const bunka = (u, d) => {
@@ -3743,6 +4059,26 @@
             return;
         }
 
+        /* ?kdo=UID&od=…&do=… – proklik z Vytížení týmu (Týdny): týden jednoho
+           člověka, ať ho manažer projde a označí jako zkontrolovaný. */
+        const kdo = par.get("kdo");
+        if (kdo) {
+            filtrZAdresyHotov = true;
+            filtr.uid = kdo;
+            osobaNastavena = true;
+            const od = par.get("od") || "", doKdy = par.get("do") || "";
+            if (/^\d{4}-\d{2}-\d{2}$/.test(od)) {
+                filtr.od = od;
+                filtr.do = /^\d{4}-\d{2}-\d{2}$/.test(doKdy) && doKdy >= od ? doKdy : od;
+                $("fOd").value = filtr.od;
+                $("fDo").value = filtr.do;
+                document.querySelectorAll("[data-obdobi]").forEach(c => c.classList.remove("chip--active"));
+                dotahniStarsi(filtr.od, filtr.do);
+            }
+            render();
+            return;
+        }
+
         const id = par.get("ukolFiltr");
         if (!id) return;
         filtrZAdresyHotov = true;
@@ -3983,6 +4319,8 @@
            manažer toho, koho má ve filtru – bez výběru („Všichni lidé")
            by nebylo čí vytížení ukazovat. */
         vykresliVytizeni(spravce ? filtr.uid : window.KB.currentUid());
+        // týdny ve výpisu: manažer je označuje, člověk vidí zkontrolované
+        vykresliKontroluTydnu(spravce ? filtr.uid : ja, zaznamy, spravce);
 
         const s = V.soucty(zaznamy);
 
@@ -4605,6 +4943,9 @@
            ve větvi pro zaměstnance by se mu odběr nikdy nespustil. Funkce
            si sama ohlídá, že ji dostane jen ten, kdo si fakturuje sám. */
         window.KB.watchMojeSazba();
+        /* Značky „zkontrolováno" u týdnů – manažer všechny (okno jako výkazy),
+           ostatní jen svoje (dotaz uid == já); rozhoduje skutečná role. */
+        window.KB.watchKontrolaTydnu();
         if (window.KBUI.can("vykaz.view")) {
             window.KB.watchVykazy();
             window.KB.watchProjekty();
@@ -4756,6 +5097,9 @@
         }
         prepocti(box);
         if (radkyBox().contains(box)) soucetDne();
+        // jiný den = jiný návrh; vybraný úkol zmizí z čipů
+        if (radkyBox().contains(box) &&
+            (event.target.dataset.f === "datum" || event.target.dataset.f === "ukolId")) vykresliNavrhy();
     });
 
     /* Napsaný čas srovnáme, až když z pole odejde – během psaní by to
@@ -5028,6 +5372,24 @@
             novyZapis();
             $("zapis").scrollIntoView({ behavior: "smooth", block: "start" });
         });
+        /* ---- Návrhy zápisu a kontrola týdnů (21. 10. 2026) ---- */
+        $("navrhy").addEventListener("click", (event) => {
+            if (event.target.closest("[data-navrh-minule]")) return void pouzijJakoMinule();
+            const cip = event.target.closest("[data-navrh-ukol]");
+            if (cip) pridejUkolZNavrhu(cip.dataset.navrhUkol);
+        });
+        // výkazy, úkoly, lidé, zámky a role chodí průběžně – zavřený formulář se nepřekresluje
+        ["vykazy", "ukoly", "users", "zpetne", "uzaverka", "projekty-docs"].forEach(udalost =>
+            window.KB.on(udalost, vykresliNavrhy));
+        document.addEventListener("kb-role", vykresliNavrhy);
+        $("kontrolaTydnu").addEventListener("click", async (event) => {
+            const b = event.target.closest("[data-kty-po]");
+            if (!b || b.disabled || !filtr.uid) return;
+            b.disabled = true;
+            if (!(await V.prepniKontroluTydne(filtr.uid, b.dataset.ktyPo, jmenoUid(filtr.uid)))) b.disabled = false;
+        });
+        window.KB.on("kontrola-tydnu", () => { render(); vykresliTyden(); });
+
         /* ---- Týden v mřížce ---- */
         $("btnTyden").addEventListener("click", () => {
             if ($("tyden").hidden) otevriTyden();
@@ -5055,6 +5417,20 @@
             tyDruhy[el.dataset.tyDruh] = el.value;
         });
         $("tyTabulka").addEventListener("click", (event) => {
+            /* „jako minule" – návrh do buněk dne, uloží se až s týdnem */
+            const minule = event.target.closest("[data-ty-minule]");
+            if (minule) {
+                const datum = minule.dataset.tyMinule;
+                const n = tyMinule(mojeUid(), datum, tyStav(mojeUid(), tyDnyTydne(tyPondeli)));
+                if (!n) return;
+                n.bunky.forEach(b => { tyVstupy[b.klic] = String(b.hodiny).replace(".", ","); });
+                vykresliTyden();
+                window.KBUI.toast("Návrh na " + tyDenText(datum) + " podle " + tyDenText(n.den) + ": " +
+                    V.pocet(n.bunky.length, ["buňka", "buňky", "buněk"]) + " – zkontroluj a ulož týden." +
+                    (n.vynechano ? " Bez úkolu v mřížce: " + V.pocet(n.vynechano, ["záznam", "záznamy", "záznamů"]) +
+                        " (ten zapiš přes Přidat výkaz → Jako minule)." : ""));
+                return;
+            }
             if (!event.target.closest("[data-ty-vikend]")) return;
             tyVikend = !tyVikend;
             vykresliTyden();
@@ -5090,6 +5466,7 @@
             srovnejPulhodiny();
             nastavVychoziSazbu(false);
             obnovAbsenceTexty();        // „Dovolená – Jméno" musí sedět na vybraného člověka
+            vykresliNavrhy();           // návrh je z výkazů toho, za koho se píše
         });
         $("eOsoba").addEventListener("change", () => {
             srovnejPulhodiny();

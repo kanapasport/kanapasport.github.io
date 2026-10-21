@@ -72,6 +72,20 @@
             display: inline-block; width: 12px; height: 12px;
             border-radius: var(--r-sm); margin-right: 6px; vertical-align: -1px;
         }
+        /* KONTROLA TÝDNE (21. 10. 2026): v pohledu Týdny se u týdne člověka
+           dá klikem dát značka „zkontrolováno" (zelený ✓). Nic nezamyká. */
+        .vt-odkaz { color: inherit; text-decoration: none; }
+        .vt-odkaz:hover { text-decoration: underline; }
+        .vt-kontrola {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; margin-left: 6px; padding: 0; vertical-align: middle;
+            border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface);
+            color: var(--dim); font-size: var(--fs-1); font-weight: 900; line-height: 1; cursor: pointer;
+        }
+        .vt-kontrola:hover { border-color: var(--ok); color: var(--ok); }
+        .vt-kontrola--ano { background: var(--ok); border-color: var(--ok); color: #fff; }
+        .vt-kontrola--ano:hover { color: #fff; filter: brightness(.92); }
+        .vt-leg .vt-kontrola { margin: 0 6px 0 0; cursor: default; }
     </style>
 </head>
 <body>
@@ -126,6 +140,9 @@
                 <span><i class="vt--akorat"></i>Tak akorát</span>
                 <span><i class="vt--hodne"></i>Přesčasy</span>
                 <span><i class="vt--abs"></i>Absence</span>
+                <!-- jen v pohledu Týdny -->
+                <span id="legKontrola" hidden><span class="vt-kontrola vt-kontrola--ano" aria-hidden="true">✓</span>Týden
+                    zkontrolovaný manažerem – klik na kroužek značku dá nebo zruší, klik na hodiny otevře výkazy týdne</span>
             </div>
         </div>
     </div>
@@ -169,6 +186,7 @@
         window.KB.watchVykazy();
         window.KB.watchProjekty();
         window.KB.watchUkoly();
+        window.KB.watchKontrolaTydnu();     // značky „zkontrolováno" (Týdny)
     }
 
     /**
@@ -393,8 +411,25 @@
             }
             // prahy dnů × 5 (plný týden = 40 hodin)
             const cls = h > 40 ? "vt--hodne" : h >= 35 ? "vt--akorat" : h > 0 ? "vt--malo" : "";
-            return '<td class="' + cls + '">' + (h > 0 ? esc(hodinyTxt(h)) : "") +
-                (abs ? '<span class="vt-a">A</span>' : "") + "</td>";
+            /* Kontrola týdne (21. 10. 2026): hodiny vedou na výkazy toho
+               člověka za ten týden, kroužek vedle dá nebo zruší značku
+               „zkontrolováno". Jen u týdne, který začal a něco v něm je. */
+            const po = iso(t.od);
+            const z = V.kontrolaTydne(u.id, po);
+            const kontrola = po <= dnesIso && (h > 0 || abs || z)
+                ? '<button type="button" class="vt-kontrola' + (z ? " vt-kontrola--ano" : "") + '"' +
+                  ' data-kontrola-uid="' + esc(u.id) + '" data-kontrola-po="' + esc(po) + '"' +
+                  ' aria-pressed="' + (z ? "true" : "false") + '"' +
+                  ' aria-label="' + esc("Týden " + V.tydenText(po) + " – " + V.jmeno(u) +
+                      (z ? ": zkontrolováno, zrušit značku" : ": označit jako zkontrolovaný")) + '"' +
+                  ' title="' + esc(z ? V.kontrolaTitulek(z) + ". Klik značku zruší."
+                                     : "Označit týden jako zkontrolovaný") + '">✓</button>'
+                : "";
+            return '<td class="' + cls + '">' +
+                (h > 0 ? '<a class="vt-odkaz" href="' + esc("vykazy.html?kdo=" + encodeURIComponent(u.id) +
+                    "&od=" + po + "&do=" + iso(t.do)) + '" title="Otevřít výkazy týdne">' +
+                    esc(hodinyTxt(h)) + "</a>" : "") +
+                (abs ? '<span class="vt-a">A</span>' : "") + kontrola + "</td>";
         }).join("") + souhrnCloveka(u, data) + "</tr>");
     }
 
@@ -405,6 +440,7 @@
 
         const skupiny = skupinyLidi();
         const data = pripravData();
+        $("legKontrola").hidden = pohled !== "tydny";
         $("vtTelo").innerHTML = (pohled === "dny"
             ? vykresliDny(skupiny, data) : vykresliTydny(skupiny, data))
             || '<tr><td colspan="40" class="tiny muted" style="padding:20px;text-align:center">' +
@@ -439,6 +475,16 @@
         document.querySelectorAll("[data-pohled]").forEach(ch =>
             ch.addEventListener("click", () => { pohled = ch.dataset.pohled; vykresli(); }));
         $("fProjekt").addEventListener("change", vykresli);
+        // kontrola týdne: kroužek v buňce týdne (jen manažer – stránku jiný nevidí)
+        $("vtTelo").addEventListener("click", async (event) => {
+            const b = event.target.closest("[data-kontrola-uid]");
+            if (!b || b.disabled) return;
+            b.disabled = true;
+            const u = V.clovek(b.dataset.kontrolaUid);
+            if (!(await V.prepniKontroluTydne(b.dataset.kontrolaUid, b.dataset.kontrolaPo,
+                u ? V.jmeno(u) : ""))) b.disabled = false;
+        });
+        window.KB.on("kontrola-tydnu", () => { if (pohled === "tydny") vykresli(); });
 
         // mřížku mění jen výkazy a seznam lidí – na projekty a úkoly
         // překreslovat nemá co, ty patří roletkám v liště

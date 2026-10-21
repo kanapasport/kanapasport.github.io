@@ -237,6 +237,14 @@ service cloud.firestore {
       allow read: if spravce() || (clen() && uid == request.auth.uid);
     }
 
+    /* Kontrola týdne: značku „zkontrolováno" u týdne člověka dává a ruší
+       manažer (zápis drží spodní pravidlo pro `private`). Člověk čte jen
+       SVOJE značky – web se ptá dotazem `uid == já`. Nic nezamyká, zámkem
+       je uzávěrka (21. 10. 2026). */
+    match /artifacts/firemni-kb-app/private/vykazy/kontrola/{id} {
+      allow read: if clen() && resource.data.uid == request.auth.uid;
+    }
+
     /* Nastavení upozornění na e-mail. Mění si ho každý sám; manažer ho
        vidí, ať se dá poradit, proč někomu nic nechodí. Rozesílku dělá
        Apps Script pod svým účtem (Michal 3. 9. 2026). */
