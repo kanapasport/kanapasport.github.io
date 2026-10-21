@@ -36,7 +36,7 @@ import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
     terminate, clearIndexedDbPersistence,
     collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
-    increment, arrayUnion, arrayRemove, writeBatch,
+    increment, arrayUnion, arrayRemove, writeBatch, runTransaction,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -131,6 +131,8 @@ const KB = {
     quicktodo: [],          // rychlé vzkazy: vidí je jen autor a adresát
     ukolBudgety: {},        // budgety úkolů (jen manažeři): id → { budgetHodin, rezervaHodin }
     auta: [],               // správa aut: zápisy na dny v Brně a rezervace vozů
+    vybaveni: [],           // přístroje k zapůjčení (public/data/meta/vybaveni) – až po otevření panelu
+    vybaveniRezervace: [],  // rezervace přístrojů, které ještě neskončily
     cinnosti: DEFAULT_CINNOSTI.slice(),
     technologie: DEFAULT_TECHNOLOGIE.slice(),
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 100 }
@@ -384,6 +386,7 @@ try {
             if (pritomnostCasovac) { clearInterval(pritomnostCasovac); pritomnostCasovac = null; }
             if (pritomnostOdber) { try { pritomnostOdber(); } catch (e) {} pritomnostOdber = null; }
             if (autaOdber) { try { autaOdber(); } catch (e) {} autaOdber = null; }
+            zrusVybaveni();
             if (tasksOdber) { try { tasksOdber(); } catch (e) {} tasksOdber = null; }
             KB.pritomnost = [];
             if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
@@ -674,7 +677,7 @@ KB.zapisAktivitu = (druh, text, jmeno) => {
     try {
         if (!db || !auth || !auth.currentUser) return;
         addDoc(aktivityCol(), {
-            druh: druh,                 // projekt | ukol | postup | vykaz | kalendar | auto
+            druh: druh,                 // projekt | ukol | postup | vykaz | kalendar | auto | vybaveni
             text: String(text || "").slice(0, 200),
             uid: auth.currentUser.uid,
             /* Vzkazy hlídek nepíše člověk, ale web – v Reportu se proto
@@ -2210,6 +2213,293 @@ KB.deleteAuto = async (id) => {
     await deleteDoc(autoDoc(id));
     KB.zapisAktivitu("auto", "smazal zápis auta" +
         (a && (a.datum || a.od) ? " na " + (a.datum || a.od) : ""));
+};
+
+/* ------------------------------------------------------------ vybavení ----
+   Přístroje k zapůjčení (skenery, dálkoměry, notebooky…) a jejich
+   rezervace. Panel je v pásu vedle Správy aut (assets/js/vybaveni.js).
+
+     public/data/meta/vybaveni              seznam přístrojů { seznam: [{ id,
+                                            nazev, druh, poznamka, aktivni }] }
+                                            – zapisuje jen manažer (pravidlo
+                                            pro `meta`), v kódu žádný není
+     public/data/vybaveni/{id}              rezervace { pristrojId, pristroj,
+                                            od, do, uid, jmeno, projektId,
+                                            projekt, poznamka, zapsalUid, ms }
+     public/data/vybaveni-dny/{přístroj_den}  zámek dne { pristrojId, den,
+                                            rezId, uid, jmeno }
+
+   Rezervace vidí celá firma (jako auta), ať se lidé nedomlouvají přes hlavu
+   toho druhého.
+
+   Proč zámky po dnech: „žádná jiná rezervace se nepřekrývá" se ve Firestore
+   nedá zeptat – pravidla ani transakce neumí dotaz. Umí ale hlídat jeden
+   dokument: zámek má id přístroj + den, takže druhá rezervace na týž den by
+   musela založit dokument, který už existuje. Rezervace se proto ukládá
+   TRANSAKCÍ spolu se všemi svými zámky. Transakce zámky napřed přečte (a
+   řekne, kdo přístroj ten den má); kdyby je mezi čtením a zápisem založil
+   někdo jiný, Firestore transakci zopakuje a kolizi najde. Pravidla navíc
+   nedovolí zámek přepsat – ani z konzole, ani manažerovi.               */
+
+const vybaveniCol = () => collection(db, "artifacts", APP_ID, "public", "data", "vybaveni");
+const vybaveniDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "vybaveni", id);
+const vybaveniDenDoc = (pristrojId, den) =>
+    doc(db, "artifacts", APP_ID, "public", "data", "vybaveni-dny", pristrojId + "_" + den);
+
+/* Nejdelší rezervace ve dnech. Co den, to zámek, a transakce je čte
+   všechny – na delší zápůjčku se rezervace rozdělí. */
+const VYBAVENI_MAX_DNU = 92;
+KB.VYBAVENI_MAX_DNU = VYBAVENI_MAX_DNU;
+
+const ISO_DEN = /^\d{4}-\d{2}-\d{2}$/;
+// id přístroje je kus cesty k zámku – nesmí v něm být lomítko ani nic divného
+const ID_PRISTROJE = /^[A-Za-z0-9-]{1,40}$/;
+
+/** Dny od–do včetně jako ISO řetězce. Počítá se v UTC, ať změna času nic
+    neposune. Neplatné datum nebo obrácený rozsah = prázdné pole; delší
+    rozsah se utne o den za limitem (volající pozná, že je moc dlouhý). */
+function dnyRozsahu(od, doKdy) {
+    const dny = [];
+    if (!ISO_DEN.test(od || "") || !ISO_DEN.test(doKdy || "") || doKdy < od) return dny;
+    const d = new Date(od + "T00:00:00Z");
+    const konec = new Date(doKdy + "T00:00:00Z");
+    if (isNaN(d) || isNaN(konec) || d.toISOString().slice(0, 10) !== od ||
+        konec.toISOString().slice(0, 10) !== doKdy) return dny;
+    while (d <= konec && dny.length <= VYBAVENI_MAX_DNU) {
+        dny.push(d.toISOString().slice(0, 10));
+        d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return dny;
+}
+KB.dnyRozsahu = dnyRozsahu;
+
+function chybaVybaveni(kod, zprava, navic) {
+    const e = new Error(zprava);
+    e.kod = kod;
+    return Object.assign(e, navic || {});
+}
+
+let vybaveniOdbery = [];
+function zrusVybaveni() {
+    vybaveniOdbery.forEach(stop => { try { stop(); } catch (e) {} });
+    vybaveniOdbery = [];
+    KB.vybaveni = []; KB.vybaveniRezervace = [];
+    KB.vybaveniPrislo = false;
+}
+
+/** Odběr seznamu přístrojů a rezervací – řekne si o něj až otevřený panel. */
+KB.watchVybaveni = async () => {
+    if (vybaveniOdbery.length) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || vybaveniOdbery.length) return;
+    const t = new Date();
+    const dnes = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
+        "-" + String(t.getDate()).padStart(2, "0");
+    vybaveniOdbery.push(onSnapshot(metaDoc("vybaveni"), (snap) => {
+        const data = snap.exists() ? snap.data() : {};
+        KB.vybaveni = (Array.isArray(data.seznam) ? data.seznam : [])
+            .filter(p => p && typeof p.id === "string" && ID_PRISTROJE.test(p.id))
+            .map(p => ({
+                id: p.id,
+                nazev: String(p.nazev || ""),
+                druh: String(p.druh || ""),
+                poznamka: String(p.poznamka || ""),
+                aktivni: p.aktivni !== false
+            }));
+        KB.vybaveniPrislo = true;
+        emit("vybaveni", KB.vybaveni);
+    }, (err) => console.error("Chyba čtení vybavení:", err)));
+    /* Jen rezervace, které ještě neskončily. Staré zůstávají v databázi
+       jako historie, panel je ale nepotřebuje a každá by se platila. */
+    vybaveniOdbery.push(onSnapshot(query(vybaveniCol(), where("do", ">=", dnes)), (snapshot) => {
+        KB.vybaveniRezervace = [];
+        snapshot.forEach(d => KB.vybaveniRezervace.push({ id: d.id, ...d.data() }));
+        KB.vybaveniRezervace.sort((a, b) => String(a.od || "").localeCompare(String(b.od || "")) ||
+            (a.ms || 0) - (b.ms || 0));
+        emit("vybaveni", KB.vybaveni);
+    }, (err) => console.error("Chyba čtení rezervací vybavení:", err)));
+};
+
+KB.newPristrojId = () => "pr" + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+KB.newVybaveniId = () => "vyb_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+/** Přidá nebo upraví přístroj v seznamu (jen manažer – hlídá pravidlo pro
+    `meta`). Transakcí: dva manažeři naráz si seznam nepřepíšou. */
+KB.ulozPristroj = async (data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const id = data.id || KB.newPristrojId();
+    if (!ID_PRISTROJE.test(id)) throw chybaVybaveni("pristroj", "Neplatný přístroj.");
+    const polozka = {
+        id: id,
+        nazev: String(data.nazev || "").trim().slice(0, 80),
+        druh: String(data.druh || "").trim().slice(0, 40),
+        poznamka: String(data.poznamka || "").trim().slice(0, 200),
+        aktivni: data.aktivni !== false
+    };
+    if (!polozka.nazev) throw chybaVybaveni("nazev", "Přístroj musí mít název.");
+    let novy = true;
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(metaDoc("vybaveni"));
+        const seznam = snap.exists() && Array.isArray(snap.data().seznam) ? snap.data().seznam.slice() : [];
+        const i = seznam.findIndex(p => p && p.id === id);
+        novy = i === -1;
+        if (novy) seznam.push(polozka); else seznam[i] = polozka;
+        tx.set(metaDoc("vybaveni"), { seznam: seznam, ms: Date.now(), updatedBy: window.KB_USER || "" });
+    });
+    KB.zapisAktivitu("vybaveni", (novy ? "přidal přístroj " : "upravil přístroj ") + polozka.nazev +
+        (polozka.aktivni ? "" : " (vyřazený z nabídky)"));
+    return id;
+};
+
+/** Smaže přístroj ze seznamu. Rezervace se tím nemažou – web proto mazání
+    nepustí, dokud má přístroj nějakou budoucí rezervaci. */
+KB.smazPristroj = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    let nazev = "";
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(metaDoc("vybaveni"));
+        const seznam = snap.exists() && Array.isArray(snap.data().seznam) ? snap.data().seznam : [];
+        const pryc = seznam.find(p => p && p.id === id);
+        nazev = pryc ? String(pryc.nazev || "") : "";
+        tx.set(metaDoc("vybaveni"), {
+            seznam: seznam.filter(p => !(p && p.id === id)),
+            ms: Date.now(), updatedBy: window.KB_USER || ""
+        });
+    });
+    KB.zapisAktivitu("vybaveni", "smazal přístroj " + nazev);
+};
+
+/**
+ * Uloží rezervaci přístroje – novou (`id` prázdné) i úpravu existující.
+ * data: { pristrojId, pristroj, od, do, projektId, projekt, poznamka }.
+ * Přístroj se úpravou nemění (na jiný přístroj = zrušit a rezervovat znovu).
+ *
+ * Když je přístroj v některý den obsazený, vyhodí chybu s `kod: "kolize"`
+ * a `kolize: [{ den, jmeno, uid, rezId, pristrojId, sirotek }]` – `sirotek`
+ * = zámek, jehož rezervace už neexistuje (smazaná mimo web).
+ */
+KB.ulozRezervaciVybaveni = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const od = String(data.od || "");
+    const doKdy = String(data.do || data.od || "");
+    const dny = dnyRozsahu(od, doKdy);
+    if (!dny.length) throw chybaVybaveni("datum", "Zkontroluj datum od a do.");
+    if (dny.length > VYBAVENI_MAX_DNU) {
+        throw chybaVybaveni("dlouha", "Rezervace může mít nejvýš " + VYBAVENI_MAX_DNU +
+            " dní – na delší dobu ji rozděl.");
+    }
+    const rezId = id || KB.newVybaveniId();
+    const ja = auth.currentUser.uid;
+
+    const ulozeno = await runTransaction(db, async (tx) => {
+        let stara = null;
+        if (id) {
+            const s = await tx.get(vybaveniDoc(id));
+            if (!s.exists()) throw chybaVybaveni("zmizela", "Rezervace mezitím zmizela – někdo ji zrušil.");
+            stara = s.data();
+        }
+        const pristrojId = stara ? String(stara.pristrojId || "") : String(data.pristrojId || "");
+        if (!ID_PRISTROJE.test(pristrojId)) throw chybaVybaveni("pristroj", "Neznámý přístroj.");
+        const stareDny = stara ? dnyRozsahu(stara.od, stara.do) : [];
+        const ubrat = stareDny.filter(d => dny.indexOf(d) === -1);
+
+        /* Transakce musí nejdřív všechno přečíst a teprve pak zapisovat.
+           Čtou se zámky VŠECH dnů nové rezervace (ne jen přidaných) – chybějící
+           zámek u vlastní rezervace se tím sám doplní. */
+        const zamky = await Promise.all(dny.map(d => tx.get(vybaveniDenDoc(pristrojId, d))));
+        const zamkyUbrat = await Promise.all(ubrat.map(d => tx.get(vybaveniDenDoc(pristrojId, d))));
+
+        const kolize = [];
+        zamky.forEach((z, i) => {
+            if (!z.exists() || z.data().rezId === rezId) return;
+            const zd = z.data();
+            kolize.push({ den: dny[i], pristrojId: pristrojId, rezId: String(zd.rezId || ""),
+                          uid: String(zd.uid || ""), jmeno: String(zd.jmeno || "") });
+        });
+        if (kolize.length) {
+            const rezervace = Array.from(new Set(kolize.map(k => k.rezId).filter(Boolean)));
+            const existuje = {};
+            const snimky = await Promise.all(rezervace.map(r => tx.get(vybaveniDoc(r))));
+            snimky.forEach((s, i) => { existuje[rezervace[i]] = s.exists(); });
+            kolize.forEach(k => { k.sirotek = !k.rezId || !existuje[k.rezId]; });
+            throw chybaVybaveni("kolize", "Přístroj je v té době rezervovaný.", { kolize: kolize });
+        }
+
+        const uid = stara ? String(stara.uid || "") : ja;
+        const jmeno = stara ? String(stara.jmeno || "") : (window.KB_USER || "");
+        const ted = Date.now();
+        zamkyUbrat.forEach((z, i) => {
+            if (z.exists() && z.data().rezId === rezId) tx.delete(vybaveniDenDoc(pristrojId, ubrat[i]));
+        });
+        zamky.forEach((z, i) => {
+            // existující zámek je jen vlastní (cizí = kolize výš) – přepsat ho pravidla nedovolí
+            if (z.exists()) return;
+            tx.set(vybaveniDenDoc(pristrojId, dny[i]), {
+                pristrojId: pristrojId, den: dny[i], rezId: rezId, uid: uid, jmeno: jmeno, ms: ted
+            });
+        });
+        const zaznam = {
+            pristrojId: pristrojId,
+            pristroj: String(data.pristroj || (stara && stara.pristroj) || "").slice(0, 80),
+            od: od,
+            do: doKdy,
+            projektId: String(data.projektId || ""),
+            projekt: data.projektId ? String(data.projekt || "").slice(0, 160) : "",
+            poznamka: String(data.poznamka || "").trim().slice(0, 200),
+            uid: uid,
+            jmeno: jmeno,
+            zapsalUid: stara ? String(stara.zapsalUid || stara.uid || "") : ja,
+            ms: stara ? (Number(stara.ms) || ted) : ted,
+            upravenoMs: ted,
+            upravil: window.KB_USER || ""
+        };
+        tx.set(vybaveniDoc(rezId), zaznam);
+        return zaznam;
+    });
+
+    KB.zapisAktivitu("vybaveni", (id ? "upravil rezervaci " : "rezervoval ") + ulozeno.pristroj +
+        " na " + od + (doKdy !== od ? " – " + doKdy : "") +
+        (ulozeno.jmeno && ulozeno.jmeno !== window.KB_USER ? " – " + ulozeno.jmeno : ""));
+    return rezId;
+};
+
+/** Zruší rezervaci i s jejími zámky (jednou transakcí). Smí autor a manažer. */
+KB.zrusRezervaciVybaveni = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const rez = await runTransaction(db, async (tx) => {
+        const s = await tx.get(vybaveniDoc(id));
+        if (!s.exists()) return null;
+        const r = s.data();
+        const pristrojId = String(r.pristrojId || "");
+        const dny = ID_PRISTROJE.test(pristrojId) ? dnyRozsahu(r.od, r.do) : [];
+        const zamky = await Promise.all(dny.map(d => tx.get(vybaveniDenDoc(pristrojId, d))));
+        zamky.forEach((z, i) => {
+            if (z.exists() && z.data().rezId === id) tx.delete(vybaveniDenDoc(pristrojId, dny[i]));
+        });
+        tx.delete(vybaveniDoc(id));
+        return r;
+    });
+    if (rez) {
+        KB.zapisAktivitu("vybaveni", "zrušil rezervaci " + (rez.pristroj || "") + " na " + rez.od +
+            (rez.do && rez.do !== rez.od ? " – " + rez.do : "") +
+            (rez.jmeno && rez.jmeno !== window.KB_USER ? " – " + rez.jmeno : ""));
+    }
+    return rez;
+};
+
+/** Uvolní osiřelé zámky (rezervace k nim už neexistuje – smazaná mimo web).
+    Smí manažer a ten, na koho zámek zní. kolize = pole z chyby „kolize". */
+KB.uvolniZamkyVybaveni = async (kolize) => {
+    if (authReady) await authReady;
+    requireDb();
+    for (const k of (kolize || [])) {
+        if (!k || !k.sirotek || !ID_PRISTROJE.test(k.pristrojId || "") || !ISO_DEN.test(k.den || "")) continue;
+        await deleteDoc(vybaveniDenDoc(k.pristrojId, k.den));
+    }
 };
 
 /* ------------------------------------------ odbavená upozornění -----------
