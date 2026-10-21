@@ -6,170 +6,419 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=294">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=294">
+    <link rel="stylesheet" href="assets/css/app.css?v=295">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=295">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* drobnosti jen pro tuhle stránku */
-
-        /* Splněný milník. Zelené pozadí řádku má app.css, tohle je to druhé
-           vodítko – barvu sama o sobě nerozezná každý, slovo a přeškrtnutí ano. */
-        .milcin { display: block; }
-        .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
-        /* milník přiřazený mně – podbarvený, ať člověk vidí „ty svoje" */
-        .milnik--muj td { background: var(--accent-tint); }
-        /* Značka u milníku. Základní podoba (zelené „splněno") musí stát
-           PŘED variantami – mají stejnou váhu a rozhodlo by pořadí, takže
-           zespodu by zelená přebila všechny ostatní barvy. */
-        .milpil {
-            display: inline-block;
-            margin-top: 4px;
-            padding: 2px 8px;
-            border-radius: var(--r-pill);
-            background: var(--p100-fg);
-            color: #fff;
-            font-size: var(--fs-1);
-            font-weight: 800;
-            letter-spacing: .06em;
-            text-transform: uppercase;
-        }
-        /* splněno od zaměstnance, které ještě neposvětil manažer */
-        .milpil--ceka { background: #fff3d6; color: #9a6b00; border: 1px solid #e8c877; }
-        /* milník, který zaměstnanci ještě nevidí – jen pro manažera */
-        .milpil--skryty { background: #eceff3; color: #5a6672; border: 1px solid #cfd6dd; }
-        /* milník, který už má svůj úkol – práce se na něj dá zapsat */
-        .milpil--ukol { background: var(--accent-tint); color: var(--p100-fg);
-            border: 1px solid var(--p100-fg); }
-        .milnik--skryty td { opacity: .72; }
-        /* termín kolegy: existuje, ale není pro mě */
-        .milniky__datum .mildash { color: var(--muted); font-weight: 700; }
-        /* nový = zveřejněný v posledních sedmi dnech (stojí za základní .milpil) */
-        .milpil--novy { background: var(--accent); color: #fff; }
-
-        /* ------------------------------------ typ milníku (20. 10. 2026)
-           Stavební a technologický milník se liší barvou – a vždycky i slovem
-           ve štítku, barvu sama o sobě nerozezná každý. Barvy jsou tokeny
-           z app.css: okrová (jako skupina Práce) a modrozelená barva webu,
-           obě přes 4,5 : 1 na bílé; mezi sebou se liší i pro barvoslepé
-           (modrá × žlutá osa). Ostatní (historický milník, vzorová místnost)
-           zůstávají neutrálně šedé. */
+        /* =====================================================================
+           MILNÍKY – vzhled „časová osa" (návrh A, 21. 10. 2026)
+           Výpis „Co se chystá" je svislá časová osa: týdny jako nadpisy, které
+           se při rolování lepí nahoru, milníky jako karty s datovým štítkem.
+           Barva typu (stavební / technologický / ostatní) je vždycky spolu se
+           slovem – barvu sama o sobě nerozezná každý. Jen tokeny z app.css.
+           ===================================================================== */
         :root {
-            --mil-stav: var(--skup-prace);
-            --mil-tech: var(--accent);
+            --mil-stav: var(--skup-prace);     /* okrová – 4,9 : 1 na bílé */
+            --mil-tech: var(--accent);         /* modrozelená barva webu */
             --mil-ost:  var(--muted);
+            --mil-lista: 0px;                  /* výška nalepené lišty webu – dopočítá skript */
+            --mil-osa: 36px;                   /* sloupec časové osy vlevo */
+            /* jediná barva kolečka zpracovatele mimo tokeny (5,5 : 1) */
+            --mava-fial-bg: #efeaf7;
+            --mava-fial-fg: #6b4fa0;
         }
-        .mtyp {
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 0 7px; border: 1px solid currentColor; border-radius: var(--r-sm);
-            background: var(--surface); color: var(--mil-ost);
-            font-size: var(--fs-1); font-weight: 800; line-height: 1.6; white-space: nowrap;
+
+        /* text jen pro čtečku obrazovky */
+        .mskryte { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0;
+            overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+        /* nadpis si drží šířku – na telefonu tlačítka spadnou pod něj */
+        main > .spread > .grow { flex-basis: 260px; }
+        main .chip { border-radius: var(--r-pill); padding: 6px 12px; font-size: var(--fs-2);
+            background: var(--surface); }
+        main .chip--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        main .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        /* ------------------------------------------------ souhrn nahoře */
+        .msouhrn { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+        .msouhrn__d {
+            position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+            padding: 12px 16px 12px 18px; border: 1px solid var(--line); border-radius: var(--r-lg);
+            background: var(--surface); box-shadow: var(--shadow); color: var(--text);
+            font: inherit; text-align: left; cursor: pointer;
+            transition: border-color .14s, box-shadow .14s, transform .14s;
         }
-        .mtyp i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
-        .mtyp--stav { color: var(--mil-stav); }
-        .mtyp--tech { color: var(--mil-tech); }
-        .mil-legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+        .msouhrn__d::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 4px;
+            border-radius: 0 4px 4px 0; background: var(--line); }
+        .msouhrn__d b { font-size: var(--fs-6); font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .msouhrn__d span { font-size: var(--fs-2); font-weight: 800; color: var(--text-soft); }
+        .msouhrn__d small { font-size: var(--fs-1); color: var(--muted); }
+        .msouhrn__d:hover:not(:disabled) { border-color: var(--accent-lt); box-shadow: var(--shadow-up); transform: translateY(-1px); }
+        .msouhrn__d:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .msouhrn__d:disabled { cursor: default; box-shadow: none; background: var(--bg-soft); }
+        .msouhrn__d--pozde::before { background: var(--danger); }
+        .msouhrn__d--pozde:not(:disabled) b { color: var(--danger); }
+        .msouhrn__d--tento::before { background: var(--accent); }
+        .msouhrn__d--pristi::before { background: var(--accent-lt); }
+        .msouhrn__d--ceka::before { background: var(--warn); }
+        .msouhrn__d--ceka:not(:disabled) b { color: var(--warn); }
+        .msouhrn__d--skryte::before { background: var(--muted); }
+        .msouhrn__d[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+
+        /* ------------------------------------------------------ záložky */
+        .zalozky { display: flex; gap: 28px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+        .zalozka { border: 0; background: none; font: inherit; font-size: var(--fs-4); font-weight: 800;
+            color: var(--muted); padding: 8px 2px 11px; cursor: pointer;
+            border-bottom: 3px solid transparent; margin-bottom: -1px; }
+        .zalozka:hover { color: var(--text); }
+        .zalozka[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+        .zalozka:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+
+        /* -------------------------------------------------- lišta filtru */
+        .mfiltr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 12px;
+            background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+            box-shadow: var(--shadow); }
+        .mfiltr .field { width: auto; min-height: 38px; padding: 7px 12px; font-size: var(--fs-2); }
+        .mhledat { position: relative; display: flex; flex: 1 1 200px; max-width: 280px; }
+        .mhledat svg { position: absolute; left: 11px; top: 50%; width: 16px; height: 16px;
+            transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+        .mhledat .field { width: 100%; padding-left: 34px; }
+        .mfiltr__vyber { max-width: 200px; }
+        .mseg { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg);
+            border: 1px solid var(--line); border-radius: var(--r); }
+        .mseg__btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            min-height: 30px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: none;
+            color: var(--text-soft); font: inherit; font-size: var(--fs-2); font-weight: 700;
+            cursor: pointer; white-space: nowrap; }
+        .mseg__btn:hover { color: var(--text); background: var(--surface); }
+        .mseg__btn[aria-pressed="true"] { background: var(--accent); color: #fff; }
+        .mseg__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+        .mseg__tecka { width: 8px; height: 8px; border-radius: 50%; background: var(--mil-ost); flex: none; }
+        .mseg__tecka--stav { background: var(--mil-stav); }
+        .mseg__tecka--tech { background: var(--mil-tech); }
+        .mseg__btn[aria-pressed="true"] .mseg__tecka { box-shadow: 0 0 0 2px #fff; }
+        .mfiltr__prepinace { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
+        .mfiltr__pryc { border: 0; background: none; padding: 4px 2px; font: inherit; font-size: var(--fs-2);
+            font-weight: 800; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+        .mfiltr__pryc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        /* přepínač „Zobrazit splněné" – zaškrtávátko v roli přepínače */
+        .mprep { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+            font-size: var(--fs-2); font-weight: 700; color: var(--text-soft); -webkit-user-select: none; user-select: none; }
+        .mprep input { position: absolute; left: 0; top: 50%; width: 38px; height: 22px; margin: 0;
+            transform: translateY(-50%); opacity: 0; cursor: pointer; }
+        .mprep__kolej { position: relative; flex: none; width: 38px; height: 22px; border-radius: var(--r-pill);
+            background: var(--bg); border: 2px solid var(--dim); transition: background .15s, border-color .15s; }
+        .mprep__kolej::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+            border-radius: 50%; background: var(--dim); transition: transform .15s, background .15s; }
+        .mprep input:checked + .mprep__kolej { background: var(--accent); border-color: var(--accent); }
+        .mprep input:checked + .mprep__kolej::after { transform: translateX(16px); background: #fff; }
+        .mprep input:focus-visible + .mprep__kolej { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        /* ------------------------------------------- legenda a nápověda */
+        .mil-legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
             font-size: var(--fs-1); color: var(--muted); }
-        .mil-legenda .milpil { margin-top: 0; }
+        .mradek { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+        .mradek > details.mtip:not([open]) { padding: 2px 4px; background: none; border-color: transparent; }
+        .mradek > details.mtip[open] { flex-basis: 100%; }
+        .mtip { padding: 12px 16px; border-radius: var(--r-lg); background: var(--accent-tint);
+            border: 1px solid var(--line-soft); color: var(--text-soft); font-size: var(--fs-2); line-height: 1.6; }
+        details.mtip > summary { cursor: pointer; font-weight: 800; color: var(--accent); list-style: none; }
+        details.mtip > summary::-webkit-details-marker { display: none; }
+        details.mtip > summary::before { content: "ⓘ  "; }
+        details.mtip[open] > summary { margin-bottom: 6px; }
+        details.mtip > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
 
-        /* harmonogram: pruh vlevo v barvě typu, nadpis skupiny taky */
-        .milniky tr.mtr--stav > td:first-child { box-shadow: inset 4px 0 0 var(--mil-stav); }
-        .milniky tr.mtr--tech > td:first-child { box-shadow: inset 4px 0 0 var(--mil-tech); }
-        .milniky .milcin + .mtyp { margin-top: 4px; }
-        .milniky__skupina--stav td { background: var(--bg-soft); border-bottom-color: var(--mil-stav); }
-        .milniky__skupina--stav:hover td { background: var(--bg-soft); }
-        .milniky__skupina--stav b { color: var(--mil-stav); }
-        .milniky__skupina--ost td { background: var(--bg-soft); border-bottom-color: var(--line); }
-        .milniky__skupina--ost:hover td { background: var(--bg-soft); }
-        .milniky__skupina--ost b { color: var(--text-soft); }
-        @media (max-width: 599.98px) {
-            .milniky tr.mtr--stav > td:first-child, .milniky tr.mtr--tech > td:first-child { box-shadow: none; }
-            table.kt.milniky tr.mtr--stav { border-left: 4px solid var(--mil-stav); }
-            table.kt.milniky tr.mtr--tech { border-left: 4px solid var(--mil-tech); }
+        /* ----------------------------------------------- štítky (pilulky) */
+        .milpil {
+            display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
+            border: 1px solid transparent; border-radius: var(--r-pill);
+            background: var(--ok-tint); color: var(--p100-fg);
+            font-size: var(--fs-1); font-weight: 800; line-height: 1.6; white-space: nowrap; vertical-align: middle;
         }
+        .milpil::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        /* nový = zveřejněný v posledních sedmi dnech */
+        .milpil--novy { background: var(--accent-tint); color: var(--accent); border-color: var(--accent-lt); }
+        /* splněno od zaměstnance, které ještě neposvětil manažer */
+        .milpil--ceka { background: var(--warn-tint); color: var(--warn); }
+        /* milník, který zaměstnanci ještě nevidí – jen pro manažera */
+        .milpil--skryty { background: var(--surface); color: var(--muted); border: 1px dashed var(--muted); }
+        .milpil--skryty::before { background: none; border: 1.5px solid currentColor; width: 5px; height: 5px; }
+        /* milník, který už má svůj úkol */
+        .milpil--ukol { background: var(--surface); color: var(--accent); border-color: var(--line); }
+        .milpil--ukol::before { border-radius: 1px; }
 
-        /* ------------------------------------------------- záložky */
-        .zalozky { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--line); }
-        .zalozka { border: 0; background: none; font: inherit; font-size: var(--fs-2); font-weight: 900;
-            letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
-            padding: 9px 14px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
-        .zalozka:hover { color: var(--accent); }
-        .zalozka[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
-        .zalozka:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        /* typ milníku: tečka v barvě typu + slovo */
+        .mtyp {
+            display: inline-flex; align-items: center; gap: 6px; padding: 1px 9px 1px 8px;
+            border: 1px solid var(--line-soft); border-radius: var(--r-pill);
+            background: var(--bg-soft); color: var(--text-soft);
+            font-size: var(--fs-1); font-weight: 800; line-height: 1.6; white-space: nowrap; vertical-align: middle;
+        }
+        .mtyp i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mil-ost); }
+        .mtyp--stav { color: var(--mil-stav); }
+        .mtyp--stav i { background: var(--mil-stav); }
+        .mtyp--tech { color: var(--mil-tech); }
+        .mtyp--tech i { background: var(--mil-tech); }
 
-        /* -------------------------------- výpis „Co se chystá" po týdnech */
-        .mvypis { display: flex; flex-direction: column; gap: var(--sp-4); }
-        .mvypis__lista { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--muted); }
-        .mblok { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-        .mblok__hlava { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
-            padding: 9px 14px; background: var(--bg-soft); border-bottom: 1px solid var(--line); }
-        .mblok__hlava b { font-size: var(--fs-2); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-        .mblok__hlava span { font-size: var(--fs-1); color: var(--muted); }
-        .mblok--pozde { border-color: var(--danger); }
-        .mblok--pozde > .mblok__hlava { background: var(--danger-tint); border-bottom-color: var(--danger); }
+        /* zpracovatelé: kolečka s iniciálami, jméno v bublině */
+        .mlide { display: inline-flex; align-items: center; vertical-align: middle; }
+        .mava {
+            position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+            width: 28px; height: 28px; margin-left: -7px; border: 2px solid var(--surface); border-radius: 50%;
+            background: var(--accent-tint); color: var(--accent);
+            font-size: var(--fs-1); font-weight: 900; letter-spacing: .02em; line-height: 1; cursor: default;
+        }
+        .mava:first-child { margin-left: 0; }
+        .mava--1 { background: var(--p50-bg); color: var(--p50-fg); }
+        .mava--2 { background: var(--ok-tint); color: var(--p100-fg); }
+        .mava--3 { background: var(--p75-bg); color: var(--p75-fg); }
+        .mava--4 { background: var(--mava-fial-bg); color: var(--mava-fial-fg); }
+        .mava--5 { background: var(--bg); color: var(--text-soft); }
+        .mava--ja { border-color: var(--accent); z-index: 1; }
+        .mava::after {
+            content: attr(data-jmeno); position: absolute; left: 50%; bottom: calc(100% + 7px); z-index: 6;
+            padding: 4px 9px; border-radius: var(--r); background: var(--text); color: #fff;
+            font-size: var(--fs-1); font-weight: 700; letter-spacing: 0; white-space: nowrap;
+            opacity: 0; pointer-events: none; transform: translate(-50%, 3px); transition: opacity .12s, transform .12s;
+        }
+        .mava:hover::after { opacity: 1; transform: translate(-50%, 0); }
+        .mlide__jmena { display: none; margin-left: 6px; }
+        /* dotyk nemá najetí myší – jména se ukážou rovnou vedle koleček */
+        @media (hover: none) { .mlide__jmena { display: inline; } }
+
+        /* ===================================== výpis „Co se chystá" = osa */
+        .mvypis { position: relative; display: flex; flex-direction: column; gap: 26px;
+            padding-left: var(--mil-osa); }
+        .mvypis::before { content: ""; position: absolute; left: 15px; top: 12px; bottom: 18px; width: 2px;
+            border-radius: 2px; background: var(--dim); opacity: .35; }
+        .mvypis__lista { display: flex; align-items: center; gap: 10px; margin: 0 0 -12px calc(-1 * var(--mil-osa));
+            font-size: var(--fs-2); color: var(--muted); }
+        .mvypis__lista .vyber-cil { width: 32px; margin: 0; background: var(--bg); position: relative; }
+
+        .mblok { scroll-margin-top: calc(var(--mil-lista) + 8px); }
+        .mblok:focus { outline: none; }
+        /* nadpis týdne – při rolování se lepí pod lištu webu */
+        .mblok__hlava {
+            position: sticky; top: var(--mil-lista); z-index: 3;
+            display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
+            margin-left: calc(-1 * var(--mil-osa)); padding: 10px 0 10px var(--mil-osa);
+            background: var(--bg);
+        }
+        .mblok__hlava::before {
+            content: ""; position: absolute; left: 8px; top: 50%; width: 16px; height: 16px; margin-top: -8px;
+            border-radius: 50%; background: var(--surface); border: 3px solid var(--accent-lt);
+        }
+        .mblok__hlava b { font-size: var(--fs-4); font-weight: 900; color: var(--text); }
+        .mblok__hlava span { font-size: var(--fs-2); color: var(--muted); }
+        .mblok--tento > .mblok__hlava::before { background: var(--accent); border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-tint); }
+        .mblok--pozde > .mblok__hlava::before { background: var(--danger); border-color: var(--danger);
+            box-shadow: 0 0 0 4px var(--danger-tint); }
         .mblok--pozde > .mblok__hlava b, .mblok--pozde > .mblok__hlava span { color: var(--danger); }
-        .mblok--ceka > .mblok__hlava b { color: var(--warn); }
+        .mblok--ceka > .mblok__hlava::before { background: var(--warn); border-color: var(--warn);
+            box-shadow: 0 0 0 4px var(--warn-tint); }
+        /* --warn má na šedém podkladu jen 4,4 : 1 – nadpis bere tmavší oranžovou (5,1 : 1) */
+        .mblok--ceka > .mblok__hlava b { color: var(--p75-fg); }
+        /* sbalené bloky (bez termínu, splněné) */
         details.mblok > summary { cursor: pointer; list-style: none; }
         details.mblok > summary::-webkit-details-marker { display: none; }
-        details.mblok > summary b::before { content: "+ "; }
-        details.mblok[open] > summary b::before { content: "− "; }
-        details.mblok:not([open]) > summary { border-bottom: 0; }
-        .mblok__hlava:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        details.mblok > .mblok__hlava::before { border-style: dashed; border-color: var(--dim); }
+        details.mblok > summary::after { content: "Rozbalit ▾"; order: 3; margin-left: auto; padding: 2px 10px;
+            border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface);
+            font-size: var(--fs-1); font-weight: 800; color: var(--accent); }
+        details.mblok[open] > summary::after { content: "Sbalit ▴"; }
+        .mblok__hlava:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r); }
 
+        /* ------------------------------------------------- karta milníku */
         .mrad {
-            display: grid; grid-template-columns: auto 118px minmax(0, 1fr) auto;
-            grid-template-areas: "vyber datum hlavni akce";
-            gap: 2px 14px; align-items: start;
-            padding: 10px 12px 10px 10px; border-bottom: 1px solid var(--line-soft);
-            border-left: 4px solid var(--mil-ost);
+            position: relative; display: grid;
+            grid-template-columns: 64px minmax(0, 1fr) auto auto;
+            grid-template-areas: "datum hlavni kdy akce";
+            column-gap: 16px; align-items: start;
+            margin-top: 10px; padding: 14px 12px 14px 14px;
+            background: var(--surface); border: 1px solid var(--line-soft);
+            border-left: 4px solid var(--mil-ost); border-radius: var(--r-lg);
+            box-shadow: var(--shadow); transition: box-shadow .14s;
         }
-        .mrad:last-child { border-bottom: 0; }
-        .mvypis--bez-vyberu .mrad { grid-template-columns: 118px minmax(0, 1fr) auto;
-            grid-template-areas: "datum hlavni akce"; }
+        .mblok__hlava + .mrad { margin-top: 2px; }
+        .mrad:hover { box-shadow: var(--shadow-up); }
         .mrad--stav { border-left-color: var(--mil-stav); }
         .mrad--tech { border-left-color: var(--mil-tech); }
+        /* bod karty na ose (v barvě typu) */
+        .mrad::before { content: ""; position: absolute; top: 25px; left: calc(11px - var(--mil-osa) - 4px);
+            width: 10px; height: 10px; border-radius: 50%; background: var(--mil-ost);
+            box-shadow: 0 0 0 3px var(--bg); }
+        .mrad--stav::before { background: var(--mil-stav); }
+        .mrad--tech::before { background: var(--mil-tech); }
         .mrad--muj { background: var(--accent-tint); }
-        .mrad--skryty { background: var(--bg-soft); }
-        .mrad__vyber { grid-area: vyber; }
-        .mrad__datum { grid-area: datum; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
-        .mrad__datum b { font-size: var(--fs-3); font-weight: 900; white-space: nowrap; }
-        .mrad__datum span { font-size: var(--fs-1); color: var(--muted); }
-        .mrad--pozde .mrad__datum b, .mrad--pozde .mrad__datum span { color: var(--danger); }
-        .mrad--blizko .mrad__datum b { color: var(--warn); }
-        .mrad__hlavni { grid-area: hlavni; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-        .mrad__titul { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-        .mrad__titul .milpil { margin-top: 0; }
-        .mrad__tech { font-weight: 900; letter-spacing: .04em; }
-        .mrad__skup { font-weight: 700; color: var(--text-soft); }
-        .mrad__napln { color: var(--text-soft); line-height: 1.45; overflow-wrap: anywhere; }
-        .mrad__meta { font-size: var(--fs-1); color: var(--muted); overflow-wrap: anywhere; }
-        .mrad__akce { grid-area: akce; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
-        .mrad--hotovo .mrad__napln { text-decoration: line-through; }
+        /* nezveřejněný = koncept: čárkovaný rámeček bez stínu */
+        .mrad--skryty { background: var(--bg-soft); border-style: dashed; border-left-style: solid; box-shadow: none; }
+        .mrad.je-vybrany { background-color: var(--accent-tint); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+
+        /* zaškrtávátko hromadného výběru – na ose místo bodu, ukáže se až
+           při najetí, fokusu nebo ve výběrovém režimu (dotyk ho má pořád) */
+        .mrad__vyber { position: absolute; z-index: 1; top: 15px; left: calc(2px - var(--mil-osa) - 4px);
+            display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+            border-radius: 50%; background: var(--bg); opacity: 0; transition: opacity .12s; }
+        .mrad:hover .mrad__vyber, .mrad__vyber:focus-within, body.ma-vyber .mrad__vyber,
+        .mrad.je-vybrany .mrad__vyber { opacity: 1; }
+        @media (hover: none) { .mrad__vyber { opacity: 1; } }
+
+        /* datový štítek: den v týdnu, číslo dne, měsíc */
+        .mrad__datum {
+            grid-area: datum; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 66px; padding: 6px 4px; border-radius: var(--r); background: var(--bg-soft);
+            border: 1px solid var(--line-soft); text-align: center; line-height: 1.15;
+            font-variant-numeric: tabular-nums;
+        }
         /* Splněné ukázané přepínačem „Zobrazit splněné" mezi tím, co se
            chystá – ztlumené, ať nepřebíjí rozdělanou práci (21. 10. 2026). */
         .mrad--ztlumeny, .milniky tr.milnik--ztlumeny > td { opacity: .62; }
         /* U pár milníků je filtr k ničemu a schová se – přepínač splněných
            ale zůstává vidět vždycky. */
-        #filtrRow.filtr--jen-splnene > :not(#btnSplnene) { display: none; }
-        @media (max-width: 640px) {
-            .mrad { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px;
-                grid-template-areas: "vyber datum akce" ". hlavni hlavni"; }
-            .mvypis--bez-vyberu .mrad { grid-template-columns: minmax(0, 1fr) auto;
-                grid-template-areas: "datum akce" "hlavni hlavni"; }
-            .mrad__datum { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
-        }
+        #filtrRow.filtr--jen-splnene > :not(.mfiltr__prepinace),
+        #filtrRow.filtr--jen-splnene .mfiltr__prepinace > :not(#splneneRow) { display: none; }
+        .mrad__datum small { font-size: var(--fs-1); font-weight: 800; letter-spacing: .06em;
+            text-transform: uppercase; color: var(--muted); }
+        .mrad__datum b { font-size: var(--fs-6); font-weight: 900; line-height: 1.05; color: var(--text); }
+        .mrad__datum--nic b { font-size: var(--fs-5); color: var(--muted); }
+        .mrad--pozde .mrad__datum { background: var(--danger-tint); border-color: var(--danger-tint); }
+        .mrad--pozde .mrad__datum b, .mrad--pozde .mrad__datum small { color: var(--danger); }
+        .mrad--hned .mrad__datum { background: var(--warn-tint); border-color: var(--warn-tint); }
+        .mrad--hned .mrad__datum b, .mrad--hned .mrad__datum small { color: var(--warn); }
+        .mrad--hotovo .mrad__datum { background: var(--ok-tint); border-color: var(--ok-tint); }
+        .mrad--hotovo .mrad__datum b, .mrad--hotovo .mrad__datum small { color: var(--p100-fg); }
+        .mrad--ceka .mrad__datum { background: var(--warn-tint); border-color: var(--warn-tint); }
+        .mrad--ceka .mrad__datum b, .mrad--ceka .mrad__datum small { color: var(--warn); }
 
-        /* nadpis si drží šířku – na telefonu tlačítka spadnou pod něj,
-           místo aby ho zmáčkla do sloupečku po jednom slově */
-        main > .spread > .grow { flex-basis: 260px; }
+        .mrad__hlavni { grid-area: hlavni; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+        .mrad__titul { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .mrad__tech { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--r-sm);
+            background: var(--text-soft); color: #fff; font-size: var(--fs-1); font-weight: 900;
+            letter-spacing: .06em; line-height: 1.6; }
+        .mrad__skup { font-size: var(--fs-2); font-weight: 700; color: var(--muted); }
+        .mrad__napln { font-size: var(--fs-4); font-weight: 700; line-height: 1.4; color: var(--text);
+            overflow-wrap: anywhere; }
+        .mrad--hotovo .mrad__napln { text-decoration: line-through; color: var(--text-soft); }
+        .mrad__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+            font-size: var(--fs-2); color: var(--muted); overflow-wrap: anywhere; }
+        .mrad__kdy { grid-area: kdy; margin-top: 3px; padding: 2px 10px; border-radius: var(--r-pill);
+            background: var(--bg-soft); color: var(--text-soft); font-size: var(--fs-1); font-weight: 800;
+            white-space: nowrap; }
+        .mrad--blizko .mrad__kdy { background: var(--warn-tint); color: var(--warn); }
+        .mrad--pozde .mrad__kdy { background: var(--danger-tint); color: var(--danger); }
+        .mrad__akce { grid-area: akce; display: flex; gap: 6px; align-items: center; justify-content: flex-end;
+            margin-top: -4px; }
 
-        /* okno hromadné změny termínu */
+        /* ============================== harmonogram – skupiny jako karty */
+        #tableWrap { padding: 2px 2px 6px; }
+        table.milniky { border-collapse: separate; border-spacing: 0; background: none; border: 0;
+            border-radius: 0; overflow: visible; }
+        .milniky th { background: none; border-bottom: 0; padding: 2px 14px 8px; }
+        .milniky td { background: var(--surface); border-bottom: 1px solid var(--line-soft); }
+        .milniky td:first-child { border-left: 1px solid var(--line); }
+        .milniky td:last-child { border-right: 1px solid var(--line); }
+        .milniky tbody tr:hover { background: none; }
+        .milniky tbody tr:not(.milniky__skupina):not(.je-vybrany):hover > td { background: var(--bg-soft); }
+        .milniky tr.mtr--posledni > td { border-bottom: 1px solid var(--line); }
+        .milniky tr.mtr--posledni > td:first-child { border-bottom-left-radius: var(--r-lg); }
+        .milniky tr.mtr--posledni > td:last-child { border-bottom-right-radius: var(--r-lg); }
+        .milniky tr.milniky__mezera > td { height: 18px; padding: 0; border: 0; background: none; }
+        .milniky tr.milniky__skupina > td { padding: 14px 16px; background: var(--surface); border: 1px solid var(--line);
+            border-bottom-color: var(--line-soft); border-radius: var(--r-lg) var(--r-lg) 0 0;
+            box-shadow: inset 4px 0 0 var(--mil-ost); }
+        .milniky tr.milniky__skupina--stav > td { box-shadow: inset 4px 0 0 var(--mil-stav); }
+        .milniky tr.milniky__skupina--tech > td { box-shadow: inset 4px 0 0 var(--mil-tech); }
+        .mskup { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+        .milniky .mskup b { font-size: var(--fs-4); font-weight: 900; letter-spacing: 0; text-transform: none; color: var(--text); }
+        .milniky .mskup span { margin: 0; font-size: var(--fs-2); color: var(--muted); }
+        .mskup .btn { margin-left: auto; }
+        .milniky tr.mtr--stav > td:first-child { box-shadow: inset 4px 0 0 var(--mil-stav); }
+        .milniky tr.mtr--tech > td:first-child { box-shadow: inset 4px 0 0 var(--mil-tech); }
+        .milniky__cinnost { white-space: normal; min-width: 150px; }
+        .milcin { display: block; margin-bottom: 4px; }
+        .milniky__cinnost .mtyp, .milniky__cinnost .milpil { margin: 2px 4px 0 0; }
+        .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
+        .milniky tr.milnik--muj > td { background: var(--accent-tint); }
+        .milniky tr.milnik--skryty > td { background: var(--bg-soft); }
+        .milniky tbody tr.milnik--po, .milniky tbody tr.milnik--dnes, .milniky tbody tr.milnik--hotovo { background: none; }
+        .milnik--hotovo .milniky__napln { opacity: 1; color: var(--text-soft); }
+        .milniky__napln { color: var(--text); font-weight: 700; }
+        .milniky__datum b { font-weight: 900; }
+        .milniky__datum .mildash { color: var(--muted); font-weight: 700; }
+        .milniky__pozn { display: table; margin-top: 5px; padding: 1px 9px; border-radius: var(--r-pill);
+            background: var(--bg-soft); color: var(--text-soft); font-weight: 800; }
+        .milnik--blizko .milniky__pozn, .milnik--dnes .milniky__pozn { background: var(--warn-tint); color: var(--warn); }
+        .milnik--po .milniky__pozn { background: var(--danger-tint); color: var(--danger); }
+        .milnik--hotovo .milniky__pozn { background: var(--ok-tint); color: var(--p100-fg); }
+        .milniky .mlide__jmena { display: inline; color: var(--text-soft); }
+        .milniky td[data-l="Zpracovatel"] { white-space: nowrap; }
+
+        /* ------------------------------------- okno hromadné změny termínu */
         .tsouhrn { padding: 12px 14px; line-height: 1.55; background: var(--bg-soft);
             border: 1px solid var(--line); border-radius: var(--r); font-size: var(--fs-2); }
         .tsouhrn ul { margin: 6px 0 0; padding-left: 18px; }
         .tsouhrn .muted { color: var(--muted); }
         .tsouhrn__chyba { color: var(--danger); font-weight: 700; }
+
+        /* ================================================== telefon */
+        @media (max-width: 640px) {
+            .msouhrn { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+            .msouhrn__d { padding: 8px 8px 8px 14px; }
+            .msouhrn__d::before { top: 8px; bottom: 8px; }
+            .msouhrn__d b { font-size: var(--fs-5); }
+            .msouhrn__d span { font-size: var(--fs-1); line-height: 1.3; }
+            .msouhrn__d small { display: none; }
+            .zalozky { gap: 20px; }
+            .mfiltr { padding: 10px; gap: 8px; }
+            .mhledat { flex-basis: 100%; max-width: none; }
+            .mseg { display: flex; width: 100%; }
+            .mseg__btn { flex: 1 1 auto; padding: 0 6px; }
+            .mseg__tecka { display: none; }
+            .mfiltr__vyber { flex: 1 1 140px; max-width: none; min-width: 0; }
+            .mfiltr__prepinace { margin-left: 0; }
+            /* legenda na telefonu jen zabírá místo – štítky na kartách mají slovo */
+            .mil-legenda { display: none; }
+
+            /* osa se na úzkém displeji schová – karty jdou přes celou šířku */
+            .mvypis { padding-left: 0; gap: 20px; }
+            .mvypis::before, .mrad::before { display: none; }
+            .mvypis__lista { margin: 0 0 -8px; }
+            .mvypis__lista .vyber-cil { width: auto; background: none; }
+            .mblok__hlava { margin-left: 0; padding: 8px 0 8px 24px; }
+            .mblok__hlava::before { left: 0; width: 14px; height: 14px; margin-top: -7px; }
+            details.mblok > summary::after { padding: 1px 8px; }
+
+            .mrad { grid-template-columns: auto auto minmax(0, 1fr) auto;
+                grid-template-areas: "vyber datum kdy akce" "hlavni hlavni hlavni hlavni";
+                column-gap: 8px; row-gap: 8px; padding: 10px 8px 12px 10px; }
+            .mvypis--bez-vyberu .mrad { grid-template-columns: auto minmax(0, 1fr) auto;
+                grid-template-areas: "datum kdy akce" "hlavni hlavni hlavni"; }
+            .mrad__vyber { position: static; grid-area: vyber; opacity: 1; width: auto; height: auto; background: none; }
+            .mrad__datum { flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 6px;
+                min-height: 0; padding: 3px 10px; }
+            .mrad__datum b { font-size: var(--fs-4); }
+            .mrad__kdy { justify-self: start; align-self: center; margin-top: 0; max-width: 100%; min-width: 0;
+                overflow: hidden; text-overflow: ellipsis; }
+            .mrad__akce { align-self: center; margin-top: 0; }
+            .mrad__napln { font-size: var(--fs-3); }
+        }
+        @media (max-width: 599.98px) {
+            /* harmonogram: řádky jsou karty (nabidka.css), skupina je nadpis */
+            .milniky td, .milniky td:first-child, .milniky td:last-child,
+            .milniky tr.mtr--posledni > td { background: none; border: 0; border-radius: 0; box-shadow: none !important; }
+            .milniky tr.milniky__mezera { display: none !important; }
+            .milniky tr.milniky__skupina > td { padding: 0; border: 0; box-shadow: none; background: none; }
+            table.kt.milniky tr:not(.kt-predel) { border-color: var(--line-soft); box-shadow: var(--shadow); }
+            table.kt.milniky tr.mtr--stav { border-left: 4px solid var(--mil-stav); }
+            table.kt.milniky tr.mtr--tech { border-left: 4px solid var(--mil-tech); }
+            table.kt.milniky tr.milnik--muj { background-color: var(--accent-tint); }
+            table.kt.milniky tr.milnik--skryty { background-color: var(--bg-soft); border-style: dashed; }
+            .milniky__cinnost { min-width: 0; }
+        }
     </style>
 </head>
 <body>
@@ -195,6 +444,10 @@
         </div>
     </div>
 
+    <!-- Souhrn: kolik je po termínu, tento a příští týden. Dlaždice skočí
+         na svůj týden ve výpisu, „Nezveřejněné" přepne filtr. -->
+    <div id="souhrn" class="msouhrn" aria-label="Souhrn termínů" hidden></div>
+
     <!-- Dvě záložky (Michal 20. 10. 2026): výchozí je výpis po datech „co se
          chystá", dosavadní harmonogram po skupinách je druhá. Poslední
          zvolenou si stránka pamatuje. -->
@@ -219,45 +472,65 @@
 
     <!-- Filtr. Harmonogram má přes sto položek, bez roztřídění se v něm
          nedá nic najít. Všechno je dobrovolné a skládá se dohromady. -->
-    <div id="filtrRow" class="row row--wrap" style="gap:8px;align-items:center">
-        <input type="search" id="fHledat" class="field" style="max-width:230px"
-               placeholder="Hledat v náplni…" aria-label="Hledat v náplni milníku">
-        <select id="fTyp" class="field" style="max-width:180px" aria-label="Typ milníku"></select>
-        <select id="fCin" class="field" style="max-width:180px" aria-label="Technologie"></select>
-        <select id="fKdo" class="field" style="max-width:210px" aria-label="Zpracovatel"></select>
-        <button type="button" class="chip" data-prep="moje">Jen moje</button>
-        <button type="button" class="chip" data-prep="skryte" data-need="milnik.manage" hidden>Jen nezveřejněné</button>
-        <!-- Splněné milníky (Michal 21. 10. 2026): přepínač je vidět vždycky,
-             i s vybraným člověkem a v Harmonogramu. Ukáže splněné v jejich
-             týdnu, ztlumeně; volba se pamatuje. Text a počet píše render(). -->
-        <button type="button" class="chip" id="btnSplnene" aria-pressed="false">Zobrazit splněné</button>
-        <button type="button" class="chip" id="btnFiltrPryc" hidden>Zrušit filtr</button>
+    <!-- Lišta filtru: hledání, typ jako segmentový přepínač, roletky,
+         přepínače vpravo. Všechno je dobrovolné a skládá se dohromady. -->
+    <div id="filtrRow" class="mfiltr" role="search" aria-label="Filtr milníků">
+        <label class="mhledat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.6-3.6"></path></svg>
+            <input type="search" id="fHledat" class="field"
+                   placeholder="Hledat v náplni…" aria-label="Hledat v náplni milníku">
+        </label>
+        <div id="fTyp" class="mseg" role="group" aria-label="Typ milníku">
+            <button type="button" class="mseg__btn" data-typ="" aria-pressed="true">Vše</button>
+            <button type="button" class="mseg__btn" data-typ="stav" aria-pressed="false"><i class="mseg__tecka mseg__tecka--stav"></i>Stavební</button>
+            <button type="button" class="mseg__btn" data-typ="tech" aria-pressed="false"><i class="mseg__tecka mseg__tecka--tech"></i>Technologické</button>
+            <button type="button" class="mseg__btn" data-typ="ost" aria-pressed="false"><i class="mseg__tecka"></i>Ostatní</button>
+        </div>
+        <select id="fCin" class="field mfiltr__vyber" aria-label="Technologie"></select>
+        <select id="fKdo" class="field mfiltr__vyber" aria-label="Zpracovatel"></select>
+        <div class="mfiltr__prepinace">
+            <button type="button" class="chip" data-prep="moje" aria-pressed="false">Jen moje</button>
+            <button type="button" class="chip" data-prep="skryte" data-need="milnik.manage" aria-pressed="false" hidden>Jen nezveřejněné</button>
+            <!-- Splněné milníky (Michal 21. 10. 2026): vypínač je vidět vždycky,
+                 i s vybraným člověkem a v Harmonogramu. Ukáže splněné v jejich
+                 týdnu, ztlumeně; volba se pamatuje. Text s počtem píše render(). -->
+            <label class="mprep" id="splneneRow">
+                <input type="checkbox" id="fSplnene" role="switch">
+                <span class="mprep__kolej" aria-hidden="true"></span>
+                <span id="splneneText">Zobrazit splněné</span>
+            </label>
+            <button type="button" class="mfiltr__pryc" id="btnFiltrPryc" hidden>Zrušit filtr</button>
+        </div>
     </div>
 
-    <!-- legenda: barva vždycky spolu se slovem -->
-    <div id="legenda" class="mil-legenda" hidden>
-        <span>Typ milníku:</span>
-        <span class="mtyp mtyp--stav"><i></i>stavební</span>
-        <span class="mtyp mtyp--tech"><i></i>technologický</span>
-        <span class="mtyp"><i></i>ostatní</span>
-        <span><span class="milpil milpil--novy">nový</span> zveřejněný za posledních 7 dní</span>
+    <!-- legenda (barva vždycky spolu se slovem) a vpravo sbalená nápověda manažera -->
+    <div class="mradek">
+        <div id="legenda" class="mil-legenda" hidden>
+            <span>Typ milníku:</span>
+            <span class="mtyp mtyp--stav"><i></i>stavební</span>
+            <span class="mtyp mtyp--tech"><i></i>technologický</span>
+            <span class="mtyp"><i></i>ostatní</span>
+            <span><span class="milpil milpil--novy">nový</span> zveřejněný za posledních 7 dní</span>
+        </div>
+
+        <details id="hintManazer" class="mtip" hidden>
+            <summary>Jak zveřejňovat a měnit termíny</summary>
+            Vidíš <b>celý harmonogram</b> včetně toho, co zaměstnanci zatím nevidí
+            (značka <span class="milpil milpil--skryty">nezveřejněno</span>).
+            Zaškrtni milníky (na PC se zaškrtávátko ukáže na ose vlevo po najetí myší)
+            a v liště dole jim <b>změníš termín</b> nebo je <b>zveřejníš s termínem</b>; termín se zpřístupní jen zpracovatelům
+            a každý z nich dostane jeden vzkaz do Quick TO-DO.
+            Celou skupinu zveřejníš naráz z jejího nadpisu v Harmonogramu.
+        </details>
     </div>
 
-    <div id="hint" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
+    <div id="hint" class="mtip" hidden>
         Zapisovat a měnit milníky můžou jen <b>správci</b>. Ostatní vidí zveřejněné
         milníky všech, ale <b>termín jen u svých</b> – u kolegových je místo data pomlčka.
     </div>
-    <div id="hintPostup" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
+    <div id="hintPostup" class="mtip" hidden>
         Celá řada tvojí profese v pořadí, jak půjde za sebou – i to, co se bude
         odevzdávat až za dlouho. Ukazuje se podle technologie, kterou děláš.
-    </div>
-    <div id="hintManazer" class="card small muted" style="padding:14px 16px;line-height:1.6" hidden>
-        Vidíš <b>celý harmonogram</b> včetně toho, co zaměstnanci zatím nevidí
-        (značka <span class="milpil milpil--skryty">nezveřejněno</span>).
-        Zaškrtni milníky a v liště dole jim <b>změň termín</b> nebo je
-        <b>zveřejni s termínem</b>; termín se zpřístupní jen zpracovatelům
-        a každý z nich dostane jeden vzkaz do Quick TO-DO.
-        Celou skupinu zveřejníš naráz z jejího nadpisu v Harmonogramu.
     </div>
 
     <div id="empty" class="card center small muted" style="padding:40px" hidden>
@@ -378,13 +651,13 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=294"></script>
-<script src="assets/js/doc.js?v=294"></script>
-<script src="assets/js/ui.js?v=294"></script>
-<script src="assets/js/nabidka.js?v=294"></script>
+<script src="assets/js/taxonomy.js?v=295"></script>
+<script src="assets/js/doc.js?v=295"></script>
+<script src="assets/js/ui.js?v=295"></script>
+<script src="assets/js/nabidka.js?v=295"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=294"></script>
-<script type="module" src="assets/js/store.js?v=294"></script>
+<script src="assets/js/vykazy.js?v=295"></script>
+<script type="module" src="assets/js/store.js?v=295"></script>
 
 <script>
 (function () {
@@ -508,6 +781,8 @@
         return 1 + Math.round(((d - ctvrtek1) / 86400000 - 3 + ((ctvrtek1.getDay() + 6) % 7)) / 7);
     }
     const DNY_TYDNE = ["ne", "po", "\u00fat", "st", "\u010dt", "p\u00e1", "so"];
+    // zkratky m\u011bs\u00edc\u016f do datov\u00e9ho \u0161t\u00edtku karty
+    const MESICE = ["led", "\u00fano", "b\u0159e", "dub", "kv\u011b", "\u010dvn", "\u010dvc", "srp", "z\u00e1\u0159", "\u0159\u00edj", "lis", "pro"];
     /** \u201e27. 10." \u2013 rok jen kdy\u017e nen\u00ed leto\u0161n\u00ed. */
     const kratkeDatum = (iso) => {
         if (!iso) return "";
@@ -540,6 +815,97 @@
             .filter(Boolean);
         if (lide.length) return lide.map(jmeno).join(", ");
         return (item.owner || "").trim();
+    }
+
+    /* ------------------------------------- zpracovatelé jako kolečka --
+       Iniciály v kolečku, celé jméno v bublině (najetí myší) a pro čtečku
+       obrazovky. Na dotyku najetí není, tam jsou jména rovnou vedle
+       (.mlide__jmena), stejně jako v harmonogramu (sJmeny). Barva kolečka
+       je podle UID, ať má každý člověk všude stejnou. */
+    const inicialy = (u) => {
+        const z = ((u.first || "").trim().charAt(0) + (u.last || "").trim().charAt(0)) ||
+            String(u.email || "?").charAt(0);
+        return z.toUpperCase();
+    };
+    const barvaAvataru = (uid) => {
+        let h = 0;
+        String(uid || "").split("").forEach(c => { h = (h * 31 + c.charCodeAt(0)) >>> 0; });
+        return h % 6;
+    };
+    function lideHtml(item, ja, sJmeny) {
+        const lide = (item.owners || [])
+            .map(uid => (window.KB.users || []).find(u => u.id === uid))
+            .filter(Boolean);
+        if (!lide.length) {
+            const stary = (item.owner || "").trim();      // starý milník: jméno jen textem
+            return stary ? "<span>" + esc(stary) + "</span>" : "";
+        }
+        const kolecka = lide.map(u => {
+            const j = jmeno(u);
+            return '<span class="mava mava--' + esc(barvaAvataru(u.id)) + (u.id === ja ? " mava--ja" : "") +
+                '" data-jmeno="' + esc(j) + '"><span aria-hidden="true">' + esc(inicialy(u)) + "</span>" +
+                '<span class="mskryte">' + esc(j) + "</span></span>";
+        }).join("");
+        return '<span class="mlide">' + kolecka + "</span>" +
+            '<span class="mlide__jmena"' + (sJmeny ? "" : ' aria-hidden="true"') + ">" +
+            esc(lide.map(jmeno).join(", ")) + "</span>";
+    }
+
+    /* ------------------------------------------- souhrn v dlaždicích --
+       Počítá se z toho, co prošlo zakázkou a filtrem – stejně jako výpis:
+       po termínu = nesplněné s prošlým datem, týden = od dneška do neděle
+       (bez potvrzených splněných), čeká = splněné, ještě nepotvrzené. */
+    function paintSouhrn(vsechny, muzeMenit) {
+        const el = $("souhrn");
+        if (!(window.KB.milniky || []).length) { el.hidden = true; el.innerHTML = ""; return; }
+        const dnes = dnesISO();
+        const po = pondeli(dnes);
+        const ne = posunISO(po, 6), po2 = posunISO(po, 7), ne2 = posunISO(po, 13);
+        const n = { pozde: 0, tento: 0, pristi: 0, ceka: 0, skryte: 0 };
+        vsechny.forEach(m => {
+            // čekající bez (viditelného) termínu leží ve sbaleném bloku – dlaždice by neměla kam skočit
+            if (m.hotovo && m.potvrzeno === false && m.datum) n.ceka += 1;
+            if (m.zverejneno === false) n.skryte += 1;
+            if (!m.datum || (m.hotovo && m.potvrzeno !== false)) return;
+            if (m.datum < dnes) { if (!m.hotovo) n.pozde += 1; return; }
+            if (m.datum <= ne) n.tento += 1;
+            else if (m.datum >= po2 && m.datum <= ne2) n.pristi += 1;
+        });
+        const rozsah = (a, b) => kratkeDatum(a) + " – " + kratkeDatum(b);
+        const dlazdice = (o) => {
+            const prepinac = typeof o.stisk === "boolean";
+            return '<button type="button" class="msouhrn__d msouhrn__d--' + esc(o.klic) + '" data-skok="' +
+                esc(o.klic) + '"' + (prepinac ? ' aria-pressed="' + (o.stisk ? "true" : "false") + '"' : "") +
+                (!o.n && !prepinac ? " disabled" : "") + ">" +
+                "<b>" + esc(o.n) + "</b><span>" + esc(o.nazev) + "</span><small>" + esc(o.pod) + "</small></button>";
+        };
+        el.innerHTML = [
+            dlazdice({ klic: "pozde", n: n.pozde, nazev: "po termínu", pod: "nesplněné" }),
+            dlazdice({ klic: "tento", n: n.tento, nazev: "tento týden", pod: rozsah(dnes, ne) }),
+            dlazdice({ klic: "pristi", n: n.pristi, nazev: "příští týden", pod: rozsah(po2, ne2) }),
+            (muzeMenit || n.ceka)
+                ? dlazdice({ klic: "ceka", n: n.ceka, nazev: "čeká na potvrzení", pod: "splněné, nepotvrzené" }) : "",
+            muzeMenit
+                ? dlazdice({ klic: "skryte", n: n.skryte, nazev: "nezveřejněné", pod: "vidíš je jen ty", stisk: jenSkryte }) : ""
+        ].join("");
+        el.hidden = false;
+    }
+
+    /** Výška nalepené lišty webu – pod ni se lepí nadpisy týdnů. */
+    function lepkaLista() {
+        const header = document.querySelector(".appbar");
+        if (!header) return;
+        const spocti = () => {
+            // na telefonu lišta odroluje pryč (position: static) – nadpis se lepí až k hornímu okraji
+            const pos = getComputedStyle(header).position;
+            const bar = header.querySelector(".appbar__bar");
+            const nad = bar && bar.offsetParent ? Math.max(0, bar.offsetTop) : 0;
+            const vyska = pos === "sticky" || pos === "fixed" ? Math.max(0, header.offsetHeight - nad) : 0;
+            document.documentElement.style.setProperty("--mil-lista", vyska + "px");
+        };
+        spocti();
+        window.addEventListener("resize", spocti);
+        if (window.ResizeObserver) new ResizeObserver(spocti).observe(header);
     }
 
     const czDate = (iso) => {
@@ -679,10 +1045,12 @@
         });
         cinnosti.sort((a, b) => a.localeCompare(b, "cs"));
 
-        $("fTyp").innerHTML = '<option value="">Všechny typy</option>' +
-            PORADI_TYPU.filter(t => typy.indexOf(t) !== -1 || t === filTyp)
-                .map(t => '<option value="' + esc(t) + '"' + (t === filTyp ? " selected" : "") + ">" +
-                    esc(TYPY_MILNIKU[t].mnozne) + "</option>").join("");
+        // segmentový přepínač typu: jen typy, které ve výpisu opravdu jsou
+        document.querySelectorAll("#fTyp [data-typ]").forEach(b => {
+            const t = b.dataset.typ;
+            b.hidden = !!t && typy.indexOf(t) === -1 && t !== filTyp;
+            b.setAttribute("aria-pressed", t === filTyp ? "true" : "false");
+        });
 
         const lide = kdo.map(uid => (window.KB.users || []).find(u => u.id === uid))
             .filter(Boolean).sort((a, b) => jmeno(a).localeCompare(jmeno(b), "cs"));
@@ -696,9 +1064,11 @@
         if ($("fHledat").value !== hledat && document.activeElement !== $("fHledat")) {
             $("fHledat").value = hledat;
         }
-        document.querySelectorAll("#filtrRow [data-prep]").forEach(el =>
-            el.classList.toggle("chip--active",
-                el.dataset.prep === "moje" ? jenMoje : jenSkryte));
+        document.querySelectorAll("#filtrRow [data-prep]").forEach(el => {
+            const on = el.dataset.prep === "moje" ? jenMoje : jenSkryte;
+            el.classList.toggle("chip--active", on);
+            el.setAttribute("aria-pressed", on ? "true" : "false");
+        });
         $("btnFiltrPryc").hidden = !(hledat || filTyp || filCin || filKdo || jenMoje || jenSkryte);
     }
 
@@ -709,14 +1079,12 @@
      * přepínač zapnutý a nedá se vypnout, uložená volba se nemění.
      */
     function paintSplnene(vsechny, harmonogram) {
-        const btn = $("btnSplnene");
+        const vypinac = $("fSplnene");
         const vzdy = harmonogram && pohled !== "nadchazejici";
-        const zapnuto = vzdy || ukazatSplnene;
-        btn.textContent = "Zobrazit splněné (" + vsechny.filter(jeSplneny).length + ")";
-        btn.classList.toggle("chip--active", zapnuto);
-        btn.setAttribute("aria-pressed", zapnuto ? "true" : "false");
-        btn.disabled = vzdy;
-        btn.title = vzdy ? "V tomhle pohledu jsou splněné milníky vidět vždycky." : "";
+        vypinac.checked = vzdy || ukazatSplnene;
+        vypinac.disabled = vzdy;
+        $("splneneText").textContent = "Zobrazit splněné (" + vsechny.filter(jeSplneny).length + ")";
+        $("splneneRow").title = vzdy ? "V tomhle pohledu jsou splněné milníky vidět vždycky." : "";
     }
 
     /** Pruh se zakázkami – stejný princip jako filtr v úkolovníku. */
@@ -801,13 +1169,16 @@
         filtrovane = vsechny;
         paintSplnene(vsechny, harmonogram);
         paintUkolyBtn(muzeMenit);
+        // souhrn v dlaždicích nahoře; řádek počtů jen u harmonogramu („N z M")
+        paintSouhrn(vsechny, muzeMenit);
+        $("pocty").hidden = !harmonogram;
 
         /* Vykreslený je vždycky jen jeden pohled – hromadný výběr hledá
            zaškrtávátka v obou a dvakrát stejné id by se pralo. */
         if (!harmonogram) {
             $("table").innerHTML = "";
             $("tableWrap").hidden = true;
-            renderVypis(vsechny, { muzeMenit: muzeMenit, jeMuj: jeMuj });
+            renderVypis(vsechny, { muzeMenit: muzeMenit, jeMuj: jeMuj, ja: ja });
             return;
         }
         $("vypis").innerHTML = "";
@@ -869,7 +1240,7 @@
             Array.from(skupiny.entries())
                 .sort((a, b) => (poradiSkupiny(a[0]) - poradiSkupiny(b[0])) ||
                                 a[0].localeCompare(b[0], "cs"))
-                .map(([nazev, radky]) => {
+                .map(([nazev, radky], poradiVyp) => {
                 const s = souhrn.get(nazev) || { celkem: radky.length, hotovych: 0, skrytych: 0 };
                 const kolik = radky.length === s.celkem
                     ? pocet(s.celkem, MILNIK)
@@ -883,18 +1254,22 @@
                     : "";
                 // barva nadpisu podle typu skupiny (stavební / technologický / ostatní)
                 const typSkupiny = typMilniku({ skupina: nazev });
+                // skupina = karta: mezera, hlavička nahoře, poslední řádek zaoblený dole
+                const mezera = poradiVyp
+                    ? '<tr class="milniky__mezera" aria-hidden="true"><td colspan="' + esc(sloupcu) + '"></td></tr>'
+                    : "";
                 const hlavicka = '<tr class="milniky__skupina milniky__skupina--' + esc(typSkupiny) +
-                    ' kt-predel"><td colspan="' + esc(sloupcu) + '">' +
+                    ' kt-predel"><td colspan="' + esc(sloupcu) + '"><div class="mskup">' +
                     "<b>" + esc(nazev) + "</b>" +
                     "<span>" + esc(kolik + " · " + s.hotovych + " splněno" +
                         (s.skrytych ? " · " + pocet(s.skrytych, NEZVEREJNENY) : "")) + "</span>" +
                     hromadne +
-                "</td></tr>";
-                return hlavicka + radky.map(radek).join("");
+                "</div></td></tr>";
+                return mezera + hlavicka + radky.map((m, i) => radek(m, i === radky.length - 1)).join("");
             }).join("") +
             "</tbody>";
 
-        function radek(item) {
+        function radek(item, posledni) {
                 const t = stavTerminu(item);
                 const muj = jeMuj(item);
                 const skryty = item.zverejneno === false;
@@ -903,6 +1278,7 @@
                         (skryty ? " milnik--skryty" : "") + (sloupecVyberu ? " kt-vybiratelny" : "") +
                         // splněný mezi nadcházejícími (přepínač) – ztlumený
                         (pohled === "nadchazejici" && jeSplneny(item) ? " milnik--ztlumeny" : "") +
+                        (posledni ? " mtr--posledni" : "") +
                         '" data-mid="' + esc(item.id) + '">' +
                     (sloupecVyberu
                         ? '<td class="kt-vyber">' + vyber.box(item.id, (item.cinnost || "") + " – " + (item.napln || "")) + "</td>"
@@ -921,7 +1297,7 @@
                         (skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "") +
                         (muzeMenit && ukolMilniku(item)
                             ? '<span class="milpil milpil--ukol">úkol</span>' : "") + "</td>" +
-                    '<td data-l="Zpracovatel">' + esc(ownersText(item)) + "</td>" +
+                    '<td data-l="Zpracovatel">' + lideHtml(item, ja, true) + "</td>" +
                     '<td class="milniky__napln">' + esc(item.napln || "") + "</td>" +
                     '<td class="milniky__datum" data-l="Termín"><b>' + t.text + "</b>" +   /* t.text je bezpečný: datum nebo vlastní značka */
                         (t.pozn ? '<span class="milniky__pozn">' + esc(t.pozn) + "</span>" : "") + "</td>" +
@@ -1004,17 +1380,20 @@
                 (hotovych ? " · " + hotovych + " splněno" : "");
         };
 
+        /* Blok = úsek časové osy. Nadpis (týden) se při rolování lepí nahoru,
+           `id` je cíl dlaždic souhrnu (#mblok-tento…). */
         const blok = (o) => {
             const hlava = "<b>" + esc(o.nazev) + "</b><span>" + esc(o.popis) + "</span>";
+            const id = ' id="mblok-' + esc(o.id || o.klic) + '"';
             if (!o.sbaleny) {
-                return '<section class="mblok ' + esc(o.trida || "") + '">' +
+                return '<section class="mblok ' + esc(o.trida || "") + '"' + id + ">" +
                     '<div class="mblok__hlava">' + hlava + "</div>" +
                     o.radky.map(radekVypisu).join("") + "</section>";
             }
             /* Sbalený blok kreslí řádky, až když je otevřený – zaškrtnutí
                „všeho vypsaného" tak nevybere i to, co člověk nevidí. */
             const otevreny = otevreneBloky.has(o.klic);
-            return '<details class="mblok ' + esc(o.trida || "") + '" data-blok="' + esc(o.klic) + '"' +
+            return '<details class="mblok ' + esc(o.trida || "") + '"' + id + ' data-blok="' + esc(o.klic) + '"' +
                 (otevreny ? " open" : "") + ">" +
                 '<summary class="mblok__hlava">' + hlava + "</summary>" +
                 (otevreny ? o.radky.map(radekVypisu).join("") : "") + "</details>";
@@ -1023,11 +1402,11 @@
         const tento = pondeli(dnes);
         const casti = [];
         if (pozde.length) {
-            casti.push(blok({ nazev: "Po termínu", trida: "mblok--pozde", radky: pozde,
+            casti.push(blok({ id: "pozde", nazev: "Po termínu", trida: "mblok--pozde", radky: pozde,
                 popis: popisBloku(pozde) + " · nesplněné" }));
         }
         if (cekaPozde.length) {
-            casti.push(blok({ nazev: "Čeká na potvrzení", trida: "mblok--ceka", radky: cekaPozde,
+            casti.push(blok({ id: "ceka", nazev: "Čeká na potvrzení", trida: "mblok--ceka", radky: cekaPozde,
                 popis: popisBloku(cekaPozde) + " · splněné, ještě nepotvrzené" }));
         }
         Array.from(tydny.keys()).sort().forEach(po => {
@@ -1036,6 +1415,8 @@
             const nazev = tydnu === 0 ? "Tento týden" : (tydnu === 1 ? "Příští týden"
                 : (tydnu === -1 ? "Minulý týden" : "Týden " + cisloTydne(po)));
             casti.push(blok({ nazev: nazev, radky: tydny.get(po),
+                id: tydnu === 0 ? "tento" : (tydnu === 1 ? "pristi" : "t" + po),
+                trida: tydnu === 0 ? "mblok--tento" : "",
                 popis: kratkeDatum(po) + " – " + kratkeDatum(posunISO(po, 6)) + " · " + popisBloku(tydny.get(po)) }));
         });
         if (bezTerminu.length) {
@@ -1048,7 +1429,7 @@
                 nazev: "Splněné", popis: popisBloku(hotove) }));
         }
         if (!pozde.length && !cekaPozde.length && !nadchazejicich) {
-            casti.unshift('<div class="card small muted" style="padding:14px 16px">' +
+            casti.unshift('<div class="mtip">' +
                 "Od dneška dál se nic nechystá – žádný nesplněný milník s termínem.</div>");
         }
 
@@ -1067,17 +1448,24 @@
 
             let datum, pozn = "", stav = "";
             if (m.datum) {
-                datum = sDnem(m.datum);
+                /* datový štítek: den v týdnu, číslo dne, měsíc (rok jen
+                   když není letošní) – v datu jsou jen číslice, ale escapuje se */
+                const [y, mes, d] = m.datum.split("-");
+                datum = "<small>" + esc(DNY_TYDNE[new Date(m.datum + "T00:00:00").getDay()]) + "</small>" +
+                    "<b>" + esc(Number(d)) + "</b>" +
+                    "<small>" + esc(MESICE[Number(mes) - 1] || "") +
+                    (Number(y) !== new Date().getFullYear() ? " " + esc(y) : "") + "</small>";
                 const dny = dnyDo(m.datum);
                 if (splneno) pozn = "splněno";
                 else if (ceka) pozn = dny < 0 ? "termín byl " + kratkeDatum(m.datum) : (dny === 0 ? "dnes" : "za " + pocet(dny, DEN_TVARY));
                 else if (dny < 0) { pozn = pocet(-dny, DEN_TVARY) + " po termínu"; stav = " mrad--pozde"; }
-                else if (dny === 0) { pozn = "dnes"; stav = " mrad--blizko"; }
-                else if (dny === 1) { pozn = "zítra"; stav = " mrad--blizko"; }
+                else if (dny === 0) { pozn = "dnes"; stav = " mrad--blizko mrad--hned"; }
+                else if (dny === 1) { pozn = "zítra"; stav = " mrad--blizko mrad--hned"; }
                 else { pozn = "za " + pocet(dny, DEN_TVARY); if (dny <= 7) stav = " mrad--blizko"; }
             } else {
                 // termín kolegy: pomlčka bez vysvětlování (Michal 8. 10. 2026)
-                datum = m.terminSkryty ? "—" : "bez termínu";
+                datum = "<b>—</b>";
+                if (!m.terminSkryty) pozn = "bez termínu";
             }
 
             const stitky = [
@@ -1090,33 +1478,38 @@
                 k.muzeMenit && ukolMilniku(m) ? '<span class="milpil milpil--ukol">úkol</span>' : ""
             ].join("");
 
-            const meta = [
+            const info = [
                 (m.zakazka || "").trim(),
-                ownersText(m),
                 // zveřejnění vidí jen manažer – zaměstnanec vidí jen zveřejněné
                 k.muzeMenit && !skryty
                     ? "zveřejněno" + (Number(m.zverejnenoMs) > 0
                         ? " " + kratkeDatum(isoDatum(new Date(Number(m.zverejnenoMs)))) : "")
                     : ""
             ].filter(Boolean).join(" · ");
+            const lide = lideHtml(m, k.ja, false);
 
             const popis = [m.cinnost, skupinaText(m), m.napln].filter(Boolean).join(" – ");
+            /* Karta: datový štítek | technologie, typ, skupina, štítky stavu,
+               náplň (hlavní text), zpracovatelé a zakázka | kdy | ⋯ */
             return '<div class="mrad mrad--' + esc(typ) + stav + (muj && !m.hotovo ? " mrad--muj" : "") +
-                    (skryty ? " mrad--skryty" : "") + (m.hotovo ? " mrad--hotovo" : "") +
+                    (skryty ? " mrad--skryty" : "") + (m.hotovo ? " mrad--hotovo" : "") + (ceka ? " mrad--ceka" : "") +
                     // splněný ukázaný přepínačem mezi rozdělanými – ztlumený
                     (splneno && ukazatSplnene ? " mrad--ztlumeny" : "") +
                     '" data-mid="' + esc(m.id) + '" data-vyber-radek>' +
                 (k.muzeMenit ? '<span class="mrad__vyber">' + vyber.box(m.id, popis) + "</span>" : "") +
-                '<span class="mrad__datum"><b>' + esc(datum) + "</b>" +
-                    (pozn ? "<span>" + esc(pozn) + "</span>" : "") + "</span>" +
+                '<span class="mrad__datum' + (m.datum ? "" : " mrad__datum--nic") + '">' +
+                    datum + "</span>" +      /* datum je složené z esc() částí výše */
                 '<span class="mrad__hlavni">' +
-                    '<span class="mrad__titul">' + stitekTypu(typ) +
-                        '<b class="mrad__tech">' + esc(m.cinnost || "") + "</b>" +
+                    '<span class="mrad__titul">' +
+                        '<b class="mrad__tech">' + esc(m.cinnost || "") + "</b>" + stitekTypu(typ) +
                         (skupinaText(m) ? '<span class="mrad__skup">' + esc(skupinaText(m)) + "</span>" : "") +
                         stitky + "</span>" +
                     (m.napln ? '<span class="mrad__napln">' + esc(m.napln) + "</span>" : "") +
-                    (meta ? '<span class="mrad__meta">' + esc(meta) + "</span>" : "") +
+                    (lide || info
+                        ? '<span class="mrad__meta">' + lide + (info ? "<span>" + esc(info) + "</span>" : "") + "</span>"
+                        : "") +
                 "</span>" +
+                (pozn && !splneno ? '<span class="mrad__kdy">' + esc(pozn) + "</span>" : "") +
                 '<span class="mrad__akce">' +
                     (k.muzeMenit && ceka
                         ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' +
@@ -1948,6 +2341,7 @@
 
     document.addEventListener("DOMContentLoaded", async () => {
         window.KBUI.mountNav({ active: "milniky.html" });
+        lepkaLista();
 
         $("btnNew").addEventListener("click", () => openForm(null));
         $("btnUkolyZMilniku").addEventListener("click", ukolyZMilniku);
@@ -1957,7 +2351,13 @@
             hledat = bezDiakritiky($("fHledat").value.trim());
             render();
         });
-        $("fTyp").addEventListener("change", () => { filTyp = $("fTyp").value; render(); });
+        // typ milníku – segmentový přepínač (Vše / Stavební / Technologické / Ostatní)
+        $("fTyp").addEventListener("click", (event) => {
+            const b = event.target.closest("[data-typ]");
+            if (!b) return;
+            filTyp = b.dataset.typ || "";
+            render();
+        });
         $("fCin").addEventListener("change", () => { filCin = $("fCin").value; render(); });
         $("fKdo").addEventListener("change", () => { filKdo = $("fKdo").value; render(); });
         document.querySelectorAll("#filtrRow [data-prep]").forEach(chip =>
@@ -1972,8 +2372,8 @@
             render();
         });
         // „Zobrazit splněné" není filtr, ale volba pohledu – Zrušit filtr ji nechává
-        $("btnSplnene").addEventListener("click", () => {
-            ukazatSplnene = !ukazatSplnene;
+        $("fSplnene").addEventListener("change", () => {
+            ukazatSplnene = $("fSplnene").checked;
             try { localStorage.setItem(SPLNENE_KLIC, ukazatSplnene ? "1" : "0"); }
             catch (err) { /* nevadí – volba jen nepřežije zavření */ }
             render();
@@ -1993,6 +2393,23 @@
             prepniZalozku(zalozka === "vypis" ? "harmonogram" : "vypis");
             const tab = document.querySelector('#zalozky [data-zalozka="' + zalozka + '"]');
             if (tab) tab.focus();
+        });
+
+        // dlaždice souhrnu: skok na týden ve výpisu, „Nezveřejněné" přepne filtr
+        $("souhrn").addEventListener("click", (event) => {
+            const d = event.target.closest("[data-skok]");
+            if (!d || d.disabled) return;
+            const kam = d.dataset.skok;
+            if (kam === "skryte") { jenSkryte = !jenSkryte; render(); return; }
+            if (zalozka !== "vypis") prepniZalozku("vypis");
+            const cil = $("mblok-" + kam) ||
+                (kam === "ceka" ? document.querySelector("#vypis .mrad--ceka") : null);
+            if (!cil) return;
+            cil.scrollIntoView({ behavior: "smooth", block: "start" });
+            // fokus za skokem – klávesnice pokračuje od nadpisu týdne
+            const hlava = cil.querySelector(".mblok__hlava") || cil;
+            if (!hlava.hasAttribute("tabindex") && hlava.tagName !== "SUMMARY") hlava.setAttribute("tabindex", "-1");
+            hlava.focus({ preventScroll: true });
         });
 
         // sbalené bloky výpisu (bez termínu, splněné) – otevřené přežijí překreslení
