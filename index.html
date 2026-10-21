@@ -120,15 +120,12 @@
             text-decoration: none; color: inherit; }
         .kontrola__datum { flex: none; font-weight: 900; color: #b91c1c;
             font-variant-numeric: tabular-nums; }
-        /* Fajfka „je to v pořádku" – zhasnutá je jen obrys, ať nevypadá
-           jako už odbavená věc. */
-        .kontrola__fajfka { flex: none; width: 26px; height: 26px; padding: 0; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            border: 1px solid #f5c2c2; border-radius: var(--r-lg); background: #fff; color: #c8a0a0; }
-        .kontrola__fajfka svg { width: 14px; height: 14px; }
-        .kontrola__fajfka:hover { border-color: var(--ok, #15803d); color: var(--ok, #15803d); }
-        .kontrola__fajfka[aria-pressed="true"] { background: var(--ok, #15803d);
-            border-color: var(--ok, #15803d); color: #fff; }
+        /* „V pořádku" / „Vrátit" (21. 10. 2026, dřív jen fajfka bez popisku).
+           Tlačítko nesmí rozmáčknout text nálezu – zůstává vpravo a text
+           se zalamuje vedle něj. */
+        .kontrola__ok { flex: none; min-height: 30px; padding: 0 10px; font-size: var(--fs-1); }
+        .kontrola__ok:hover { border-color: var(--ok); color: var(--ok); }
+        .kontrola__kdo { color: var(--muted); font-size: var(--fs-1); }
         /* odbavený nález: zůstává vidět, ale už nekřičí */
         .kontrola__radek--ok { background: var(--bg-soft); border-color: var(--line); opacity: .75; }
         .kontrola__radek--ok .kontrola__datum { color: var(--muted); }
@@ -1022,8 +1019,8 @@
     /* Splněno / Vrátit / smazání / rozbalení splněných – panel v pásu má
        vlastní obsluhu v ui.js, tohle patří jen dlaždici. */
     document.addEventListener("click", (event) => {
-        const fajfka = event.target.closest("[data-ok]");
-        if (fajfka) return void prepniKontrolaOk(fajfka.dataset.ok);
+        const vPoradku = event.target.closest("[data-ok]");
+        if (vPoradku) return void prepniKontrolaOk(vPoradku.dataset.ok, vPoradku);
         const dovol = event.target.closest("[data-potvrd-dovolenou]");
         if (dovol) {
             dovol.disabled = true;
@@ -1674,104 +1671,53 @@
     }
 
     /* ------------------------------------------ upozornění pro kontrolu ---
-       Tři kontroly nad výkazy: přes 14 hodin za den, dva zápisy přes sebe
-       a práce v den celodenní absence. Většinou je dlaždice prázdná –
-       existuje pro tu chvíli, kdy něco nesedí. */
+       Podezřelé zápisy za posledních 14 dní: den nad 10 h, dva zápisy přes
+       sebe, práce v den celodenní absence, hodiny na úkol, který byl už
+       hotový, a výpomoc na cizí úkol bez poznámky. Počítá je vykazy.js
+       (`V.podezreleZapisy`, test NASTROJE\web\testy\test_podezrele.js) –
+       tady se jen vykreslují (rešerše 19. 10. 2026, bod 5; do 21. 10. 2026
+       tu byly vlastní kontroly: den nad 14 h a každá výpomoc). Většinou je
+       dlaždice prázdná – existuje pro tu chvíli, kdy něco nesedí. */
 
-    const naMin = (cas) => {
-        const m = /^(\d{1,2}):(\d{2})$/.exec(cas || "");
-        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    let ukazOdbavene = false;
+    const DNY_KRATCE = ["ne", "po", "út", "st", "čt", "pá", "so"];
+    /** „út 21. 10." – v okně 14 dní je rok navíc. */
+    const denKratce = (iso) => {
+        if (!iso) return "";
+        const [y, m, d] = iso.split("-").map(Number);
+        return DNY_KRATCE[new Date(y, m - 1, d).getDay()] + " " + d + ". " + m + ".";
     };
 
-    const FAJFKA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
-
-    /* Co už manažer odbavil. Drží se v databázi, ne v prohlížeči – kontroluje
-       to víc lidí a nikdo nemá procházet znovu to, co druhý odklepl. */
-    let kontrolaOk = new Set();
-    let ukazOdbavene = false;
-
-    async function nactiKontrolaOk() {
-        if (!window.KBUI.can("vykaz.view")) return;
-        try { kontrolaOk = new Set(await window.KB.nactiKontrolaOk()); }
-        catch (err) { console.error(err); }
-        renderKontrola();
+    /* Co už je v pořádku, si pamatuje každý manažer pod svým uid
+       (`private/kontrola/manazeri/{uid}`); dlaždice ukazuje odbavené všemi –
+       co odklikl jeden, druhý znovu procházet nemusí. */
+    function sledujKontrolaOk() {
+        if (window.KBUI.can("vykaz.view") && window.KB.watchKontrolaOk) window.KB.watchKontrolaOk();
     }
 
-    async function prepniKontrolaOk(klic) {
-        kontrolaOk.has(klic) ? kontrolaOk.delete(klic) : kontrolaOk.add(klic);
-        renderKontrola();
-        try { await window.KB.ulozKontrolaOk(Array.from(kontrolaOk)); }
-        catch (err) {
+    async function prepniKontrolaOk(klic, btn) {
+        const bylo = !!(window.KB.kontrolaOk || {})[klic];
+        const zmen = (ok) => ok ? window.KB.oznacKontrolaOk(klic) : window.KB.zrusKontrolaOk(klic);
+        if (btn) btn.disabled = true;
+        try {
+            await zmen(!bylo);
+            window.KBUI.toast(bylo ? "Vráceno mezi upozornění." : "Označeno jako v pořádku.",
+                undefined, { zpet: () => zmen(bylo) });
+        } catch (err) {
             console.error(err);
             window.KBUI.toast("Uložení se nepovedlo.", "error");
+            if (btn) btn.disabled = false;
         }
     }
 
     function renderKontrola() {
         const box = document.getElementById("kontrolaSeznam");
         if (!box || !window.KBUI.can("vykaz.view")) return;
+        const ok = window.KB.kontrolaOk || {};
 
-        // záznamy po dnech a lidech
-        const dny = new Map();
-        (window.KB.vykazy || []).forEach(z => {
-            if (!z.datum || !z.uid) return;
-            const k = z.uid + "|" + z.datum;
-            if (!dny.has(k)) dny.set(k, { prace: [], absenceCely: false, hodiny: 0 });
-            const den = dny.get(k);
-            if (z.absence === true) {
-                if (z.od === "00:00") den.absenceCely = true;
-                return;
-            }
-            den.prace.push(z);
-            den.hodiny += Number(z.hodiny) || 0;
-        });
-
-        const chyby = [];
-        dny.forEach((den, klic) => {
-            const [uid, datum] = klic.split("|");
-            const kdo = jmenoUid(uid) || "?";
-
-            /* Odkaz míří na konkrétní zápis – ne na celé výkazy. U chyb
-               přes celý den stačí kterýkoliv z nich, stránka ukáže ten den
-               celý (u překryvu je potřeba vidět i sousední zápis). */
-            const prvni = den.prace[0] || {};
-
-            if (den.hodiny > 14) chyby.push({ datum: datum, klic: klic + "|hodiny",
-                zapis: prvni.id || "",
-                text: kdo + " má " + V.hod(den.hodiny) + " za jeden den" });
-
-            if (den.absenceCely && den.prace.length) chyby.push({ datum: datum,
-                klic: klic + "|absence", zapis: prvni.id || "",
-                text: kdo + " má výkaz práce v den celodenní absence" });
-
-            // překryvy: seřadit podle začátku a porovnat sousedy
-            const sCasy = den.prace
-                .filter(z => naMin(z.od) !== null && naMin(z.do) !== null)
-                .sort((a, b) => naMin(a.od) - naMin(b.od));
-            for (let i = 1; i < sCasy.length; i++) {
-                if (naMin(sCasy[i].od) < naMin(sCasy[i - 1].do)) {
-                    chyby.push({ datum: datum, klic: klic + "|prekryv",
-                        zapis: sCasy[i].id || "",
-                        text: kdo + " má zápisy přes sebe (" +
-                        sCasy[i - 1].od + "–" + sCasy[i - 1].do + " a " +
-                        sCasy[i].od + "–" + sCasy[i].do + ")" });
-                    break;   // jeden den = jedno hlášení, ať se neopakuje
-                }
-            }
-        });
-
-        /* Výpomoc: hodiny zapsané na úkol, který člověku nepatří. Stává se
-           (lidi si pomáhají), ale manažer o tom má vědět a odklepnout to. */
-        (window.KB.vykazy || []).forEach(z => {
-            if (!z.ukolId || z.absence === true || !z.datum) return;
-            const u = (window.KB.ukoly || []).find(x => x.id === z.ukolId);
-            if (!u || (u.prirazeni || []).indexOf(z.uid) !== -1) return;
-            chyby.push({ datum: z.datum, klic: "vypomoc|" + z.id, zapis: z.id,
-                stitek: "CIZÍ ÚKOL",
-                text: (jmenoUid(z.uid) || "?") + " zapsal výkaz (" +
-                    czDatum(z.datum) + ") na cizí úkol „" + (u.nazev || "?") + "“" });
-        });
+        const chyby = V.podezreleZapisy(window.KB.vykazy || [], { ukoly: window.KB.ukoly || [] })
+            .map(p => ({ klic: p.klic, datum: p.datum, zapis: p.zapis,
+                         kdo: jmenoUid(p.uid) || "?", text: p.duvod }));
 
         /* Ručně vepsané řádky pod čárou v Tabulkách Google – hlásí je
            hodinová kontrola skriptu (řádek s datem od čáry, který nemá ID
@@ -1784,6 +1730,7 @@
             chyby.push({
                 datum: new Date(Number(g.ms) || Date.now()).toISOString().slice(0, 10),
                 klic: "rucni|" + (g.id || "") + "|" + g.pocet,
+                kdo: "",
                 stitek: "RUČNÍ ŘÁDEK",
                 text: "Výkaz " + (g.osoba || "?") + ": pod čárou je " +
                     V.pocet(Number(g.pocet), ["ručně vepsaný řádek", "ručně vepsané řádky",
@@ -1806,23 +1753,29 @@
 
         chyby.sort((a, b) => b.datum.localeCompare(a.datum));
 
-        const otevrene = chyby.filter(ch => !kontrolaOk.has(ch.klic));
-        const odbavene = chyby.filter(ch => kontrolaOk.has(ch.klic));
+        const otevrene = chyby.filter(ch => !ok[ch.klic]);
+        const odbavene = chyby.filter(ch => !!ok[ch.klic]);
 
-        const radek = (ch, hotovo) =>
-            '<div class="kontrola__radek' + (hotovo ? " kontrola__radek--ok" : "") + '">' +
-                '<a class="kontrola__odkaz" href="' +
-                    (ch.zapis ? "vykazy.html?zapis=" + encodeURIComponent(ch.zapis)
-                              : "vykazy.html") + '">' +
+        /* Řádek: kdy, kdo, proč – klik vede do výkazů na ten den toho člověka
+           (zápis se tam zvýrazní); vpravo „V pořádku" (odbavené: „Vrátit"). */
+        const radek = (ch, hotovo) => {
+            const kdoOk = hotovo ? (ok[ch.klic] || []).filter(Boolean) : [];
+            return '<div class="kontrola__radek' + (hotovo ? " kontrola__radek--ok" : "") + '">' +
+                '<a class="kontrola__odkaz" href="' + esc(ch.zapis
+                        ? "vykazy.html?zapis=" + encodeURIComponent(ch.zapis) : "vykazy.html") + '"' +
+                    ' title="' + esc(ch.zapis ? "Otevřít výkazy toho dne" : "Otevřít výkazy") + '">' +
                     '<span class="kontrola__datum"' +
-                        (ch.stitek ? ' style="color:var(--accent)"' : "") + ">" +
-                        esc(ch.stitek || czDatum(ch.datum)) + "</span>" +
-                    "<span>" + esc(ch.text) + "</span></a>" +
-                '<button type="button" class="kontrola__fajfka" data-ok="' + esc(ch.klic) + '"' +
-                    ' aria-pressed="' + (hotovo ? "true" : "false") + '"' +
+                        (ch.stitek ? ' style="color:var(--accent)"' : "") +
+                        (ch.stitek ? "" : ' title="' + esc(czDatum(ch.datum)) + '"') + ">" +
+                        esc(ch.stitek || denKratce(ch.datum)) + "</span>" +
+                    "<span>" + (ch.kdo ? "<b>" + esc(ch.kdo) + "</b> – " : "") + esc(ch.text) +
+                        (kdoOk.length ? ' <span class="kontrola__kdo">· v pořádku: ' +
+                            esc(kdoOk.join(", ")) + "</span>" : "") + "</span></a>" +
+                '<button type="button" class="btn btn--ghost btn--sm kontrola__ok" data-ok="' + esc(ch.klic) + '"' +
                     ' title="' + (hotovo ? "Vrátit mezi upozornění" : "Je to v pořádku – schovat") + '">' +
-                    FAJFKA + "</button>" +
+                    (hotovo ? "Vrátit" : "V pořádku") + "</button>" +
             "</div>";
+        };
 
         const potvrzeniHtml = kPotvrzeni.map(u =>
             '<div class="kontrola__radek" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
@@ -1848,7 +1801,8 @@
                 ? otevrene.slice(0, 25).map(ch => radek(ch, false)).join("")
                 : ((kPotvrzeni.length || milKPotvrzeni.length) ? "" :
                   '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-                  "Vše v pořádku – žádný výkaz nevypadá podezřele.</div>")) +
+                  "Vše v pořádku – za posledních " + esc(V.PODEZRELE_DNI) +
+                  " dní žádný výkaz nevypadá podezřele.</div>")) +
             /* Odbavené se nemažou, jen schovají – ať se dá odškrtnutí vzít
                zpět a ať je vidět, že se na to někdo díval. */
             (odbavene.length
@@ -2094,7 +2048,7 @@
         window.KB.on("guides", () => runSearch(window.KBUI.searchValue()));
         const obnov = () => { zapniSledovani(); renderNastenka(); renderOnline();
             renderQuick(); renderKalendarDlazdice(); renderMilniky(); renderKontrola();
-            renderDovolene(); renderRychly(); renderFaktury(); nactiKontrolaOk();
+            renderDovolene(); renderRychly(); renderFaktury(); sledujKontrolaOk();
             zapniUpozVyzvu(); renderUpozVyzva(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
@@ -2122,6 +2076,7 @@
         window.KB.on("milniky", () => { renderKalendarDlazdice(); renderMilniky();
             renderKontrola(); });   // potvrzování splněných milníků
         window.KB.on("vykazy", renderKontrola);
+        window.KB.on("kontrola-ok", renderKontrola);    // odklikl jiný manažer (nebo já)
         window.KB.on("faktury", renderFaktury);
         // dlaždice Rozpočty: výkazy s částkami, rozpočty, úkoly, budgety, projekty
         ["vykazy", "vykazy-meta", "ukoly", "ukoly-budgety", "projekty-docs", "faktury", "users"]

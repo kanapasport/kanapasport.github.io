@@ -2213,30 +2213,101 @@ KB.deleteAuto = async (id) => {
 };
 
 /* ------------------------------------------ odbavená upozornění -----------
-   Manažer si u upozornění na nástěnce odškrtne, že je to v pořádku (noční
-   směna, dvě práce v jeden čas omylem zapsané správně…). Seznam odbavených
-   leží v `private`, kam vidí jen manažeři – jsou to poznámky o cizích
-   výkazech, ne firemní číselník. Je to jeden dokument s polem klíčů;
-   je jich pár desítek, takže se to nevyplatí rozpadat na dokumenty.      */
+   Manažer si u upozornění na nástěnce odklikne „V pořádku" (noční směna,
+   domluvená výpomoc…). Leží to v `private`, kam vidí jen manažeři – jsou
+   to poznámky o cizích výkazech, ne firemní číselník.
 
-const kontrolaDoc = () => doc(db, "artifacts", APP_ID, "private", "kontrola", "seznam", "vyrizeno");
+   Od 21. 10. 2026 má každý manažer VLASTNÍ dokument pod svým uid:
+     private/kontrola/manazeri/{uid}   { klice: [...], kdo, updatedMs }
+   Odkliknutí si tak pamatuje ten, kdo ho udělal, a zapisuje se po jednom
+   klíči (arrayUnion/arrayRemove). Dřív to byl jeden společný dokument,
+   který se ukládal celý – dva manažeři si ho uměli navzájem přepsat.
+   Nástěnka ukazuje SJEDNOCENÍ všech: co odklikl jeden, nemusí procházet
+   druhý, a u položky je vidět kdo. Starý společný dokument
+   `private/kontrola/seznam/vyrizeno` se už jen čte – co v něm je, zůstává
+   odbavené, a „Vrátit" z něj klíč umí vyndat. */
 
-KB.nactiKontrolaOk = async () => {
+const kontrolaStaryDoc = () => doc(db, "artifacts", APP_ID, "private", "kontrola", "seznam", "vyrizeno");
+const kontrolaManazeriCol = () => collection(db, "artifacts", APP_ID, "private", "kontrola", "manazeri");
+const kontrolaManazerDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "kontrola", "manazeri", uid);
+
+KB.kontrolaOk = {};             // klíč → [kdo ho odklikl]
+KB.kontrolaOkPrislo = false;
+let kontrolaOkOdber = null;
+let kontrolaOkDocs = {};        // uid manažera → { klice, kdo }
+let kontrolaOkStare = [];       // klíče ze starého společného dokumentu
+
+function slijKontrolaOk() {
+    const mapa = {};
+    const pridej = (klic, kdo) => {
+        const seznam = mapa[klic] || (mapa[klic] = []);
+        if (kdo && seznam.indexOf(kdo) === -1) seznam.push(kdo);
+    };
+    kontrolaOkStare.forEach(k => pridej(String(k), ""));
+    Object.keys(kontrolaOkDocs).forEach(uid =>
+        kontrolaOkDocs[uid].klice.forEach(k => pridej(String(k), kontrolaOkDocs[uid].kdo)));
+    KB.kontrolaOk = mapa;
+    KB.kontrolaOkPrislo = true;
+    emit("kontrola-ok", mapa);
+}
+
+/** Odbavená upozornění všech manažerů – jen manažer (databáze jinak odmítne). */
+KB.watchKontrolaOk = async () => {
+    if (kontrolaOkOdber) return;
     if (authReady) await authReady;
-    requireDb();
-    const snap = await getDoc(kontrolaDoc());
-    const data = snap.exists() ? snap.data() : {};
-    return Array.isArray(data.klice) ? data.klice : [];
+    if (!db || !auth || !auth.currentUser || kontrolaOkOdber) return;
+    if (pockejNaRoli(KB.watchKontrolaOk)) return;
+    if (!jsemManazer() || kontrolaOkOdber) return;
+    kontrolaOkOdber = onSnapshot(kontrolaManazeriCol(), (snap) => {
+        kontrolaOkDocs = {};
+        snap.forEach(d => {
+            const x = d.data() || {};
+            kontrolaOkDocs[d.id] = { klice: Array.isArray(x.klice) ? x.klice : [], kdo: String(x.kdo || "") };
+        });
+        slijKontrolaOk();
+    }, (err) => console.error("Chyba čtení odbavených upozornění:", err));
+    try {
+        const snap = await getDoc(kontrolaStaryDoc());
+        const data = snap.exists() ? snap.data() : {};
+        kontrolaOkStare = Array.isArray(data.klice) ? data.klice.map(String) : [];
+        slijKontrolaOk();
+    } catch (err) { console.warn("Starý seznam odbavených upozornění:", err); }
 };
 
-KB.ulozKontrolaOk = async (klice) => {
+/** „V pořádku" – klíč do vlastního dokumentu přihlášeného manažera. */
+KB.oznacKontrolaOk = async (klic) => {
     if (authReady) await authReady;
     requireDb();
-    await setDoc(kontrolaDoc(), {
-        klice: Array.isArray(klice) ? klice : [],
+    const uid = KB.currentUid();
+    if (!uid || !klic) return;
+    await setDoc(kontrolaManazerDoc(uid), {
+        klice: arrayUnion(String(klic)),
+        kdo: window.KB_USER || "",
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
-    });
+    }, { merge: true });
+};
+
+/** „Vrátit" – klíč zmizí ze všech seznamů, kde je (i ze starého společného). */
+KB.zrusKontrolaOk = async (klic) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!klic) return;
+    const k = String(klic);
+    const razitko = { updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    const kde = Object.keys(kontrolaOkDocs).filter(uid => kontrolaOkDocs[uid].klice.indexOf(k) !== -1);
+    /* vlastní dokument vždycky – „Zpět" hned po „V pořádku" nesmí čekat,
+       až odběr pošle čerstvý stav */
+    const ja = KB.currentUid();
+    if (ja && kde.indexOf(ja) === -1) kde.push(ja);
+    for (const uid of kde) {
+        await setDoc(kontrolaManazerDoc(uid), Object.assign({ klice: arrayRemove(k) }, razitko), { merge: true });
+    }
+    if (kontrolaOkStare.indexOf(k) !== -1) {
+        await setDoc(kontrolaStaryDoc(), Object.assign({ klice: arrayRemove(k) }, razitko), { merge: true });
+        kontrolaOkStare = kontrolaOkStare.filter(x => x !== k);       // starý se neposlouchá živě
+        slijKontrolaOk();
+    }
 };
 
 /* ------------------------------------------------- přesun starých tabulí --
@@ -4695,6 +4766,72 @@ KB.ulozZustatek = async (uid, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
+};
+
+/* ------------------------------------------- kontrola týdne (manažer) ----
+   Značka „zkontrolováno" u týdne člověka (rešerše 19. 10. 2026, bod 4;
+   Michal schválil 21. 10. 2026). NIC NEZAMYKÁ – zámkem je uzávěrka. Jen
+   říká, že manažer hodiny toho týdne prošel (hlavně u OSVČ, kteří podle
+   výkazu fakturují).
+
+     private/vykazy/kontrola/{uid}_{RRRR-Www}
+       { uid, tyden: "2026-W43", pondeli: "2026-10-19", kdo, kdoUid, ms }
+
+   Zapisuje jen manažer (spodní pravidlo pro `private`). Člověk čte jen
+   SVOJE dokumenty, a to dotazem `uid == já` – pravidla nejsou filtr.
+   Zrušená značka = smazaný dokument. */
+
+const kontrolaTydnuCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", "kontrola");
+const kontrolaTydneDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vykazy", "kontrola", id);
+
+KB.kontrolaTydnu = {};          // "uid_RRRR-Www" → { uid, tyden, pondeli, kdo, ms }
+let kontrolaTydnuOdber = null;
+
+KB.watchKontrolaTydnu = async () => {
+    if (kontrolaTydnuOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || kontrolaTydnuOdber) return;
+    if (pockejNaRoli(KB.watchKontrolaTydnu)) return;
+    if (kontrolaTydnuOdber) return;
+    /* Manažer drží živě stejné okno jako výkazy (OKNO_MESICU) plus týden
+       rezervy – první týden okna začíná ještě v předchozím měsíci. */
+    const d = new Date(oknoOd() + "T12:00:00");
+    d.setDate(d.getDate() - 7);
+    const od = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+    const dotaz = jsemManazer()
+        ? query(kontrolaTydnuCol(), where("pondeli", ">=", od))
+        : query(kontrolaTydnuCol(), where("uid", "==", auth.currentUser.uid));
+    kontrolaTydnuOdber = onSnapshot(dotaz, (snap) => {
+        KB.kontrolaTydnu = {};
+        snap.forEach(x => { KB.kontrolaTydnu[x.id] = Object.assign({ id: x.id }, x.data()); });
+        emit("kontrola-tydnu", KB.kontrolaTydnu);
+    }, (err) => console.error("Chyba čtení kontroly týdnů:", err));
+};
+
+/** Značka u týdne člověka, nebo null. `tyden` = „2026-W43" (V.isoTyden). */
+KB.kontrolaTydne = (uid, tyden) => (KB.kontrolaTydnu || {})[uid + "_" + tyden] || null;
+
+/**
+ * Označí týden člověka jako zkontrolovaný (`ano`), nebo značku zruší.
+ * `pondeli` = „2026-10-19", `tyden` = „2026-W43" (počítá ho vykazy.js).
+ */
+KB.ulozKontroluTydne = async (uid, pondeli, tyden, ano, jmeno) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(pondeli || "")) ||
+        !/^\d{4}-W\d{2}$/.test(String(tyden || ""))) throw new Error("Neplatný týden.");
+    const id = uid + "_" + tyden;
+    if (ano) {
+        await setDoc(kontrolaTydneDoc(id), {
+            uid: uid, tyden: tyden, pondeli: pondeli,
+            kdo: window.KB_USER || "", kdoUid: KB.currentUid(), ms: Date.now()
+        });
+    } else {
+        await deleteDoc(kontrolaTydneDoc(id));
+    }
+    KB.zapisAktivitu("vykaz", (ano ? "označil jako zkontrolovaný týden " : "zrušil značku zkontrolováno u týdne ") +
+        tyden + (jmeno ? " – " + jmeno : ""));
 };
 
 /* --------------------------------------------------------- PORADY -------
