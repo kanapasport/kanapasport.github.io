@@ -8,188 +8,297 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=289">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=289">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
-        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji. */
+        /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji.
+           Poznámky jsou od 21. 10. 2026 konverzace (chat): přehled jako
+           dlaždice, otevřená konverzace jako bubliny po čase. */
 
         .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 
-        /* ------------------------------------------------------------ listy */
-        .plist { border: 1px solid var(--line); border-radius: var(--radius-lg);
-            background: var(--surface); box-shadow: var(--shadow); padding: 16px 18px; }
-        .plist__hlava { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-            margin-bottom: 12px; }
-        .plist__nazev { font-size: var(--fs-4); font-weight: 900; }
-        .plist__pocet { font-size: var(--fs-1); color: var(--muted); }
-        .plist__akce { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-        .plist__sdileno { font-size: var(--fs-1); color: var(--muted); width: 100%; }
+        /* --------------------------------------------- přehled: dlaždice */
+        .kgrid { display: grid; gap: 14px;
+            grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
+        .kdl { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+            min-height: 172px; padding: 14px 12px 12px 16px; border: 1px solid var(--line);
+            border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow);
+            cursor: pointer; }
+        .kdl:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+        .kdl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        /* nepřečtené: proužek vlevo (barva není jediné vodítko – je tu i číslo) */
+        .kdl--nove { box-shadow: inset 4px 0 0 var(--accent), var(--shadow); }
+        .kdl__hlava { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .kdl__nazev { flex: 1; min-width: 0; font-size: var(--fs-4); font-weight: 900;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kcas { flex: none; font-size: var(--fs-1); color: var(--muted); white-space: nowrap; }
+        .kpocet { flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill);
+            background: var(--accent); color: #fff; font-size: var(--fs-1); font-weight: 900;
+            line-height: 20px; text-align: center; }
+        .kpocet--tlumeny { background: var(--dim); }
+        .kdl__lide { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .kavy { display: flex; flex: none; }
+        .kavy .kav + .kav { margin-left: -7px; }
+        .kdl__jmena { min-width: 0; font-size: var(--fs-1); color: var(--muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kdl__posledni { font-size: var(--fs-2); color: var(--text-soft); line-height: 1.45;
+            overflow: hidden; overflow-wrap: anywhere; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .kdl--nove .kdl__posledni { color: var(--text); font-weight: 700; }
+        .kdl__pata { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .kstitek { padding: 1px 8px; border-radius: var(--r-pill); background: var(--bg);
+            color: var(--text-soft); font-size: var(--fs-1); font-weight: 700; }
 
-        /* -------------------------------------------------------- poznámky */
-        /* min(460px, 100%): na telefonu je list užší než 460 px – dlaždice
-           pak vezme celou jeho šířku, místo aby vyčuhovala z okna */
-        .pozngrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(460px, 100%), 1fr));
-            gap: 14px; }
-        /* Oranžová = řeší se, zelená = splněno. Barva není jediné vodítko –
-           splněná nese i štítek, kvůli barvoslepým. */
-        .pozn { position: relative; border: 1px solid #e0a441; border-left: 5px solid #e08700;
-            border-radius: var(--radius); background: #fff7ec; padding: 10px 12px;
-            cursor: pointer; text-align: left; font: inherit; overflow: hidden;
-            display: flex; flex-direction: column; gap: 6px; }
-        /* screenshot je vidět rovnou na dlaždici */
-        .pozn__foto { margin: -10px -12px 8px; display: block; }
-        .pozn__foto img { width: 100%; height: 300px; object-fit: cover;
-            object-position: top; display: block; }
-        /* editace pravým klikem – knoflíky vpravo nahoře na dlaždici */
-        .pozn__akce { position: absolute; top: 7px; right: 7px; display: flex;
-            gap: 5px; z-index: 2; }
-        .pozn__akce span { width: 28px; height: 28px; border-radius: 50%;
-            background: rgba(20, 25, 35, .88); color: #fff; border: 1.5px solid #fff;
-            display: flex; align-items: center; justify-content: center;
-            font-size: var(--fs-3); font-weight: 900; cursor: pointer; line-height: 1;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
-        .pozn__akce .pakce--smaz { background: var(--danger, #c8102e); }
-        .pozn--editace { outline: 2px dashed var(--accent); outline-offset: 2px; }
-        .pozn:hover { filter: brightness(.98); }
-        .pozn--hotovo { border-color: #7dbb95; border-left-color: var(--ok, #169c53);
-            background: #edf7f1; }
-        .pozn--zvyraznena { outline: 3px solid var(--accent); outline-offset: 2px; }
-        .pozn__text { font-size: var(--fs-2); line-height: 1.45; overflow: hidden;
-            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-        .pozn__meta { font-size: var(--fs-1); color: var(--muted); display: flex;
-            gap: 8px; flex-wrap: wrap; margin-top: auto; }
-        /* stav je jen odznak v levém horním rohu fotky */
-        .pozn__stitek { position: absolute; top: 8px; left: 8px; z-index: 2;
-            font-size: var(--fs-1); font-weight: 900; letter-spacing: .06em;
-            text-transform: uppercase; color: #fff; border-radius: var(--r-sm);
-            padding: 2px 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
-        /* bez fotky by odznak lehl na text – obsah se mu uhne */
-        .pozn--bezfota { padding-top: 36px; }
-        .pozn__stitek--resi { background: #e08700; }
-        .pozn__stitek--hotovo { background: var(--ok, #169c53); }
+        /* kolečka s iniciálami – barva podle člověka, vždy stejná */
+        .kav { width: 26px; height: 26px; flex: none; display: inline-flex; align-items: center;
+            justify-content: center; border-radius: 50%; border: 2px solid var(--surface);
+            color: #fff; font-size: var(--fs-1); font-weight: 900; letter-spacing: 0; line-height: 1; }
+        .kav--0 { background: var(--accent); }
+        .kav--1 { background: var(--skup-podklady); }
+        .kav--2 { background: var(--skup-prace); }
+        .kav--3 { background: var(--ok); }
+        .kav--4 { background: var(--warn); }
+        .kav--5 { background: var(--accent-lt); }
+        .kav--vic { background: var(--line); color: var(--text-soft); }
 
-        /* --------------------------------------------------------- overlaye */
+        /* ------------------------------------------- otevřená konverzace */
+        .kchat { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 14px;
+            height: var(--kchat-vyska, 640px); min-height: 420px; }
+        .kchat__seznam { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+            padding: 8px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+        .kchat__nova { margin-bottom: 6px; }
+        .kpol { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0;
+            padding: 8px 10px; border: 0; border-radius: var(--r); background: none; color: inherit;
+            font: inherit; text-align: left; cursor: pointer; }
+        .kpol:hover { background: var(--bg-soft); }
+        .kpol--aktivni, .kpol--aktivni:hover { background: var(--accent-tint); }
+        .kpol__radek { display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .kpol__nazev { flex: 1; min-width: 0; font-size: var(--fs-3); font-weight: 800;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kpol__text { font-size: var(--fs-1); color: var(--muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kpol--nove .kpol__text { color: var(--text); font-weight: 700; }
+
+        .kchat__okno { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
+            border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-soft); }
+        .kchat__hlava { flex: none; display: flex; align-items: center; gap: 8px; min-width: 0;
+            padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+        .kchat__zpet { flex: none; width: 38px; height: 38px; border: 0; border-radius: var(--r);
+            background: none; color: var(--text); font-size: var(--fs-5); line-height: 1; cursor: pointer; }
+        .kchat__zpet:hover { background: var(--bg); }
+        .kchat__titul { flex: 1; min-width: 0; }
+        .kchat__nazev { font-size: var(--fs-4); font-weight: 900;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* kdo je v konverzaci, je vidět vždycky */
+        .kchat__kdo { font-size: var(--fs-1); color: var(--muted); line-height: 1.4; overflow: hidden;
+            overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .kchat__zpravy { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+            display: flex; flex-direction: column; padding: 10px 14px 12px; }
+        .kchat__prazdno { margin: auto; max-width: 340px; text-align: center; color: var(--muted);
+            font-size: var(--fs-2); line-height: 1.6; }
+        .kchat__psani { flex: none; display: flex; flex-direction: column; gap: 8px;
+            padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+            border-top: 1px solid var(--line); background: var(--surface); }
+        .kchat__radek { display: flex; align-items: flex-end; gap: 6px; }
+        .kchat__pole { flex: 1; min-width: 0; min-height: 40px; max-height: 160px; resize: none;
+            line-height: 1.4; }
+        .kikona { flex: none; width: 40px; height: 40px; display: inline-flex; align-items: center;
+            justify-content: center; border: 1px solid var(--line); border-radius: var(--r);
+            background: var(--surface); color: var(--text-soft); cursor: pointer; }
+        .kikona:hover { color: var(--accent); border-color: var(--accent); }
+        .kikona svg { width: 20px; height: 20px; }
+        .kchat__odeslat { flex: none; height: 40px; }
+        .kchat__jencteni { flex: none; padding: 12px 14px; border-top: 1px solid var(--line);
+            background: var(--surface); color: var(--muted); font-size: var(--fs-2); line-height: 1.5; }
+
+        /* oddělovače dnů, „Nové zprávy" a události (kdo koho přidal) */
+        .kden { align-self: center; margin: 12px 0 4px; padding: 2px 10px; border-radius: var(--r-pill);
+            border: 1px solid var(--line-soft); background: var(--surface); color: var(--muted);
+            font-size: var(--fs-1); font-weight: 700; }
+        .kden--nove { border-color: var(--accent); background: var(--accent); color: #fff; }
+        .kudalost { align-self: center; max-width: 90%; margin: 8px 0 2px; color: var(--muted);
+            font-size: var(--fs-1); text-align: center; overflow-wrap: anywhere; }
+
+        /* bubliny: moje vpravo, ostatní vlevo se jménem */
+        .kz { display: flex; align-items: flex-end; gap: 8px; max-width: 100%; margin-top: 10px; }
+        .kz--navazuje { margin-top: 3px; }
+        .kz--moje { justify-content: flex-end; }
+        .kz__misto { width: 26px; flex: none; }
+        .kz__bublina { position: relative; min-width: 0; max-width: min(72%, 620px); padding: 7px 10px 4px;
+            border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
+            box-shadow: 0 1px 1px rgba(16, 20, 26, .04); }
+        .kz--moje .kz__bublina { border-color: color-mix(in srgb, var(--accent) 22%, white);
+            background: var(--accent-tint); }
+        .kz--odpoved .kz__bublina { border-style: dashed; }
+        .kz--zvyraznena .kz__bublina { outline: 3px solid var(--accent); outline-offset: 2px; }
+        .kz__autor { margin-bottom: 2px; color: var(--accent); font-size: var(--fs-1); font-weight: 900; }
+        .kz__odkaz { margin-bottom: 3px; color: var(--muted); font-size: var(--fs-1);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kz__text { font-size: var(--fs-3); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .kz__pata { display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+            margin-top: 1px; color: var(--muted); font-size: var(--fs-1); }
+        .kz__pata .nabidka-vic { min-width: 26px; height: 22px; margin-right: -6px; font-size: var(--fs-3);
+            opacity: 0; }
+        .kz:hover .nabidka-vic, .kz .nabidka-vic:focus-visible, .kz .nabidka-vic[aria-expanded="true"] { opacity: 1; }
+        @media (hover: none) { .kz .nabidka-vic { opacity: .75; } }
+        /* štítek řeší se / splněno (barva i slovo – kvůli barvoslepým) */
+        .kz__stitek { display: inline-block; margin-bottom: 4px; padding: 1px 7px; border-radius: var(--r-sm);
+            color: #fff; font-size: var(--fs-1); font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+        .kz__stitek--resi { background: var(--warn); }
+        .kz__stitek--hotovo { background: var(--ok); }
+        .kz__foto { position: relative; display: block; max-width: 100%; margin: 2px 0 4px; padding: 0;
+            border: 0; border-radius: var(--r); background: none; cursor: zoom-in; overflow: hidden; }
+        .kz__foto img { display: block; max-width: min(320px, 100%); max-height: 240px; object-fit: cover;
+            border-radius: var(--r); }
+        .kz__vic { position: absolute; right: 6px; bottom: 6px; padding: 1px 8px; border-radius: var(--r-pill);
+            background: rgba(16, 20, 26, .75); color: #fff; font-size: var(--fs-1); font-weight: 900; }
+        .kz__fotky { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }
+        .kz__fotky button { padding: 0; border: 0; background: none; cursor: zoom-in; }
+        .kz__fotky img { display: block; width: 120px; height: 84px; object-fit: cover;
+            border: 1px solid var(--line); border-radius: var(--r); }
+
+        /* telefon: konverzace přes celou obrazovku, zpátky šipkou */
+        @media (max-width: 760px) {
+            .kchat { display: block; height: auto; min-height: 0; }
+            .kchat__seznam { display: none; }
+            .kchat__okno { position: fixed; inset: 0; z-index: 150; height: 100vh; height: 100dvh;
+                border: 0; border-radius: 0; }
+            .kchat__hlava { padding-top: calc(8px + env(safe-area-inset-top)); }
+            .kchat__zpravy { padding: 8px 10px 10px; }
+            .kz__bublina { max-width: 84%; }
+            body.kchat-otevreny { overflow: hidden; }
+        }
+
+        /* ------------------------------------------------------- okno lidí */
         .pokno { position: fixed; inset: 0; z-index: 160; background: rgba(11, 13, 16, .55);
             display: flex; align-items: flex-start; justify-content: center;
             padding: 40px 14px; overflow-y: auto; }
         .pokno__telo { background: var(--surface); border-radius: var(--radius-lg);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, .25); width: 100%; max-width: 640px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, .25); width: 100%; max-width: 560px;
             padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
         .pokno__hlava { display: flex; align-items: center; gap: 10px; }
-        .pokno__hlava b { font-size: var(--fs-4); }
-        .pokno__zavrit { margin-left: auto; border: 0; background: none; font-size: var(--fs-5);
-            cursor: pointer; color: var(--muted); line-height: 1; padding: 4px; }
-
-        /* .pnahledy a .pnahled jsou ve společném app.css – stejné náhledy
-           používá i vkládání screenshotu do Quick TO-DO. */
-
-        .pdetail__obrazky img { width: 100%; border-radius: var(--radius);
-            border: 1px solid var(--line); display: block; margin-bottom: 10px; }
-        .pkoment { border-top: 1px solid var(--line-soft); padding-top: 8px;
-            font-size: var(--fs-2); line-height: 1.5; }
-        .pkoment__kdo { font-weight: 800; }
-        .pkoment__kdy { font-size: var(--fs-1); color: var(--muted); margin-left: 6px; }
-
-        .pvyber { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-            gap: 4px 12px; font-size: var(--fs-2); max-height: 260px; overflow-y: auto; }
-        .pvyber label { display: flex; align-items: center; gap: 7px; padding: 3px 0; }
+        .pokno__hlava b { flex: 1; min-width: 0; font-size: var(--fs-4); overflow-wrap: anywhere; }
+        .pokno__zavrit { border: 0; background: none; font-size: var(--fs-5); cursor: pointer;
+            color: var(--muted); line-height: 1; padding: 4px; }
+        .klide { display: flex; flex-wrap: wrap; gap: 6px; }
+        .klide:empty { display: none; }
+        .kchip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0;
+            padding: 3px 4px; border: 1px solid var(--line); border-radius: var(--r-pill);
+            background: var(--surface); font-size: var(--fs-2); }
+        .kchip .kav { width: 24px; height: 24px; border-width: 0; }
+        .kchip__jmeno { min-width: 0; padding-right: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kchip button { flex: none; width: 24px; height: 24px; border: 0; border-radius: 50%;
+            background: var(--bg); color: var(--text-soft); line-height: 1; cursor: pointer; }
+        .kchip button:hover { background: var(--danger-tint); color: var(--danger); }
     </style>
 </head>
 <body>
 
 <div id="appHeader"></div>
 
-<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+<main class="wrap" style="padding-top:26px;padding-bottom:40px;display:flex;flex-direction:column;gap:18px">
 
     <div class="hlavicka">
         <div>
             <h2 class="nadpis-stranky">Poznámky</h2>
-            <p class="small muted" style="margin-top:3px;line-height:1.6;max-width:720px">
-                Narazíš na problém → screenshot → pár vět k tomu. Poznámky máš jen ty;
-                list můžeš nasdílet kolegům a u poznámky někoho upozornit — přistane mu
-                to v Quick TO-DO. <b>Nová poznámka ve sdíleném listu se ozve sama</b>
-                všem, s kým je list nasdílený. Vyřešená poznámka se zaklikne jako
-                splněná a zezelená.
+            <p class="small muted" id="popisStranky" style="margin-top:3px;line-height:1.6;max-width:760px">
+                Konverzace s kolegy: zprávy se řadí za sebou, jak je píšete. Screenshot vložíš
+                klávesami <b>Ctrl+V</b> nebo tlačítkem se sponkou. Komu je konverzace nasdílená,
+                tomu přijde upozornění. Lidi přidáš přes <b>⋯</b> nebo pravým tlačítkem.
             </p>
         </div>
         <div class="row" style="gap:8px;margin-left:auto">
-            <button type="button" id="btnNovyList" class="btn btn--primary">+ Nový list</button>
+            <button type="button" id="btnNovaKonv" class="btn btn--primary">+ Nová konverzace</button>
         </div>
     </div>
 
-    <div id="mojeListy" class="col" style="gap:14px"></div>
+    <!-- přehled: dlaždice konverzací -->
+    <section id="prehled" aria-label="Konverzace">
+        <div id="dlazdice" class="kgrid"></div>
+        <div id="nacitam" class="small muted">Načítám konverzace…</div>
+        <div id="prazdno" class="card center small muted" style="padding:40px" hidden>
+            Zatím žádné konverzace — začni tlačítkem <b>+ Nová konverzace</b> nahoře.
+        </div>
+    </section>
 
-    <div id="sdileneBox" hidden>
-        <h3 style="font-size:var(--fs-3);font-weight:900;margin:6px 0 10px">Sdílené se mnou</h3>
-        <div id="sdileneListy" class="col" style="gap:14px"></div>
-    </div>
-
-    <div id="prazdno" class="card center small muted" style="padding:40px" hidden>
-        Zatím žádné poznámky — začni tlačítkem <b>+ Nový list</b> nahoře.
-    </div>
+    <!-- otevřená konverzace: na PC vlevo seznam, vpravo chat -->
+    <section id="chatObal" class="kchat" hidden>
+        <nav class="kchat__seznam" id="chatSeznam" aria-label="Seznam konverzací"></nav>
+        <div class="kchat__okno" role="region" aria-labelledby="chatNazev">
+            <div class="kchat__hlava" id="chatHlava">
+                <button type="button" class="kchat__zpet" id="btnZpet" aria-label="Zpět na konverzace"
+                        title="Zpět na konverzace">←</button>
+                <div class="kchat__titul">
+                    <div class="kchat__nazev" id="chatNazev"></div>
+                    <div class="kchat__kdo" id="chatKdo"></div>
+                </div>
+                <button type="button" class="btn btn--sm btn--ghost" id="btnPridatLidi">+ Přidat lidi</button>
+                <span id="chatVic"></span>
+            </div>
+            <div class="kchat__zpravy" id="chatZpravy" role="log" aria-label="Zprávy"></div>
+            <form class="kchat__psani" id="chatPsani" autocomplete="off">
+                <div class="pnahledy" id="psaniNahledy" hidden></div>
+                <div class="kchat__radek">
+                    <button type="button" class="kikona" id="btnObrazek" title="Přiložit obrázek z počítače / telefonu"
+                            aria-label="Přiložit obrázek">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 12.5l-8.6 8.6a5 5 0 01-7.1-7.1l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-2.8-2.8l8.3-8.3"/></svg>
+                    </button>
+                    <button type="button" class="kikona" id="btnSchranka" hidden
+                            title="Vložit screenshot ze schránky (PrintScreen nebo Win+Shift+S, pak sem)"
+                            aria-label="Vložit screenshot ze schránky">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="8" y="3" width="8" height="4" rx="1"/>
+                            <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
+                    </button>
+                    <textarea id="psaniText" class="field kchat__pole" rows="1" maxlength="4000"
+                              aria-label="Text zprávy"></textarea>
+                    <button type="submit" class="btn btn--primary kchat__odeslat" id="btnOdeslat">Odeslat</button>
+                </div>
+                <input type="file" id="soubor" accept="image/*" multiple hidden>
+            </form>
+            <div class="kchat__jencteni" id="chatJenCteni" hidden>
+                Starší poznámky, které ti někdo nasdílel jednotlivě. Do jejich konverzace tě
+                nepřidali, takže je můžeš jen číst (a přepnout štítek řeší se / splněno).
+            </div>
+        </div>
+    </section>
 </main>
 
-<!-- ============================================= okno: list (název + sdílení) -->
-<div class="pokno" id="oknoList" hidden>
+<!-- ============================ okno: nová konverzace / lidé v konverzaci -->
+<div class="pokno" id="oknoKonv" hidden role="dialog" aria-modal="true" aria-labelledby="oknoKonvNadpis">
     <div class="pokno__telo">
-        <div class="pokno__hlava"><b id="oknoListNadpis">Nový list</b>
-            <button type="button" class="pokno__zavrit" data-zavri="oknoList">×</button></div>
-        <div>
-            <span class="label">Název listu</span>
-            <input type="text" id="listNazev" class="field" maxlength="80"
+        <div class="pokno__hlava"><b id="oknoKonvNadpis">Nová konverzace</b>
+            <button type="button" class="pokno__zavrit" data-zavri-okno aria-label="Zavřít">×</button></div>
+        <div id="konvNazevBox">
+            <label class="label" for="konvNazev">Název konverzace</label>
+            <input type="text" id="konvNazev" class="field" maxlength="80"
                    placeholder="Např. ArcGIS – problémy při kreslení">
         </div>
+        <div id="konvUcastniciBox" hidden>
+            <span class="label">V konverzaci jsou</span>
+            <div class="klide" id="konvUcastnici"></div>
+        </div>
         <div>
-            <span class="label">Sdílet s kolegy (vidí list i jeho poznámky)</span>
-            <div class="pvyber" id="listSdileni"></div>
+            <span class="label" id="konvKdoPopis">Kdo v ní bude</span>
+            <select id="konvKdo" aria-label="Přidat člověka"></select>
+            <div class="klide" id="konvVybrani" style="margin-top:8px"></div>
         </div>
         <div class="row" style="gap:8px;justify-content:flex-end">
-            <button type="button" class="btn btn--ghost" data-zavri="oknoList">Zrušit</button>
-            <button type="button" class="btn btn--primary" id="btnUlozList">Uložit</button>
+            <button type="button" class="btn btn--ghost" data-zavri-okno>Zrušit</button>
+            <button type="button" class="btn btn--primary" id="btnKonvUloz">Založit</button>
         </div>
-    </div>
-</div>
-
-<!-- ============================================= okno: nová poznámka -->
-<div class="pokno" id="oknoNova" hidden>
-    <div class="pokno__telo">
-        <div class="pokno__hlava"><b>Nová poznámka</b>
-            <button type="button" class="pokno__zavrit" data-zavri="oknoNova">×</button></div>
-        <div>
-            <span class="label">Co se děje</span>
-            <textarea id="novaText" class="field" rows="4" maxlength="2000"
-                      placeholder="Popiš problém nebo co si chceš zapamatovat…"></textarea>
-        </div>
-        <div>
-            <div class="row" style="gap:8px;flex-wrap:wrap">
-                <button type="button" id="btnVlozit" class="btn btn--sm btn--primary"
-                    title="Stiskni PrintScreen (nebo Win+Shift+S) a pak sem klikni">+ Vložit screenshot</button>
-                <button type="button" id="btnVybrat" class="btn btn--sm btn--ghost">Vybrat z PC</button>
-                <span class="tiny muted" style="align-self:center">nebo Ctrl+V kdekoliv v okně</span>
-            </div>
-            <input type="file" id="soubor" accept="image/*" multiple hidden>
-            <div class="pnahledy" id="novaNahledy" style="margin-top:10px"></div>
-        </div>
-        <div class="row" style="gap:8px;justify-content:flex-end">
-            <button type="button" class="btn btn--ghost" data-zavri="oknoNova">Zrušit</button>
-            <button type="button" class="btn btn--primary" id="btnUlozNovou">Uložit poznámku</button>
-        </div>
-    </div>
-</div>
-
-<!-- ============================================= okno: detail poznámky -->
-<div class="pokno" id="oknoDetail" hidden>
-    <div class="pokno__telo" style="max-width:760px">
-        <div class="pokno__hlava"><b id="detailNadpis">Poznámka</b>
-            <button type="button" class="pokno__zavrit" data-zavri="oknoDetail">×</button></div>
-        <div id="detailTelo" class="col" style="gap:12px"></div>
     </div>
 </div>
 
 <script src="assets/js/taxonomy.js?v=289"></script>
 <script src="assets/js/doc.js?v=289"></script>
 <script src="assets/js/ui.js?v=289"></script>
+<script src="assets/js/nabidka.js?v=289"></script>
 <script src="assets/js/vykazy.js?v=289"></script>
 <script type="module" src="assets/js/store.js?v=289"></script>
 
@@ -199,536 +308,922 @@
 
     const $ = (id) => document.getElementById(id);
     const esc = (v) => window.KBUI.esc(v);
+    const toast = (text, ton, volby) => window.KBUI.toast(text, ton, volby);
     const me = () => (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+    const jeTelefon = () => window.matchMedia("(max-width: 760px)").matches;
+    const dotyk = () => window.matchMedia("(pointer: coarse)").matches;
+    const PET_MINUT = 5 * 60e3;
+    const zprav = (n) => window.KBNabidka.pocet(n, ["zpráva", "zprávy", "zpráv"]);
 
-    let upravovanyList = "";     // id listu v okně (prázdné = nový)
-    let novaListId = "";         // do kterého listu se přidává poznámka
-    let otevrenaPozn = "";       // id poznámky v detailu
-    let aktivniPozn = "";        // dlaždice s otevřenou editací (pravý klik)
+    let otevrena = "";               // id otevřené konverzace ("" = dlaždice)
+    let zvyraznena = "";             // zpráva, na kterou se skočilo (?pozn=)
+    let zvyraznenaUkazana = false;
+    let parametryHotovo = false;     // ?konv= / ?pozn= se zpracuje jednou
+    let cekamNa = "";                // právě založená konverzace – otevře se, až dorazí
+    let hranice = { id: "", od: Infinity };   // čára „Nové zprávy" v otevřené konverzaci
+    let posledniHtml = "";           // obsah okna zpráv – beze změny se nepřekresluje
+    let drzetDole = true;            // po otevření a odeslání skočit na poslední zprávu
+    let uDna = true;                 // okno zpráv je dole (dorazí-li obrázek, zůstat dole)
+    let odesilam = false;
+    let noveObrazky = [];            // rozepsané screenshoty (data URL)
+    let seznam = [];                 // naposledy spočítané konverzace
+    let casovacPrecteno = null;
+    const koncepty = new Map();      // id konverzace → rozepsaný text a obrázky
+    const obrazkyCache = new Map();  // id zprávy → plné obrázky (ověřené data URL)
+    const nacitaSe = new Set();
 
-    /**
-     * Kdo smí poznámku zavřít nebo smazat: autor, majitel listu a každý,
-     * komu je přisdílená. Poznámka je hlášení „tohle se pokazilo" – kdo to
-     * spraví, ten ji zavře. Co člověk nemá přisdílené, to stejně nevidí
-     * (Michal 25. 9. 2026). Stejné právo drží i pravidla databáze.
-     */
-    const smimResit = (z) => {
-        if (!z) return false;
-        if (z.uid === me()) return true;
-        if ((z.sdileni || []).indexOf(me()) !== -1) return true;
-        const list = (window.KB.poznListy || []).find(l => l.id === z.listId);
-        return !!list && list.uid === me();
-    };
+    /* ------------------------------------------------------------ lidé --- */
 
-    /** Cizí poznámka ve vlastním listu – ať je při mazání jasné, čí je. */
-    const jeCizi = (z) => !!z && z.uid !== me();
-
-    /** Otázka před smazáním: u cizí poznámky se jmenuje její autor. */
-    const otazkaSmazat = (z) => jeCizi(z)
-        ? "Smazat poznámku od " + ((z.jmeno || jmenoUid(z.uid)) || "kolegy") + " i s obrázky?"
-        : "Smazat poznámku i s obrázky?";
-    let noveObrazky = [];        // dataUrl obrázků rozepsané poznámky
-    const obrazkyCache = new Map();   // id poznámky → nahrané obrázky
-    let zParametruOtevreno = false;   // ?pozn=… se otvírá jen jednou
-
-    const kdy = (ms) => {
-        const d = new Date(ms || 0);
-        return d.getDate() + ". " + (d.getMonth() + 1) + ". " +
-            String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-    };
-
-    /* Stejné řazení lidí jako u Quick TO-DO: manažeři, zaměstnanci, studenti. */
     const PORADI = { "hlavni-spravce": 0, "majitel": 1, "spravce": 2, "asistentka": 3,
                      "zamestnanec": 4, "student": 5 };
+    const uzivatel = (uid) => (window.KB.users || []).find(u => u.id === uid);
+    const celeJmeno = (u) => u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
+    /* Jméno se bere ze seznamu lidí podle uid, ne z `jmeno` ve zprávě –
+       to si pisatel může z konzole napsat jakékoliv. */
+    const jmeno = (uid, zaloha) => celeJmeno(uzivatel(uid)) || String(zaloha || "") || "Neznámý";
+    const jmenoKratke = (uid, zaloha) => uid === me() ? "Ty" : jmeno(uid, zaloha);
+    const inicialy = (uid, zaloha) => jmeno(uid, zaloha).split(/\s+/).filter(Boolean)
+        .map(s => s.charAt(0)).slice(0, 2).join("").toUpperCase() || "?";
+    const barvaClovek = (uid) => {
+        let h = 0;
+        String(uid || "").split("").forEach(c => { h = (h * 31 + c.charCodeAt(0)) >>> 0; });
+        return h % 6;
+    };
+    const avatar = (uid, zaloha) => '<span class="kav kav--' + barvaClovek(uid) + '" title="' +
+        esc(jmeno(uid, zaloha)) + '" aria-hidden="true">' + esc(inicialy(uid, zaloha)) + "</span>";
     const kolegove = () => (window.KB.users || [])
         .filter(u => u.active !== false && u.id !== me())
         .sort((a, b) => (PORADI[a.role] === undefined ? 9 : PORADI[a.role]) -
                         (PORADI[b.role] === undefined ? 9 : PORADI[b.role]) ||
                         (a.last || "").localeCompare(b.last || "", "cs"));
-    const jmenoUid = (uid) => {
-        const u = (window.KB.users || []).find(x => x.id === uid);
-        return u ? ((u.first || "") + " " + (u.last || "")).trim() : "";
-    };
 
-    /* ------------------------------------------------------------ výpis --- */
+    /* ------------------------------------------------------------- čas --- */
 
-    function render() {
-        if (!me()) return;
-        const listy = window.KB.poznListy || [];
-        const pozn = window.KB.poznamky || [];
+    const dvoj = (n) => String(n).padStart(2, "0");
+    const hodina = (ms) => { const d = new Date(ms); return d.getHours() + ":" + dvoj(d.getMinutes()); };
+    const denKlic = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(); };
+    const DNY = ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"];
+    function denPopis(ms) {
+        const d = new Date(ms), dnes = new Date(), vcera = new Date();
+        vcera.setDate(vcera.getDate() - 1);
+        if (denKlic(ms) === denKlic(dnes.getTime())) return "Dnes";
+        if (denKlic(ms) === denKlic(vcera.getTime())) return "Včera";
+        const s = DNY[d.getDay()] + " " + d.getDate() + ". " + (d.getMonth() + 1) + ".";
+        return s.charAt(0).toUpperCase() + s.slice(1) +
+            (d.getFullYear() !== dnes.getFullYear() ? " " + d.getFullYear() : "");
+    }
+    function casKratce(ms) {
+        if (!ms) return "";
+        const d = new Date(ms), dnes = new Date();
+        if (denKlic(ms) === denKlic(dnes.getTime())) return hodina(ms);
+        return d.getDate() + ". " + (d.getMonth() + 1) + "." +
+            (d.getFullYear() !== dnes.getFullYear() ? " " + d.getFullYear() : "");
+    }
+    const celyCas = (ms) => { const d = new Date(ms); return d.toLocaleDateString("cs-CZ") + " " + hodina(ms); };
 
-        const kartaListu = (list, cizi) => {
-            const zaznamy = pozn.filter(z => z.listId === list.id);
-            const sdileno = (list.sdileni || []).map(jmenoUid).filter(Boolean);
-            /* Do „osiřelé" skupiny (vidím jen přisdílené poznámky, ne celý
-               list) se psát nedá – nová poznámka by majiteli zůstala skrytá. */
-            const skutecny = listy.some(x => x.id === list.id);
-            return '<section class="plist">' +
-                '<div class="plist__hlava">' +
-                    '<span class="plist__nazev">' + esc(list.nazev) + "</span>" +
-                    '<span class="plist__pocet">' + zaznamy.length + " pozn." +
-                        (cizi ? " · od " + esc(list.jmeno || jmenoUid(list.uid)) : "") + "</span>" +
-                    '<span class="plist__akce">' +
-                        (skutecny ? '<button type="button" class="btn btn--sm btn--primary" data-nova="' +
-                            esc(list.id) + '">+ Poznámka</button>' : "") +
-                        (cizi ? "" :
-                            '<button type="button" class="btn btn--sm btn--ghost" data-sdilej="' +
-                                esc(list.id) + '">Sdílení</button>' +
-                            '<button type="button" class="linkbtn" data-smaz-list="' +
-                                esc(list.id) + '" style="color:var(--danger)">smazat</button>') +
-                    "</span>" +
-                    (!cizi && sdileno.length
-                        ? '<span class="plist__sdileno">Sdílíš s: ' + esc(sdileno.join(", ")) + "</span>" : "") +
-                "</div>" +
-                (zaznamy.length
-                    ? '<div class="pozngrid">' + zaznamy.map(dlazdice).join("") + "</div>"
-                    : '<div class="tiny muted">Zatím bez poznámek.</div>') +
-            "</section>";
-        };
+    /* ------------------------------------------------------ konverzace --- */
 
-        const dlazdice = (z) => {
-            const hotovo = Number(z.stav) === 1;
-            const moje = smimResit(z);
-            const foto = window.KBUI.bezpecnyObrazek(z.nahled);
-            return '<button type="button" class="pozn' + (hotovo ? " pozn--hotovo" : "") +
-                (foto ? "" : " pozn--bezfota") +
-                (z.id === otevrenaPozn ? " pozn--zvyraznena" : "") +
-                (z.id === aktivniPozn ? " pozn--editace" : "") +
-                '" data-pozn="' + esc(z.id) + '">' +
-                (foto ? '<span class="pozn__foto"><img src="' + esc(foto) + '" alt=""></span>' : "") +
-                (z.id === aktivniPozn && moje
-                    ? '<span class="pozn__akce">' +
-                        '<span data-pozn-akce="stav" title="' +
-                            (hotovo ? "Vrátit na řeší se" : "Označit splněno") + '">' +
-                            (hotovo ? "↩" : "✓") + "</span>" +
-                        /* text mění jen autor – majitel listu smí zavřít
-                           nebo smazat, ne přepisovat cizí slova */
-                        (z.uid === me() ? '<span data-pozn-akce="text" title="Upravit text">✎</span>' : "") +
-                        '<span class="pakce--smaz" data-pozn-akce="smaz" title="Smazat">×</span>' +
-                      "</span>"
-                    : "") +
-                '<span class="pozn__stitek ' + (hotovo ? "pozn__stitek--hotovo" : "pozn__stitek--resi") +
-                    '">' + (hotovo ? "Splněno" : "Řeší se") + "</span>" +
-                '<span class="pozn__text">' + esc(z.text || "(bez textu)") + "</span>" +
-                '<span class="pozn__meta">' +
-                    (z.uid !== me() ? "<span>" + esc(z.jmeno || jmenoUid(z.uid)) + "</span>" : "") +
-                    "<span>" + esc(kdy(z.ms)) + "</span>" +
-                    (Number(z.obrazku) > 0 ? "<span>📷 " + Number(z.obrazku) + "</span>" : "") +
-                    ((z.komentare || []).length ? "<span>💬 " + z.komentare.length + "</span>" : "") +
+    /**
+     * Konverzace, které vidím: skutečné (listy) a navíc starší poznámky,
+     * které mi někdo nasdílel jednotlivě bez listu – ty jsou jen ke čtení.
+     */
+    function spocitejKonverzace() {
+        const KB = window.KB;
+        const uid = me();
+        const listy = KB.poznListy || [];
+        const podleListu = new Map();
+        (KB.poznamky || []).forEach(z => {
+            const k = String(z.listId || "-");
+            if (!podleListu.has(k)) podleListu.set(k, []);
+            podleListu.get(k).push(z);
+        });
+        const mam = new Set(listy.map(l => l.id));
+        const ven = listy.map(l => ({
+            id: l.id, list: l, nazev: String(l.nazev || "") || "Konverzace",
+            zakladatel: l.uid, ucastnici: KB.poznUcastnici(l), jenCteni: false,
+            ztlumeno: KB.poznZtlumena(l, uid),
+            zpravy: podleListu.get(l.id) || [],
+            nove: KB.poznNeprecteneZpravy(l.id).length, maNove: KB.poznMaNove(l)
+        }));
+        podleListu.forEach((zp, lid) => {
+            if (mam.has(lid)) return;
+            const cizi = zp.filter(z => z.uid !== uid);
+            if (!cizi.length) return;          // jen moje staré poznámky z opuštěné konverzace
+            const lide = [];
+            zp.forEach(z => [z.uid].concat(Array.isArray(z.sdileni) ? z.sdileni : [])
+                .forEach(u => { if (u && lide.indexOf(u) === -1) lide.push(u); }));
+            ven.push({ id: "cteni-" + lid, list: null,
+                nazev: String(cizi[cizi.length - 1].listNazev || "") || "Starší poznámky",
+                zakladatel: "", ucastnici: lide, jenCteni: true, ztlumeno: false,
+                zpravy: zp, nove: 0, maNove: false });
+        });
+        ven.forEach(k => {
+            const skutecne = k.zpravy.filter(z => z.typ !== "udalost");
+            k.posledni = skutecne.length ? skutecne[skutecne.length - 1] : null;
+            k.aktivita = Math.max(0, Number(k.list && k.list.posledniMs) || 0, Number(k.list && k.list.ms) || 0,
+                ...k.zpravy.map(z => KB.poznCas(z)));
+        });
+        ven.sort((a, b) => b.aktivita - a.aktivita);
+        return ven;
+    }
+
+    const najdiKonv = (id) => seznam.find(k => k.id === id) || null;
+    const najdiZpravu = (id) => (window.KB.poznamky || []).find(z => z.id === id) || null;
+    const konvZpravy = (z) => z ? (seznam.find(k => k.zpravy.indexOf(z) !== -1) ||
+        seznam.find(k => k.id === z.listId || k.id === "cteni-" + z.listId) || null) : null;
+    const maxCas = (k) => Math.max(Number(k.list && k.list.posledniMs) || 0,
+        ...k.zpravy.map(z => Number(z.createdMs) || 0));
+
+    function textPosledni(k) {
+        const p = k.posledni;
+        if (!p) {
+            return k.list && k.list.posledniText
+                ? jmenoKratke(k.list.posledniUid, k.list.posledniJmeno).split(" ")[0] + ": " + k.list.posledniText
+                : "Zatím žádné zprávy – napiš první.";
+        }
+        const obrazek = Number(p.obrazku) > 0 || !!p.nahled;
+        return jmenoKratke(p.uid, p.jmeno).split(" ")[0] + ": " +
+            ((obrazek ? "📷 " : "") + (String(p.text || "").trim() || (obrazek ? "Obrázek" : "")));
+    }
+    const pocetNovych = (k) => k.nove ? String(k.nove) : (k.maNove ? "•" : "");
+    const kdoJeTam = (k) => k.ucastnici.map(u => jmenoKratke(u) +
+        (u === k.zakladatel && k.ucastnici.length > 1 ? " (zakladatel)" : "")).join(", ");
+
+    function dlazdiceHtml(k) {
+        const pocet = pocetNovych(k);
+        const lide = k.ucastnici;
+        const jmena = lide.map(u => jmenoKratke(u)).join(", ");
+        return '<article class="kdl' + (pocet ? " kdl--nove" : "") + '" data-konv="' + esc(k.id) + '" tabindex="0"' +
+                ' aria-label="' + esc("Konverzace " + k.nazev + (pocet && pocet !== "•" ? ", nepřečtené: " + pocet : "")) + '">' +
+            '<div class="kdl__hlava">' +
+                '<span class="kdl__nazev">' + esc(k.nazev) + "</span>" +
+                (pocet ? '<span class="kpocet' + (k.ztlumeno ? " kpocet--tlumeny" : "") +
+                    '" title="Nepřečtené zprávy">' + esc(pocet) + "</span>" : "") +
+                '<span class="kcas">' + esc(casKratce(k.aktivita)) + "</span>" +
+                window.KBNabidka.tlacitko("Další akce: " + k.nazev) +
+            "</div>" +
+            '<div class="kdl__lide" title="' + esc("V konverzaci: " + jmena) + '">' +
+                '<span class="kavy">' + lide.slice(0, 5).map(u => avatar(u)).join("") +
+                    (lide.length > 5 ? '<span class="kav kav--vic">+' + esc(lide.length - 5) + "</span>" : "") +
                 "</span>" +
-            "</button>";
-        };
-
-        const moje = listy.filter(l => l.uid === me());
-        $("mojeListy").innerHTML = moje.map(l => kartaListu(l, false)).join("");
-
-        /* Sdílené: listy nasdílené celé + osamocené poznámky, ke kterým mě
-           někdo přisdílel upozorněním (jejich list nevidím – jméno nese
-           poznámka sama v `listNazev`). */
-        const cizListy = listy.filter(l => l.uid !== me());
-        const mamListy = new Set(listy.map(l => l.id));
-        const sirotci = pozn.filter(z => z.uid !== me() && !mamListy.has(z.listId));
-        const skupinySirotku = {};
-        sirotci.forEach(z => {
-            const k = z.listId || "-";
-            (skupinySirotku[k] = skupinySirotku[k] || { id: k, nazev: z.listNazev || "Poznámky",
-                uid: z.uid, jmeno: z.jmeno, sdileni: [] });
-        });
-        const sdileneHtml = cizListy.map(l => kartaListu(l, true)).join("") +
-            Object.values(skupinySirotku).map(l => kartaListu(l, true)).join("");
-        $("sdileneBox").hidden = !sdileneHtml;
-        $("sdileneListy").innerHTML = sdileneHtml;
-
-        $("prazdno").hidden = !!(moje.length || sdileneHtml);
-
-        /* proklik z Quick TO-DO: ?pozn=… otevře poznámku, jakmile dorazí */
-        if (!zParametruOtevreno) {
-            const cil = new URLSearchParams(location.search).get("pozn");
-            if (cil && pozn.some(z => z.id === cil)) {
-                zParametruOtevreno = true;
-                otevriDetail(cil);
-            }
-        }
-        if (otevrenaPozn && !$("oknoDetail").hidden) vykresliDetail();
+                '<span class="kdl__jmena">' + esc(jmena) + "</span>" +
+            "</div>" +
+            '<div class="kdl__posledni">' + esc(textPosledni(k)) + "</div>" +
+            '<div class="kdl__pata">' +
+                '<span class="kstitek">' + esc(zprav(k.zpravy.filter(z => z.typ !== "udalost").length)) + "</span>" +
+                (k.ztlumeno ? '<span class="kstitek">🔕 ztlumeno</span>' : "") +
+                (k.jenCteni ? '<span class="kstitek">jen ke čtení</span>' : "") +
+            "</div>" +
+        "</article>";
     }
 
-    /* ------------------------------------------------------------ detail --- */
-
-    async function otevriDetail(id) {
-        otevrenaPozn = id;
-        $("oknoDetail").hidden = false;
-        vykresliDetail();
-        if (!obrazkyCache.has(id)) {
-            try {
-                obrazkyCache.set(id, await window.KB.nactiPoznObrazky(id));
-                vykresliDetail();
-                /* starší poznámka bez náhledu na dlaždici – doplní se sám,
-                   jakmile si ji autor otevře */
-                const z = (window.KB.poznamky || []).find(x => x.id === id);
-                const obr = obrazkyCache.get(id);
-                if (z && z.uid === me() && !z.nahled && obr && obr.length) {
-                    const nahled = await udelejNahled(obr[0].data);
-                    if (nahled) await window.KB.ulozPoznamku(id, { nahled: nahled });
-                }
-            } catch (err) { console.error(err); }
-        }
+    function radekSeznamuHtml(k) {
+        const pocet = pocetNovych(k);
+        const aktivni = k.id === otevrena;
+        return '<button type="button" class="kpol' + (aktivni ? " kpol--aktivni" : "") +
+                (pocet ? " kpol--nove" : "") + '" data-konv="' + esc(k.id) + '"' +
+                (aktivni ? ' aria-current="true"' : "") + ">" +
+            '<span class="kpol__radek"><span class="kpol__nazev">' + esc(k.nazev) + "</span>" +
+                (pocet ? '<span class="kpocet' + (k.ztlumeno ? " kpocet--tlumeny" : "") + '">' + esc(pocet) + "</span>" : "") +
+                '<span class="kcas">' + esc(casKratce(k.aktivita)) + "</span></span>" +
+            '<span class="kpol__text">' + esc(textPosledni(k)) + "</span>" +
+        "</button>";
     }
 
-    function vykresliDetail() {
-        const z = (window.KB.poznamky || []).find(x => x.id === otevrenaPozn);
-        if (!z) { $("oknoDetail").hidden = true; return; }
-        const moje = smimResit(z);
-        const hotovo = Number(z.stav) === 1;
-        $("detailNadpis").textContent = (z.listNazev || "Poznámka") +
-            (moje ? "" : " · " + (z.jmeno || jmenoUid(z.uid)));
+    /* ----------------------------------------------------------- zprávy --- */
 
-        const obrazky = obrazkyCache.get(z.id);
+    function udalostHtml(p) {
+        const z = p.z;
+        const kdo = (Array.isArray(z.kdo) ? z.kdo : []).map(u => jmeno(u)).join(", ");
+        const kdoTo = jmeno(z.uid, z.jmeno);
+        const veta = z.akce === "pridal" ? "Přidáni do konverzace: " + kdo + " (přidal(a) " + kdoTo + ")"
+            : z.akce === "odebral" ? "Odebráni z konverzace: " + kdo + " (odebral(a) " + kdoTo + ")"
+            : z.akce === "opustil" ? kdoTo + " opustil(a) konverzaci"
+            : "Změna v konverzaci (" + kdoTo + ")";
+        return '<div class="kudalost" data-udalost="' + esc(z.id) + '">' + esc(veta) + " · " +
+            esc(hodina(p.cas)) + "</div>";
+    }
 
-        $("detailTelo").innerHTML =
-            '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
-                '<span class="pozn__stitek ' + (hotovo ? "pozn__stitek--hotovo" : "pozn__stitek--resi") +
-                    '" style="align-self:center">' + (hotovo ? "Splněno" : "Řeší se") + "</span>" +
-                '<span class="tiny muted">' + esc(kdy(z.ms)) + "</span>" +
-                (moje ? '<button type="button" class="btn btn--sm ' +
-                        (hotovo ? "btn--ghost" : "btn--primary") + '" id="btnStav">' +
-                        (hotovo ? "Vrátit na řeší se" : "✓ Splněno") + "</button>" : "") +
-                (moje ? '<button type="button" class="linkbtn" id="btnSmazPozn" ' +
-                        'style="color:var(--danger);margin-left:auto">smazat poznámku</button>' : "") +
-            "</div>" +
-            '<div style="font-size:var(--fs-3);line-height:1.6;white-space:pre-wrap">' + esc(z.text || "") + "</div>" +
-            '<div class="pdetail__obrazky">' +
-                (obrazky === undefined && z.obrazku ? '<span class="tiny muted">Načítám obrázky…</span>' : "") +
-                (obrazky || []).map(o => window.KBUI.bezpecnyObrazek(o && o.data)).filter(Boolean)
-                    .map(src => '<img src="' + esc(src) + '" alt="">').join("") +
-            "</div>" +
+    function fotoHtml(z) {
+        const plne = obrazkyCache.get(z.id);
+        const nahled = window.KBUI.bezpecnyObrazek(z.nahled);
+        const pocet = Number(z.obrazku) || 0;
+        if (plne && plne.length > 1) {
+            return '<div class="kz__fotky">' + plne.map((src, i) =>
+                '<button type="button" data-foto="' + esc(z.id) + '" data-foto-i="' + i + '"' +
+                ' aria-label="Zvětšit obrázek ' + (i + 1) + '"><img src="' + esc(src) + '" alt=""></button>').join("") +
+                "</div>";
+        }
+        const src = (plne && plne[0]) || nahled;
+        if (src) {
+            return '<button type="button" class="kz__foto" data-foto="' + esc(z.id) + '" data-foto-i="0"' +
+                ' aria-label="Zvětšit obrázek"><img src="' + esc(src) + '" alt="">' +
+                (pocet > 1 ? '<span class="kz__vic">+' + esc(pocet - 1) + "</span>" : "") + "</button>";
+        }
+        if (pocet > 0) {
+            return '<button type="button" class="linkbtn" data-foto="' + esc(z.id) + '" data-foto-i="0">📷 ' +
+                (nacitaSe.has(z.id) ? "Načítám obrázek…" : pocet === 1 ? "Zobrazit obrázek" :
+                    "Zobrazit obrázky (" + esc(pocet) + ")") + "</button>";
+        }
+        return "";
+    }
 
-            '<div>' +
-                '<span class="label">Komentáře</span>' +
-                ((z.komentare || []).map(k =>
-                    '<div class="pkoment"><span class="pkoment__kdo">' + esc(k.jmeno || "?") +
-                    '</span><span class="pkoment__kdy">' + esc(kdy(k.ms)) + "</span><br>" +
-                    esc(k.text) + "</div>").join("") ||
-                    '<div class="tiny muted">Zatím bez komentářů.</div>') +
-                '<div class="row" style="gap:8px;margin-top:10px">' +
-                    '<input type="text" id="komentText" class="field grow" maxlength="500" ' +
-                        'placeholder="Napsat komentář…">' +
-                    '<button type="button" class="btn btn--sm btn--primary" id="btnKoment">Odeslat</button>' +
+    function bublinaHtml(p, navazuje) {
+        const z = p.z;
+        const moje = p.autor === me();
+        const odpoved = p.druh === "odpoved";
+        const text = String((odpoved ? p.c.text : z.text) || "");
+        const stav = !odpoved && (z.stav === 0 || z.stav === 1) ? Number(z.stav) : null;
+        return '<div class="kz ' + (moje ? "kz--moje" : "kz--cizi") + (navazuje ? " kz--navazuje" : "") +
+                (odpoved ? " kz--odpoved" : "") + (!odpoved && z.id === zvyraznena ? " kz--zvyraznena" : "") + '" ' +
+                (odpoved ? 'data-odpoved="' + esc(z.id) + '" data-odpoved-i="' + esc(p.i) + '"'
+                         : 'data-zprava="' + esc(z.id) + '"') + ">" +
+            (moje ? "" : (navazuje ? '<span class="kz__misto"></span>' : avatar(p.autor, p.jmeno))) +
+            '<div class="kz__bublina">' +
+                (!moje && !navazuje ? '<div class="kz__autor">' + esc(jmeno(p.autor, p.jmeno)) + "</div>" : "") +
+                (odpoved ? '<div class="kz__odkaz">↪ k poznámce „' +
+                    esc(String(z.text || "obrázek").replace(/\s+/g, " ").slice(0, 60)) + "“</div>" : "") +
+                (stav !== null ? '<span class="kz__stitek ' + (stav ? "kz__stitek--hotovo" : "kz__stitek--resi") +
+                    '">' + (stav ? "Splněno" : "Řeší se") + "</span>" : "") +
+                (odpoved ? "" : fotoHtml(z)) +
+                (text ? '<div class="kz__text">' + esc(text) + "</div>" : "") +
+                '<div class="kz__pata">' +
+                    (!odpoved && z.upraveno ? "<span>upraveno</span>" : "") +
+                    '<span title="' + esc(celyCas(p.cas)) + '">' + esc(hodina(p.cas)) + "</span>" +
+                    window.KBNabidka.tlacitko("Akce se zprávou") +
                 "</div>" +
             "</div>" +
+        "</div>";
+    }
 
-            '<div style="border-top:1px solid var(--line-soft);padding-top:12px">' +
-                /* Vzkaz o poznámce jde často celé partě – zaškrtávátka
-                   a hledání stejné jako v Quick TO-DO (Michal 4. 9. 2026). */
-                '<span class="label">Upozornit kolegy (přistane jim to v Quick TO-DO)</span>' +
-                '<div class="quickpanel__kdo" id="upozornitKdo" data-lide-vyber' +
-                        ' style="margin-top:6px">' +
-                    '<div class="quickpanel__hledej">' +
-                        '<input type="text" class="field" data-quick-hledej' +
-                            ' placeholder="Hledat člověka…" aria-label="Hledat člověka">' +
-                        '<button type="button" data-quick-hledej-zrus hidden' +
-                            ' title="Zrušit hledání">×</button>' +
-                    "</div>" +
-                    '<div class="quickpanel__lide" data-quick-komu></div>' +
-                "</div>" +
-                '<div class="row" style="gap:8px;margin-top:8px">' +
-                    '<button type="button" class="btn btn--sm btn--primary" id="btnUpozornit">' +
-                        "Upozornit vybrané</button>" +
-                "</div>" +
-            "</div>";
-
-        /* Autor poznámky mezi adresáty nepatří – ten už o ní ví. */
-        window.KBUI.lideDoVyberu($("upozornitKdo").querySelector("[data-quick-komu]"),
-            false, [z.uid]);
-        window.KBUI.profiltrujLidi($("upozornitKdo"));
-
-        $("btnKoment").addEventListener("click", async () => {
-            const text = $("komentText").value.trim();
-            if (!text) return;
-            try {
-                await window.KB.pridejPoznKomentar(z.id, text);
-                $("komentText").value = "";
-            } catch (err) { window.KBUI.toast("Komentář se neuložil.", "error"); }
-        });
-        $("komentText").addEventListener("keydown", (e) => {
-            if (e.key === "Enter") $("btnKoment").click();
-        });
-        $("btnUpozornit").addEventListener("click", async () => {
-            const komu = Array.from($("upozornitKdo")
-                .querySelectorAll("[data-quick-komu] input:checked")).map(ch => ch.value);
-            if (!komu.length) return window.KBUI.toast("Vyber, koho upozornit.", "warn");
-            $("btnUpozornit").disabled = true;
-            try {
-                // přisdílení, ať poznámku po prokliku opravdu vidí
-                for (const uid of komu) await window.KB.pridejPoznSdileni(z.id, uid);
-                /* Jeden vzkaz pro všechny – dřív se zakládal každému zvlášť
-                   a v přehledu se pak objevil několikrát. */
-                await window.KB.saveQuickTodo(window.KB.newQuickId(), {
-                    text: "Mrkni na poznámku: " + String(z.text || "").slice(0, 80),
-                    proUids: komu,
-                    poznamka: z.id
-                });
-                $("upozornitKdo").querySelectorAll("input:checked")
-                    .forEach(ch => { ch.checked = false; });
-                window.KBUI.toast(komu.length === 1
-                    ? "Upozornění odesláno do Quick TO-DO."
-                    : "Upozornění odesláno " + komu.length + " lidem.");
-            } catch (err) {
-                console.error(err);
-                window.KBUI.toast("Upozornění se nepodařilo.", "error");
-            } finally {
-                $("btnUpozornit").disabled = false;
-            }
-        });
-        if (moje) {
-            $("btnStav").addEventListener("click", () =>
-                window.KB.ulozPoznamku(z.id, { stav: hotovo ? 0 : 1 })
-                    .then(() => window.KBUI.toast(hotovo ? "Vráceno na řeší se." : "Označeno jako splněné.",
-                        undefined, { zpet: () => window.KB.ulozPoznamku(z.id, { stav: hotovo ? 1 : 0 }) }))
-                    .catch(() => window.KBUI.toast("Uložení selhalo.", "error")));
-            $("btnSmazPozn").addEventListener("click", async () => {
-                if (!(await window.KBUI.potvrd({ nadpis: otazkaSmazat(z), ano: "Smazat", nebezpecne: true }))) return;
-                await window.KB.smazPoznamku(z.id);
-                otevrenaPozn = "";
-                $("oknoDetail").hidden = true;
+    /* Časová osa: zprávy, události a staré komentáře jako odpovědi (jen
+       ke čtení). Odpověď se řadí za svou poznámku, i kdyby měla starší čas
+       – poznámka si dřív posouvala čas při každé úpravě. */
+    function zpravyHtml(k) {
+        const KB = window.KB;
+        const uid = me();
+        const osa = [];
+        k.zpravy.forEach(z => {
+            const cas = KB.poznCas(z);
+            osa.push({ druh: z.typ === "udalost" ? "udalost" : "zprava", z, cas, klic: cas, autor: z.uid, jmeno: z.jmeno });
+            (Array.isArray(z.komentare) ? z.komentare : []).forEach((c, i) => {
+                if (!c || typeof c !== "object") return;
+                const cms = Number(c.ms) || cas;
+                osa.push({ druh: "odpoved", z, c, i, cas: cms, klic: Math.max(cms, cas) + (i + 1) / 1000,
+                    autor: String(c.uid || ""), jmeno: c.jmeno });
             });
+        });
+        osa.sort((a, b) => a.klic - b.klic);
+        if (!osa.length) {
+            return '<div class="kchat__prazdno">' + (k.jenCteni ? "Nic tu není." :
+                "Zatím tu nic není. Napiš první zprávu nebo vlož screenshot (Ctrl+V).") + "</div>";
+        }
+        let html = "", den = "", pred = null, cara = false;
+        osa.forEach(p => {
+            const d = denKlic(p.klic);
+            if (d !== den) { html += '<div class="kden">' + esc(denPopis(p.klic)) + "</div>"; den = d; pred = null; }
+            if (!cara && hranice.id === k.id && p.druh === "zprava" && p.autor !== uid &&
+                Number(p.z.createdMs) > hranice.od) {
+                html += '<div class="kden kden--nove">Nové zprávy</div>';
+                cara = true; pred = null;
+            }
+            if (p.druh === "udalost") { html += udalostHtml(p); pred = null; return; }
+            html += bublinaHtml(p, !!(pred && pred.autor === p.autor && p.klic - pred.klic < PET_MINUT));
+            pred = p;
+        });
+        return html;
+    }
+
+    function vykresliChat() {
+        const k = najdiKonv(otevrena);
+        if (!k) {
+            if (window.KB.poznNacteno) {
+                toast("Konverzace už neexistuje, nebo v ní nejsi.", "warn");
+                zpetNaPrehled();
+            }
+            return;
+        }
+        $("chatHlava").setAttribute("data-konv-hlava", k.id);
+        $("chatNazev").textContent = k.nazev;
+        const kdo = "V konverzaci: " + kdoJeTam(k);
+        $("chatKdo").textContent = kdo;
+        $("chatKdo").title = kdo;
+        $("btnPridatLidi").hidden = k.jenCteni;
+        if (!$("chatVic").firstChild) $("chatVic").innerHTML = window.KBNabidka.tlacitko("Další akce s konverzací");
+        $("chatPsani").hidden = k.jenCteni;
+        $("chatJenCteni").hidden = !k.jenCteni;
+
+        const box = $("chatZpravy");
+        const html = zpravyHtml(k);
+        if (html !== posledniHtml) {
+            const dole = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+            const kde = box.scrollTop;
+            box.innerHTML = html;
+            posledniHtml = html;
+            const cil = zvyraznena && !zvyraznenaUkazana && box.querySelector('[data-zprava="' + CSS.escape(zvyraznena) + '"]');
+            if (cil) { zvyraznenaUkazana = true; cil.scrollIntoView({ block: "center" }); }
+            else if (drzetDole || dole) box.scrollTop = box.scrollHeight;
+            else box.scrollTop = kde;
+            drzetDole = false;
+            uDna = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+        }
+        oznacPrectenoPozdeji(k);
+    }
+
+    /* Přečteno se zapíše, až je konverzace opravdu na očích. Značka je čas
+       poslední zprávy (ne hodiny tohohle počítače), ať se nic nepřeskočí. */
+    function oznacPrectenoPozdeji(k) {
+        if (!k || k.jenCteni || document.visibilityState !== "visible") return;
+        const max = maxCas(k);
+        if (!max || (Number(window.KB.poznPrecteno[k.id]) || 0) >= max) return;
+        clearTimeout(casovacPrecteno);
+        casovacPrecteno = setTimeout(() => {
+            if (otevrena !== k.id || document.visibilityState !== "visible") return;
+            window.KB.oznacPrecteno(k.id, max).catch(err => console.warn("Přečteno se nezapsalo:", err));
+        }, 700);
+    }
+
+    /* ----------------------------------------------------- vykreslení --- */
+
+    let posledniDlazdice = null, posledniSeznam = null;
+
+    function vykresli() {
+        if (!me() || !window.KB) return;
+        seznam = spocitejKonverzace();
+        const nacteno = !!window.KB.poznNacteno;
+        $("nacitam").hidden = nacteno || seznam.length > 0;
+        $("prazdno").hidden = !nacteno || seznam.length > 0;
+
+        const dl = seznam.map(dlazdiceHtml).join("");
+        if (dl !== posledniDlazdice) { $("dlazdice").innerHTML = dl; posledniDlazdice = dl; }
+        const sz = '<button type="button" class="btn btn--sm btn--primary kchat__nova" data-nova-konv>' +
+            "+ Nová konverzace</button>" + seznam.map(radekSeznamuHtml).join("");
+        if (sz !== posledniSeznam) { $("chatSeznam").innerHTML = sz; posledniSeznam = sz; }
+
+        if (cekamNa && najdiKonv(cekamNa)) { const id = cekamNa; cekamNa = ""; otevri(id, odkudOtevrit()); return; }
+        zpracujParametry();
+        if (otevrena) vykresliChat();
+        if (!$("oknoKonv").hidden) {
+            if (okno.rezim === "lidi") vykresliUcastnikyOkna();
+            // seznam lidí dorazil až po otevření okna – nabídku doplnit
+            if ($("konvKdo").options.length <= 1 && kolegove().length) vykresliVyberOkna();
         }
     }
 
-    /* ------------------------------------------------- nová poznámka --- */
+    /* ?konv=ID otevře konverzaci (odkaz z upozornění), ?pozn=ID skočí na
+       zprávu (odkaz z Quick TO-DO) – jednou, až data dorazí. */
+    function zpracujParametry() {
+        if (parametryHotovo || !window.KB.poznNacteno) return;
+        parametryHotovo = true;
+        const q = new URLSearchParams(location.search);
+        const pozn = q.get("pozn"), konv = q.get("konv");
+        if (pozn) {
+            const k = konvZpravy(najdiZpravu(pozn));
+            if (!k) { toast("Tahle zpráva už neexistuje, nebo ji nevidíš.", "warn"); zrusAdresu(); return; }
+            zvyraznena = pozn;
+            zvyraznenaUkazana = false;
+            otevri(k.id, "adresa");
+        } else if (konv) {
+            if (najdiKonv(konv)) otevri(konv, "adresa");
+            else { toast("Konverzace už neexistuje, nebo v ní nejsi.", "warn"); zrusAdresu(); }
+        }
+    }
 
-    /* Zmenšení screenshotu i náhled na dlaždici umí ui.js – stejně je
-       potřebuje vkládání obrázku do Quick TO-DO a dvě kopie téhož by se
-       dřív nebo později rozešly (Michal 4. 9. 2026). */
-    const zmensi = (blob) => window.KBUI.zmensiObrazek(blob);
-    const udelejNahled = (dataUrl) => window.KBUI.nahledObrazku(dataUrl);
+    const zrusAdresu = () => { try { history.replaceState(null, "", location.pathname); } catch (e) { /* nic */ } };
 
+    /* ----------------------------------------------- otevřít / zavřít --- */
+
+    /**
+     * Otevře konverzaci. `odkud`: "dlazdice" (nový krok v historii – tlačítko
+     * Zpět v prohlížeči i v telefonu vrátí na dlaždice), "seznam" (přepnutí
+     * v levém seznamu, krok se nahradí), "adresa" (?konv=/?pozn=) a
+     * "historie" (krok zpět/vpřed – historie se nemění).
+     */
+    function otevri(id, odkud) {
+        const k = najdiKonv(id);
+        if (!k) return;
+        if (otevrena !== id) {
+            ulozKoncept();
+            otevrena = id;
+            // čára „Nové zprávy" – jen když při otevření něco nepřečteného je
+            hranice = { id: id, od: k.nove ? (Number(window.KB.poznPrecteno[id]) || 0) : Infinity };
+            posledniHtml = "";
+            drzetDole = true;
+            nactiKoncept();
+        }
+        if (odkud !== "historie") {
+            const adresa = location.pathname + "?konv=" + encodeURIComponent(id);
+            const zDlazdic = odkud === "dlazdice" || (odkud === "seznam" && !!(history.state && history.state.zDlazdic));
+            try {
+                if (odkud === "dlazdice") history.pushState({ konv: id, zDlazdic: true }, "", adresa);
+                else history.replaceState({ konv: id, zDlazdic: zDlazdic }, "", adresa);
+            } catch (e) { /* nic */ }
+        }
+        prepniPohled();
+        if (!dotyk() && !k.jenCteni) {
+            setTimeout(() => { try { $("psaniText").focus({ preventScroll: true }); } catch (e) { /* nic */ } }, 0);
+        }
+    }
+    // z dlaždic je to nový krok v historii, z levého seznamu jen přepnutí
+    const odkudOtevrit = () => otevrena ? "seznam" : "dlazdice";
+
+    function zavri() {
+        ulozKoncept();
+        otevrena = ""; zvyraznena = ""; posledniHtml = "";
+        hranice = { id: "", od: Infinity };
+        prepniPohled();
+    }
+
+    /** Zpátky na dlaždice – krokem zpět, když se sem přišlo z nich. Zavírá
+        se hned (ne až po popstate), jinak by druhé zavolání před příchodem
+        popstate couvlo o krok víc – pryč ze stránky. */
+    function zpetNaPrehled() {
+        const zpet = !!(history.state && history.state.konv && history.state.zDlazdic);
+        zavri();
+        if (zpet) history.back();
+        else zrusAdresu();
+    }
+
+    function prepniPohled() {
+        const chat = !!otevrena;
+        $("prehled").hidden = chat;
+        $("chatObal").hidden = !chat;
+        $("popisStranky").hidden = chat;
+        document.body.classList.toggle("kchat-otevreny", chat);
+        if (chat && !jeTelefon()) window.scrollTo(0, 0);
+        nastavVysku();
+        vykresli();
+    }
+
+    /* Na PC zabere chat zbytek okna pod nadpisem – zprávy rolují uvnitř. */
+    function nastavVysku() {
+        const el = $("chatObal");
+        if (el.hidden || jeTelefon()) { el.style.removeProperty("--kchat-vyska"); return; }
+        const v = Math.max(420, Math.round(window.innerHeight - el.getBoundingClientRect().top - 16));
+        el.style.setProperty("--kchat-vyska", v + "px");
+    }
+
+    /* ---------------------------------------------------------- psaní --- */
+
+    function ulozKoncept() {
+        if (!otevrena) return;
+        const text = $("psaniText").value;
+        if (text || noveObrazky.length) koncepty.set(otevrena, { text: text, obrazky: noveObrazky.slice() });
+        else koncepty.delete(otevrena);
+    }
+
+    function nactiKoncept() {
+        const c = koncepty.get(otevrena) || { text: "", obrazky: [] };
+        $("psaniText").value = c.text;
+        noveObrazky = c.obrazky.slice();
+        vykresliNahledy();
+        prizpusobVysku();
+    }
+
+    function prizpusobVysku() {
+        const t = $("psaniText");
+        t.style.height = "auto";
+        t.style.height = Math.min(t.scrollHeight + 2, 160) + "px";
+    }
+
+    function vykresliNahledy() {
+        $("psaniNahledy").innerHTML = noveObrazky.map((d, i) => {
+            const src = window.KBUI.bezpecnyObrazek(d);
+            return src ? '<span class="pnahled"><img src="' + esc(src) + '" alt="">' +
+                '<button type="button" data-odeber="' + i + '" title="Odebrat" aria-label="Odebrat obrázek">×</button></span>' : "";
+        }).join("");
+        $("psaniNahledy").hidden = !noveObrazky.length;
+    }
+
+    /* Zmenšení screenshotu je společné s Quick TO-DO (UI.zmensiObrazek –
+       hlídá i limit dokumentu 1 MB). */
     async function pridejObrazky(soubory) {
         for (const s of soubory) {
-            try { noveObrazky.push(await zmensi(s)); }
-            catch (err) { window.KBUI.toast("Obrázek se nepodařilo zpracovat.", "error"); }
+            if (noveObrazky.length >= 10) { toast("Do jedné zprávy se vejde nejvýš 10 obrázků.", "warn"); break; }
+            try { noveObrazky.push(await window.KBUI.zmensiObrazek(s)); }
+            catch (err) { toast("Obrázek se nepodařilo zpracovat.", "error"); }
         }
         vykresliNahledy();
     }
 
-    function vykresliNahledy() {
-        $("novaNahledy").innerHTML = noveObrazky.map((d, i) =>
-            '<span class="pnahled"><img src="' + d + '" alt="">' +
-            '<button type="button" data-odeber="' + i + '" title="Odebrat">×</button></span>').join("");
+    async function odesli() {
+        const k = najdiKonv(otevrena);
+        if (odesilam || !k || k.jenCteni) return;
+        const text = $("psaniText").value.trim();
+        if (!text && !noveObrazky.length) return;
+        odesilam = true;
+        $("btnOdeslat").disabled = true;
+        const obrazky = noveObrazky.slice();
+        try {
+            const nahled = obrazky.length ? await window.KBUI.nahledObrazku(obrazky[0]) : "";
+            const id = await window.KB.posliZpravu(k.id, { text: text, obrazky: obrazky, nahled: nahled });
+            if (id && obrazky.length) obrazkyCache.set(id, obrazky.map(o => window.KBUI.bezpecnyObrazek(o)).filter(Boolean));
+            $("psaniText").value = "";
+            noveObrazky = [];
+            koncepty.delete(k.id);
+            vykresliNahledy();
+            prizpusobVysku();
+            drzetDole = true;
+            vykresli();
+        } catch (err) {
+            console.error(err);
+            toast("Zprávu se nepodařilo odeslat.", "error");
+        } finally {
+            odesilam = false;
+            $("btnOdeslat").disabled = false;
+            if (!dotyk()) $("psaniText").focus();
+        }
     }
 
-    /* ------------------------------------------------------------- start --- */
+    /* ------------------------------------------------------ obrázky --- */
+
+    async function lupa(id, i) {
+        const z = najdiZpravu(id);
+        let plne = obrazkyCache.get(id);
+        if (!plne && z && Number(z.obrazku) > 0 && !nacitaSe.has(id)) {
+            nacitaSe.add(id);
+            posledniHtml = "";
+            vykresli();
+            try {
+                const obr = await window.KB.nactiPoznObrazky(id);
+                plne = obr.map(o => window.KBUI.bezpecnyObrazek(o && o.data)).filter(Boolean);
+                obrazkyCache.set(id, plne);
+            } catch (err) {
+                console.error(err);
+                toast("Obrázek se nepodařilo načíst.", "error");
+            } finally {
+                nacitaSe.delete(id);
+                vykresli();
+            }
+        }
+        const src = (plne && (plne[i] || plne[0])) || window.KBUI.bezpecnyObrazek(z && z.nahled);
+        if (src && window.KBDoc && window.KBDoc.openImage) {
+            window.KBDoc.openImage(src, z && z.text ? String(z.text).slice(0, 140) : "");
+        }
+    }
+
+    /* ------------------------------------------- akce s konverzací --- */
+
+    async function prejmenuj(k) {
+        const nazev = await window.KBUI.zeptej({ nadpis: "Název konverzace", vychozi: k.nazev,
+            maxDelka: 80, ano: "Uložit" });
+        if (nazev === null) return;
+        const t = String(nazev).trim();
+        if (!t || t === k.nazev) return;
+        await window.KB.prejmenujKonverzaci(k.id, t);
+        toast("Přejmenováno.");
+    }
+
+    async function prepniZtlumeni(k) {
+        const bylo = k.ztlumeno;
+        await window.KB.ztlumKonverzaci(k.id, !bylo);
+        toast(bylo ? "Upozornění z konverzace zase chodí." : "Ztlumeno – upozornění z téhle konverzace ti chodit nebudou.",
+            undefined, { zpet: () => window.KB.ztlumKonverzaci(k.id, bylo) });
+    }
+
+    async function oznacPrectene(k) {
+        const max = maxCas(k);
+        if (max) await window.KB.oznacPrecteno(k.id, max);
+    }
+
+    async function opust(k) {
+        if (!(await window.KBUI.potvrd({ nadpis: "Opustit konverzaci „" + k.nazev + "“?",
+            text: "Přestaneš vidět její zprávy. Zpátky tě může přidat kdokoliv, kdo v ní zůstane.",
+            ano: "Opustit", nebezpecne: true }))) return;
+        if (otevrena === k.id) zpetNaPrehled();
+        await window.KB.opustKonverzaci(k.id);
+        toast("Konverzaci jsi opustil(a).");
+    }
+
+    async function smazKonverzaci(k) {
+        const n = k.zpravy.length;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat konverzaci „" + k.nazev + "“?",
+            text: "Smaže se všem účastníkům" + (n ? " i se " + zprav(n) + " a obrázky" : "") + ". Vrátit to nejde.",
+            ano: "Smazat", nebezpecne: true }))) return;
+        if (otevrena === k.id) zpetNaPrehled();
+        await window.KB.smazPoznList(k.id);
+        toast("Konverzace smazána.");
+    }
+
+    function nabidkaKonverzace(id, prvek) {
+        const k = najdiKonv(id);
+        if (!k) return null;
+        const zakladatel = !k.jenCteni && k.zakladatel === me();
+        return {
+            nadpis: k.nazev,
+            radek: prvek,
+            polozky: [
+                otevrena !== k.id && { text: "Otevřít", ikona: "zprava", fn: () => otevri(k.id, odkudOtevrit()) },
+                !k.jenCteni && { text: "Přidat lidi…", ikona: "clovek", fn: () => otevriOkno("lidi", k.id) },
+                zakladatel && { text: "Přejmenovat…", ikona: "upravit", fn: () => prejmenuj(k) },
+                !k.jenCteni && { text: k.ztlumeno ? "Zrušit ztlumení" : "Ztlumit konverzaci",
+                    ikona: k.ztlumeno ? "oko" : "skryt", fn: () => prepniZtlumeni(k) },
+                !k.jenCteni && (k.nove || k.maNove) && { text: "Označit jako přečtené", ikona: "hotovo",
+                    fn: () => oznacPrectene(k) },
+                !k.jenCteni && !zakladatel && { text: "Opustit konverzaci…", ikona: "vratit", nebezpeci: true,
+                    fn: () => opust(k) },
+                zakladatel && { text: "Smazat konverzaci…", ikona: "smazat", nebezpeci: true,
+                    fn: () => smazKonverzaci(k) }
+            ]
+        };
+    }
+
+    /* --------------------------------------------- akce se zprávou --- */
+
+    async function nastavStav(z, stav) {
+        const bylo = (z.stav === 0 || z.stav === 1) ? Number(z.stav) : null;
+        await window.KB.stavZpravy(z.id, stav);
+        toast(stav === 1 ? "Označeno jako splněné." : stav === 0 ? "Označeno: řeší se." : "Štítek odebrán.",
+            undefined, { zpet: () => window.KB.stavZpravy(z.id, bylo) });
+    }
+
+    async function upravText(z) {
+        const text = await window.KBUI.zeptej({ nadpis: "Upravit zprávu", vychozi: z.text || "",
+            viceradku: true, maxDelka: 4000, ano: "Uložit" });
+        if (text === null || text === (z.text || "")) return;
+        await window.KB.upravZpravu(z.id, text);
+    }
+
+    async function smazZpravu(z) {
+        const cizi = z.uid !== me();
+        if (!(await window.KBUI.potvrd({ nadpis: cizi ? "Smazat zprávu od " + jmeno(z.uid, z.jmeno) + "?" : "Smazat zprávu?",
+            text: "Zmizí všem v konverzaci" + (Number(z.obrazku) > 0 ? " i s obrázky" : "") + ".",
+            ano: "Smazat", nebezpecne: true }))) return;
+        await window.KB.smazPoznamku(z.id);
+        toast("Zpráva smazána.");
+    }
+
+    function nabidkaZpravy(id, prvek) {
+        const z = najdiZpravu(id);
+        if (!z || z.typ === "udalost") return null;
+        const k = konvZpravy(z);
+        const ja = me();
+        const autor = z.uid === ja;
+        const ucastnik = !!k && !k.jenCteni;
+        const smiStitek = autor || ucastnik || (Array.isArray(z.sdileni) && z.sdileni.indexOf(ja) !== -1);
+        const stav = (z.stav === 0 || z.stav === 1) ? Number(z.stav) : null;
+        const obrazek = Number(z.obrazku) > 0 || !!window.KBUI.bezpecnyObrazek(z.nahled);
+        return {
+            nadpis: autor ? "Moje zpráva" : "Zpráva od " + jmeno(z.uid, z.jmeno),
+            radek: prvek,
+            polozky: [
+                z.text && { text: "Kopírovat text", ikona: "kopirovat",
+                    fn: () => window.KBNabidka.kopiruj(z.text, "Text zprávy zkopírován.") },
+                obrazek && { text: "Zvětšit obrázek", ikona: "lupa", fn: () => lupa(z.id, 0) },
+                smiStitek && stav !== 0 && { text: "Štítek: řeší se", ikona: "vlajka", fn: () => nastavStav(z, 0) },
+                smiStitek && stav !== 1 && { text: "Štítek: splněno", ikona: "hotovo", fn: () => nastavStav(z, 1) },
+                smiStitek && stav !== null && { text: "Bez štítku", ikona: "skryt", fn: () => nastavStav(z, null) },
+                autor && { text: "Upravit text…", ikona: "upravit", fn: () => upravText(z) },
+                (autor || (ucastnik && k.zakladatel === ja)) && { text: "Smazat zprávu…", ikona: "smazat",
+                    nebezpeci: true, fn: () => smazZpravu(z) }
+            ]
+        };
+    }
+
+    function nabidkaOdpovedi(prvek) {
+        const z = najdiZpravu(prvek.getAttribute("data-odpoved"));
+        const c = z && Array.isArray(z.komentare) ? z.komentare[Number(prvek.getAttribute("data-odpoved-i"))] : null;
+        if (!c || !c.text) return null;
+        return { nadpis: "Odpověď od " + jmeno(c.uid, c.jmeno), radek: prvek, polozky: [
+            { text: "Kopírovat text", ikona: "kopirovat",
+              fn: () => window.KBNabidka.kopiruj(String(c.text), "Text zkopírován.") }
+        ] };
+    }
+
+    /* ---------------------------------- okno: nová konverzace / lidé --- */
+
+    let okno = { rezim: "", id: "", vybrani: [] };
+
+    function otevriOkno(rezim, id) {
+        okno = { rezim: rezim, id: id || "", vybrani: [] };
+        const k = id ? najdiKonv(id) : null;
+        if (rezim === "lidi" && !k) return;
+        $("oknoKonvNadpis").textContent = rezim === "nova" ? "Nová konverzace" : "Lidé v konverzaci „" + k.nazev + "“";
+        $("konvNazevBox").hidden = rezim !== "nova";
+        $("konvUcastniciBox").hidden = rezim === "nova";
+        $("konvNazev").value = "";
+        $("konvKdoPopis").textContent = rezim === "nova"
+            ? "Kdo v ní bude (nikdo = poznámky jen pro tebe)"
+            : "Přidat lidi – uvidí i všechny dosavadní zprávy";
+        $("btnKonvUloz").textContent = rezim === "nova" ? "Založit" : "Přidat";
+        vykresliUcastnikyOkna();
+        vykresliVyberOkna();
+        $("oknoKonv").hidden = false;
+        setTimeout(() => {
+            // kdo už v okně kliká nebo píše, tomu se kurzor nepřehazuje
+            if ($("oknoKonv").contains(document.activeElement)) return;
+            const vstup = rezim === "nova" ? $("konvNazev") : vstupLidi();
+            if (vstup) vstup.focus();
+        }, 0);
+    }
+
+    const vstupLidi = () => {
+        const obal = $("konvKdo").closest("[data-hledac]");
+        return obal ? obal.querySelector("[data-hledac-vstup]") : null;
+    };
+    const zavriOkno = () => { $("oknoKonv").hidden = true; };
+
+    function vykresliUcastnikyOkna() {
+        const k = okno.id ? najdiKonv(okno.id) : null;
+        if (!k) { $("konvUcastnici").innerHTML = ""; return; }
+        const ja = me();
+        $("konvUcastnici").innerHTML = k.ucastnici.map(u =>
+            '<span class="kchip">' + avatar(u) +
+                '<span class="kchip__jmeno">' + esc(jmenoKratke(u)) +
+                    (u === k.zakladatel ? ' <span class="tiny muted">(zakladatel)</span>' : "") + "</span>" +
+                (k.zakladatel === ja && u !== ja
+                    ? '<button type="button" data-odeber-ucastnika="' + esc(u) + '" title="Odebrat z konverzace"' +
+                      ' aria-label="' + esc("Odebrat z konverzace: " + jmeno(u)) + '">×</button>' : "") +
+            "</span>").join("");
+    }
+
+    function vykresliVyberOkna() {
+        const k = okno.id ? najdiKonv(okno.id) : null;
+        const uz = k ? k.ucastnici : [me()];
+        $("konvVybrani").innerHTML = okno.vybrani.map(u =>
+            '<span class="kchip">' + avatar(u) + '<span class="kchip__jmeno">' + esc(jmeno(u)) + "</span>" +
+                '<button type="button" data-odeber-vybraneho="' + esc(u) + '" title="Nepřidávat"' +
+                ' aria-label="' + esc("Nepřidávat: " + jmeno(u)) + '">×</button></span>').join("");
+        const sel = $("konvKdo");
+        sel.innerHTML = '<option value="">— vyber člověka —</option>' + kolegove()
+            .filter(u => uz.indexOf(u.id) === -1 && okno.vybrani.indexOf(u.id) === -1)
+            .map(u => '<option value="' + esc(u.id) + '">' + esc(celeJmeno(u)) + "</option>").join("");
+        sel.value = "";
+        window.KBUI.naseptavac(sel, { nazev: "Přidat člověka", popis: "Piš jméno kolegy…",
+            prazdne: "Už není koho přidat" });
+        $("btnKonvUloz").disabled = okno.rezim === "lidi" && !okno.vybrani.length;
+    }
+
+    async function ulozOkno() {
+        const b = $("btnKonvUloz");
+        b.disabled = true;
+        try {
+            if (okno.rezim === "nova") {
+                const nazev = $("konvNazev").value.trim();
+                if (!nazev) { toast("Napiš název konverzace.", "warn"); $("konvNazev").focus(); return; }
+                const id = await window.KB.zalozKonverzaci(nazev, okno.vybrani);
+                zavriOkno();
+                toast(okno.vybrani.length
+                    ? "Konverzace založena · " + okno.vybrani.length + (okno.vybrani.length === 1 ? " člověk dostal" : " lidí dostalo") + " vzkaz."
+                    : "Konverzace založena.");
+                cekamNa = id;
+                vykresli();
+            } else {
+                const n = await window.KB.pridejDoKonverzace(okno.id, okno.vybrani);
+                zavriOkno();
+                toast(n ? (n === 1 ? "Přidáno – vidí i dosavadní zprávy." : "Přidáno " + n + " lidí – vidí i dosavadní zprávy.")
+                        : "Nikdo nový nepřibyl.");
+            }
+        } catch (err) {
+            console.error(err);
+            toast("Nepodařilo se to uložit.", "error");
+        } finally {
+            b.disabled = okno.rezim === "lidi" && !okno.vybrani.length;
+        }
+    }
+
+    /* ------------------------------------------------------------ start --- */
 
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "poznamky.html" });
 
-        $("btnNovyList").addEventListener("click", () => {
-            upravovanyList = "";
-            $("oknoListNadpis").textContent = "Nový list";
-            $("listNazev").value = "";
-            naplnSdileni([]);
-            $("oknoList").hidden = false;
-            $("listNazev").focus();
+        $("btnNovaKonv").addEventListener("click", () => otevriOkno("nova"));
+        $("btnPridatLidi").addEventListener("click", () => { if (otevrena) otevriOkno("lidi", otevrena); });
+        $("btnZpet").addEventListener("click", zpetNaPrehled);
+        $("btnKonvUloz").addEventListener("click", ulozOkno);
+        $("konvNazev").addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); ulozOkno(); }
+        });
+        $("konvKdo").addEventListener("change", () => {
+            const v = $("konvKdo").value;
+            if (!v || okno.vybrani.indexOf(v) !== -1) return;
+            okno.vybrani.push(v);
+            vykresliVyberOkna();
         });
 
-        function naplnSdileni(vybrane) {
-            $("listSdileni").innerHTML = kolegove().map(u =>
-                '<label><input type="checkbox" value="' + esc(u.id) + '"' +
-                (vybrane.indexOf(u.id) !== -1 ? " checked" : "") + "> " +
-                esc(((u.first || "") + " " + (u.last || "")).trim()) + "</label>").join("") ||
-                '<span class="tiny muted">Žádní kolegové v seznamu.</span>';
-        }
-
-        $("btnUlozList").addEventListener("click", async () => {
-            const nazev = $("listNazev").value.trim();
-            if (!nazev) return window.KBUI.toast("Napiš název listu.", "warn");
-            const sdileni = Array.from($("listSdileni").querySelectorAll("input:checked"))
-                .map(ch => ch.value);
-            try {
-                const id = await window.KB.ulozPoznList(upravovanyList || null, {
-                    nazev: nazev, sdileni: sdileni });
-                /* sdílení listu se propíše i do jeho poznámek – právě podle
-                   nich se sdíleným lidem poznámky vůbec vydají */
-                for (const z of (window.KB.poznamky || [])) {
-                    if (z.listId === id && z.uid === me()) {
-                        await window.KB.ulozPoznamku(z.id, { sdileni: sdileni, listNazev: nazev });
-                    }
-                }
-                $("oknoList").hidden = true;
-            } catch (err) { window.KBUI.toast("Uložení listu selhalo.", "error"); }
+        /* psaní: Enter odešle, Shift+Enter nový řádek. Na dotykové
+           klávesnici Enter dělá nový řádek – Shift tam není, odesílá se
+           tlačítkem. */
+        $("chatPsani").addEventListener("submit", (e) => { e.preventDefault(); odesli(); });
+        $("psaniText").addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !dotyk()) { e.preventDefault(); odesli(); }
         });
-
-        /* screenshoty do nové poznámky: schránka, výběr z PC, Ctrl+V */
-        $("btnVlozit").addEventListener("click", async () => {
+        $("psaniText").addEventListener("input", prizpusobVysku);
+        $("psaniText").placeholder = dotyk() ? "Napiš zprávu…"
+            : "Napiš zprávu… (Enter odešle, Shift+Enter nový řádek, Ctrl+V vloží screenshot)";
+        $("btnObrazek").addEventListener("click", () => $("soubor").click());
+        $("soubor").addEventListener("change", () => {
+            if ($("soubor").files.length) pridejObrazky(Array.from($("soubor").files));
+            $("soubor").value = "";
+        });
+        $("btnSchranka").hidden = dotyk() || !(navigator.clipboard && navigator.clipboard.read);
+        $("btnSchranka").addEventListener("click", async () => {
             try {
                 const polozky = await navigator.clipboard.read();
                 for (const p of polozky) {
                     const typ = (p.types || []).find(t => t.indexOf("image/") === 0);
                     if (typ) return void pridejObrazky([await p.getType(typ)]);
                 }
-                window.KBUI.toast("Ve schránce není obrázek – stiskni PrintScreen" +
-                    " (nebo Win+Shift+S) a klikni znovu.", "warn");
+                toast("Ve schránce není obrázek – stiskni PrintScreen (nebo Win+Shift+S) a klikni znovu.", "warn");
             } catch (err) {
-                window.KBUI.toast("Prohlížeč schránku nevydal – vlož screenshot" +
-                    " klávesami Ctrl+V.", "warn");
+                toast("Prohlížeč schránku nevydal – vlož screenshot klávesami Ctrl+V.", "warn");
             }
         });
-        $("btnVybrat").addEventListener("click", () => $("soubor").click());
-        $("soubor").addEventListener("change", () => {
-            if ($("soubor").files.length) pridejObrazky(Array.from($("soubor").files));
-            $("soubor").value = "";
-        });
-        document.addEventListener("paste", (e) => {
-            if ($("oknoNova").hidden) return;
-            const obrazek = Array.from((e.clipboardData || {}).items || [])
-                .find(i => i.type && i.type.indexOf("image/") === 0);
-            if (obrazek) { e.preventDefault(); pridejObrazky([obrazek.getAsFile()]); }
-        });
-        $("novaNahledy").addEventListener("click", (e) => {
+        $("psaniNahledy").addEventListener("click", (e) => {
             const b = e.target.closest("[data-odeber]");
             if (!b) return;
-            noveObrazky.splice(Number(b.dataset.odeber), 1);
+            noveObrazky.splice(Number(b.getAttribute("data-odeber")), 1);
             vykresliNahledy();
         });
-
-        /* Nová poznámka ve sdíleném listu se sama ozve všem, s kým je list
-           nasdílený – vzkaz jim přistane v Quick TO-DO pod filtrem
-           Poznámky a proklikem skočí rovnou na ni. Autor sám sobě vzkaz
-           neposílá. (Přání Michala 1. 9. 2026.) */
-        async function ozviSeSdilenym(list, poznId, text) {
-            if (!list) return 0;
-            const kruh = (list.uid === me() ? (list.sdileni || [])
-                : [list.uid].concat((list.sdileni || []).filter(u => u !== me())))
-                .filter(uid => uid && uid !== me());
-            if (!kruh.length) return 0;
-            try {
-                await window.KB.saveQuickTodo(window.KB.newQuickId(), {
-                    text: "Nová poznámka v listu „" + (list.nazev || "bez názvu") + "“: " +
-                          String(text || "(jen screenshot)").slice(0, 70),
-                    proUids: kruh,
-                    poznamka: poznId
-                });
-                return kruh.length;
-            } catch (err) {
-                console.warn("Upozornění na novou poznámku se nezapsalo:", err);
-                return 0;
-            }
-        }
-
-        $("btnUlozNovou").addEventListener("click", async () => {
-            const text = $("novaText").value.trim();
-            if (!text && !noveObrazky.length)
-                return window.KBUI.toast("Napiš text nebo vlož screenshot.", "warn");
-            const list = (window.KB.poznListy || []).find(l => l.id === novaListId);
-            $("btnUlozNovou").disabled = true;
-            try {
-                const id = await window.KB.ulozPoznamku(null, {
-                    listId: novaListId,
-                    listNazev: list ? list.nazev : "",
-                    text: text,
-                    /* poznámka do sdíleného listu se rovnou sdílí stejně;
-                       kolega píšící do cizího listu přisdílí majitele */
-                    sdileni: list
-                        ? (list.uid === me() ? (list.sdileni || [])
-                           : [list.uid].concat((list.sdileni || []).filter(u => u !== me())))
-                        : []
-                });
-                for (const d of noveObrazky) await window.KB.pridejPoznObrazek(id, d);
-                if (noveObrazky.length) {
-                    const nahled = await udelejNahled(noveObrazky[0]);
-                    if (nahled) await window.KB.ulozPoznamku(id, { nahled: nahled });
-                }
-                const komu = await ozviSeSdilenym(list, id, text);
-                $("oknoNova").hidden = true;
-                window.KBUI.toast(komu
-                    ? "Poznámka uložena · upozornění pro " + komu + " lidí"
-                    : "Poznámka uložena.");
-            } catch (err) {
-                console.error(err);
-                window.KBUI.toast("Uložení poznámky selhalo.", "error");
-            }
-            $("btnUlozNovou").disabled = false;
-        });
-
-        /* pravý klik na dlaždici = editace vpravo nahoře (jen vlastní) */
-        document.addEventListener("contextmenu", (e) => {
-            const dl = e.target.closest("[data-pozn]");
-            if (!dl) return;
-            const z = (window.KB.poznamky || []).find(x => x.id === dl.dataset.pozn);
-            if (!z || z.uid !== me()) return;    // cizí se edituje jen v detailu
+        // Ctrl+V kdekoliv v otevřené konverzaci (kromě jiných polí)
+        document.addEventListener("paste", (e) => {
+            if (!otevrena || $("chatPsani").hidden || !$("oknoKonv").hidden) return;
+            const cil = e.target;
+            if (cil !== $("psaniText") && cil && cil.closest &&
+                cil.closest("input, textarea, select, [contenteditable='true']")) return;
+            const obrazky = Array.from((e.clipboardData || {}).items || [])
+                .filter(i => i.type && i.type.indexOf("image/") === 0)
+                .map(i => i.getAsFile()).filter(Boolean);
+            if (!obrazky.length) return;
             e.preventDefault();
-            aktivniPozn = aktivniPozn === dl.dataset.pozn ? "" : dl.dataset.pozn;
-            render();
+            pridejObrazky(obrazky);
         });
 
-        /* kliky v seznamech: nová poznámka, sdílení, mazání listu, detail */
-        document.addEventListener("click", async (e) => {
-            const nova = e.target.closest("[data-nova]");
-            if (nova) {
-                novaListId = nova.dataset.nova;
-                noveObrazky = [];
-                $("novaText").value = "";
-                vykresliNahledy();
-                $("oknoNova").hidden = false;
-                $("novaText").focus();
+        /* kliky: dlaždice a řádky seznamu, obrázky, okno lidí */
+        document.addEventListener("click", (e) => {
+            const t = e.target;
+            if (!t || !t.closest) return;
+            if (t.closest("[data-nova-konv]")) { otevriOkno("nova"); return; }
+            const foto = t.closest("[data-foto]");
+            if (foto) { lupa(foto.getAttribute("data-foto"), Number(foto.getAttribute("data-foto-i")) || 0); return; }
+            const odeberV = t.closest("[data-odeber-vybraneho]");
+            if (odeberV) {
+                okno.vybrani = okno.vybrani.filter(u => u !== odeberV.getAttribute("data-odeber-vybraneho"));
+                vykresliVyberOkna();
                 return;
             }
-            const sdilej = e.target.closest("[data-sdilej]");
-            if (sdilej) {
-                const list = (window.KB.poznListy || []).find(l => l.id === sdilej.dataset.sdilej);
-                if (!list) return;
-                upravovanyList = list.id;
-                $("oknoListNadpis").textContent = "List: " + list.nazev;
-                $("listNazev").value = list.nazev;
-                naplnSdileni(list.sdileni || []);
-                $("oknoList").hidden = false;
+            const odeberU = t.closest("[data-odeber-ucastnika]");
+            if (odeberU) {
+                const uid = odeberU.getAttribute("data-odeber-ucastnika");
+                const k = najdiKonv(okno.id);
+                if (!k) return;
+                window.KBUI.potvrd({ nadpis: "Odebrat " + jmeno(uid) + " z konverzace?",
+                    text: "Přestane vidět její zprávy, i ty dosavadní.", ano: "Odebrat", nebezpecne: true })
+                    .then(ano => ano && window.KB.odeberZKonverzace(k.id, uid).then(() => toast("Odebráno.")))
+                    .catch(err => { console.error(err); toast("Odebrání se nepovedlo.", "error"); });
                 return;
             }
-            const smazl = e.target.closest("[data-smaz-list]");
-            if (smazl) {
-                const list = (window.KB.poznListy || []).find(l => l.id === smazl.dataset.smazList);
-                const kolik = (window.KB.poznamky || []).filter(z => z.listId === smazl.dataset.smazList).length;
-                if (!(await window.KBUI.potvrd({ nadpis: "Smazat list „" + (list ? list.nazev : "") + "“" +
-                    (kolik ? " i s " + kolik + " poznámkami?" : "?"), ano: "Smazat", nebezpecne: true }))) return;
-                await window.KB.smazPoznList(smazl.dataset.smazList);
-                return;
-            }
-            // knoflíky editace na dlaždici (✓ / ✎ / ×)
-            const akce = e.target.closest("[data-pozn-akce]");
-            if (akce) {
-                const id = akce.closest("[data-pozn]").dataset.pozn;
-                const z = (window.KB.poznamky || []).find(x => x.id === id);
-                if (!z) return;
-                if (akce.dataset.poznAkce === "stav") {
-                    const byla = Number(z.stav) === 1 ? 1 : 0;
-                    await window.KB.ulozPoznamku(id, { stav: byla ? 0 : 1 });
-                    window.KBUI.toast(byla ? "Vráceno na řeší se." : "Označeno jako splněné.", undefined,
-                        { zpet: () => window.KB.ulozPoznamku(id, { stav: byla }) });
-                } else if (akce.dataset.poznAkce === "text") {
-                    const text = await window.KBUI.zeptej({ nadpis: "Text poznámky", vychozi: z.text || "",
-                        viceradku: true, maxDelka: 2000, ano: "Uložit" });
-                    if (text !== null) await window.KB.ulozPoznamku(id, { text: text });
-                } else if (akce.dataset.poznAkce === "smaz") {
-                    if (!(await window.KBUI.potvrd({ nadpis: otazkaSmazat(z), ano: "Smazat",
-                        nebezpecne: true }))) return;
-                    aktivniPozn = "";
-                    await window.KB.smazPoznamku(id);
-                }
-                return;
-            }
-            const pozn = e.target.closest("[data-pozn]");
-            if (pozn) { otevriDetail(pozn.dataset.pozn); return; }
-            // klik mimo dlaždice zavře otevřenou editaci
-            if (aktivniPozn) { aktivniPozn = ""; render(); }
-            // klik na tmavé pozadí okno zavře
-            if (e.target.classList && e.target.classList.contains("pokno")) e.target.hidden = true;
+            if (t.closest("[data-zavri-okno]") || t === $("oknoKonv")) { zavriOkno(); return; }
+            const konv = t.closest("[data-konv]");
+            if (konv && !t.closest("[data-nabidka-vic]")) otevri(konv.getAttribute("data-konv"), odkudOtevrit());
         });
-        document.querySelectorAll("[data-zavri]").forEach(b =>
-            b.addEventListener("click", () => { $(b.dataset.zavri).hidden = true; }));
+        document.addEventListener("keydown", (e) => {
+            if ((e.key === "Enter" || e.key === " ") && e.target && e.target.matches &&
+                e.target.matches("article[data-konv]")) {
+                e.preventDefault();
+                otevri(e.target.getAttribute("data-konv"), "dlazdice");
+                return;
+            }
+            if (e.key === "Escape" && !$("oknoKonv").hidden && !document.querySelector(".hledac--otevreno") &&
+                !document.querySelector(".kbdlg")) {
+                zavriOkno();
+            }
+        });
+        window.addEventListener("popstate", () => {
+            const id = new URLSearchParams(location.search).get("konv") || "";
+            if (id && najdiKonv(id)) otevri(id, "historie");
+            else if (otevrena) zavri();
+        });
+        // dorazil obrázek a byl jsem dole → zůstat dole (obrázek výšku zvětší)
+        $("chatZpravy").addEventListener("scroll", () => {
+            const box = $("chatZpravy");
+            uDna = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+        }, { passive: true });
+        $("chatZpravy").addEventListener("load", (e) => {
+            if (uDna && e.target && e.target.tagName === "IMG") $("chatZpravy").scrollTop = $("chatZpravy").scrollHeight;
+        }, true);
+        window.addEventListener("resize", nastavVysku);
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible" && otevrena) vykresliChat();
+        });
 
-        const obnov = () => { window.KB.watchPoznamky(); render(); };
+        /* pravé tlačítko, „⋯", Shift+F10 i podržení prstem – jedna nabídka */
+        window.KBNabidka.pripoj((cil) => {
+            const zprava = cil.closest("[data-zprava]");
+            if (zprava && $("chatZpravy").contains(zprava)) return nabidkaZpravy(zprava.getAttribute("data-zprava"), zprava);
+            const odpoved = cil.closest("[data-odpoved]");
+            if (odpoved && $("chatZpravy").contains(odpoved)) return nabidkaOdpovedi(odpoved);
+            const hlava = cil.closest("[data-konv-hlava]");
+            if (hlava) return nabidkaKonverzace(hlava.getAttribute("data-konv-hlava"), null);
+            const konv = cil.closest("[data-konv]");
+            if (konv) return nabidkaKonverzace(konv.getAttribute("data-konv"), konv);
+            return null;
+        });
+
+        const obnov = () => { window.KB.watchPoznamky(); vykresli(); };
         document.addEventListener("kb-role", obnov);
-        window.KB.on("poznamky", render);
-        window.KB.on("users", render);
+        window.KB.on("poznamky", vykresli);
+        window.KB.on("users", vykresli);
         obnov();
     });
 })();

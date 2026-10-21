@@ -391,11 +391,7 @@ try {
             quickOdbery.forEach(stop => { try { stop(); } catch (e) {} });
             quickOdbery = []; quickPrijate = []; quickPrijateSkupina = [];
             quickOdeslane = []; KB.quicktodo = [];
-            poznOdbery.forEach(stop => { try { stop(); } catch (e) {} });
-            poznOdbery = [];
-            poznKusy.listyMoje = []; poznKusy.listySdilene = [];
-            poznKusy.zaznamyMoje = []; poznKusy.zaznamySdilene = [];
-            KB.poznListy = []; KB.poznamky = [];
+            zrusPoznamky();
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
             KB.vykazyPrisly = false;
@@ -882,14 +878,33 @@ KB.pridejQuickKomentar = async (id, text) => {
     }, { merge: true });
 };
 
-/* ------------------------------------------------------------ poznámky ---
-   Osobní zápisník problémů: screenshot + pár vět, řazené do pojmenovaných
-   listů. Jako Quick TO-DO leží mimo `private` – nevidí je ani manažer,
-   jen autor a lidé, kterým autor list nebo poznámku nasdílel.
+/* ------------------------------------------------- poznámky = konverzace ---
+   Od 21. 10. 2026 jsou Poznámky chat (přání Michala): LIST je KONVERZACE
+   a POZNÁMKA je ZPRÁVA. Data se nestěhovala – staré listy a poznámky se
+   samy ukážou jako konverzace a zprávy, staré komentáře jako odpovědi.
+   Jako Quick TO-DO leží mimo `private` – nevidí je ani manažer, jen
+   účastníci konverzace.
 
-     osobni/poznamky/listy/{id}                { nazev, uid, sdileni }
-     osobni/poznamky/zaznamy/{id}              poznámka + komentáře
-     osobni/poznamky/zaznamy/{id}/obrazky/{n}  screenshoty (JPEG base64) */
+     osobni/poznamky/listy/{id}      konverzace { nazev, uid = zakladatel,
+                                     jmeno, sdileni = ostatní účastníci, ms,
+                                     posledniMs/Uid/Jmeno/Text/Id (dlaždice
+                                     a odznak nepřečtených), ztlumili [uid],
+                                     precteno { uid: ms } – kam až kdo četl }
+     osobni/poznamky/zaznamy/{id}    zpráva { listId, listNazev, text, uid =
+                                     autor, jmeno, sdileni = VŠICHNI účastníci
+                                     (podle toho ji databáze vydá), createdMs,
+                                     ms, nahled, obrazku, stav? (0 řeší se,
+                                     1 splněno), typ? ("udalost": akce, kdo) }
+     osobni/poznamky/zaznamy/{id}/obrazky/{n}   screenshoty (JPEG base64)
+
+   Upozornění (ntfy, e-mail) rozesílá Apps Script (KB.ohlasZpravu níž) –
+   čte konverzaci a zprávu servisním účtem (pravidla: rozesilac()), bere
+   účastníky z `uid` + `sdileni`, vynechá `ztlumili` a podle `precteno`
+   může poskládat souhrn nepřečteného.
+
+   Čas zprávy je `createdMs` a už se nemění. Stará poznámka ho nemá – její
+   `ms` se posouvalo při každé úpravě; nepřečtená proto nikdy není (jinak
+   by po přechodu na chat svítilo všechno, co kdy kdo napsal). */
 
 const poznListyCol = () => collection(db, "artifacts", APP_ID, "osobni", "poznamky", "listy");
 const poznListDoc = (id) => doc(db, "artifacts", APP_ID, "osobni", "poznamky", "listy", id);
@@ -900,112 +915,378 @@ const poznObrazek = (id, n) => doc(db, "artifacts", APP_ID, "osobni", "poznamky"
 
 KB.poznListy = [];
 KB.poznamky = [];
-let poznOdbery = [];
+KB.poznPrecteno = {};       // listId → ms, kam až jsem v konverzaci četl (z `precteno` konverzací)
+KB.poznNeprecteno = 0;      // konverzací s nepřečtenou zprávou (bez ztlumených) – odznak v liště
+KB.poznNacteno = false;     // dorazily konverzace i zprávy (stránka Poznámky)
+let poznOdbery = [];        // zprávy – jen stránka Poznámky
+let poznHlavyOdbery = [];   // konverzace (s přečteno) – každá stránka (odznak)
+const poznPrectenoHned = {}; // přečteno zapsané z tohoto okna, než ho databáze vrátí
 const poznKusy = { listyMoje: [], listySdilene: [], zaznamyMoje: [], zaznamySdilene: [] };
+const poznPrislo = {};      // který odběr už poslal první snímek
+
+/** Účastníci konverzace: zakladatel + `sdileni`, bez prázdných a dvojic. */
+KB.poznUcastnici = (l) => {
+    const ven = [];
+    [l && l.uid].concat((l && Array.isArray(l.sdileni)) ? l.sdileni : [])
+        .forEach(u => { if (u && typeof u === "string" && ven.indexOf(u) === -1) ven.push(u); });
+    return ven;
+};
+
+/** Kdy zpráva vznikla – nová má `createdMs`, stará poznámka jen `ms`. */
+KB.poznCas = (z) => Number(z && (z.createdMs || z.ms)) || 0;
+
+/** Ztlumil jsem si konverzaci? (`ztlumili` = pole uid; snese i mapu.) */
+KB.poznZtlumena = (l, uid) => {
+    const z = l && l.ztlumili;
+    const kdo = uid || KB.currentUid();
+    if (Array.isArray(z)) return z.indexOf(kdo) !== -1;
+    if (z && typeof z === "object" && z[kdo]) return z[kdo] === true || Number(z[kdo]) > Date.now();
+    return false;
+};
+
+/** Je v konverzaci zpráva, kterou jsem nečetl? Pozná se už z hlavičky. */
+KB.poznMaNove = (l) => {
+    const uid = KB.currentUid();
+    return !!l && !!l.posledniUid && l.posledniUid !== uid &&
+        Number(l.posledniMs) > (Number(KB.poznPrecteno[l.id]) || 0);
+};
+
+/** Nepřečtené zprávy konverzace – jen nové zprávy od ostatních. */
+KB.poznNeprecteneZpravy = (listId) => {
+    const uid = KB.currentUid();
+    const od = Number(KB.poznPrecteno[listId]) || 0;
+    return (KB.poznamky || []).filter(z => z.listId === listId && z.uid !== uid &&
+        z.typ !== "udalost" && Number(z.createdMs) > od);
+};
 
 function slejPoznamky() {
+    const uid = KB.currentUid();
     const listy = new Map(), zaznamy = new Map();
     poznKusy.listyMoje.concat(poznKusy.listySdilene).forEach(l => listy.set(l.id, l));
     poznKusy.zaznamyMoje.concat(poznKusy.zaznamySdilene).forEach(z => zaznamy.set(z.id, z));
     KB.poznListy = Array.from(listy.values()).sort((a, b) => (a.ms || 0) - (b.ms || 0));
-    KB.poznamky = Array.from(zaznamy.values()).sort((a, b) => (b.ms || 0) - (a.ms || 0));
+    // přečteno: z konverzace, a dokud se nevrátí z databáze, i to právě zapsané
+    const precteno = {};
+    KB.poznListy.forEach(l => {
+        const p = (l.precteno && typeof l.precteno === "object") ? Number(l.precteno[uid]) || 0 : 0;
+        const kdy = Math.max(p, Number(poznPrectenoHned[l.id]) || 0);
+        if (kdy) precteno[l.id] = kdy;
+    });
+    KB.poznPrecteno = precteno;
+    // zprávy v pořadí, jak se psaly (chat čte shora dolů)
+    KB.poznamky = Array.from(zaznamy.values()).sort((a, b) => KB.poznCas(a) - KB.poznCas(b));
+    KB.poznNeprecteno = KB.poznListy.filter(l => KB.poznMaNove(l) && !KB.poznZtlumena(l, uid)).length;
+    KB.poznNacteno = !!(poznPrislo.listyMoje && poznPrislo.listySdilene &&
+        poznPrislo.zaznamyMoje && poznPrislo.zaznamySdilene);
     emit("poznamky", null);
+    emit("pozn-neprecteno", KB.poznNeprecteno);
 }
 
+/* Pravidla umí dotaz povolit nebo zakázat, ne ho profiltrovat – proto
+   vždy dva dotazy (moje / sdílené se mnou) a slepení podle id. */
+function sledujPozn(kam, klic, dotaz) {
+    kam.push(onSnapshot(dotaz, (s) => {
+        poznKusy[klic] = [];
+        s.forEach(d => poznKusy[klic].push({ id: d.id, ...d.data() }));
+        poznPrislo[klic] = true;
+        slejPoznamky();
+    }, (err) => console.error("Chyba čtení poznámek:", err)));
+}
+
+/**
+ * Hlavičky konverzací (i s „přečteno do") – malé dokumenty, poslouchá je
+ * každá stránka kvůli odznaku nepřečtených v liště (ui.js). Zprávy samotné
+ * až KB.watchPoznamky na stránce Poznámky.
+ */
+KB.watchPoznHlavy = async () => {
+    if (poznHlavyOdbery.length) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || poznHlavyOdbery.length) return;
+    const uid = auth.currentUser.uid;
+    sledujPozn(poznHlavyOdbery, "listyMoje", query(poznListyCol(), where("uid", "==", uid)));
+    sledujPozn(poznHlavyOdbery, "listySdilene", query(poznListyCol(), where("sdileni", "array-contains", uid)));
+};
+
 KB.watchPoznamky = async () => {
+    KB.watchPoznHlavy();
     if (poznOdbery.length) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || poznOdbery.length) return;
     const uid = auth.currentUser.uid;
-    /* Dva dotazy na listy a dva na poznámky (moje / sdílené se mnou) –
-       pravidla umí dotaz povolit nebo zakázat, ne ho profiltrovat. */
-    const sleduj = (klic, dotaz) => poznOdbery.push(onSnapshot(dotaz, (s) => {
-        poznKusy[klic] = []; s.forEach(d => poznKusy[klic].push({ id: d.id, ...d.data() }));
-        slejPoznamky();
-    }, (err) => console.error("Chyba čtení poznámek:", err)));
-    sleduj("listyMoje", query(poznListyCol(), where("uid", "==", uid)));
-    sleduj("listySdilene", query(poznListyCol(), where("sdileni", "array-contains", uid)));
-    sleduj("zaznamyMoje", query(poznCol(), where("uid", "==", uid)));
-    sleduj("zaznamySdilene", query(poznCol(), where("sdileni", "array-contains", uid)));
+    sledujPozn(poznOdbery, "zaznamyMoje", query(poznCol(), where("uid", "==", uid)));
+    sledujPozn(poznOdbery, "zaznamySdilene", query(poznCol(), where("sdileni", "array-contains", uid)));
 };
 
-KB.ulozPoznList = async (id, data) => {
+function zrusPoznamky() {
+    poznOdbery.concat(poznHlavyOdbery).forEach(stop => { try { stop(); } catch (e) {} });
+    poznOdbery = []; poznHlavyOdbery = [];
+    poznKusy.listyMoje = []; poznKusy.listySdilene = [];
+    poznKusy.zaznamyMoje = []; poznKusy.zaznamySdilene = [];
+    Object.keys(poznPrislo).forEach(k => { delete poznPrislo[k]; });
+    Object.keys(poznPrectenoHned).forEach(k => { delete poznPrectenoHned[k]; });
+    KB.poznListy = []; KB.poznamky = []; KB.poznPrecteno = {};
+    KB.poznNeprecteno = 0; KB.poznNacteno = false;
+    emit("pozn-neprecteno", 0);
+}
+
+const novePoznId = (pred) => pred + Date.now() + "_" + Math.floor(Math.random() * 1000);
+const poznKonverzace = (lid) => (KB.poznListy || []).find(l => l.id === lid) || null;
+
+/** Zprávy konverzace, které smím číst. Na stránce Poznámky jsou živé
+    v paměti; jinde (nebo dřív, než dorazily) se dotáhnou dvěma dotazy. */
+async function zpravyKonverzace(lid) {
+    if (poznOdbery.length && KB.poznNacteno) return (KB.poznamky || []).filter(z => z.listId === lid);
+    const uid = KB.currentUid();
+    const [a, b] = await Promise.all([
+        getDocs(query(poznCol(), where("uid", "==", uid))),
+        getDocs(query(poznCol(), where("sdileni", "array-contains", uid)))
+    ]);
+    const m = new Map();
+    [a, b].forEach(s => s.forEach(d => m.set(d.id, { id: d.id, ...d.data() })));
+    return Array.from(m.values()).filter(z => z.listId === lid);
+}
+
+/**
+ * Srovná čtenáře zpráv (`sdileni`) dávkou po 400 zápisech (limit dávky je
+ * 500). Když dávka neprojde (zpráva mezitím zmizela – update na neexistující
+ * dokument shodí celou dávku), zkusí se zprávy po jedné.
+ */
+async function srovnejCtenare(zpravy, zmena) {
+    for (let i = 0; i < zpravy.length; i += 400) {
+        const kus = zpravy.slice(i, i + 400);
+        try {
+            const davka = writeBatch(db);
+            kus.forEach(z => davka.update(poznDoc(z.id), { sdileni: zmena }));
+            await davka.commit();
+        } catch (err) {
+            console.warn("Dávka čtenářů neprošla, zkouším po jedné:", err);
+            for (const z of kus) {
+                await updateDoc(poznDoc(z.id), { sdileni: zmena })
+                    .catch(e => console.warn("Zpráva " + z.id + " se nesrovnala:", e));
+            }
+        }
+    }
+}
+
+/** Záznam do časové osy („X přidal(a) Y"). Píše ho účastník sám za sebe. */
+async function zapisUdalost(l, ucastnici, akce, kdo) {
+    const id = novePoznId("pz_");
+    const ted = Date.now();
+    const jmena = (kdo || []).map(u => {
+        const c = (KB.users || []).find(x => x.id === u);
+        return c ? ((c.first || "") + " " + (c.last || "")).trim() : "";
+    }).filter(Boolean).join(", ");
+    const veta = { pridal: "přidal(a) do konverzace: ", odebral: "odebral(a) z konverzace: ",
+                   opustil: "opustil(a) konverzaci" }[akce] || "";
+    await setDoc(poznDoc(id), {
+        listId: l.id, listNazev: String(l.nazev || "").slice(0, 80),
+        typ: "udalost", akce: akce, kdo: (kdo || []).slice(0, 50),
+        text: (veta + (akce === "opustil" ? "" : jmena)).slice(0, 300),
+        uid: KB.currentUid(), jmeno: window.KB_USER || "",
+        sdileni: ucastnici, createdMs: ted, ms: ted, obrazku: 0
+    });
+    return id;
+}
+
+/** Vzkaz do Quick TO-DO lidem, kteří do konverzace právě přibyli – jen
+    tehdy, ne u každé zprávy (o zprávách dá vědět KB.ohlasZpravu). */
+function ohlasPridani(nazev, uids, zpravaId) {
+    if (!uids || !uids.length) return;
+    KB.saveQuickTodo(KB.newQuickId(), {
+        text: "Přidal tě do konverzace „" + String(nazev || "bez názvu").slice(0, 80) + "“ v Poznámkách.",
+        proUids: uids.slice(),
+        poznamka: zpravaId || ""
+    }).catch(err => console.warn("Vzkaz o přidání do konverzace se nezapsal:", err));
+}
+
+/** Nová konverzace; `uids` = kdo v ní bude kromě mě (může být nikdo). */
+KB.zalozKonverzaci = async (nazev, uids) => {
     if (authReady) await authReady;
     requireDb();
-    const lid = id || "pzl_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-    await setDoc(poznListDoc(lid), {
-        nazev: String(data.nazev || "List").slice(0, 80),
-        sdileni: Array.isArray(data.sdileni) ? data.sdileni : [],
-        uid: data.uid || KB.currentUid(),
-        jmeno: data.jmeno || window.KB_USER || "",
-        ms: data.ms || Date.now()
-    }, { merge: true });
+    const ja = KB.currentUid();
+    const lide = (uids || []).filter((u, i, a) => u && u !== ja && a.indexOf(u) === i).slice(0, 49);
+    const lid = novePoznId("pzl_");
+    const l = {
+        nazev: String(nazev || "").trim().slice(0, 80) || "Konverzace",
+        uid: ja, jmeno: window.KB_USER || "",
+        sdileni: lide, ztlumili: [], ms: Date.now()
+    };
+    await setDoc(poznListDoc(lid), l);
+    if (lide.length) {
+        let udalost = "";
+        try { udalost = await zapisUdalost({ id: lid, ...l }, [ja].concat(lide), "pridal", lide); }
+        catch (err) { console.warn("Záznam o přidání se nezapsal:", err); }
+        ohlasPridani(l.nazev, lide, udalost);
+    }
     return lid;
 };
 
-/** Smaže list i s jeho poznámkami a jejich obrázky (jen vlastní). */
-KB.smazPoznList = async (id) => {
+/** Přejmenování – jen zakladatel (hlídají pravidla). */
+KB.prejmenujKonverzaci = async (lid, nazev) => {
     if (authReady) await authReady;
     requireDb();
-    const moje = (KB.poznamky || []).filter(z => z.listId === id && z.uid === KB.currentUid());
-    for (const z of moje) await KB.smazPoznamku(z.id);
-    await deleteDoc(poznListDoc(id));
+    await updateDoc(poznListDoc(lid), { nazev: String(nazev || "").trim().slice(0, 80) || "Konverzace" });
 };
 
-/* Ukládá se jen to, co v patchi opravdu je – sdílený člověk smí podle
-   pravidel měnit jen komentáře a přisdílení, plný zápis by mu spadl. */
-KB.ulozPoznamku = async (id, patch) => {
+/**
+ * Přidá lidi do konverzace. Smí každý účastník, nejen zakladatel – stejně
+ * jako dřív smělo jít upozornění u poznámky komukoliv. Nový člověk uvidí
+ * i historii: všem zprávám, které vidím, se čtenáři srovnají s účastníky.
+ * Vrací, kolik lidí opravdu přibylo.
+ */
+KB.pridejDoKonverzace = async (lid, uids) => {
     if (authReady) await authReady;
     requireDb();
-    const pid = id || "pz_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-    const p = {};
-    if ("listId" in patch) p.listId = String(patch.listId || "");
-    if ("listNazev" in patch) p.listNazev = String(patch.listNazev || "").slice(0, 80);
-    if ("text" in patch) p.text = String(patch.text || "").slice(0, 2000);
-    if ("stav" in patch) p.stav = Number(patch.stav) || 0;   // 0 = řeší se, 1 = splněno
-    if ("sdileni" in patch) p.sdileni = Array.isArray(patch.sdileni) ? patch.sdileni : [];
-    // malý náhled prvního screenshotu – ať je fotka vidět rovnou na dlaždici
-    if ("nahled" in patch) p.nahled = String(patch.nahled || "").slice(0, 90000);
-    if (!id) {
-        p.uid = KB.currentUid();
-        p.jmeno = window.KB_USER || "";
-        p.komentare = [];
-        p.obrazku = 0;
-        if (!("stav" in p)) p.stav = 0;
-    }
-    p.ms = Date.now();
-    await setDoc(poznDoc(pid), p, { merge: true });
-    return pid;
+    const l = poznKonverzace(lid);
+    if (!l) throw new Error("Konverzace není načtená.");
+    const ted = KB.poznUcastnici(l);
+    const novi = (uids || []).filter((u, i, a) => u && a.indexOf(u) === i && ted.indexOf(u) === -1);
+    if (!novi.length) return 0;
+    if (ted.length + novi.length > 50) throw new Error("V konverzaci může být nejvýš 50 lidí.");
+    await updateDoc(poznListDoc(lid), { sdileni: arrayUnion(...novi) });
+    // účastníky beru znovu z databáze – mohl je mezitím měnit i někdo jiný
+    const cerstva = await getDoc(poznListDoc(lid));
+    const lCerstva = cerstva.exists() ? { id: lid, ...cerstva.data() } : { ...l, sdileni: (l.sdileni || []).concat(novi) };
+    const vsichni = KB.poznUcastnici(lCerstva);
+    const zpravy = await zpravyKonverzace(lid);
+    await srovnejCtenare(zpravy.filter(z => vsichni.some(u => (z.sdileni || []).indexOf(u) === -1)),
+        arrayUnion(...vsichni));
+    let udalost = "";
+    try { udalost = await zapisUdalost(lCerstva, vsichni, "pridal", novi); }
+    catch (err) { console.warn("Záznam o přidání se nezapsal:", err); }
+    ohlasPridani(lCerstva.nazev, novi, udalost);
+    return novi.length;
 };
 
-KB.pridejPoznKomentar = async (id, text) => {
+/** Odebrání člověka – jen zakladatel. Odebraný přestane vidět i historii. */
+KB.odeberZKonverzace = async (lid, uid) => {
     if (authReady) await authReady;
     requireDb();
+    const l = poznKonverzace(lid);
+    if (!l || l.uid !== KB.currentUid()) throw new Error("Odebírat smí jen zakladatel konverzace.");
+    if (!uid || uid === l.uid) return;
+    await updateDoc(poznListDoc(lid), { sdileni: arrayRemove(uid) });
+    const zbyli = KB.poznUcastnici(l).filter(u => u !== uid);
+    try { await zapisUdalost(l, zbyli, "odebral", [uid]); }
+    catch (err) { console.warn("Záznam o odebrání se nezapsal:", err); }
+    const zpravy = await zpravyKonverzace(lid);
+    await srovnejCtenare(zpravy.filter(z => (z.sdileni || []).indexOf(uid) !== -1), arrayRemove(uid));
+};
+
+/** Opustit konverzaci (účastník; zakladatel ji místo toho smaže). */
+KB.opustKonverzaci = async (lid) => {
+    if (authReady) await authReady;
+    requireDb();
+    const ja = KB.currentUid();
+    const l = poznKonverzace(lid);
+    if (!l) throw new Error("Konverzace není načtená.");
+    if (l.uid === ja) throw new Error("Zakladatel konverzaci neopouští – může ji smazat.");
+    // záznam ještě jako účastník – potom už by ho databáze nepustila
+    try { await zapisUdalost(l, KB.poznUcastnici(l), "opustil", [ja]); }
+    catch (err) { console.warn("Záznam o odchodu se nezapsal:", err); }
+    const zpravy = await zpravyKonverzace(lid);
+    await srovnejCtenare(zpravy.filter(z => (z.sdileni || []).indexOf(ja) !== -1), arrayRemove(ja));
+    await updateDoc(poznListDoc(lid), { sdileni: arrayRemove(ja) });
+};
+
+/** Ztlumit upozornění (ntfy, e-mail i odznak v liště) – každý jen sám sebe. */
+KB.ztlumKonverzaci = async (lid, ztlumit) => {
+    if (authReady) await authReady;
+    requireDb();
+    const ja = KB.currentUid();
+    await updateDoc(poznListDoc(lid), { ztlumili: ztlumit ? arrayUnion(ja) : arrayRemove(ja) });
+};
+
+/**
+ * Přečteno do `ms` (čas poslední zprávy, kterou jsem viděl – ne hodiny
+ * tohohle počítače). Jen dopředu. Leží v konverzaci jako `precteno.{uid}`:
+ * účastníci tak vidí, kdo co četl, a Apps Script z toho může poskládat
+ * souhrn. Každý smí zapsat jen svůj klíč (pravidla).
+ */
+KB.oznacPrecteno = async (lid, ms) => {
+    if (authReady) await authReady;
+    requireDb();
+    const kdy = Number(ms) || 0;
+    if (!lid || !kdy || (Number(KB.poznPrecteno[lid]) || 0) >= kdy) return;
+    // hned v paměti – odznak zhasne bez čekání na databázi
+    poznPrectenoHned[lid] = kdy;
+    slejPoznamky();
+    await updateDoc(poznListDoc(lid), { ["precteno." + KB.currentUid()]: kdy });
+};
+
+/**
+ * Odešle zprávu: text a/nebo screenshoty (data URL z UI.zmensiObrazek),
+ * `nahled` = malý náhled prvního obrázku. Vrací id zprávy.
+ */
+KB.posliZpravu = async (lid, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const d = data || {};
+    const l = poznKonverzace(lid);
+    if (!l) throw new Error("Konverzace není načtená.");
+    const ja = KB.currentUid();
+    const ucastnici = KB.poznUcastnici(l);
+    if (ucastnici.indexOf(ja) === -1) throw new Error("V téhle konverzaci nejsi.");
+    const text = String(d.text || "").trim().slice(0, 4000);
+    const fotky = (d.obrazky || []).filter(x => typeof x === "string" && x).slice(0, 10);
+    if (!text && !fotky.length) return "";
+    const id = novePoznId("pz_");
+    const ted = Date.now();
     await setDoc(poznDoc(id), {
-        komentare: arrayUnion({
-            uid: KB.currentUid(),
-            jmeno: window.KB_USER || "",
-            text: String(text || "").slice(0, 500),
-            ms: Date.now()
-        }),
-        ms: Date.now()
-    }, { merge: true });
+        listId: lid, listNazev: String(l.nazev || "").slice(0, 80),
+        text: text, uid: ja, jmeno: window.KB_USER || "",
+        // čtenáři = přesně účastníci konverzace (pravidla to hlídají)
+        sdileni: ucastnici, createdMs: ted, ms: ted,
+        nahled: String(d.nahled || "").slice(0, 90000), obrazku: fotky.length
+    });
+    for (let i = 0; i < fotky.length; i++) {
+        await setDoc(poznObrazek(id, "img_" + ted + "_" + i), { data: fotky[i], ms: ted + i });
+    }
+    // dlaždice a odznak nepřečtených u ostatních; vlastní zpráva je přečtená
+    poznPrectenoHned[lid] = Math.max(Number(poznPrectenoHned[lid]) || 0, ted);
+    await updateDoc(poznListDoc(lid), {
+        posledniMs: ted, posledniUid: ja, posledniJmeno: window.KB_USER || "",
+        posledniText: (text || "📷 Obrázek").slice(0, 140), posledniId: id,
+        ["precteno." + ja]: ted
+    }).catch(err => console.warn("Poslední zpráva konverzace se nezapsala:", err));
+    KB.ohlasZpravu(lid, id);
+    return id;
 };
 
-/** Přisdílí poznámku dalšímu člověku (třeba při upozornění do Quick TO-DO). */
-KB.pridejPoznSdileni = async (id, uid) => {
-    if (authReady) await authReady;
-    requireDb();
-    await setDoc(poznDoc(id), { sdileni: arrayUnion(uid), ms: Date.now() }, { merge: true });
+/**
+ * Upozornění na novou zprávu (ntfy do mobilu, e-mail) – vyřizuje Apps
+ * Script (`meta/gsync`), stejná cesta jako zápis zakázky do evidence.
+ * Bez čekání a bez čtení odpovědi: zpráva je uložená tak jako tak.
+ * Skript z tokenu pozná odesílatele a zprávu i konverzaci si přečte
+ * sám (smlouva je u funkce v gas/).
+ */
+KB.ohlasZpravu = async (listId, zpravaId) => {
+    if (!KB.gsyncUrl || !listId || !zpravaId) return;
+    let token = "";
+    try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript nic nepošle */ }
+    try {
+        fetch(KB.gsyncUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ akce: "zprava", token: token, listId: listId, zpravaId: zpravaId })
+        }).catch(err => console.warn("Upozornění na zprávu se neozvalo:", err));
+    } catch (err) { console.warn("Upozornění na zprávu se neodeslalo:", err); }
 };
 
-KB.pridejPoznObrazek = async (id, dataUrl) => {
+/** Štítek zprávy: 0 = řeší se, 1 = splněno, cokoliv jiného = bez štítku.
+    Smí každý účastník (jako dřív „vyřešeno" u poznámky). */
+KB.stavZpravy = async (id, stav) => {
     if (authReady) await authReady;
     requireDb();
-    const n = "img_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-    await setDoc(poznObrazek(id, n), { data: dataUrl, ms: Date.now() });
-    await setDoc(poznDoc(id), { obrazku: increment(1), ms: Date.now() }, { merge: true });
-    return n;
+    await updateDoc(poznDoc(id), { stav: (stav === 0 || stav === 1) ? stav : deleteField() });
+};
+
+/** Oprava textu – jen autor. */
+KB.upravZpravu = async (id, text) => {
+    if (authReady) await authReady;
+    requireDb();
+    await updateDoc(poznDoc(id), { text: String(text || "").slice(0, 4000), upraveno: Date.now() });
 };
 
 KB.nactiPoznObrazky = async (id) => {
@@ -1018,12 +1299,26 @@ KB.nactiPoznObrazky = async (id) => {
     return ven;
 };
 
+/** Smaže zprávu i s obrázky (autor, nebo zakladatel konverzace). */
 KB.smazPoznamku = async (id) => {
     if (authReady) await authReady;
     requireDb();
     const obrazky = await getDocs(poznObrazky(id));
     for (const d of obrazky.docs) await deleteDoc(d.ref);
     await deleteDoc(poznDoc(id));
+};
+
+/** Smaže konverzaci se všemi zprávami, které vidím (jen zakladatel). Zprávy
+    napřed – po smazání konverzace by na ně zakladatel neměl právo. */
+KB.smazPoznList = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    const zpravy = await zpravyKonverzace(id);
+    for (const z of zpravy) {
+        try { await KB.smazPoznamku(z.id); }
+        catch (err) { console.warn("Zpráva " + z.id + " se nesmazala:", err); }
+    }
+    await deleteDoc(poznListDoc(id));
 };
 
 /* ------------------------------------------------ zámek citlivých sekcí ---

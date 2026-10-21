@@ -557,65 +557,211 @@ service cloud.firestore {
       }
     }
 
-    // --- poznámky: osobní zápisník problémů (screenshot + text) ----------
+    // --- poznámky = konverzace (chat se screenshoty) ----------------------
     //
-    //   osobni/poznamky/listy/{id}                { nazev, uid, sdileni }
-    //   osobni/poznamky/zaznamy/{id}              poznámka, stav, komentáře
+    //   osobni/poznamky/listy/{id}                konverzace { nazev, uid =
+    //                                             zakladatel, sdileni = ostatní
+    //                                             účastníci, posledni*, ztlumili,
+    //                                             precteno { uid: ms } }
+    //   osobni/poznamky/zaznamy/{id}              zpráva { listId, text, uid =
+    //                                             autor, sdileni = účastníci,
+    //                                             createdMs… }
     //   osobni/poznamky/zaznamy/{id}/obrazky/{n}  screenshoty (base64)
     //
-    // Jako Quick TO-DO schválně MIMO `private` – nevidí je ani manažer.
-    // Vidí je jen autor a lidé v poli `sdileni` (autor si je volí sám).
+    // Od 21. 10. 2026 jsou poznámky chat: list = konverzace, poznámka =
+    // zpráva (data se nestěhovala). Jako Quick TO-DO schválně MIMO
+    // `private` – nevidí je ani manažer. Konverzaci vidí jen její účastníci
+    // (zakladatel + `sdileni`), zprávu jen lidé v jejím `sdileni`.
+    //
+    // `sdileni` zprávy je kopie účastníků konverzace. Musí být přímo ve
+    // zprávě, protože pravidla nejsou filtr – dotaz se ptá na pole
+    // dokumentu, ne na jiný dokument. Proto ho databáze hlídá: nová zpráva
+    // má čtenáře PŘESNĚ jako konverzace a později je jde jen srovnat
+    // s konverzací (přidání člověka mu otevře i historii, odebrání ji
+    // zavře), ne si je vymyslet.
+    //
+    // Přidávat lidi smí zakladatel i každý účastník (dřív směl upozornit
+    // a tím přisdílet poznámku kdokoliv, kdo ji viděl, a kdo je
+    // v konverzaci, je pořád vidět u ní nahoře); odebírat jen zakladatel,
+    // sám sebe každý (Opustit).
+    //
+    // Konverzace a zprávy čte i rozesílací účet Apps Scriptu (rozesilac(),
+    // stejně jako Quick TO-DO) – posílá z nich upozornění na nové zprávy
+    // (ntfy, e-mail). Není to člověk; manažer ani nikdo jiný to právo nemá.
+    //
     // U čtení nesmí být pojistka `is list` – dotaz array-contains přes
     // `sdileni` by pak spadl na právech (stejná past jako u Quick TO-DO).
 
+    function konverzaceCesta(lid) {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/listy/$(lid);
+    }
+    function konverzace(lid) {
+      return get(konverzaceCesta(lid)).data;
+    }
+    function konverzaceExistuje(lid) {
+      return lid is string && lid != '' && exists(konverzaceCesta(lid));
+    }
+    // zakladatel + ostatní účastníci
+    function ucastnici(l) {
+      return [l.uid].concat(l.get('sdileni', []));
+    }
+    function jsemUcastnik(lid) {
+      return konverzaceExistuje(lid) && request.auth.uid in ucastnici(konverzace(lid));
+    }
+    function jsemZakladatel(lid) {
+      return konverzaceExistuje(lid) && konverzace(lid).uid == request.auth.uid;
+    }
+    // dva seznamy se stejnými lidmi (na pořadí a dvojicích nezáleží)
+    function stejniLide(a, b) {
+      return a is list && b is list && a.hasAll(b) && b.hasAll(a);
+    }
+    // v seznamu přibyl nebo ubyl jen ten, kdo zapisuje (ztlumení, odchod)
+    function zmenaJenJa(stare, nove) {
+      return stare is list && nove is list
+        && stare.toSet().difference(nove.toSet()).hasOnly([request.auth.uid])
+        && nove.toSet().difference(stare.toSet()).hasOnly([request.auth.uid]);
+    }
+    // z čtenářů ubyl jen ten, kdo zapisuje, a nikdo nepřibyl
+    function ubylJenJa(stare, nove) {
+      return stare is list && nove is list
+        && stare.toSet().difference(nove.toSet()).hasOnly([request.auth.uid])
+        && nove.toSet().difference(stare.toSet()).size() == 0;
+    }
+    // Čas posílá prohlížeč, ale ne z budoucnosti (hodina rezerva na špatně
+    // nařízené hodiny). Zpráva z budoucnosti by navždy visela dole a „přečetla"
+    // by i zprávy, které po ní teprve přijdou.
+    function casOk(t) {
+      return t is number && t <= request.time.toMillis() + 3600000;
+    }
+    function zmenenaPole(nova, stara) {
+      return nova.diff(stara).affectedKeys();
+    }
+    // „přečteno do" (mapa uid → ms): každý mění jen svůj klíč
+    function prectenoJenMoje(stare, nove) {
+      return stare is map && nove is map
+        && nove.diff(stare).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
     match /artifacts/firemni-kb-app/osobni/poznamky/listy/{id} {
-      allow read: if clen() && (resource.data.uid == request.auth.uid
-                                || request.auth.uid in resource.data.sdileni);
-      allow create: if clen() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if clen() && resource.data.uid == request.auth.uid;
+      allow read: if rozesilac() || (clen() && (resource.data.uid == request.auth.uid
+                                || request.auth.uid in resource.data.sdileni));
+      // založit smí každý člen – jen jako zakladatel sám za sebe
+      allow create: if clen() && request.resource.data.uid == request.auth.uid
+                       && request.resource.data.sdileni is list
+                       && request.resource.data.sdileni.size() <= 50
+                       && request.resource.data.get('ztlumili', []).size() == 0
+                       && request.resource.data.get('precteno', {}).keys().hasOnly([request.auth.uid])
+                       && request.resource.data.get('posledniUid', request.auth.uid) == request.auth.uid;
+      allow update: if clen()
+                       // zakladatel se nemění
+                       && request.resource.data.uid == resource.data.uid
+                       && request.resource.data.get('sdileni', []) is list
+                       && request.resource.data.get('sdileni', []).size() <= 50
+                       // ztlumit se smí každý jen sám (i zakladatel)
+                       && zmenaJenJa(resource.data.get('ztlumili', []),
+                                     request.resource.data.get('ztlumili', []))
+                       // přečteno si každý zapisuje jen svoje (i zakladatel)
+                       && prectenoJenMoje(resource.data.get('precteno', {}),
+                                          request.resource.data.get('precteno', {}))
+                       // poslední zprávu hlásí jen její autor a ne z budoucnosti
+                       && (!zmenenaPole(request.resource.data, resource.data)
+                              .hasAny(['posledniMs', 'posledniUid', 'posledniJmeno', 'posledniText', 'posledniId'])
+                           || (request.resource.data.posledniUid == request.auth.uid
+                               && casOk(request.resource.data.posledniMs)))
+                       && (
+                         // zakladatel: název i lidé (přidat i odebrat)
+                         resource.data.uid == request.auth.uid
+                         || (request.auth.uid in resource.data.sdileni && (
+                              // účastník: poslední zpráva, vlastní ztlumení a přečteno
+                              // (hlídané výš)
+                              zmenenaPole(request.resource.data, resource.data)
+                                .hasOnly(['posledniMs', 'posledniUid', 'posledniJmeno', 'posledniText',
+                                          'posledniId', 'ztlumili', 'precteno'])
+                              // přidat lidi: nikdo neubude
+                              || (zmenenaPole(request.resource.data, resource.data).hasOnly(['sdileni'])
+                                  && request.resource.data.sdileni.hasAll(resource.data.sdileni))
+                              // opustit: ubude jen on sám (a jeho ztlumení)
+                              || (zmenenaPole(request.resource.data, resource.data).hasOnly(['sdileni', 'ztlumili'])
+                                  && ubylJenJa(resource.data.sdileni, request.resource.data.sdileni))
+                            ))
+                       );
+      // smazat celou konverzaci smí jen zakladatel
+      allow delete: if clen() && resource.data.uid == request.auth.uid;
     }
 
     function poznData(id) {
       return get(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/zaznamy/$(id)).data;
     }
 
-    /* Kdo poznámku vidí, ten ji smí i vyřídit: autor, majitel listu
-       a každý, komu je přisdílená. Poznámka je hlášení „tohle se pokazilo" –
-       kdo to spraví, ten ji zavře, ať po ní nemusí chodit zpátky její autor
-       (Michal 25. 9. 2026). Text ale zůstává autorovi; ostatní smí jen
-       stav, komentář a přisdílení dalšího člověka. */
-    function poznListVlastnik(lid) {
-      return lid is string && lid != ''
-        && exists(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/listy/$(lid))
-        && get(/databases/$(database)/documents/artifacts/firemni-kb-app/osobni/poznamky/listy/$(lid))
-             .data.uid == request.auth.uid;
-    }
-
     match /artifacts/firemni-kb-app/osobni/poznamky/zaznamy/{id} {
-      allow read: if clen() && (resource.data.uid == request.auth.uid
-                                || request.auth.uid in resource.data.sdileni);
-      allow create: if clen() && request.resource.data.uid == request.auth.uid;
-      // autor mění cokoliv (kromě `uid`); sdílený smí jen komentovat
-      // a přisdílet dalšího (upozornění) – stav „splněno" patří autorovi
-      allow update: if clen() && request.resource.data.uid == resource.data.uid
-                       && (resource.data.uid == request.auth.uid
-                           // ostatní: stav, komentář a přisdílení – ne cizí text
-                           || ((poznListVlastnik(resource.data.listId)
-                                || request.auth.uid in resource.data.sdileni)
-                               && request.resource.data.diff(resource.data).affectedKeys()
-                                    .hasOnly(['stav', 'komentare', 'sdileni', 'ms'])));
+      allow read: if rozesilac() || (clen() && (resource.data.uid == request.auth.uid
+                                || request.auth.uid in resource.data.sdileni));
+
+      // NOVÁ ZPRÁVA: jen účastník konverzace, jen pod svým uid a vidět ji
+      // smí přesně účastníci – ani víc, ani míň. Staré komentáře se novým
+      // zprávám podstrčit nedají (dají se jen číst u starých poznámek).
+      allow create: if clen()
+                       && request.resource.data.uid == request.auth.uid
+                       && jsemUcastnik(request.resource.data.listId)
+                       && stejniLide(request.resource.data.sdileni,
+                                     ucastnici(konverzace(request.resource.data.listId)))
+                       && casOk(request.resource.data.get('createdMs', 0))
+                       && request.resource.data.get('text', '') is string
+                       && request.resource.data.get('text', '').size() <= 4000
+                       && !('komentare' in request.resource.data)
+                       && request.resource.data.get('stav', 0) in [0, 1];
+
+      allow update: if clen()
+                       // autor ani konverzace se nemění
+                       && request.resource.data.uid == resource.data.uid
+                       && request.resource.data.get('listId', '') == resource.data.get('listId', '')
+                       && (
+        // a) autor: text, štítek a obrázky své zprávy
+        (resource.data.uid == request.auth.uid
+          && zmenenaPole(request.resource.data, resource.data)
+               .hasOnly(['text', 'stav', 'nahled', 'obrazku', 'upraveno'])
+          && request.resource.data.get('text', '') is string
+          && request.resource.data.get('text', '').size() <= 4000
+          && request.resource.data.get('stav', 0) in [0, 1])
+        // b) účastník (i čtenář starší přisdílené poznámky): štítek
+        //    řeší se / splněno – kdo věc spraví, ten ji zavře
+        || ((jsemUcastnik(resource.data.listId) || request.auth.uid in resource.data.sdileni)
+          && zmenenaPole(request.resource.data, resource.data).hasOnly(['stav'])
+          && request.resource.data.get('stav', 0) in [0, 1])
+        // c) přidání člověka: čtenáři = dosavadní + všichni účastníci
+        //    konverzace – nikoho, kdo v ní není, tím přidat nejde
+        || (jsemUcastnik(resource.data.listId)
+          && zmenenaPole(request.resource.data, resource.data).hasOnly(['sdileni'])
+          && request.resource.data.sdileni is list
+          && request.resource.data.sdileni.hasAll(resource.data.get('sdileni', []))
+          && request.resource.data.sdileni.hasAll(ucastnici(konverzace(resource.data.listId)))
+          && resource.data.get('sdileni', []).concat(ucastnici(konverzace(resource.data.listId)))
+               .hasAll(request.resource.data.sdileni))
+        // d) odchod: čtenář smí z čtenářů ubrat jen sám sebe
+        || (zmenenaPole(request.resource.data, resource.data).hasOnly(['sdileni'])
+          && ubylJenJa(resource.data.get('sdileni', []), request.resource.data.get('sdileni', [])))
+        // e) zakladatel konverzace čtenáře jen ubírá (odebral člověka)
+        || (jsemZakladatel(resource.data.listId)
+          && zmenenaPole(request.resource.data, resource.data).hasOnly(['sdileni'])
+          && request.resource.data.sdileni is list
+          && request.resource.data.sdileni.toSet()
+               .difference(resource.data.get('sdileni', []).toSet()).size() == 0)
+                       );
+
+      // smazat smí autor a zakladatel konverzace (úklid celé konverzace);
+      // ostatní účastníci cizí zprávy nemažou
       allow delete: if clen() && (resource.data.uid == request.auth.uid
-                                  || poznListVlastnik(resource.data.listId)
-                                  || request.auth.uid in resource.data.sdileni);
+                                  || jsemZakladatel(resource.data.listId));
 
       match /obrazky/{n} {
-        // obrázek nenese uid – právo se bere z rodičovské poznámky
+        // obrázek nenese uid – právo se bere z rodičovské zprávy
         allow read: if clen() && (poznData(id).uid == request.auth.uid
                                   || request.auth.uid in poznData(id).sdileni);
-        /* S poznámkou mizí i obrázky – smí to každý, kdo ji smí smazat. */
-        allow write: if clen() && (poznData(id).uid == request.auth.uid
-                                   || poznListVlastnik(poznData(id).listId)
-                                   || request.auth.uid in poznData(id).sdileni);
+        // přikládá jen autor zprávy, měnit se nedá
+        allow create: if clen() && poznData(id).uid == request.auth.uid;
+        // s mazáním zprávy mizí i obrázky – smí ten, kdo smí smazat zprávu
+        allow delete: if clen() && (poznData(id).uid == request.auth.uid
+                                    || jsemZakladatel(poznData(id).listId));
       }
     }
 

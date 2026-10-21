@@ -1265,6 +1265,32 @@
         || (item.projekty ? projektyMenu() : null)
         || (item.milniky ? milnikMenu() : null);
 
+    /* Odznak u POZNÁMEK: kolik konverzací má nepřečtenou zprávu. Počítá ho
+       store z hlaviček konverzací (KB.poznNeprecteno, ztlumené se nepočítají),
+       tady se jen kreslí – v liště i v pásu na telefonu. V liště se kreslí
+       rovnou s počtem, ať po překreslení lišty (refreshNav) nezmizí. */
+    const ODZNAK_POZN = "margin-left:6px;min-width:18px;height:18px;padding:0 5px;" +
+        "border-radius:var(--r-pill);background:var(--danger);color:#fff;font-size:var(--fs-1);" +
+        "font-weight:900;line-height:18px;letter-spacing:0;text-align:center;" +
+        // bílý lem – na aktivní (cihlové) položce by červená splynula
+        "box-shadow:0 0 0 2px var(--surface)";
+    const pocetPoznamek = () => Number(window.KB && window.KB.poznNeprecteno) || 0;
+    const jsouPoznamky = (href) => String(href || "").split(/[?#]/)[0] === "poznamky.html";
+    const odznakPoznamek = (item) => {
+        if (!item || !jsouPoznamky(item.href)) return "";
+        const n = pocetPoznamek();
+        return '<span data-pozn-pocet title="Konverzace s nepřečtenou zprávou" style="' + ODZNAK_POZN + '"' +
+            (n ? "" : " hidden") + ">" + esc(n > 99 ? "99+" : String(n)) + "</span>";
+    };
+    function vypisOdznakPoznamek() {
+        const n = pocetPoznamek();
+        document.querySelectorAll("[data-pozn-pocet]").forEach(el => {
+            el.textContent = n > 99 ? "99+" : String(n);
+            el.hidden = !n;
+        });
+        srovnejSkupiny();
+    }
+
     /**
      * Roletka u NÁVODŮ: svislý seznam kategorií pod sebou. Najetím myší na
      * řádek se rozbalí jeho obsah, kliknutím se přejde na danou sekci.
@@ -1285,7 +1311,7 @@
             if (!menu) {
                 return '<div class="navitem"' + gate + '><a class="' + cls + '"' + tint +
                     ' href="' + item.href + '">' +
-                    (item.icon ? icon(item.icon) : "") + item.title + "</a></div>";
+                    (item.icon ? icon(item.icon) : "") + item.title + odznakPoznamek(item) + "</a></div>";
             }
 
             /* Počet otevřených úkolů u řádku roletky (Úkoly & TO-DO). */
@@ -1578,6 +1604,7 @@
             window.KB.on("kalendar", hlidkaAkci);
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
             window.KB.on("auta", renderAuta);
+            window.KB.on("pozn-neprecteno", vypisOdznakPoznamek);
         }
         // roletka úkolů je pro manažera jiná (Úkoly týmu) – po změně role / náhledu znovu
         document.addEventListener("kb-role", () => { pozadejOData(); renderMujDen(); renderQuick(); refreshNav(); });
@@ -1702,6 +1729,7 @@
         polozky: (window.KB_NAV || []).filter(p => p.href).map(p => ({
             nazev: nazevStranky(p.title), href: p.href, need: p.need || "",
             ikona: IKONY_STRANEK[p.href.split(/[?#]/)[0]] || p.icon || "mrizka",
+            odznak: jsouPoznamky(p.href) ? "data-pozn-pocet" : "",
             verejne: !p.need          // jako v liště: bez práva je vidí každý
         }))
     });
@@ -2204,6 +2232,7 @@
         if (mujDenZapnut || !window.KB || !window.KB.currentUid || !window.KB.currentUid()) return;
         mujDenZapnut = true;
         window.KB.watchQuickTodo();
+        if (window.KB.watchPoznHlavy) window.KB.watchPoznHlavy();   // odznak u Poznámek
         window.KB.watchMojeProjekty();     // roletka projektů v Quick TO-DO
         if (!UI.can("vykaz.otevrit")) return;      // student výkazy nemá
         window.KB.watchMojeVykazy();
