@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=290">
+    <link rel="stylesheet" href="assets/css/app.css?v=293">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -57,6 +57,29 @@
         .upbeh--pozor { background: #fff3d6; border-color: #e8c877; color: #8a5a00; }
         .upbeh--stop { background: #fde3e3; border-color: #eeb4b4; color: var(--danger); }
         .upbeh--vyp { background: var(--bg-soft); border-color: var(--line); color: var(--text-soft); }
+
+        /* Upozornění do mobilu přes aplikaci ntfy (Michal 21. 10. 2026). */
+        .upntfy__hlava { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; flex-wrap: wrap; }
+        .upntfy__nadpis { font-size: var(--fs-3); font-weight: 900; }
+        .upntfy__stitek { font-size: var(--fs-1); font-weight: 900; letter-spacing: .06em;
+            text-transform: uppercase; padding: 3px 10px; border-radius: var(--r-pill);
+            background: var(--bg-soft); color: var(--muted); border: 1px solid var(--line); }
+        .upntfy__stitek--zap { background: var(--ok-tint); color: var(--ok); border-color: #bfe3d0; }
+        .upntfy__kroky { margin: 0; padding-left: 20px; display: flex; flex-direction: column;
+            gap: 8px; font-size: var(--fs-2); line-height: 1.6; }
+        .upntfy__tema { font-family: ui-monospace, Consolas, "Courier New", monospace;
+            font-size: var(--fs-2); padding: 2px 7px; border-radius: 6px; background: var(--bg-soft);
+            border: 1px solid var(--line); word-break: break-all; user-select: all; }
+        .upntfy__qr { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .upntfy__qrobr { width: 132px; height: 132px; flex: none; background: #fff; padding: 4px;
+            border: 1px solid var(--line); border-radius: var(--radius);
+            display: flex; align-items: center; justify-content: center; }
+        .upntfy__qrobr svg { width: 100%; height: 100%; display: block; }
+        .upntfy__qrtext { flex: 1 1 220px; min-width: 0; font-size: var(--fs-1); color: var(--muted);
+            line-height: 1.6; }
+        .upntfy__qrtext a { word-break: break-all; }
+        .upntfy .upvolba { border-bottom: 0; padding: 4px 2px; }
     </style>
 </head>
 <body>
@@ -104,14 +127,73 @@
             je skript, který běží vedle zápisu výkazů do Tabulek Google. Jestli
             zrovna jede, je vidět nahoře.
         </p>
+
+        <!-- Upozornění do mobilu přes aplikaci ntfy. Téma je tajné jako
+             heslo: kdo ho zná, čte. Nikdy se nevypisuje do konzole ani do
+             aktivit; ukazuje se jen tady jeho majiteli. -->
+        <div class="card col upntfy" id="ntfyKarta" style="padding:16px 18px;gap:12px">
+            <div class="upntfy__hlava">
+                <span class="upntfy__nadpis">Upozornění do mobilu (ntfy)</span>
+                <span id="ntfyStitek" class="upntfy__stitek">vypnuto</span>
+            </div>
+            <p class="small muted" style="margin:0;line-height:1.6">
+                Nová zpráva v Poznámkách ti hned pípne v telefonu — přes aplikaci
+                <b>ntfy</b> (zdarma, bez registrace). Do mobilu jde jen to, kdo píše,
+                a odkaz na web, nikdy text zprávy.
+            </p>
+            <div id="ntfyNeumi" class="upbeh upbeh--pozor" hidden>
+                <b>Tahle část ještě čeká na novou verzi webu.</b> Zapnout se dá,
+                až ji správce nasadí.
+            </div>
+            <div id="ntfyVyp" class="row" style="gap:12px;flex-wrap:wrap;align-items:center">
+                <button type="button" id="btnNtfyZapnout" class="btn btn--primary">Zapnout</button>
+                <span class="small muted">Vytvoří se tvoje tajné téma a ukáže se, co udělat v telefonu.</span>
+            </div>
+            <div id="ntfyZap" class="col" style="gap:12px" hidden>
+                <ol class="upntfy__kroky">
+                    <li>Nainstaluj si aplikaci <b>ntfy</b>:
+                        <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener noreferrer">App Store</a> (iPhone)
+                        nebo <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener noreferrer">Google Play</a> (Android).</li>
+                    <li>V aplikaci dej <b>+</b> (Subscribe to topic / Přidat odběr).</li>
+                    <li>Jako téma (Topic) zadej <code id="ntfyTema" class="upntfy__tema"></code>
+                        <button type="button" id="btnNtfyKopie" class="btn btn--ghost btn--sm">Kopírovat</button>
+                        — server nech výchozí <b>ntfy.sh</b>.</li>
+                    <li>Povol aplikaci upozornění a dej tady <b>Poslat zkušební upozornění</b>.</li>
+                </ol>
+                <div class="upntfy__qr">
+                    <div id="ntfyQr" class="upntfy__qrobr"></div>
+                    <div class="upntfy__qrtext">
+                        Téma si do telefonu přeneseš i QR kódem — naskenuj ho fotoaparátem.
+                        Odkaz: <a id="ntfyOdkaz" href="#" target="_blank" rel="noopener noreferrer"></a>
+                    </div>
+                </div>
+                <label class="upvolba">
+                    <input type="checkbox" id="ntfyOstatni">
+                    <span class="upvolba__text">
+                        <b class="upvolba__nazev">Posílat do mobilu i ostatní upozornění</b>
+                        <span class="upvolba__popis">Ke každému e-mailu odsud krátké pípnutí – jen kolik čeho přišlo, obsah zůstane v e-mailu.</span>
+                    </span>
+                </label>
+                <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+                    <button type="button" id="btnNtfyTest" class="btn btn--primary">Poslat zkušební upozornění</button>
+                    <button type="button" id="btnNtfyVypnout" class="btn btn--ghost">Vypnout</button>
+                    <span id="ntfyZprava" class="small muted"></span>
+                </div>
+                <p class="tiny muted" style="margin:0;line-height:1.6">
+                    Název tématu je jako heslo: kdo ho zná, vidí tvoje upozornění.
+                    Nikomu ho neposílej. Kdyby unikl, dej Vypnout a znovu Zapnout —
+                    vznikne nové a v aplikaci ho přidáš znovu.
+                </p>
+            </div>
+        </div>
     </div>
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=290"></script>
-<script src="assets/js/ui.js?v=290"></script>
-<script src="assets/js/vykazy.js?v=290"></script>
-<script type="module" src="assets/js/store.js?v=290"></script>
+<script src="assets/js/taxonomy.js?v=293"></script>
+<script src="assets/js/ui.js?v=293"></script>
+<script src="assets/js/vykazy.js?v=293"></script>
+<script type="module" src="assets/js/store.js?v=293"></script>
 
 <script>
 (function () {
@@ -150,7 +232,13 @@
             { id: "poradaZminka", nazev: "Někdo mě zmínil v poradě přes @",
               popis: "V bodu nebo v komentáři.", vychozi: true },
             { id: "poradaKomentar", nazev: "Komentář u bodu, ke kterému jsem psal",
-              popis: "Jen tam, kde už jsem něco napsal.", vychozi: false }
+              popis: "Jen tam, kde už jsem něco napsal.", vychozi: false },
+            /* Do mobilu chodí každá zpráva hned (ntfy níž); e-mailem
+               jen hodinový souhrn toho, na co člověk ještě neodpověděl. */
+            { id: "poznZprava", nazev: "Nová zpráva v Poznámkách",
+              popis: "Souhrn za hodinu – jen zprávy, na které jsem ještě neodpověděl. " +
+                  "Do mobilu chodí každá zpráva hned, když mám zapnuté upozornění do mobilu (níž).",
+              vychozi: false }
         ] },
         { skupina: "Výkazy", need: "vykaz.otevrit", polozky: [
             { id: "vykazChybi", nazev: "Nemám zapsaný výkaz za minulý týden",
@@ -169,7 +257,13 @@
             { id: "dovolenaKPotvrzeni", nazev: "Dovolená čeká na moje potvrzení",
               popis: "Když si někdo nahlásí dovolenou nebo volno.", vychozi: true },
             { id: "vykazyChybejici", nazev: "Souhrn, kdo nemá zapsaný výkaz",
-              popis: "V pondělí ráno jeden e-mail za celou partu.", vychozi: false }
+              popis: "V pondělí ráno jeden e-mail za celou partu.", vychozi: false },
+            /* Stejný výpočet jako dlaždice Rozpočty na nástěnce (Apps Script
+               ho počítá jednou denně ráno). Skript bere neuloženou volbu
+               u manažera jako zapnutou – stejně ji tu ukazuje i stránka. */
+            { id: "rozpocetZakazky", nazev: "Rozpočet zakázky překročil 80 % / 100 %",
+              popis: "Ráno, jednou za zakázku a hranici; když to trvá, znovu další měsíc. " +
+                  "Jen procenta, bez částek.", vychozi: true }
         ] },
         { skupina: "Souhrny", polozky: [
             { id: "souhrnPondeli", nazev: "Co mě čeká tenhle týden",
@@ -184,6 +278,11 @@
     /** Volby, na které má přihlášený vůbec právo. */
     const mojeSkupiny = () => VOLBY.filter(s => !s.need || window.KBUI.can(s.need));
 
+    /* Uložené nastavení e-mailů = dokument s volbami. Samotné zapnutí
+       mobilu (ntfy) založí dokument jen s tématem – podle toho se ale
+       nesmí tvářit, že jsou e-maily nastavené (past ze 14. 9. 2026). */
+    const ulozenoEmaily = () => !!(nactene && nactene.volby);
+
     function vykresli() {
         if (upravovano) return;
         const u = nactene || {};
@@ -192,7 +291,7 @@
 
         const ja = (window.KB.users || []).find(x => x.id === window.KB.currentUid());
         $("upEmail").textContent = (ja && ja.email) || "—";
-        $("upStav").textContent = nactene
+        $("upStav").textContent = ulozenoEmaily()
             ? "Naposledy uloženo " + (u.ms ? new Date(u.ms).toLocaleDateString("cs-CZ") : "")
             : "Zatím neuloženo.";
 
@@ -203,7 +302,7 @@
            neexistuje. Michal si myslel, že to má zapnuté, a čekal na
            e-maily, které nikomu nechodily (14. 9. 2026). */
         const ul = $("stavUlozeni");
-        if (!nactene) {
+        if (!ulozenoEmaily()) {
             ul.hidden = false;
             ul.className = "upbeh upbeh--pozor";
             ul.innerHTML = "<b>Nastavení ještě není uložené.</b> Co je zaškrtnuté níž, " +
@@ -354,9 +453,186 @@
                 esc(window.KBVYK.pocet(kolik, ["člověk", "lidé", "lidí"])) : "") + ".";
     }
 
+    /* ------------------------------------------- UPOZORNĚNÍ DO MOBILU ----
+       Aplikace ntfy (iPhone i Android, zdarma, bez účtu) odebírá „téma"
+       na serveru ntfy.sh. Téma je náhodné a tajné – kdo ho zná, čte – a
+       ukládá se jen do vlastního dokumentu upozornění (`ntfyTema`). Posílá
+       na něj Apps Script (nová zpráva v Poznámkách hned, ostatní upozornění
+       ke každému e-mailu, když je zapnuté „i ostatní" = `ntfyOstatni`).
+       Ukládá KB.ulozNtfy ve store.js; dokud ji web nemá, část jen varuje.
+       Téma se NIKDY nepíše do konzole ani do aktivit. */
+    const NTFY = "https://ntfy.sh";
+    const TEMA_VZOR = /^[A-Za-z0-9_-]{12,64}$/;
+    let ntfyPrace = false;
+    let ntfyQrPro = "";
+
+    const ntfyUmi = () => !!(window.KB && typeof window.KB.ulozNtfy === "function");
+    const mojeTema = () => {
+        const t = String((nactene && nactene.ntfyTema) || "");
+        return TEMA_VZOR.test(t) ? t : "";
+    };
+
+    /** „kb-" + 24 znaků a–z0–9 z crypto.getRandomValues (bez zkreslení: 252 = 7 × 36). */
+    function noveTema() {
+        const abc = "abcdefghijklmnopqrstuvwxyz0123456789";
+        let ven = "";
+        while (ven.length < 24) {
+            const bajty = new Uint8Array(32);
+            window.crypto.getRandomValues(bajty);
+            for (const b of bajty) {
+                if (b < 252 && ven.length < 24) ven += abc[b % 36];
+            }
+        }
+        return "kb-" + ven;
+    }
+
+    /* QR stejnou knihovnou jako u faktur (qrcode-generator z cdnjs),
+       načtenou až ve chvíli, kdy je potřeba. */
+    let qrKnihovna = null;
+    function nactiQrKnihovnu() {
+        if (window.qrcode) return Promise.resolve();
+        if (qrKnihovna) return qrKnihovna;
+        qrKnihovna = new Promise((resolve, reject) => {
+            const sc = document.createElement("script");
+            sc.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+            sc.onload = resolve;
+            sc.onerror = () => { qrKnihovna = null; reject(new Error("qrcode-generator se nenačetl")); };
+            document.head.appendChild(sc);
+        });
+        return qrKnihovna;
+    }
+
+    async function kresliQr(text, tema) {
+        const box = $("ntfyQr");
+        box.innerHTML = "";
+        try {
+            await nactiQrKnihovnu();
+            if (ntfyQrPro !== tema) return;          // mezitím se téma změnilo
+            const q = window.qrcode(0, "M");
+            q.addData(text);
+            q.make();
+            box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+        } catch (err) {
+            box.innerHTML = '<span class="tiny muted" style="text-align:center">QR se nenačetl – téma opiš ručně.</span>';
+        }
+    }
+
+    function vykresliNtfy() {
+        const umi = ntfyUmi();
+        const tema = mojeTema();
+        $("ntfyNeumi").hidden = umi;
+        $("btnNtfyZapnout").disabled = !umi || ntfyPrace;
+        $("ntfyVyp").hidden = !!tema;
+        $("ntfyZap").hidden = !tema;
+        const st = $("ntfyStitek");
+        st.textContent = tema ? "zapnuto" : "vypnuto";
+        st.classList.toggle("upntfy__stitek--zap", !!tema);
+        if (!tema) {
+            ntfyQrPro = "";
+            $("ntfyQr").innerHTML = "";
+            $("ntfyZprava").textContent = "";
+            return;
+        }
+        $("ntfyTema").textContent = tema;
+        const odkaz = NTFY + "/" + tema;
+        $("ntfyOdkaz").href = odkaz;
+        $("ntfyOdkaz").textContent = odkaz;
+        $("ntfyOstatni").checked = !(nactene && nactene.ntfyOstatni === false);
+        ["ntfyOstatni", "btnNtfyVypnout", "btnNtfyTest"].forEach(id => { $(id).disabled = !umi || ntfyPrace; });
+        if (ntfyQrPro !== tema) { ntfyQrPro = tema; kresliQr(odkaz, tema); }
+    }
+
+    /** Uložení přes store – chyba se do konzole píše bez dat (mohlo by v nich být téma). */
+    async function ulozNtfy(data, hotovo, chyba) {
+        if (!ntfyUmi() || ntfyPrace) return false;
+        ntfyPrace = true;
+        vykresliNtfy();
+        try {
+            await window.KB.ulozNtfy(data);
+            if (hotovo) window.KBUI.toast(hotovo.text, "", hotovo.volby);
+            return true;
+        } catch (err) {
+            console.error("Upozornění do mobilu se neuložila (" + ((err && err.code) || "chyba") + ").");
+            window.KBUI.toast(chyba, "error");
+            return false;
+        } finally {
+            ntfyPrace = false;
+            vykresliNtfy();
+        }
+    }
+
+    function ntfyZapnout() {
+        ulozNtfy({ tema: noveTema() },
+            { text: "Upozornění do mobilu zapnutá. Teď si téma přidej v aplikaci ntfy." },
+            "Zapnutí se nepovedlo.");
+    }
+
+    function ntfyVypnout() {
+        const stare = mojeTema();
+        ulozNtfy({ tema: "" }, {
+            text: "Upozornění do mobilu vypnutá. Odběr v aplikaci ntfy můžeš smazat.",
+            // Zpět vrátí stejné téma – v aplikaci se nic přidávat nemusí
+            volby: { zpet: () => window.KB.ulozNtfy({ tema: stare }) }
+        }, "Vypnutí se nepovedlo.");
+    }
+
+    function ntfyOstatni() {
+        const ano = $("ntfyOstatni").checked;
+        ulozNtfy({ ostatni: ano },
+            { text: ano ? "Do mobilu půjdou i ostatní upozornění." : "Do mobilu půjdou jen zprávy z Poznámek." },
+            "Uložení se nepovedlo.");
+    }
+
+    /* Zkušební upozornění rovnou z prohlížeče na VLASTNÍ téma (ntfy.sh
+       povoluje CORS). Bez vlastních hlaviček, ať prohlížeč neposílá
+       předlet – nadpis, štítek a odkaz jdou parametry v adrese. */
+    async function ntfyZkouska() {
+        const tema = mojeTema();
+        if (!tema) return;
+        $("btnNtfyTest").disabled = true;
+        $("ntfyZprava").textContent = "Posílám…";
+        try {
+            const param = new URLSearchParams({
+                title: "Pasport Kaňa",
+                tags: "white_check_mark",
+                click: new URL("upozorneni.html", location.href).href
+            });
+            const odp = await fetch(NTFY + "/" + encodeURIComponent(tema) + "?" + param.toString(), {
+                method: "POST",
+                body: "Zkušební upozornění z webu – funguje to.",
+                cache: "no-store",
+                referrerPolicy: "no-referrer"
+            });
+            if (!odp.ok) throw new Error(String(odp.status));
+            $("ntfyZprava").textContent = "Odesláno – v telefonu by to mělo pípnout do pár vteřin.";
+        } catch (err) {
+            $("ntfyZprava").textContent = (err && err.message === "429")
+                ? "ntfy.sh teď odmítá moc požadavků – zkus to za chvíli."
+                : "Nepodařilo se odeslat – zkontroluj připojení a zkus to znovu.";
+        } finally {
+            $("btnNtfyTest").disabled = !ntfyUmi();
+        }
+    }
+
+    async function ntfyKopie() {
+        const tema = mojeTema();
+        if (!tema) return;
+        try {
+            await navigator.clipboard.writeText(tema);
+            window.KBUI.toast("Téma zkopírované.");
+        } catch (err) {
+            window.KBUI.toast("Kopírování nejde – označ téma a zkopíruj ho ručně.", "warn");
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "upozorneni.html" });
         $("btnUloz").addEventListener("click", uloz);
+        $("btnNtfyZapnout").addEventListener("click", ntfyZapnout);
+        $("btnNtfyVypnout").addEventListener("click", ntfyVypnout);
+        $("btnNtfyTest").addEventListener("click", ntfyZkouska);
+        $("btnNtfyKopie").addEventListener("click", ntfyKopie);
+        $("ntfyOstatni").addEventListener("change", ntfyOstatni);
         $("upZapnuto").addEventListener("change", () => { upravovano = true; srovnejVypnuto(); });
         $("volby").addEventListener("change", (event) => {
             upravovano = true;
@@ -376,7 +652,9 @@
            něco, takže se stránka tvářila, že nastavení uložené je, i když
            v databázi nebylo nic. Data se čtou z KB, jako to dělá zbytek webu
            (Michal 14. 9. 2026). */
-        window.KB.on("upozorneni", () => { nactene = window.KB.upozorneni; vykresli(); });
+        /* Mobil se kreslí zvlášť: e-mailová část se během úprav nepřekresluje
+           (`upravovano`), zapnutí ntfy se ale musí ukázat hned. */
+        window.KB.on("upozorneni", () => { nactene = window.KB.upozorneni; vykresli(); vykresliNtfy(); });
         window.KB.on("upozorneni-stav", vykresliBeh);
         window.KB.on("users", vykresli);
         document.addEventListener("kb-role", vykresli);
@@ -384,6 +662,7 @@
         window.KB.watchUpozorneniStav();
         vykresli();
         vykresliBeh();
+        vykresliNtfy();
     });
 })();
 </script>

@@ -4318,6 +4318,27 @@ KB.ulozUpozorneni = async (data) => {
     }, { merge: true });
 };
 
+
+/* Upozornění do mobilu přes ntfy (stránka Upozornění). `tema` = tajný
+   název tématu na ntfy.sh – kdo ho zná, čte; prázdné = vypnuto.
+   `ostatni` = posílat do mobilu i krátké ohlášení k e-mailům (výchozí ano).
+   Ukládá se jen to, co v datech je – `zapnuto` ani `volby` e-mailů se
+   nemění. Rozesílá Apps Script (gas/Upozorneni.gs). */
+KB.ulozNtfy = async (data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid) throw new Error("Není kdo ukládá.");
+    const zapis = { ntfyMs: Date.now() };
+    if ("tema" in data) {
+        const tema = String(data.tema || "");
+        if (tema && !/^[A-Za-z0-9_-]{12,64}$/.test(tema)) throw new Error("Neplatné téma.");
+        zapis.ntfyTema = tema;
+    }
+    if ("ostatni" in data) zapis.ntfyOstatni = data.ostatni !== false;
+    await setDoc(upozDoc(uid), zapis, { merge: true });
+};
+
 /* ------------------------------------------- ZŮSTATKY DOVOLENÉ ----------
    Kolik komu zbývá dovolené a kolik má naběháno přesčasů. Web nemá
    historii z doby před sebou, takže se u každého člověka nastaví, OD KDY
