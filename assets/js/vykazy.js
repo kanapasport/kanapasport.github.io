@@ -538,12 +538,19 @@
     V.budgetUkolu = (u, budgety) =>
         Number(((budgety || window.KB.ukolBudgety || {})[u && u.id] || {}).budgetKc) || 0;
 
+    /** Sleduje se u úkolu plnění? Jen když má TO-DO položky nebo je hotový –
+        úkol bez TO-DO by jinak vypadal jako „hotovo 0 %“ a každá zakázka, kde
+        nikdo neklikal procenta, by hlásila „čerpání předbíhá hotovost“
+        (ověřeno na živých datech 21. 10. 2026). */
+    V.sledujePlneni = (u) => !!u && ((Array.isArray(u.todo) && u.todo.length > 0) || u.stav === "hotovo");
+
     /**
      * Hotovo skupiny úkolů v %: % TO-DO vážená budgetem úkolu; když budget
-     * nemá žádný z nich, prostý průměr. Bez úkolů null – hotovost neznáme.
+     * nemá žádný z nich, prostý průměr. Počítají se jen úkoly, u kterých se
+     * plnění sleduje (V.sledujePlneni); bez nich null – hotovost neznáme.
      */
     V.hotovoUkolu = (ukoly, budgety) => {
-        const seznam = ukoly || [];
+        const seznam = (ukoly || []).filter(V.sledujePlneni);
         if (!seznam.length) return null;
         let vaha = 0, soucet = 0;
         seznam.forEach(u => {
@@ -732,8 +739,8 @@
         });
         const cerpano = Math.round(kc);
         const pct = procento(cerpano, budget);
-        const hotovo = u ? V.pctUkolu(u) : 0;
-        const predbiha = pct === null ? null : celaPct(pct) - hotovo;
+        const hotovo = V.sledujePlneni(u) ? V.pctUkolu(u) : null;
+        const predbiha = (pct === null || hotovo === null) ? null : celaPct(pct) - hotovo;
         return {
             budget: budget, cerpano: cerpano, hodiny: Math.round(h * 10) / 10,
             cerpaniPct: pct, hotovoPct: hotovo, predbiha: predbiha,
