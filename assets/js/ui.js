@@ -1213,6 +1213,52 @@
         catch (err) { return []; }
     };
 
+    /* Týdenní stav projektu – semafor + pár vět (rešerše 22). Leží v hlavičce
+       projektu: `stavProjektu` = poslední zápis { kod, text, ms, uid, jmeno },
+       `stavHistorie` = starší zápisy (KB.ulozStavProjektu). Kódy a názvy STEJNÉ
+       jako v Apps Scriptu (STAVY_PROJEKTU_ v gas/Upozorneni.gs), barvy
+       v app.css (.semafor--<kód>). */
+    UI.STAVY_PROJEKTU = [
+        { kod: "plan", nazev: "V plánu" },
+        { kod: "riziko", nazev: "Hrozí skluz" },
+        { kod: "skluz", nazev: "Skluz" },
+        { kod: "pauza", nazev: "Pozastaveno" },
+        { kod: "hotovo", nazev: "Hotovo" }
+    ];
+    /* Po kolika dnech bez aktualizace stav zešedne. Hotový, pozastavený
+       a uzavřený projekt nezastarává – v pátek se mu ani nepřipomíná. */
+    UI.STAV_ZASTARALY_DNI = 8;
+
+    /** Jeden zápis stavu (poslední, nebo `zapis` z historie) k vykreslení,
+     *  nebo null, když projekt stav nemá. */
+    UI.stavProjektu = (p, zapis) => {
+        const s = zapis || (p && p.stavProjektu);
+        const druh = s && UI.STAVY_PROJEKTU.find(x => x.kod === s.kod);
+        if (!druh) return null;
+        const ms = Number(s.ms) || 0;
+        const dni = ms ? Math.floor((Date.now() - ms) / 86400000) : 0;
+        return {
+            kod: druh.kod, nazev: druh.nazev, text: String(s.text || ""), ms: ms,
+            jmeno: String(s.jmeno || ""), dni: dni,
+            zastaraly: !zapis && !!ms && dni >= UI.STAV_ZASTARALY_DNI && !(p && p.uzavreno === true) &&
+                druh.kod !== "hotovo" && druh.kod !== "pauza"
+        };
+    };
+
+    /** Semafor jako HTML: tečka + název, s `jenTecka` jen tečka (Gantt,
+     *  nástěnka) a název v bublině. Prázdno, když projekt stav nemá. */
+    UI.semaforHtml = (p, jenTecka) => {
+        const s = UI.stavProjektu(p);
+        if (!s) return "";
+        const popis = "Stav: " + s.nazev +
+            (s.ms ? " · " + new Date(s.ms).toLocaleDateString("cs-CZ") : "") +
+            (s.zastaraly ? " · stav zastaralý (" + s.dni + " dní bez aktualizace)" : "") +
+            (s.text ? " – " + s.text : "");
+        return '<span class="semafor semafor--' + esc(s.kod) + (s.zastaraly ? " semafor--zastaraly" : "") +
+            (jenTecka ? ' semafor--tecka" role="img" aria-label="' + esc(popis) : "") +
+            '" title="' + esc(popis) + '">' + (jenTecka ? "" : esc(s.nazev)) + "</span>";
+    };
+
     function projektyMenu() {
         const dulezitost = { "resit-okamzite": 0, "vysoka": 1, "stredni": 2, "nizka": 3 };
         const oblibene = UI.oblibeneProjekty();

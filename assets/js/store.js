@@ -3563,7 +3563,8 @@ KB.saveCiselnikZakazek = async (patch) => {
 
    Hlavička: { cislo:"2024-007", nazev, firma, manazer:uid, zacatek:"2024-01-10",
                konec:"", stav:"bezi", priorita:"nizka|stredni|vysoka|resit-okamzite",
-               uzavreno:false, lide:[uid], poznamka }                        */
+               uzavreno:false, lide:[uid], poznamka,
+               stavProjektu, stavHistorie (týdenní semafor, KB.ulozStavProjektu) } */
 
 function sledujProjekty(jenSve) {
     if (!db || !auth || !auth.currentUser) return;
@@ -3622,6 +3623,48 @@ KB.ulozProjektCasti = async (id, patch) => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
     await setDoc(projektDoc(id), payload, { merge: true });
+};
+
+/**
+ * Týdenní stav projektu – semafor a pár vět (rešerše 22, jen manažer).
+ * Leží přímo v hlavičce projektu, ne v podkolekci: Gantt, nástěnka i Apps
+ * Script projekty čtou tak jako tak, takže stav dostanou bez dalšího čtení
+ * a bez nových pravidel (zápis do hlavičky smí jen manažer).
+ *   stavProjektu: { kod, text, ms, uid, jmeno }   poslední zápis
+ *   stavHistorie: [ … ]                           posledních 26 (půl roku), nejnovější první
+ * Transakce: dva manažeři naráz si historii nepřepíšou. `saveProjekt` tahle
+ * pole nevypisuje (merge), takže je uložení Údajů nesmaže.
+ */
+KB.ulozStavProjektu = async (id, kod, text) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!id) throw new Error("Chybí projekt.");
+    if (!(window.KBUI && window.KBUI.STAVY_PROJEKTU || []).some(s => s.kod === kod)) {
+        throw new Error("Neznámý stav projektu.");
+    }
+    const zapis = {
+        kod: kod,
+        text: String(text || "").trim().slice(0, 600),
+        ms: Date.now(),
+        uid: KB.currentUid() || "",
+        jmeno: window.KB_USER || ""
+    };
+    let nazev = "";
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(projektDoc(id));
+        if (!snap.exists()) throw new Error("Projekt v databázi není.");
+        const d = snap.data() || {};
+        nazev = d.nazev || "";
+        const historie = Array.isArray(d.stavHistorie) ? d.stavHistorie : [];
+        tx.update(projektDoc(id), {
+            stavProjektu: zapis,
+            stavHistorie: [zapis].concat(historie).slice(0, 26),
+            updatedMs: zapis.ms,
+            updatedBy: window.KB_USER || ""
+        });
+    });
+    KB.zapisAktivitu("projekt", "aktualizoval stav projektu " + nazev);
+    return zapis;
 };
 
 KB.saveProjekt = async (id, data) => {
