@@ -1502,6 +1502,30 @@
         });
     }
 
+    /* Bez signálu (v terénu, rešerše bod 29): stránku podá service worker
+       z mezipaměti (sw.js), data Firestore ze své. Proužek pod lištou řekne,
+       že je to stav z posledního připojení. Bez trvalé fronty zápisů
+       (Safari – store.js, KB.offlineFronta) se změny neuchovají, řekne to taky. */
+    function prouzekBezSignalu() {
+        let el = document.getElementById("kbBezSignalu");
+        if (navigator.onLine !== false) { if (el) el.hidden = true; return; }
+        if (!el) {
+            el = document.createElement("div");
+            el.id = "kbBezSignalu";
+            el.className = "bezsignalu no-print";
+            el.setAttribute("role", "status");
+            const lista = document.querySelector(".appbar, #appHeader");
+            if (lista) lista.after(el); else document.body.prepend(el);
+        }
+        el.textContent = window.KB && window.KB.offlineFronta
+            ? "Bez signálu – ukazuje se, co bylo naposledy načtené; změny se uloží po připojení."
+            : "Bez signálu – v tomhle prohlížeči se data ani změny bez připojení neuchovají; počkej na signál.";
+        el.hidden = false;
+    }
+    window.addEventListener("online", prouzekBezSignalu);
+    window.addEventListener("offline", prouzekBezSignalu);
+    document.addEventListener("DOMContentLoaded", prouzekBezSignalu);
+
     /* Instalace webu jako aplikace (Michal 21. 10. 2026: ikonu instalace
        v adresním řádku Chrome neukazoval a z mini okna se nic nestalo).
        Když prohlížeč instalaci nabídnout umí, pošle `beforeinstallprompt` –
@@ -4410,6 +4434,11 @@
     document.addEventListener("click", (event) => {
         const target = event.target.closest("[data-logout],[data-login],[data-role-pill]");
         if (!target) return;
+        /* Odhlášení smaže kopii databáze v prohlížeči i s frontou neodeslaných
+           změn – a znovu se přihlásit jde jen se signálem. */
+        if (target.hasAttribute("data-logout") && navigator.onLine === false) {
+            return UI.toast("Bez signálu se neodhlašuj – neodeslané změny by se smazaly a přihlásit se jde jen se signálem.", "warn");
+        }
         if (target.hasAttribute("data-logout")) return UI.logout();
         // odznak role slouží k přihlášení; roli si nikdo nepřepíná sám
         if (window.KB_USER) return;
@@ -4521,13 +4550,18 @@
 
     UI.bindCloudStatus = (selector) => {
         const paint = (status) => {
+            // data z mezipaměti hlásí „online" i bez signálu – rozhoduje prohlížeč
+            if (navigator.onLine === false) status = "offline";
             document.querySelectorAll(selector).forEach(el => {
                 el.textContent = status === "online" ? "Živě synchronizováno"
                     : status === "offline" ? "Offline režim" : "Připojuji…";
                 el.dataset.state = status;   // barvu řeší CSS podle podkladu
             });
         };
-        paint(window.KB ? window.KB.status : "connecting");
+        const prekresli = () => paint(window.KB ? window.KB.status : "connecting");
+        prekresli();
+        window.addEventListener("online", prekresli);
+        window.addEventListener("offline", prekresli);
         if (window.KB) window.KB.on("status", (event) => paint(event.detail));
     };
 

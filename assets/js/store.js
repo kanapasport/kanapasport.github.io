@@ -34,9 +34,10 @@ import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut as
     from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
     getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-    terminate, clearIndexedDbPersistence,
-    collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField,
-    increment, arrayUnion, arrayRemove, writeBatch, runTransaction,
+    terminate, clearIndexedDbPersistence, waitForPendingWrites,
+    collection, doc, getDoc, getDocs, setDoc as setDocSdk, updateDoc as updateDocSdk,
+    deleteDoc as deleteDocSdk, deleteField,
+    increment, arrayUnion, arrayRemove, writeBatch as writeBatchSdk, runTransaction,
     onSnapshot, serverTimestamp, addDoc, query, where, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -138,6 +139,7 @@ const KB = {
     sazby: {},              // výchozí hodinová sazba člověka: { uid: 100 }
     rozpocty: {},           // rozpočet zakázky: { "Zakázka A": { kc: 100, hodiny: 100 } }
     status: "connecting",   // connecting | online | offline
+    offlineFronta: false,   // true = zápisy bez signálu čekají v trvalé frontě prohlížeče
     ready: false
 };
 window.KB = KB;
@@ -154,6 +156,54 @@ KB.emit = emit;
 let db = null;
 let auth = null;
 let authReady = null;
+
+/* Bez signálu (v terénu – rešerše 19. 10. 2026, bod 29). Firestore zápis
+   bez připojení hned uloží do fronty v prohlížeči (IndexedDB) a po připojení
+   ho odešle sám, i když se stránka mezitím zavře. Jeho slib se ale splní až
+   po potvrzení serverem – stránka by do té doby visela na „Odesílám…"
+   a člověk by klikal znovu (dvakrát zadaný vzkaz). Bez signálu se proto čeká
+   jen na uložení do fronty: první odběr dokumentu přijde až po něm (SDK
+   vyřizuje vše popořadě); dávka a výjimky mají pojistku 3 s. Jen s trvalou
+   mezipamětí – v paměti (Safari) by zápis zavřením stránky zmizel, tam se
+   dál čeká na server. Online se nemění nic. */
+function poZapisu(slib, ref) {
+    if (navigator.onLine !== false || !KB.offlineFronta) return slib;
+    slib.catch(err => {
+        console.warn("Změnu udělanou bez signálu databáze nepřijala:", err);
+        if (err && err.code === "permission-denied" && window.KBUI) {
+            window.KBUI.toast("Změnu udělanou bez signálu databáze po připojení odmítla.", "error");
+        }
+    });
+    return new Promise((hotovo, chyba) => {
+        let stop = null;
+        let konec = false;
+        const dost = (err) => {
+            if (konec) return;
+            konec = true;
+            clearTimeout(pojistka);
+            if (stop) stop();
+            if (err) chyba(err); else hotovo();
+        };
+        const pojistka = setTimeout(() => dost(), 3000);
+        slib.then(() => dost(), dost);
+        if (ref) {
+            stop = onSnapshot(ref, () => dost(), () => dost());
+            if (konec) stop();
+        }
+    });
+}
+const setDoc = (ref, ...dalsi) => poZapisu(setDocSdk(ref, ...dalsi), ref);
+const updateDoc = (ref, ...dalsi) => poZapisu(updateDocSdk(ref, ...dalsi), ref);
+const deleteDoc = (ref) => poZapisu(deleteDocSdk(ref), ref);
+const writeBatch = (databaze) => {
+    const davka = writeBatchSdk(databaze);
+    const odeslat = davka.commit.bind(davka);
+    davka.commit = () => poZapisu(odeslat(), null);
+    return davka;
+};
+/* Apps Script si zápis čte z databáze – bez signálu se mu ozve až po odeslání fronty. */
+const poOdeslani = () => (navigator.onLine === false && db)
+    ? waitForPendingWrites(db).catch(() => {}) : Promise.resolve();
 
 const guidesCol = () => collection(db, "artifacts", APP_ID, "public", "data", "guides");
 const guideDoc = (id) => doc(db, "artifacts", APP_ID, "public", "data", "guides", id);
@@ -365,6 +415,7 @@ try {
             : initializeFirestore(app, {
                 localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
             });
+        KB.offlineFronta = !webkitApple;
     } catch (err) {
         console.warn("Mezipaměť databáze se nezapnula, jede se bez ní:", err);
         db = getFirestore(app);
@@ -1316,6 +1367,7 @@ KB.posliZpravu = async (lid, data) => {
  */
 KB.ohlasZpravu = async (listId, zpravaId) => {
     if (!KB.gsyncUrl || !listId || !zpravaId) return;
+    await poOdeslani();
     let token = "";
     try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript nic nepošle */ }
     try {
@@ -3169,12 +3221,12 @@ KB.posliDoSheets = (id) => {
     /* text/plain schválně: prohlížeč tak požadavek pošle rovnou, bez
        předletu, který Apps Script neumí odbavit. Odpověď nečteme –
        výsledek si skript zapíše zpátky do databáze. */
-    fetch(KB.gsyncUrl, {
+    poOdeslani().then(() => fetch(KB.gsyncUrl, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ id: id })
-    }).catch(err => console.warn("Zápis do Tabulek se neozval:", err));
+    })).catch(err => console.warn("Zápis do Tabulek se neozval:", err));
 };
 
 /**
@@ -3186,6 +3238,7 @@ KB.posliDoSheets = (id) => {
  */
 KB.posliZakazkuDoEvidence = async (projekt) => {
     if (!KB.gsyncUrl || !projekt || !projekt.cislo) return;
+    await poOdeslani();
     /* Adresu skriptu zná každý člen, proto skript (od v284) pustí jen
        manažera, pozná ho podle ID tokenu, a údaje zakázky si přečte sám
        z databáze. Pole níž se posílají dál jen kvůli starší verzi skriptu. */

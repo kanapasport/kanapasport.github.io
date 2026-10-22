@@ -972,8 +972,10 @@
         srovnejVypinatka();
         try {
             const dataUrl = await window.KB.nactiPlanObrazek(id);
+            // bez signálu je prázdný (nebo neúplný), když plán v tomhle zařízení online otevřený nebyl
+            if (!dataUrl) throw new Error("Obrázek plánu není k dispozici.");
             $("obrazek").src = dataUrl;
-            await new Promise(ok => { $("obrazek").onload = ok; });
+            await new Promise((ok, chyba) => { $("obrazek").onload = ok; $("obrazek").onerror = chyba; });
             // na začátku se plán vejde celý do okna
             srovnejNaOkno();
             poloz();
@@ -982,7 +984,9 @@
             vykresliZnacky();
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Plán se nepodařilo načíst.", "error");
+            window.KBUI.toast(navigator.onLine === false
+                ? "Tenhle plán bez signálu nejde – v zařízení jsou jen plány, které už jsi otevřel online."
+                : "Plán se nepodařilo načíst.", "error");
         }
         $("nahravam").hidden = true;
     }
