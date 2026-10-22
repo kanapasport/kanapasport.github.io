@@ -132,15 +132,8 @@
         details.mtip > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
 
         /* ----------------------------------------------- štítky (pilulky) */
-        .milpil {
-            display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
-            border: 1px solid transparent; border-radius: var(--r-pill);
-            background: var(--ok-tint); color: var(--p100-fg);
-            font-size: var(--fs-1); font-weight: 800; line-height: 1.6; white-space: nowrap; vertical-align: middle;
-        }
-        .milpil::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-        /* nový = zveřejněný v posledních sedmi dnech */
-        .milpil--novy { background: var(--accent-tint); color: var(--accent); border-color: var(--accent-lt); }
+        /* základ .milpil a .milpil--novy je v app.css (sdílí ho nástěnka a kalendář);
+           varianty níž stojí ZA ním – mají stejnou váhu a jinak by je přebil */
         /* splněno od zaměstnance, které ještě neposvětil manažer */
         .milpil--ceka { background: var(--warn-tint); color: var(--warn); }
         /* milník, který zaměstnanci ještě nevidí – jen pro manažera */
@@ -756,11 +749,9 @@
         return s === "-" ? "" : s;
     };
 
-    /* Nov\u011b zve\u0159ejn\u011bn\u00fd miln\u00edk m\u00e1 sedm dn\u00ed \u0161t\u00edtek \u201enov\u00fd". Raz\u00edtko
-       `zverejnenoMs` p\u00ed\u0161e KB.nastavMilniky; star\u0161\u00ed zve\u0159ejn\u011bn\u00ed ho nemaj\u00ed. */
-    const NOVY_DNI = 7;
-    const jeNovy = (m) => m.zverejneno !== false && Number(m.zverejnenoMs) > 0 &&
-        Date.now() - Number(m.zverejnenoMs) < NOVY_DNI * 86400000;
+    /* Štítek „nový“ (zveřejněno v posledních 7 dnech) – pravidlo je jedno pro
+       Milníky, nástěnku i kalendář: V.milnikNovy ve vykazy.js. */
+    const jeNovy = (m) => window.KBVYK.milnikNovy(m);
 
     /* ------------------------------------------------- data pro v\u00fdpis */
     const isoDatum = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +

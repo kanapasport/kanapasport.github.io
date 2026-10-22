@@ -453,6 +453,13 @@
         };
     };
 
+    /* Nově zveřejněný milník má sedm dní štítek „nový" – na stránce Milníky,
+       v dlaždici na nástěnce i v kalendáři (jedno pravidlo pro všechny).
+       Razítko `zverejnenoMs` píše KB.nastavMilniky; starší zveřejnění ho nemají. */
+    V.MILNIK_NOVY_DNI = 7;
+    V.milnikNovy = (m, ted) => !!m && m.zverejneno !== false && Number(m.zverejnenoMs) > 0 &&
+        (ted || Date.now()) - Number(m.zverejnenoMs) < V.MILNIK_NOVY_DNI * 86400000;
+
     /**
      * Patří patro do budovy? Číselník projektu může mít `patraBudov`,
      * třeba { "Datový sál": ["G62"] }. Patro, které v mapě není, platí ve

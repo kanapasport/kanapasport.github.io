@@ -2082,6 +2082,98 @@
     /** Vzal si vzkaz tenhle člověk aspoň na vědomí? */
     UI.quickVzal = (q, uid) => !!(q && (q.vzaliUids || []).indexOf(uid) !== -1);
 
+    /* ------------------------------------------ odložení (bod 26) -------
+       Vzkaz Quick TO-DO a upozornění pro kontrolu jde odložit na zítra
+       nebo na pondělí (rešerše 19. 10. 2026): do té doby se neukazuje ani
+       nepočítá do odznaku, pak se vrátí samo. Odložení je osobní – ukládá
+       se čas návratu (ms místní půlnoci) pod toho, kdo odložil. */
+
+    /** Čas návratu: "zitra" | "pondeli" (nejbližší příští; v neděli = zítra). */
+    UI.odlozitDo = (kam, ted) => {
+        const d = new Date(ted || Date.now());
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + (kam === "pondeli" ? ((8 - d.getDay()) % 7 || 7) : 1));
+        return d.getTime();
+    };
+
+    const DNY_ODLOZENI = ["ne", "po", "út", "st", "čt", "pá", "so"];
+    /** „čt 23. 10." */
+    UI.odlozenoText = (ms) => {
+        const d = new Date(Number(ms) || 0);
+        return DNY_ODLOZENI[d.getDay()] + " " + d.getDate() + ". " + (d.getMonth() + 1) + ".";
+    };
+
+    /* Návrat bez obnovení stránky: jeden časovač na nejbližší návrat, pak se
+       znovu ohlásí data (KB.emit) a seznamy i odznaky se překreslí samy. */
+    const navratOdlozeni = {};      // událost → { ms, casovac }
+    function hlidejNavrat(ms, udalost) {
+        const n = navratOdlozeni[udalost];
+        if (n && n.ms <= ms) return;
+        if (n) clearTimeout(n.casovac);
+        navratOdlozeni[udalost] = { ms: ms, casovac: setTimeout(() => {
+            delete navratOdlozeni[udalost];
+            if (window.KB && window.KB.emit) window.KB.emit(udalost);
+        }, Math.min(ms - Date.now() + 1000, 2147483000)) };
+    }
+
+    /** Je odloženo (návrat v budoucnu)? `udalost` se ohlásí, až čas vyprší. */
+    UI.odlozeno = (ms, udalost) => {
+        const n = Number(ms) || 0;
+        if (!(n > Date.now())) return false;
+        if (udalost) hlidejNavrat(n, udalost);
+        return true;
+    };
+
+    /** Odložil si tenhle člověk vzkaz? */
+    UI.quickOdlozeno = (q, uid) => UI.odlozeno(q && q.odlozeno && q.odlozeno[uid], "quicktodo");
+
+    /** Volby do nabídky (KBNabidka); fn(ms) uloží. V neděli je zítra pondělí – jen jedna. */
+    UI.odlozitPolozky = (fn) => {
+        const zitra = UI.odlozitDo("zitra"), pondeli = UI.odlozitDo("pondeli");
+        return [{ text: "Odložit na zítra (" + UI.odlozenoText(zitra) + ")", ikona: "hodiny", fn: () => fn(zitra) }]
+            .concat(pondeli === zitra ? [] : [{ text: "Odložit na pondělí (" + UI.odlozenoText(pondeli) + ")",
+                ikona: "kalendar", fn: () => fn(pondeli) }]);
+    };
+
+    /** Tlačítko „Odložit" u položky – otevře volby přes KBNabidka. `attr` skládá volající (s esc). */
+    UI.odlozitTlacitko = (attr, trida) =>
+        '<button type="button" class="btn btn--ghost btn--sm' + (trida ? " " + esc(trida) : "") + '"' +
+        ' data-nabidka-vic aria-haspopup="menu"' +
+        ' aria-expanded="false" ' + attr + ' title="Odložit na zítra nebo na pondělí – do té doby zmizí">Odložit</button>';
+
+    /** Odloží vzkaz do `ms` (0 = vrátit hned) – s hláškou a „Zpět". */
+    UI.quickOdloz = (q, ms) => {
+        const uid = window.KB.currentUid();
+        const bylo = Number((q.odlozeno || {})[uid]) || 0;
+        return window.KB.odlozQuick(q.id, ms)
+            .then(() => UI.toast(ms ? "Odloženo do " + UI.odlozenoText(ms) + " – pak se vzkaz vrátí sám."
+                    : "Vzkaz je zpátky v seznamu.", undefined,
+                { zpet: () => window.KB.odlozQuick(q.id, bylo > Date.now() ? bylo : 0) }))
+            .catch((err) => { console.error(err); UI.toast("Uložení selhalo.", "error"); });
+    };
+
+    /* Nabídka u vzkazu (⋯ = tlačítko Odložit, pravé tlačítko, podržení prstu)
+       na stránce Quick TO-DO i v dlaždici nástěnky. Jen adresát a jen
+       nesplněný vzkaz – jinde zůstane nabídka prohlížeče. */
+    function nabidkaQuick(cil) {
+        const tl = cil.closest("[data-quick-odlozit]");
+        const radek = cil.closest("[data-quick-radek]");
+        const id = tl ? tl.getAttribute("data-quick-odlozit") : (radek ? radek.getAttribute("data-quick-radek") : "");
+        const q = id && (window.KB.quicktodo || []).find(x => x.id === id);
+        const uid = window.KB.currentUid && window.KB.currentUid();
+        if (!q || UI.quickAdresati(q).indexOf(uid) === -1 || UI.quickHotovoPro(q, uid)) return null;
+        const polozky = UI.quickOdlozeno(q, uid)
+            ? [{ text: "Vrátit hned (odloženo do " + UI.odlozenoText(q.odlozeno[uid]) + ")", ikona: "vratit",
+                fn: () => UI.quickOdloz(q, 0) }]
+            : UI.odlozitPolozky((ms) => UI.quickOdloz(q, ms));
+        if (!tl) polozky.unshift({ text: "Otevřít vzkaz", ikona: "otevrit", fn: () => UI.otevriQuick(q.id) });
+        return { nadpis: String(q.text || "Vzkaz").slice(0, 60), radek: radek, polozky: polozky };
+    }
+    // nabidka.js se načítá až za ui.js (stránky, které vzkazy ukazují)
+    document.addEventListener("DOMContentLoaded", () => {
+        if (window.KBNabidka) window.KBNabidka.pripoj(nabidkaQuick);
+    });
+
     /**
      * Kolik adresátů si vzkaz vzalo na vědomí – vrací „3 z 5", nebo nic.
      * Zadavatel tím pozná, že vzkaz nezapadl, i když ho nikdo neodškrtl
@@ -2939,6 +3031,7 @@
     };
 
     let quickSplneneVidet = false;
+    let quickOdlozeneVidet = false;
 
     /* ------------------------------------------------ pípnutí na nový vzkaz
        Krátký tón, když PŘI OTEVŘENÉ stránce přistane nový quick to-do pro mě.
@@ -3174,6 +3267,7 @@
                zmizet z toho, co po mně ještě někdo chce (Michal 16. 9. 2026). */
             const jsemAdresat = adresati(q).indexOf(uid) !== -1;
             const vzatoMne = jsemAdresat && !hotovoMne && UI.quickVzal(q, uid);
+            const odlozenoMne = jsemAdresat && !hotovoMne && UI.quickOdlozeno(q, uid);
             const poTerminu = !hotovoMne && q.doKdy && q.doKdy < dnesISO();
             /* U společného vzkazu se vypisuje, s kým na tom člověk je –
                sebe v tom seznamu vidět nepotřebuje. */
@@ -3200,7 +3294,7 @@
 
             return '<div class="quickrad' +
                 (hotovoMne ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) +
-                (vzatoMne ? " quickrad--vzato" : "") + '">' +
+                (vzatoMne || odlozenoMne ? " quickrad--vzato" : "") + '" data-quick-radek="' + esc(q.id) + '">' +
                 '<span class="quickrad__text quickrad__text--klik" data-quick-detail="' +
                     esc(q.id) + '" role="button" tabindex="0"' +
                     ' title="Otevřít vzkaz – komentáře a obrázky">' +
@@ -3233,6 +3327,9 @@
                               esc(UI.quickVedomi(q)) + "</span>" : "") +
                         (vzatoMne
                             ? '<br><span class="quickrad__vzato">beru na vědomí</span>' : "") +
+                        (odlozenoMne
+                            ? '<br><span class="quickrad__vzato">odloženo do ' +
+                              esc(UI.odlozenoText(q.odlozeno[uid])) + "</span>" : "") +
                         (q.rezim !== "kazdy" && q.hotovo && q.hotovoKdo
                             ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatumKratke(new Date(q.hotovoMs)
@@ -3257,6 +3354,13 @@
                         : '<button type="button" class="btn btn--ghost btn--sm" data-quick-vzal="' +
                             esc(q.id) + '" title="Vím o tom – zůstane v seznamu, ale přestane ' +
                             'svítit v odznaku">Beru na vědomí</button>')
+                    : "") +
+                // odložit na zítra / na pondělí (volby v nabídce), odložené vrátit hned
+                (jsemAdresat && !hotovoMne
+                    ? (odlozenoMne
+                        ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-odlozit-zrus="' +
+                            esc(q.id) + '">Vrátit hned</button>'
+                        : UI.odlozitTlacitko('data-quick-odlozit="' + esc(q.id) + '"'))
                     : "") +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
                 /* Zadavatel, který mezi adresáty není, nemá co odškrtávat –
@@ -3286,7 +3390,10 @@
 
         /* Co je pro mě, se řídí MÝM splněním; co jsem poslal, mizí ze
            seznamu, až to má celá parta. */
-        const aktivniProMe = proMe.filter(q => !UI.quickHotovoPro(q, uid)).sort(naporadi);
+        /* Odložené (na zítra / na pondělí) do té doby nejsou v seznamu ani
+           v odznaku – leží pod odkazem „Odložené" dole. */
+        const aktivniProMe = proMe.filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickOdlozeno(q, uid)).sort(naporadi);
+        const odlozene = proMe.filter(q => !UI.quickHotovoPro(q, uid) && UI.quickOdlozeno(q, uid)).sort(naporadi);
         const aktivniOdeMe = odeMe.filter(q => !UI.quickHotovoVse(q)).sort(naporadi);
         /* Historie splněných drží jen poslední týden – starší zůstávají
            v databázi a v týdenních lozích reportů, tady by jen překážely. */
@@ -3299,6 +3406,7 @@
                 && (q.hotovoMs || q.ms || 0) >= tydenZpet);
         const aktivni = (mojeRezim ? aktivniProMe : aktivniOdeMe)
             .filter(q => !jenPozn || q.poznamka);
+        const odlozeneTady = mojeRezim ? odlozene.filter(q => !jenPozn || q.poznamka) : [];
 
         const seznamHtml =
             '<div class="row" style="gap:6px;margin-bottom:10px">' +
@@ -3323,14 +3431,21 @@
                   (quickSplneneVidet
                       ? '<div class="quickmriz">' + splnene.map(q => radek(q, !mojeRezim)).join("") + "</div>"
                       : "")
+                : "") +
+            (odlozeneTady.length
+                ? '<button type="button" class="linkbtn" data-quick-odlozene style="margin-top:14px;display:block">' +
+                    (quickOdlozeneVidet ? "Skrýt odložené" : "Odložené (" + odlozeneTady.length + ")") + "</button>" +
+                  (quickOdlozeneVidet
+                      ? '<div class="quickmriz">' + odlozeneTady.map(q => radek(q, false)).join("") + "</div>"
+                      : "")
                 : "");
         document.querySelectorAll("[data-quick-seznam]").forEach(el => {
             el.innerHTML = seznamHtml;
         });
 
         // odznak s počtem nesplněných na tlačítku v pásu
-        // vzaté na vědomí v odznaku nesvítí – vím o tom, nemusí mě to honit
-        const kolik = proMe.filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickVzal(q, uid)).length;
+        // vzaté na vědomí v odznaku nesvítí – vím o tom, nemusí mě to honit; odložené taky ne
+        const kolik = aktivniProMe.filter(q => !UI.quickVzal(q, uid)).length;
         document.querySelectorAll("[data-quick-pocet]").forEach(el => {
             el.textContent = kolik;
             el.hidden = !kolik;
@@ -3945,6 +4060,18 @@
             renderQuick();
             return;
         }
+        if (event.target.closest("[data-quick-odlozene]")) {
+            quickOdlozeneVidet = !quickOdlozeneVidet;
+            renderQuick();
+            return;
+        }
+        // odložený vzkaz zpátky hned (stránka Quick TO-DO i dlaždice nástěnky)
+        const nevracet = event.target.closest("[data-quick-odlozit-zrus]");
+        if (nevracet) {
+            const q = (window.KB.quicktodo || []).find(x => x.id === nevracet.dataset.quickOdlozitZrus);
+            if (q) UI.quickOdloz(q, 0);
+            return;
+        }
         const vzalBtn = event.target.closest("[data-quick-vzal]");
         if (vzalBtn && vzalBtn.tagName === "BUTTON") {
             const id = vzalBtn.dataset.quickVzal;
@@ -4167,7 +4294,8 @@
         const todoZbyva = mojeUkoly.reduce((s, u) =>
             s + (u.todo || []).filter(t => t.vypnuto !== true && (Number(t.pct) || 0) < 100).length, 0);
         const quickZbyva = (window.KB.quicktodo || [])
-            .filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickVzal(q, uid) && q.proUid === uid).length;
+            .filter(q => !UI.quickHotovoPro(q, uid) && !UI.quickVzal(q, uid) && !UI.quickOdlozeno(q, uid) &&
+                q.proUid === uid).length;
 
         /* Dokud výkazy nedorazily, svítí „—" – nula by tvrdila, že člověk
            dnes nic nezapsal (rešerše 19. 10.: pás na Celkovém přehledu). */

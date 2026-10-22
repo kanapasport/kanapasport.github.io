@@ -989,11 +989,17 @@
         if (sbalit) sbalit.hidden = !lzeSbalit();
     }
 
-    /** Počet Quick TO-DO, které na mě čekají (vzaté na vědomí ne – jako odznak v pásu). */
+    /** Quick TO-DO bez odložených (na zítra / na pondělí) – ty se do té doby neukazují. */
+    function quickBezOdlozenych(uid) {
+        const ui = UI();
+        return (KB().quicktodo || []).filter(q => !(ui && ui.quickOdlozeno && ui.quickOdlozeno(q, uid)));
+    }
+
+    /** Počet Quick TO-DO, které na mě čekají (vzaté na vědomí a odložené ne – jako odznak v pásu). */
     function pocetQuick() {
         const uid = mojeUid(), ui = UI();
         if (!uid || !ui || !ui.quickAdresati) return 0;
-        return (KB().quicktodo || []).filter(q => ui.quickAdresati(q).indexOf(uid) !== -1 &&
+        return quickBezOdlozenych(uid).filter(q => ui.quickAdresati(q).indexOf(uid) !== -1 &&
             !ui.quickHotovoPro(q, uid) && !ui.quickVzal(q, uid)).length;
     }
 
@@ -1090,7 +1096,7 @@
         const box = $("[data-mini-qseznam]");
         if (!box) return;
         const ui = UI(), uid = mojeUid();
-        const seznam = mojeQuick(KB().quicktodo, uid,
+        const seznam = mojeQuick(quickBezOdlozenych(uid), uid,
             { adresati: ui.quickAdresati, hotovoPro: ui.quickHotovoPro, vzal: ui.quickVzal });
         const kolik = pocetQuick();
         const MAX = 6;
