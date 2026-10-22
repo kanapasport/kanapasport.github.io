@@ -2389,7 +2389,7 @@
                 (z.stav === 1 ? ' · <b style="color:var(--ok)">splněno</b>' : "") +
             "</div>" +
             '<div style="font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere">' +
-                esc(z.text || "") + "</div>" +
+                UI.textSOdkazy(z.text || "", z.odkazy) + "</div>" +
             (z.nahled
                 ? '<img src="' + esc(z.nahled) + '" alt="" style="margin-top:12px;max-width:100%;' +
                   'border-radius:8px;border:1px solid var(--line)">' : "") +
@@ -2748,8 +2748,10 @@
                         " data-quick-zavri>Zavřít</button></div>" +
                 '<div class="hookno__telo quickpanel__telo">' +
                     '<div class="quickpanel__form">' +
-                        '<input type="text" class="field" data-quick-text maxlength="300" ' +
-                            'placeholder="Napiš rychlý úkol">' +
+                        /* @ zmíní kolegu (dostane vlastní vzkaz), # odkáže
+                           na projekt nebo úkol (22. 10. 2026) */
+                        '<input type="text" class="field" data-quick-text data-napoveda maxlength="300" ' +
+                            'placeholder="Napiš rychlý úkol (@ kolega, # projekt či úkol)" autocomplete="off">' +
 
                         /* Lidí může být víc – stejný vzkaz se často posílá
                            celé partě. Zaškrtávátka místo roletky, ať je vidět,
@@ -2945,7 +2947,7 @@
                 (hotovoMne ? ' · <b style="color:var(--ok)">splněno</b>' : "") +
             "</div>" +
             '<div style="font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere">' +
-                esc(q.text || "") + "</div>" +
+                UI.textSOdkazy(q.text || "", q.odkazy) + "</div>" +
             (ostatni.length
                 ? '<div class="tiny muted" style="margin-top:6px">Spoluúčast: ' +
                   esc(ostatni.join(", ")) + (q.rezim === "kazdy" ? " · každý sám" : "") + "</div>"
@@ -3346,7 +3348,7 @@
                     ' title="Otevřít vzkaz – komentáře a obrázky">' +
                 (hlidkaBarva
                     ? '<b style="color:' + hlidkaBarva + '">' + esc(q.text) + "</b>"
-                    : esc(q.text)) +
+                    : UI.textSOdkazy(q.text, q.odkazy)) +
                     '<span class="quickrad__kdo">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
                            zopakování toho, co už tam stojí – vynechává se. */
@@ -4025,15 +4027,47 @@
             });
     });
 
+    /**
+     * Otevře panel Quick TO-DO. `volby` (nepovinné) ho předvyplní – „Quick
+     * TO-DO k úkolu…" na stránce Úkoly: { odkaz: {t, id, n}, komu: [uid],
+     * projekt }. Rozepsaný text zůstane, odkaz se připíše za něj; adresáti
+     * se nastaví přesně na `komu` (bez sebe – sám sobě jen „Jen pro mě").
+     */
+    UI.otevriQuickPanel = (volby) => {
+        const o = volby || {};
+        mountQuickPanel();
+        renderQuick();
+        prepniQuick(true);
+        const panel = document.getElementById("kbQuickPanel");
+        const pole = panel.querySelector("[data-quick-text]");
+        const odkaz = UI.cisteOdkazy(o.odkaz ? [o.odkaz] : [])[0];
+        if (odkaz) {
+            const ted = pole.value.replace(/\s+$/, "");
+            pole.value = (ted ? ted + " " : "") + "#" + odkaz.n + " ";
+            pole.kbOdkazy = (pole.kbOdkazy || []).concat([odkaz]);
+        }
+        if (Array.isArray(o.komu)) {
+            const ja = window.KB.currentUid();
+            const komu = o.komu.filter(u => u && u !== ja);
+            if (!komu.length && o.komu.indexOf(ja) !== -1) komu.push(ja);
+            panel.querySelectorAll("[data-quick-komu] input").forEach(ch => {
+                ch.checked = komu.indexOf(ch.value) !== -1;
+            });
+            profiltrujLidi(panel);
+        }
+        const projektSel = panel.querySelector("[data-quick-projekt]");
+        if (o.projekt && Array.from(projektSel.options).some(x => x.value === o.projekt)) {
+            projektSel.value = o.projekt;
+        }
+        setTimeout(() => {
+            pole.focus();
+            pole.setSelectionRange(pole.value.length, pole.value.length);
+        }, 60);
+    };
+
     document.addEventListener("click", async (event) => {
         if (event.target.closest("[data-quick-otevri]")) {
-            mountQuickPanel();
-            renderQuick();
-            prepniQuick(true);
-            setTimeout(() => {
-                const pole = document.querySelector("#kbQuickPanel [data-quick-text]");
-                if (pole) pole.focus();
-            }, 60);
+            UI.otevriQuickPanel();
             return;
         }
         if (event.target.closest("[data-quick-zavri]")) {
@@ -4050,9 +4084,10 @@
                 .catch(() => UI.toast("Smazání selhalo.", "error"));
             return;
         }
-        /* Rozkliknutí vzkazu – okno s obrázkem, splněním a komentáři. */
+        /* Rozkliknutí vzkazu – okno s obrázkem, splněním a komentáři.
+           Odkaz „#projekt / #úkol" v textu vede tam, kam ukazuje. */
         const detail = event.target.closest("[data-quick-detail]");
-        if (detail) {
+        if (detail && !event.target.closest("a[href]")) {
             UI.otevriQuick(detail.dataset.quickDetail);
             return;
         }
@@ -4150,7 +4185,8 @@
         if (!event.target.closest("[data-quick-uloz]")) return;
 
         const panel = document.getElementById("kbQuickPanel");
-        const text = panel.querySelector("[data-quick-text]").value.trim();
+        const pole = panel.querySelector("[data-quick-text]");
+        const text = pole.value.trim();
         const komu = vybraniKomu();
         // screenshot sám o sobě dává smysl – ať kvůli němu nikdo nevymýšlí text
         if (!text && !quickNoveObrazky.length) {
@@ -4172,14 +4208,25 @@
             /* Jeden vzkaz pro všechny vybrané. Ve společném režimu ho kdokoliv
                odškrtne za všechny; v „každý sám" si ho škrtá každý zvlášť. */
             const id = window.KB.newQuickId();
-            await window.KB.saveQuickTodo(id, {
+            const odkazy = UI.odkazyPole(pole);
+            await window.KB.saveQuickTodo(id, Object.assign({
                 text: text || "(jen screenshot)", proUids: komu,
                 doKdy: asap ? "" : doKdy,   // „co nejdříve" termín nemá
                 asap: asap,
                 rezim: kazdy ? "kazdy" : "",
                 projekt: projekt,
                 opakovani: opakovani
-            });
+            }, odkazy.length ? { odkazy: odkazy } : {}));
+
+            /* Zmínka přes @: kdo není mezi adresáty, dostane vlastní vzkaz
+               „Zmínil tě v Quick TO-DO" – původní vzkaz by neviděl. */
+            let zmineni = [];
+            try {
+                zmineni = await UI.ohlasZminky(UI.zminkyVTextu(text).filter(u => komu.indexOf(u) === -1),
+                    "Zmínil tě v Quick TO-DO: " + text, { projekt: projekt, odkazy: odkazy });
+            } catch (err) {
+                console.warn("Vzkaz o zmínce se nezapsal:", err);
+            }
 
             /* Obrázky až po vzkazu – pravidla se u nich ptají rodičovského
                dokumentu, takže dřív by na ně nikdo neměl právo. Náhled jde
@@ -4194,7 +4241,8 @@
                 vykresliQuickNahledy();
             }
 
-            panel.querySelector("[data-quick-text]").value = "";
+            pole.value = "";
+            pole.kbOdkazy = [];
             panel.querySelector("[data-quick-kdy]").value = "";
             panel.querySelector("[data-quick-asap]").checked = false;
             panel.querySelector("[data-quick-kazdy]").checked = false;
@@ -4210,7 +4258,8 @@
             UI.toast((jenJa ? "Poznámka uložena jen pro tebe."
                 : komu.length === 1 ? "Quick to-do zadáno."
                 : (kazdy ? "Zadáno " + komu.length + " lidem – každý si odškrtne sám."
-                    : "Společný quick to-do zadán " + komu.length + " lidem.")) + opak);
+                    : "Společný quick to-do zadán " + komu.length + " lidem.")) + opak +
+                (zmineni.length ? " Zmínka poslána: " + zmineni.join(", ") + "." : ""));
         } catch (err) {
             console.error(err);
             UI.toast("Odeslání selhalo.", "error");
@@ -4886,18 +4935,22 @@
     /* Nabídka je `position: fixed` – bloky formulářů mívají overflow:hidden
        a ořízly by ji. Poloha se proto dopočítává: pod pole, a když se tam
        nevejde, nad něj. */
-    function umistiHledac(obal) {
-        const r = hledacVstup(obal).getBoundingClientRect();
-        const seznam = hledacSeznam(obal);
+    /* Sdílí ho i napovídání @ a # (níž) – stejná nabídka u jiného pole. */
+    function umistiSeznam(r, seznam, vlevo, sirka) {
         const podNim = window.innerHeight - r.bottom - 12;
         const nadNim = r.top - 12;
         const dolu = podNim >= 200 || podNim >= nadNim;
 
-        seznam.style.left = r.left + "px";
-        seznam.style.width = r.width + "px";
+        seznam.style.left = vlevo + "px";
+        seznam.style.width = sirka + "px";
         seznam.style.maxHeight = Math.max(120, Math.min(320, dolu ? podNim : nadNim)) + "px";
         seznam.style.top = dolu ? (r.bottom + 4) + "px" : "auto";
         seznam.style.bottom = dolu ? "auto" : (window.innerHeight - r.top + 4) + "px";
+    }
+
+    function umistiHledac(obal) {
+        const r = hledacVstup(obal).getBoundingClientRect();
+        umistiSeznam(r, hledacSeznam(obal), r.left, r.width);
     }
 
     function ukazHledac(obal, dotaz) {
@@ -5011,6 +5064,262 @@
 
     window.addEventListener("scroll", srovnejHledace, true);
     window.addEventListener("resize", srovnejHledace);
+
+    /* ------------------------------------- zmínky @ a odkazy # v textu ---
+       Po napsání „@" nabídka lidí, po „#" projektů a úkolů – stejný zvyk
+       jako zmínky v Poradách (bod 19 rešerše, 22. 10. 2026). Pole se
+       přihlásí atributem `data-napoveda`; vybrané odkazy si nese ve
+       vlastnosti `kbOdkazy` a stránka je při ukládání vezme přes
+       UI.odkazyPole(pole).
+
+       Text zůstává čitelný („#VZT – G61", „@Jan Novák") – tak ho dostane
+       i e-mail z Apps Scriptu a dlaždice, které text jen vypisují. Kam
+       „#" vede, drží vedle textu pole `odkazy` [{ t: "p" | "u", id, n }]:
+       podle id je odkaz spolehlivý (stejně pojmenované úkoly ani
+       přejmenování ho nespletou) a staré texty bez pole se kreslí jako
+       dřív. Nabídka má vzhled našeptávače (.hledac__seznam). */
+
+    const PISMENO = /[\p{L}\p{N}_]/u;
+
+    /** Lidé, které jde zmínit: aktivní, s jménem, bez služebních účtů. */
+    function lideKZmince() {
+        return ((window.KB && window.KB.users) || [])
+            .filter(u => u && u.id && u.active !== false && !UI.jeSluzebni(u))
+            .map(u => ({ id: u.id, jmeno: ((u.first || "") + " " + (u.last || "")).replace(/\s+/g, " ").trim() }))
+            .filter(u => u.jmeno);
+    }
+
+    /** Je `znacka` v textu jako celek (před ní ani za ní není písmeno)? */
+    function maZnacku(text, znacka) {
+        for (let i = text.indexOf(znacka); i !== -1; i = text.indexOf(znacka, i + 1)) {
+            if (!PISMENO.test(text.charAt(i - 1)) && !PISMENO.test(text.charAt(i + znacka.length))) return true;
+        }
+        return false;
+    }
+
+    /** Odkazy z databáze jen v povoleném tvaru – cokoliv navíc zahodí. */
+    UI.cisteOdkazy = (odkazy) => (Array.isArray(odkazy) ? odkazy : [])
+        .filter(o => o && (o.t === "p" || o.t === "u") && typeof o.id === "string" && o.id &&
+            typeof o.n === "string" && o.n.trim())
+        .slice(0, 20)
+        .map(o => ({ t: o.t, id: o.id.slice(0, 120), n: o.n.slice(0, 120) }));
+
+    /** Kam odkaz vede: projekt do Správy projektů, úkol do Úkolů (otevře i cizí). */
+    UI.odkazAdresa = (o) => (o.t === "p" ? "sprava.html?id=" : "ukoly.html?otevri=") +
+        encodeURIComponent(o.id);
+
+    /** Kdo je v textu zmíněný přes „@Jméno Příjmení" (uid). */
+    UI.zminkyVTextu = (text) => {
+        const t = String(text || "");
+        return t.indexOf("@") === -1 ? []
+            : lideKZmince().filter(u => maZnacku(t, "@" + u.jmeno)).map(u => u.id);
+    };
+
+    /**
+     * Text do innerHTML: všechno přes esc, „#Název" z `odkazy` jako odkaz
+     * a „@Jméno" zvýrazněné. Bez odkazů a zmínek vrací přesně esc(text).
+     */
+    UI.textSOdkazy = (text, odkazy) => {
+        const t = String(text == null ? "" : text);
+        const znacky = UI.cisteOdkazy(odkazy).map(o => ({ s: "#" + o.n, o: o }));
+        if (t.indexOf("@") !== -1) lideKZmince().forEach(u => znacky.push({ s: "@" + u.jmeno }));
+        if (!znacky.length) return esc(t);
+        // delší přednost: „#VZT – G61" se nesmí rozpadnout na „#VZT"
+        znacky.sort((a, b) => b.s.length - a.s.length);
+        const sedi = (z, i) => t.startsWith(z.s, i) && !PISMENO.test(t.charAt(i + z.s.length));
+        let ven = "", od = 0, i = 0;
+        while (i < t.length) {
+            const c = t.charAt(i);
+            if ((c !== "#" && c !== "@") || PISMENO.test(t.charAt(i - 1))) { i++; continue; }
+            // dva stejně pojmenované úkoly: každý výskyt dostane svůj odkaz
+            const z = znacky.find(x => !x.pouzito && sedi(x, i)) || znacky.find(x => sedi(x, i));
+            if (!z) { i++; continue; }
+            z.pouzito = true;
+            ven += esc(t.slice(od, i)) + (z.o
+                ? '<a class="odkazref" href="' + esc(UI.odkazAdresa(z.o)) + '" title="' +
+                    (z.o.t === "p" ? "Otevřít projekt" : "Otevřít úkol") + '">' + esc(z.s) + "</a>"
+                : '<span class="zminka">' + esc(z.s) + "</span>");
+            i += z.s.length;
+            od = i;
+        }
+        return ven + esc(t.slice(od));
+    };
+
+    /** Odkazy, které pole opravdu nese – jen ty, jejichž „#Název" v textu zůstal. */
+    UI.odkazyPole = (pole) => {
+        const t = String((pole && pole.value) || "");
+        const ven = [];
+        UI.cisteOdkazy(pole && pole.kbOdkazy).forEach(o => {
+            if (maZnacku(t, "#" + o.n) && !ven.some(x => x.t === o.t && x.id === o.id)) ven.push(o);
+        });
+        return ven;
+    };
+
+    /**
+     * Zmíněným přes @ vzkaz do Quick TO-DO („Zmínil tě v …") – stávající
+     * cesta upozornění: pípnutí, odznak i e-mail z Apps Scriptu. Sebe
+     * vynechá; víc lidí = jeden vzkaz, každý si ho odškrtne sám.
+     * @returns {Promise<string[]>} jména, komu vzkaz šel
+     */
+    UI.ohlasZminky = async (uids, text, volby) => {
+        const o = volby || {};
+        const ja = window.KB.currentUid();
+        const komu = (uids || []).filter((u, i, a) => u && u !== ja && a.indexOf(u) === i);
+        if (!komu.length) return [];
+        const odkazy = UI.cisteOdkazy(o.odkazy);
+        await window.KB.saveQuickTodo(window.KB.newQuickId(), Object.assign({
+            text: text, proUids: komu, rezim: komu.length > 1 ? "kazdy" : "", projekt: o.projekt || ""
+        }, odkazy.length ? { odkazy: odkazy } : {}));
+        const lide = lideKZmince();
+        return komu.map(u => (lide.find(x => x.id === u) || {}).jmeno).filter(Boolean);
+    };
+
+    let nap = null;          // otevřená nabídka: { pole, od, znak, polozky, akt }
+    let napEl = null;
+
+    function zavriNapovedu() {
+        nap = null;
+        if (napEl) { napEl.hidden = true; napEl.innerHTML = ""; }
+    }
+
+    const nazevOdkazu = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 120);
+
+    function polozkyNapovedy(znak, dotaz) {
+        const slova = foldText(dotaz).trim().split(/\s+/).filter(Boolean);
+        const sedi = (text) => { const s = foldText(text); return slova.every(x => s.indexOf(x) !== -1); };
+        const ja = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        const abc = (a, b) => a.text.localeCompare(b.text, "cs");
+        if (znak === "@") {
+            return lideKZmince().filter(u => u.id !== ja && sedi(u.jmeno))
+                .map(u => ({ text: u.jmeno, vlozit: "@" + u.jmeno })).sort(abc).slice(0, 8);
+        }
+        const projekty = ((window.KB && window.KB.projektyDocs) || [])
+            .filter(p => p && p.id && p.uzavreno !== true && nazevOdkazu(p.nazev) &&
+                sedi((p.cislo || "") + " " + p.nazev))
+            .map(p => ({ skupina: "Projekty", text: nazevOdkazu(p.nazev), popis: String(p.cislo || ""),
+                odkaz: { t: "p", id: p.id, n: nazevOdkazu(p.nazev) } }))
+            .sort(abc).slice(0, 6);
+        // nehotové úkoly dřív – na ty se odkazuje nejčastěji
+        const ukoly = ((window.KB && window.KB.ukoly) || [])
+            .filter(u => u && u.id && nazevOdkazu(u.nazev) && sedi(u.nazev + " " + (u.projekt || "")))
+            .sort((a, b) => (a.stav === "hotovo" ? 1 : 0) - (b.stav === "hotovo" ? 1 : 0) ||
+                nazevOdkazu(a.nazev).localeCompare(nazevOdkazu(b.nazev), "cs"))
+            .slice(0, 8)
+            .map(u => ({ skupina: "Úkoly", text: nazevOdkazu(u.nazev),
+                popis: [u.projekt, u.stav === "hotovo" ? "hotový" : ""].filter(Boolean).join(" · "),
+                odkaz: { t: "u", id: u.id, n: nazevOdkazu(u.nazev) } }));
+        return projekty.concat(ukoly).map(p => Object.assign(p, { vlozit: "#" + p.text }));
+    }
+
+    function umistiNapovedu() {
+        const r = nap.pole.getBoundingClientRect();
+        const sirka = Math.min(Math.max(r.width, 240), 380, window.innerWidth - 16);
+        umistiSeznam(r, napEl, Math.max(8, Math.min(r.left, window.innerWidth - sirka - 8)), sirka);
+    }
+
+    function vykresliNapovedu() {
+        if (!napEl) {
+            napEl = document.createElement("div");
+            napEl.className = "hledac__seznam napoveda no-print";
+            napEl.setAttribute("role", "listbox");
+            document.body.appendChild(napEl);
+        }
+        let skupina = "";
+        napEl.setAttribute("aria-label", nap.znak === "@" ? "Zmínit kolegu" : "Odkaz na projekt nebo úkol");
+        napEl.innerHTML = nap.polozky.map((p, i) => {
+            const delic = p.skupina && p.skupina !== skupina
+                ? '<div class="hledac__delic">' + esc(p.skupina) + "</div>" : "";
+            skupina = p.skupina || "";
+            return delic + '<button type="button" class="hledac__radek' + (i === nap.akt ? " hledac__radek--akt" : "") +
+                '" role="option" tabindex="-1" aria-selected="' + (i === nap.akt) + '" data-napoveda-i="' + i + '">' +
+                esc(p.text) + (p.popis ? '<span class="napoveda__popis">' + esc(p.popis) + "</span>" : "") +
+                "</button>";
+        }).join("");
+        napEl.hidden = false;
+        umistiNapovedu();
+    }
+
+    /** Podívá se, jestli se před kurzorem píše „@…" nebo „#…", a nabídne. */
+    function napovez(pole) {
+        const pred = pole.value.slice(0, pole.selectionStart || 0);
+        // jen na začátku slova – „jan@firma.cz" ani „C#" nabídku neotevřou
+        const m = /(^|[\s(„"'])([@#])([^@#\n]{0,40})$/.exec(pred);
+        if (!m || /^\s|\s\s/.test(m[3])) return zavriNapovedu();
+        const polozky = polozkyNapovedy(m[2], m[3]);
+        // dopsaná zmínka s mezerou za ní („@Jan Novák ") už nic nenabízí
+        const dopsano = /\s$/.test(m[3]) && polozky.some(p => foldText(p.text) === foldText(m[3].trim()));
+        if (!polozky.length || dopsano) return zavriNapovedu();
+        nap = { pole: pole, od: pred.length - m[3].length - 1, znak: m[2], polozky: polozky, akt: 0 };
+        vykresliNapovedu();
+    }
+
+    function vlozNapovedu(i) {
+        const p = nap && nap.polozky[i];
+        if (!p) return;
+        const pole = nap.pole;
+        const vlozit = p.vlozit + " ";
+        const kam = nap.od + vlozit.length;
+        pole.value = pole.value.slice(0, nap.od) + vlozit + pole.value.slice(pole.selectionStart || 0);
+        if (p.odkaz) pole.kbOdkazy = (pole.kbOdkazy || []).concat([p.odkaz]);
+        zavriNapovedu();
+        pole.focus();
+        pole.setSelectionRange(kam, kam);
+        // stránka se o změně dozví (výška pole, koncept); nabídka se znovu neotvírá
+        const udalost = new Event("input", { bubbles: true });
+        udalost.kbNapoveda = true;
+        pole.dispatchEvent(udalost);
+    }
+
+    document.addEventListener("input", (e) => {
+        if (e.kbNapoveda) return;
+        const pole = e.target;
+        if (pole && pole.matches && pole.matches("[data-napoveda]")) napovez(pole);
+        else if (nap) zavriNapovedu();
+    });
+
+    /* Šipky, Enter/Tab a Esc patří otevřené nabídce DŘÍV než stránce –
+       Enter jinde odesílá zprávu nebo ukládá poznámku, Esc zavírá okno. */
+    window.addEventListener("keydown", (e) => {
+        if (!nap || e.target !== nap.pole || e.isComposing) return;
+        const n = nap.polozky.length;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            nap.akt = (nap.akt + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+            vykresliNapovedu();
+            const akt = napEl.querySelector(".hledac__radek--akt");
+            if (akt) akt.scrollIntoView({ block: "nearest" });
+        } else if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+            vlozNapovedu(nap.akt);
+        } else if (e.key === "Escape") {
+            zavriNapovedu();
+        } else {
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    }, true);
+
+    /* Výběr až na `click` (řádek tou dobou ještě stojí, klik nepropadne na
+       stránku pod ním); `mousedown` jen podrží kurzor v poli. */
+    document.addEventListener("mousedown", (e) => {
+        if (e.target.closest && e.target.closest("[data-napoveda-i]")) return void e.preventDefault();
+        if (nap && e.target !== nap.pole) zavriNapovedu();
+    });
+    document.addEventListener("click", (e) => {
+        const b = e.target.closest && e.target.closest("[data-napoveda-i]");
+        if (b && nap) vlozNapovedu(Number(b.dataset.napovedaI));
+    });
+    document.addEventListener("focusout", (e) => {
+        if (nap && e.target === nap.pole) zavriNapovedu();
+    });
+
+    function srovnejNapovedu() {
+        if (!nap) return;
+        const r = nap.pole.getBoundingClientRect();
+        if (!nap.pole.isConnected || !r.width || r.bottom < 0 || r.top > window.innerHeight) zavriNapovedu();
+        else umistiNapovedu();
+    }
+    window.addEventListener("scroll", srovnejNapovedu, true);
+    window.addEventListener("resize", srovnejNapovedu);
 
     /* ------------------------------------------------------ vyhledávání */
 

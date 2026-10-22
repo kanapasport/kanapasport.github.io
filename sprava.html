@@ -2124,11 +2124,13 @@
                 todo.map(t => {
                     const pct = Math.max(0, Math.min(100, Number(t.pct) || 0));
                     const vyp = t.vypnuto === true;
-                    /* Poznámky jsou pole záznamů {text, kdo, …} (stránka Úkoly) –
-                       holé esc(pole) z nich dělalo „[object Object]". */
+                    /* Poznámky jsou pole záznamů {text, kdo, odkazy, …} (stránka
+                       Úkoly) – holé esc(pole) z nich dělalo „[object Object]".
+                       Hotové HTML: odkazy #projekt/#úkol a zmínky @ (KBUI.textSOdkazy). */
                     const pozn = Array.isArray(t.pozn)
-                        ? t.pozn.map(p => (p && p.text) || "").filter(Boolean).join(" · ")
-                        : (typeof t.pozn === "string" ? t.pozn : "");
+                        ? t.pozn.filter(p => p && p.text)
+                            .map(p => window.KBUI.textSOdkazy(p.text, p.odkazy)).join(" · ")
+                        : (typeof t.pozn === "string" ? esc(t.pozn) : "");
                     return '<div class="butodo__radek' + (vyp ? " butodo__radek--vyp" : "") + '">' +
                         '<span class="butodo__text">' + esc(t.text || "") +
                             /* plnění zaklikané u úkolu bez rozpadu (ukoly.html) */
@@ -2137,7 +2139,7 @@
                         "</span>" +
                         '<span class="butodo__pruh"><i style="width:' + pct + '%"></i></span>' +
                         '<span class="butodo__pct">' + pct + " %</span>" +
-                        (pozn ? '<span class="butodo__pozn">' + esc(pozn) + "</span>" : "") +
+                        (pozn ? '<span class="butodo__pozn">' + pozn + "</span>" : "") +
                     "</div>";
                 }).join("") +
             "</div></td></tr>";

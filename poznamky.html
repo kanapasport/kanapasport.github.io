@@ -270,7 +270,7 @@
                             <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
                     </button>
                     <textarea id="psaniText" class="field kchat__pole" rows="1" maxlength="4000"
-                              aria-label="Text zprávy"></textarea>
+                              aria-label="Text zprávy" data-napoveda></textarea>
                     <button type="submit" class="btn btn--primary kchat__odeslat" id="btnOdeslat">Odeslat</button>
                 </div>
                 <input type="file" id="soubor" accept="image/*" multiple hidden>
@@ -565,7 +565,7 @@
                 (stav !== null ? '<span class="kz__stitek ' + (stav ? "kz__stitek--hotovo" : "kz__stitek--resi") +
                     '">' + (stav ? "Splněno" : "Řeší se") + "</span>" : "") +
                 (odpoved ? "" : fotoHtml(z)) +
-                (text ? '<div class="kz__text">' + esc(text) + "</div>" : "") +
+                (text ? '<div class="kz__text">' + window.KBUI.textSOdkazy(text, odpoved ? null : z.odkazy) + "</div>" : "") +
                 '<div class="kz__pata">' +
                     (!odpoved && z.upraveno ? "<span>upraveno</span>" : "") +
                     '<span title="' + esc(celyCas(p.cas)) + '">' + esc(hodina(p.cas)) + "</span>" +
@@ -787,13 +787,15 @@
     function ulozKoncept() {
         if (!otevrena) return;
         const text = $("psaniText").value;
-        if (text || noveObrazky.length) koncepty.set(otevrena, { text: text, obrazky: noveObrazky.slice() });
-        else koncepty.delete(otevrena);
+        if (text || noveObrazky.length) {
+            koncepty.set(otevrena, { text: text, obrazky: noveObrazky.slice(), odkazy: $("psaniText").kbOdkazy || [] });
+        } else koncepty.delete(otevrena);
     }
 
     function nactiKoncept() {
         const c = koncepty.get(otevrena) || { text: "", obrazky: [] };
         $("psaniText").value = c.text;
+        $("psaniText").kbOdkazy = (c.odkazy || []).slice();     // vybrané #odkazy rozepsané zprávy
         noveObrazky = c.obrazky.slice();
         vykresliNahledy();
         prizpusobVysku();
@@ -833,11 +835,15 @@
         odesilam = true;
         $("btnOdeslat").disabled = true;
         const obrazky = noveObrazky.slice();
+        let mimo = [];      // zmínění přes @, kteří v konverzaci nejsou – zmínku by neviděli
         try {
             const nahled = obrazky.length ? await window.KBUI.nahledObrazku(obrazky[0]) : "";
-            const id = await window.KB.posliZpravu(k.id, { text: text, obrazky: obrazky, nahled: nahled });
+            const odkazy = window.KBUI.odkazyPole($("psaniText"));
+            const id = await window.KB.posliZpravu(k.id, { text: text, obrazky: obrazky, nahled: nahled, odkazy: odkazy });
             if (id && obrazky.length) obrazkyCache.set(id, obrazky.map(o => window.KBUI.bezpecnyObrazek(o)).filter(Boolean));
+            if (id) mimo = window.KBUI.zminkyVTextu(text).filter(u => k.ucastnici.indexOf(u) === -1);
             $("psaniText").value = "";
+            $("psaniText").kbOdkazy = [];
             noveObrazky = [];
             koncepty.delete(k.id);
             vykresliNahledy();
@@ -851,6 +857,27 @@
             odesilam = false;
             $("btnOdeslat").disabled = false;
             if (!dotyk()) $("psaniText").focus();
+        }
+        // až po vrácení kurzoru do pole – okno si ho pak vezme samo
+        if (mimo.length) nabidniPridani(k, mimo);
+    }
+
+    /* Zmínka přes @ o někom, kdo v konverzaci není: do konverzace se sám
+       nepřidá (uviděl by i všechno dosavadní) – jen se to nabídne. */
+    async function nabidniPridani(k, uids) {
+        const jmena = uids.map(u => jmeno(u)).join(", ");
+        const ano = await window.KBUI.potvrd({
+            nadpis: "Přidat do konverzace?",
+            text: jmena + (uids.length === 1 ? " v konverzaci není a zmínku neuvidí." : " v konverzaci nejsou a zmínku neuvidí.") +
+                " Po přidání uvidí i všechny dosavadní zprávy.",
+            ano: "Přidat", ne: "Nepřidávat" });
+        if (!ano) return;
+        try {
+            const n = await window.KB.pridejDoKonverzace(k.id, uids);
+            toast(n ? "Přidáno – vidí i dosavadní zprávy." : "Nikdo nový nepřibyl.");
+        } catch (err) {
+            console.error(err);
+            toast("Přidání do konverzace se nepovedlo.", "error");
         }
     }
 
@@ -1160,8 +1187,8 @@
             if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !dotyk()) { e.preventDefault(); odesli(); }
         });
         $("psaniText").addEventListener("input", prizpusobVysku);
-        $("psaniText").placeholder = dotyk() ? "Napiš zprávu…"
-            : "Napiš zprávu… (Enter odešle, Shift+Enter nový řádek, Ctrl+V vloží screenshot)";
+        $("psaniText").placeholder = dotyk() ? "Napiš zprávu… (@ kolega, # projekt či úkol)"
+            : "Napiš zprávu… (Enter odešle, Shift+Enter nový řádek, @ kolega, # projekt či úkol, Ctrl+V screenshot)";
         $("btnObrazek").addEventListener("click", () => $("soubor").click());
         $("soubor").addEventListener("change", () => {
             if ($("soubor").files.length) pridejObrazky(Array.from($("soubor").files));
