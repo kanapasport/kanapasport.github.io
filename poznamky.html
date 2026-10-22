@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=297">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=297">
+    <link rel="stylesheet" href="assets/css/app.css?v=298">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=298">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -192,6 +192,20 @@
         .kchip button { flex: none; width: 24px; height: 24px; border: 0; border-radius: 50%;
             background: var(--bg); color: var(--text-soft); line-height: 1; cursor: pointer; }
         .kchip button:hover { background: var(--danger-tint); color: var(--danger); }
+        /* výběr lidí do konverzace – zaškrtávací seznam (víc lidí naráz, Vybrat všechny) */
+        .kvyber__lista { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .kvyber__lista .field { flex: 1 1 180px; min-width: 0; }
+        .kvyber { max-height: min(300px, 45vh); overflow-y: auto; margin-top: 8px; padding: 4px;
+            border: 1px solid var(--line); border-radius: var(--r); display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px; }
+        .kvyber:empty { display: none; }
+        .kvyber__clovek { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px;
+            border-radius: var(--r); cursor: pointer; font-size: var(--fs-2); }
+        .kvyber__clovek:hover { background: var(--bg-soft); }
+        .kvyber__clovek input { flex: none; width: 17px; height: 17px; margin: 0; }
+        .kvyber__clovek .kav { width: 24px; height: 24px; border-width: 0; flex: none; }
+        .kvyber__clovek .kchip__jmeno { padding: 0; }
+        .kvyber__nic { grid-column: 1 / -1; padding: 8px; font-size: var(--fs-1); color: var(--muted); }
     </style>
 </head>
 <body>
@@ -285,8 +299,13 @@
         </div>
         <div>
             <span class="label" id="konvKdoPopis">Kdo v ní bude</span>
-            <select id="konvKdo" aria-label="Přidat člověka"></select>
-            <div class="klide" id="konvVybrani" style="margin-top:8px"></div>
+            <div class="kvyber__lista">
+                <input type="search" id="konvHledat" class="field" placeholder="Hledat jméno…"
+                       aria-label="Hledat kolegu" autocomplete="off">
+                <button type="button" class="btn btn--ghost btn--sm" id="btnKonvVse">Vybrat všechny</button>
+            </div>
+            <div class="kvyber" id="konvSeznam" role="group" aria-label="Kolegové"></div>
+            <div class="tiny muted" id="konvVybranoText" style="margin-top:6px"></div>
         </div>
         <div class="row" style="gap:8px;justify-content:flex-end">
             <button type="button" class="btn btn--ghost" data-zavri-okno>Zrušit</button>
@@ -295,12 +314,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=297"></script>
-<script src="assets/js/doc.js?v=297"></script>
-<script src="assets/js/ui.js?v=297"></script>
-<script src="assets/js/nabidka.js?v=297"></script>
-<script src="assets/js/vykazy.js?v=297"></script>
-<script type="module" src="assets/js/store.js?v=297"></script>
+<script src="assets/js/taxonomy.js?v=298"></script>
+<script src="assets/js/doc.js?v=298"></script>
+<script src="assets/js/ui.js?v=298"></script>
+<script src="assets/js/nabidka.js?v=298"></script>
+<script src="assets/js/vykazy.js?v=298"></script>
+<script type="module" src="assets/js/store.js?v=298"></script>
 
 <script>
 (function () {
@@ -666,7 +685,7 @@
         if (!$("oknoKonv").hidden) {
             if (okno.rezim === "lidi") vykresliUcastnikyOkna();
             // seznam lidí dorazil až po otevření okna – nabídku doplnit
-            if ($("konvKdo").options.length <= 1 && kolegove().length) vykresliVyberOkna();
+            if (!$("konvSeznam").querySelector("input") && kolegove().length) vykresliVyberOkna();
         }
     }
 
@@ -1002,6 +1021,7 @@
         $("konvNazevBox").hidden = rezim !== "nova";
         $("konvUcastniciBox").hidden = rezim === "nova";
         $("konvNazev").value = "";
+        $("konvHledat").value = "";
         $("konvKdoPopis").textContent = rezim === "nova"
             ? "Kdo v ní bude (nikdo = poznámky jen pro tebe)"
             : "Přidat lidi – uvidí i všechny dosavadní zprávy";
@@ -1012,15 +1032,9 @@
         setTimeout(() => {
             // kdo už v okně kliká nebo píše, tomu se kurzor nepřehazuje
             if ($("oknoKonv").contains(document.activeElement)) return;
-            const vstup = rezim === "nova" ? $("konvNazev") : vstupLidi();
-            if (vstup) vstup.focus();
+            (rezim === "nova" ? $("konvNazev") : $("konvHledat")).focus();
         }, 0);
     }
-
-    const vstupLidi = () => {
-        const obal = $("konvKdo").closest("[data-hledac]");
-        return obal ? obal.querySelector("[data-hledac-vstup]") : null;
-    };
     const zavriOkno = () => { $("oknoKonv").hidden = true; };
 
     function vykresliUcastnikyOkna() {
@@ -1037,20 +1051,36 @@
             "</span>").join("");
     }
 
-    function vykresliVyberOkna() {
+    /** Kdo se dá v okně vybrat: kolegové, kteří v konverzaci ještě nejsou. */
+    function nabidkaOkna() {
         const k = okno.id ? najdiKonv(okno.id) : null;
         const uz = k ? k.ucastnici : [me()];
-        $("konvVybrani").innerHTML = okno.vybrani.map(u =>
-            '<span class="kchip">' + avatar(u) + '<span class="kchip__jmeno">' + esc(jmeno(u)) + "</span>" +
-                '<button type="button" data-odeber-vybraneho="' + esc(u) + '" title="Nepřidávat"' +
-                ' aria-label="' + esc("Nepřidávat: " + jmeno(u)) + '">×</button></span>').join("");
-        const sel = $("konvKdo");
-        sel.innerHTML = '<option value="">— vyber člověka —</option>' + kolegove()
-            .filter(u => uz.indexOf(u.id) === -1 && okno.vybrani.indexOf(u.id) === -1)
-            .map(u => '<option value="' + esc(u.id) + '">' + esc(celeJmeno(u)) + "</option>").join("");
-        sel.value = "";
-        window.KBUI.naseptavac(sel, { nazev: "Přidat člověka", popis: "Piš jméno kolegy…",
-            prazdne: "Už není koho přidat" });
+        return kolegove().filter(u => uz.indexOf(u.id) === -1);
+    }
+
+    /** …a z nich ti, které propustí hledání (bez háčků, po slovech). */
+    function viditelniOkna() {
+        const slova = window.KBUI.fold($("konvHledat").value).split(/\s+/).filter(Boolean);
+        return nabidkaOkna().filter(u => {
+            const j = window.KBUI.fold(celeJmeno(u));
+            return slova.every(s => j.indexOf(s) !== -1);
+        });
+    }
+
+    function vykresliVyberOkna() {
+        const nabidka = nabidkaOkna();
+        const vidim = viditelniOkna();
+        $("konvSeznam").innerHTML = vidim.length
+            ? vidim.map(u =>
+                '<label class="kvyber__clovek"><input type="checkbox" data-vyber-cloveka="' + esc(u.id) + '"' +
+                    (okno.vybrani.indexOf(u.id) !== -1 ? " checked" : "") + ">" + avatar(u) +
+                    '<span class="kchip__jmeno">' + esc(celeJmeno(u)) + "</span></label>").join("")
+            : '<div class="kvyber__nic">' + (nabidka.length ? "Nikdo takový." : "Už není koho přidat.") + "</div>";
+        const vsichni = vidim.length > 0 && vidim.every(u => okno.vybrani.indexOf(u.id) !== -1);
+        $("btnKonvVse").textContent = vsichni ? "Zrušit výběr" : "Vybrat všechny";
+        $("btnKonvVse").disabled = !vidim.length;
+        $("konvVybranoText").textContent = okno.vybrani.length
+            ? "Vybráno: " + okno.vybrani.length + " z " + nabidka.length : "";
         $("btnKonvUloz").disabled = okno.rezim === "lidi" && !okno.vybrani.length;
     }
 
@@ -1094,10 +1124,31 @@
         $("konvNazev").addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); ulozOkno(); }
         });
-        $("konvKdo").addEventListener("change", () => {
-            const v = $("konvKdo").value;
-            if (!v || okno.vybrani.indexOf(v) !== -1) return;
-            okno.vybrani.push(v);
+        $("konvSeznam").addEventListener("change", (e) => {
+            const id = e.target.getAttribute("data-vyber-cloveka");
+            if (!id) return;
+            okno.vybrani = okno.vybrani.filter(u => u !== id);
+            if (e.target.checked) okno.vybrani.push(id);
+            vykresliVyberOkna();
+        });
+        $("konvHledat").addEventListener("input", vykresliVyberOkna);
+        // Enter v hledání: jediného nalezeného rovnou zaškrtne
+        $("konvHledat").addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" || e.isComposing) return;
+            e.preventDefault();
+            const vidim = viditelniOkna();
+            if (vidim.length === 1 && okno.vybrani.indexOf(vidim[0].id) === -1) {
+                okno.vybrani.push(vidim[0].id);
+                $("konvHledat").value = "";
+                vykresliVyberOkna();
+            }
+        });
+        // Vybrat všechny (viditelné po hledání) / Zrušit výběr
+        $("btnKonvVse").addEventListener("click", () => {
+            const vidim = viditelniOkna().map(u => u.id);
+            const vsichni = vidim.every(id => okno.vybrani.indexOf(id) !== -1);
+            okno.vybrani = okno.vybrani.filter(id => vidim.indexOf(id) === -1);
+            if (!vsichni) okno.vybrani = okno.vybrani.concat(vidim);
             vykresliVyberOkna();
         });
 
@@ -1156,12 +1207,6 @@
             if (t.closest("[data-nova-konv]")) { otevriOkno("nova"); return; }
             const foto = t.closest("[data-foto]");
             if (foto) { lupa(foto.getAttribute("data-foto"), Number(foto.getAttribute("data-foto-i")) || 0); return; }
-            const odeberV = t.closest("[data-odeber-vybraneho]");
-            if (odeberV) {
-                okno.vybrani = okno.vybrani.filter(u => u !== odeberV.getAttribute("data-odeber-vybraneho"));
-                vykresliVyberOkna();
-                return;
-            }
             const odeberU = t.closest("[data-odeber-ucastnika]");
             if (odeberU) {
                 const uid = odeberU.getAttribute("data-odeber-ucastnika");
