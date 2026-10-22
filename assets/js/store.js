@@ -59,7 +59,7 @@ const APP_ID = "firemni-kb-app";
    soukromým klíčem, a ten má Google a Apps Script. Prázdný = upozornění
    z webu se teprve chystají – karta na stránce Upozornění ukáže
    „Připravuje se.“ a nic z toho se nevolá. */
-const PUSH_VAPID = "";
+const PUSH_VAPID = "BKEYzFbAiOuZkvHodwybuiMiGCSGQ4mfkKDZ7q7ufRE-yYzbm8vgT0_xVsmE7UZpoJq_CJBg4YkBfrAreU4egGo";
 
 /** Výchozí rozdělení úkolů uvnitř zakázky, dokud si ho nikdo neupraví. */
 const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ", "TABULKY"];

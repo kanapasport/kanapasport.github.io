@@ -25,8 +25,8 @@
    • push: VŽDY ukázat upozornění – iPhone odběr zruší, když push nic
      neukáže. Data z FCM: { data: { titulek, text, odkaz, tag } }; pro
      jistotu se bere i notification.title/body a fcmOptions.link.
-   • notificationclick: zavřít, najít otevřené okno webu a přepnout ho na
-     odkaz (jinak nové okno). Odkaz jen pod adresou webu – cizí adresa nebo
+   • notificationclick: zavřít; okno, které už odkaz ukazuje, jen zaměřit,
+     jinak nové okno (rozepsaný výkaz v jiném okně se nepřepíše). Odkaz jen pod adresou webu – cizí adresa nebo
      javascript: z podvržené zprávy otevře úvodní stránku.
    ========================================================================== */
 
@@ -242,16 +242,14 @@ function ukazUpozorneni(data) {
     return self.registration.showNotification(o.titulek, volby);
 }
 
-/** Otevřené okno webu přepnout na odkaz; když žádné není (nebo nejde přepnout), nové okno. */
+/** Okno, které už odkaz ukazuje, jen zaměřit; jinak nové okno. Jiné otevřené okno
+    webu se nepřepíná – mohl by v něm být rozepsaný výkaz nebo zpráva. */
 async function otevriOdkaz(odkaz) {
     const okna = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    const okno = okna.find(c => c.url === odkaz) || okna.find(c => c.url.startsWith(KOREN));
+    const okno = okna.find(c => c.url === odkaz);
     if (okno) {
-        try {
-            const zamerene = (await okno.focus()) || okno;
-            if (zamerene.url !== odkaz) await zamerene.navigate(odkaz);
-            return;
-        } catch (err) { /* okno neřídí tenhle service worker nebo nejde zaměřit – nové okno */ }
+        try { await okno.focus(); return; }
+        catch (err) { /* okno nejde zaměřit – nové okno */ }
     }
     if (self.clients.openWindow) await self.clients.openWindow(odkaz);
 }
