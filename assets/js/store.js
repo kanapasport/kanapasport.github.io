@@ -52,6 +52,15 @@ const FIREBASE_CONFIG = {
 };
 const APP_ID = "firemni-kb-app";
 
+/* Upozornění z webu (Firebase Cloud Messaging) – VEŘEJNÝ klíč Web Push
+   z konzole Firebase (Nastavení projektu → Cloud Messaging → Web Push
+   certificates → Key pair). Stejně jako apiKey nahoře není tajný: jen říká
+   prohlížeči, od koho smí upozornění přijímat; posílat jde jen se
+   soukromým klíčem, a ten má Google a Apps Script. Prázdný = upozornění
+   z webu se teprve chystají – karta na stránce Upozornění ukáže
+   „Připravuje se.“ a nic z toho se nevolá. */
+const PUSH_VAPID = "";
+
 /** Výchozí rozdělení úkolů uvnitř zakázky, dokud si ho nikdo neupraví. */
 const DEFAULT_SKUPINY = ["ARCGIS", "SKENY", "FOCENÍ", "TABULKY"];
 
@@ -156,6 +165,7 @@ KB.emit = emit;
 let db = null;
 let auth = null;
 let authReady = null;
+let fbApp = null;               // aplikace Firebase – potřebuje ji až upozornění z webu (getMessaging)
 
 /* Bez signálu (v terénu – rešerše 19. 10. 2026, bod 29). Firestore zápis
    bez připojení hned uloží do fronty v prohlížeči (IndexedDB) a po připojení
@@ -372,6 +382,7 @@ const zrusProjektyUkoly = () => {
 
 try {
     const app = initializeApp(FIREBASE_CONFIG);
+    fbApp = app;
 
     /* WebKit (Safari): IndexedDB tam umí potichu VISET a je na ní postavená
        jak mezipaměť dat, tak ukládání přihlášení. Bez tohohle obcházení na
@@ -605,6 +616,7 @@ try {
 
 
         ohlasSe(user);
+        naplanujObnovuPush();
 
         // po opětovném přihlášení navázat i výkazy, projekty a úkoly,
         // pokud si o ně některá stránka už řekla
@@ -5430,17 +5442,21 @@ KB.ulozNtfy = async (data) => {
 
 /** Zkušební pípnutí do mobilu PŘES Apps Script (ne z prohlížeče) – vrátí {ok, kod, chyba}.
     Ukáže, jestli ntfy.sh bere zprávy ze serverů Googlu, odkud chodí ohlášení zpráv. */
-KB.zkouskaNtfyServer = async () => {
+KB.zkouskaNtfyServer = () => zkouskaPresServer("ntfyZkouska");
+
+/* Zkouška přes Apps Script – ntfy i upozornění z webu chodí stejnou cestou.
+   Text/plain kvůli tomu, aby prohlížeč neposílal předlet (Apps Script ho neumí). */
+async function zkouskaPresServer(akce) {
     if (authReady) await authReady;
     if (!KB.gsyncUrl) return { ok: false, chyba: "adresa skriptu není nastavená" };
     const token = await auth.currentUser.getIdToken();
     const odp = await fetch(KB.gsyncUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ akce: "ntfyZkouska", token: token })
+        body: JSON.stringify({ akce: akce, token: token })
     });
     return await odp.json();
-};
+}
 
 /** Přehled doručování do mobilu (zapisuje Apps Script, čte jen správce): řádky od nejnovějšího. */
 KB.ntfyStav = async () => {
@@ -5449,6 +5465,259 @@ KB.ntfyStav = async () => {
     const s = await getDoc(doc(db, "artifacts", APP_ID, "private", "upozorneni", "ntfy", "stav"));
     return s.exists() && Array.isArray(s.data().radky) ? s.data().radky : [];
 };
+
+/* ------------------------------------------- UPOZORNĚNÍ Z WEBU (FCM) -----
+   Upozornění do mobilu a počítače přímo z webu přes Firebase Cloud
+   Messaging – bez aplikace ntfy, kterou bezplatný ntfy.sh ze serverů Googlu
+   nebere (250 zpráv denně na IP, Google ji sdílí → 429). ntfy zůstává jako
+   záloha. Posílá Apps Script, web jen:
+     • přihlásí zařízení k odběru a uloží jeho adresu (token FCM),
+     • upozornění ukáže a po kliknutí otevře (sw.js, push a notificationclick).
+
+     private/upozorneni/lide/{uid}
+       push:   { "<zid>": { token, ms, zarizeni } }
+       pushMs  kdy se seznam zařízení naposledy změnil
+       ntfyOstatni  (už existuje) i krátká ohlášení k e-mailům – platí pro push i ntfy
+
+   `zid` = id zařízení, které si vymyslí prohlížeč (z + 12 znaků a–z0–9)
+   a pamatuje v localStorage – podle něj se pozná „toto zařízení“ a obnova
+   přepíše jen svůj řádek. `zarizeni` je jen hrubý popis („Android · Chrome“),
+   nic osobního. Neplatné tokeny maže Apps Script sám (smaže `push.<zid>`).
+   Token se nepíše do konzole ani do aktivit.
+
+   iPhone a iPad: upozornění z webu umí jen web přidaný na plochu (iOS 16.4+),
+   v Safari samotném PushManager vůbec není. A Safari zahodí žádost
+   o povolení, která nepřijde přímo z kliknutí – proto KB.pushZapnout NENÍ
+   async a requestPermission zavolá dřív, než na cokoliv čeká. */
+const PUSH_ZID_KLIC = "kb_push_zid";
+const PUSH_OBNOVA_KLIC = "kb_push_obnova";
+const PUSH_ZID_VZOR = /^z[a-z0-9]{12}$/;
+const PUSH_OBNOVA_MS = 24 * 60 * 60 * 1000;
+/* Adresa je složená schválně: sw.js si z textu skriptů vybírá celé adresy
+   Firebase a ukládá je předem pro práci bez signálu. Messaging tam nepatří –
+   stahuje se jen po kliknutí na Zapnout a při obnově tokenu. */
+const PUSH_SDK = "https://www.gstatic.com/firebasejs/11.6.1/firebase-" + "messaging.js";
+
+const PUSH_HLASKY = {
+    nastaveni: "Upozornění z webu se teprve připravují.",
+    "ios-plocha": "Na iPhonu a iPadu to jde jen z webu přidaného na plochu.",
+    nepodporuje: "Tenhle prohlížeč upozornění z webu neumí.",
+    zakazano: "Upozornění jsou pro tento web zakázaná. Povol je v nastavení prohlížeče nebo telefonu a zkus to znovu.",
+    nepovoleno: "Upozornění jsi nepovolil. Zkus to znovu a v okně prohlížeče dej Povolit.",
+    sw: "Web se ještě nenačetl celý. Obnov stránku a zkus to znovu.",
+    sdk: "Nepodařilo se načíst část webu pro upozornění. Zkontroluj připojení a zkus to znovu.",
+    token: "Prohlížeč nedostal adresu pro upozornění. Zkus to za chvíli znovu.",
+    ulozeni: "Uložení se nepovedlo. Zkus to znovu."
+};
+function pushChyba(kod, navic) {
+    const e = new Error(PUSH_HLASKY[kod] + (navic ? " (" + navic + ")" : ""));
+    e.kod = kod;
+    return e;
+}
+
+const ctiUloziste = (klic) => { try { return localStorage.getItem(klic) || ""; } catch (err) { return ""; } };
+const zapisUloziste = (klic, hodnota) => {
+    try { if (hodnota) localStorage.setItem(klic, hodnota); else localStorage.removeItem(klic); }
+    catch (err) { /* úložiště nejde (anonymní okno) – zařízení se pozná jen do zavření */ }
+};
+
+const jeIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const jeZPlochy = () => navigator.standalone === true ||
+    !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+
+/** Id tohoto zařízení, nebo "" (tady ještě nezapnuto, nebo odebráno). */
+KB.pushMojeZid = () => {
+    const zid = ctiUloziste(PUSH_ZID_KLIC);
+    return PUSH_ZID_VZOR.test(zid) ? zid : "";
+};
+
+/** Nové id zařízení: „z“ + 12 znaků a–z0–9 bez zkreslení (252 = 7 × 36). */
+function novaZid() {
+    const abc = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let zid = "z";
+    while (zid.length < 13) {
+        const bajty = new Uint8Array(16);
+        crypto.getRandomValues(bajty);
+        for (const b of bajty) if (b < 252 && zid.length < 13) zid += abc[b % 36];
+    }
+    return zid;
+}
+
+/** Hrubý popis zařízení do seznamu („iPhone · aplikace“, „PC · Chrome“) – nic osobního. */
+function popisZarizeni() {
+    const ua = navigator.userAgent || "";
+    const typ = jeIos() ? (/iPhone|iPod/.test(ua) ? "iPhone" : "iPad")
+        : /Android/i.test(ua) ? "Android"
+        : /Macintosh|Mac OS X/.test(ua) ? "Mac" : "PC";
+    const kde = jeZPlochy() ? "aplikace"
+        : /Edg(A|iOS)?\//.test(ua) ? "Edge"
+        : /OPR\//.test(ua) ? "Opera"
+        : /SamsungBrowser/.test(ua) ? "Samsung"
+        : /Firefox|FxiOS/.test(ua) ? "Firefox"
+        : /Chrome|CriOS/.test(ua) ? "Chrome"
+        : /Safari/.test(ua) ? "Safari" : "prohlížeč";
+    return typ + " · " + kde;
+}
+
+/**
+ * Umí tohle zařízení upozornění z webu? `duvod` říká stránce, co ukázat:
+ *   "nastaveni"   chybí klíč PUSH_VAPID (teprve se připravuje),
+ *   "ios-plocha"  iPhone/iPad v Safari – web se musí přidat na plochu,
+ *   "nepodporuje" prohlížeč to neumí,
+ *   "zakazano"    upozornění pro web jsou v prohlížeči / telefonu zakázaná.
+ * iOS se kontroluje před podporou: v Safari mimo plochu PushManager chybí
+ * a „neumí to“ by tam byla špatná rada.
+ */
+KB.pushPodpora = () => {
+    if (!PUSH_VAPID) return { umi: false, duvod: "nastaveni" };
+    if (jeIos() && !jeZPlochy()) return { umi: false, duvod: "ios-plocha" };
+    if (typeof Notification === "undefined" || !("serviceWorker" in navigator) ||
+        typeof PushManager === "undefined") return { umi: false, duvod: "nepodporuje" };
+    if (Notification.permission === "denied") return { umi: false, duvod: "zakazano" };
+    return { umi: true, duvod: "" };
+};
+
+/** Zařízení přihlášeného člověka (bez tokenů – stránka je nepotřebuje): toto první, pak od nejnovějšího. */
+KB.pushZarizeni = () => {
+    const p = (KB.upozorneni && KB.upozorneni.push && typeof KB.upozorneni.push === "object")
+        ? KB.upozorneni.push : {};
+    const moje = KB.pushMojeZid();
+    return Object.keys(p)
+        .filter(zid => PUSH_ZID_VZOR.test(zid) && p[zid] && p[zid].token)
+        .map(zid => ({ zid: zid, zarizeni: String(p[zid].zarizeni || ""), ms: Number(p[zid].ms) || 0, moje: zid === moje }))
+        .sort((a, b) => (Number(b.moje) - Number(a.moje)) || (b.ms - a.ms));
+};
+
+/* Firebase Messaging až ve chvíli, kdy je potřeba. */
+let pushSdk = null;
+const nactiPushSdk = () => pushSdk ||
+    (pushSdk = import(PUSH_SDK).catch(err => { pushSdk = null; throw err; }));
+
+/** Registrace sw.js (ukazuje upozornění). Bez service workeru by se čekalo věčně. */
+function pushRegistrace() {
+    let casovac = null;
+    return Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, chyba) => { casovac = setTimeout(() => chyba(pushChyba("sw")), 15000); })
+    ]).finally(() => clearTimeout(casovac));
+}
+
+/** Token FCM tohoto zařízení (odběr vznikne, když ještě není). */
+async function ziskejPushToken() {
+    const reg = await pushRegistrace();
+    let fm;
+    try { fm = await nactiPushSdk(); } catch (err) { throw pushChyba("sdk"); }
+    if (!(await fm.isSupported())) throw pushChyba("nepodporuje");
+    try {
+        return await fm.getToken(fm.getMessaging(fbApp), { vapidKey: PUSH_VAPID, serviceWorkerRegistration: reg });
+    } catch (err) {
+        throw pushChyba("token", err && err.code);
+    }
+}
+
+/* Hluboký merge přepíše jen řádek tohoto zařízení, ostatní zůstanou. */
+const ulozPushToken = (uid, zid, token) => {
+    const ted = Date.now();
+    return setDoc(upozDoc(uid), {
+        push: { [zid]: { token: String(token), ms: ted, zarizeni: popisZarizeni() } },
+        pushMs: ted
+    }, { merge: true });
+};
+
+/**
+ * Zapnout upozornění na tomto zařízení → slib { ok, chyba } (česká hláška).
+ * Stránka ho volá JAKO PRVNÍ příkaz v obsluze kliknutí: requestPermission
+ * tu běží synchronně, až potom se na cokoliv čeká (viz iOS výš).
+ */
+KB.pushZapnout = () => {
+    const podpora = KB.pushPodpora();
+    if (!podpora.umi) return Promise.resolve({ ok: false, chyba: PUSH_HLASKY[podpora.duvod] });
+    const povoleni = new Promise(hotovo => {
+        // starší Safari umí jen zpětné volání, novější prohlížeče slib – vezme se, co přijde dřív
+        const v = Notification.requestPermission(hotovo);
+        if (v && typeof v.then === "function") v.then(hotovo, () => hotovo("default"));
+    }).catch(() => "default");
+    return dokonciPush(povoleni).then(() => ({ ok: true, chyba: "" }), (err) => {
+        console.warn("Upozornění z webu se nezapnula:", (err && (err.kod || err.code)) || "chyba");
+        return { ok: false, chyba: (err && err.kod) ? err.message
+            : "Zapnutí se nepovedlo (" + ((err && (err.code || err.message)) || "chyba") + ")." };
+    });
+};
+
+async function dokonciPush(povoleni) {
+    const stav = await povoleni;
+    if (stav !== "granted") throw pushChyba(stav === "denied" ? "zakazano" : "nepovoleno");
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    const token = await ziskejPushToken();
+    if (!token) throw pushChyba("token");
+    const zid = KB.pushMojeZid() || novaZid();
+    zapisUloziste(PUSH_ZID_KLIC, zid);
+    try { await ulozPushToken(uid, zid, token); } catch (err) { throw pushChyba("ulozeni", err && err.code); }
+    zapisUloziste(PUSH_OBNOVA_KLIC, String(Date.now()));     // token je čerstvý – obnova až za den
+}
+
+/** Odebrat zařízení ze seznamu. U tohoto zařízení i zrušit odběr v prohlížeči (chyby jen do konzole). */
+KB.pushOdebrat = async (zid) => {
+    zid = String(zid || "");
+    if (!PUSH_ZID_VZOR.test(zid)) throw new Error("Neplatné zařízení.");
+    if (authReady) await authReady;
+    requireDb();
+    await updateDoc(upozDoc(KB.currentUid()), { ["push." + zid]: deleteField(), pushMs: Date.now() });
+    if (zid !== KB.pushMojeZid()) return;
+    // zapomenout id – jinak by ho tady stránka dál měla za „toto zařízení“
+    zapisUloziste(PUSH_ZID_KLIC, "");
+    zapisUloziste(PUSH_OBNOVA_KLIC, "");
+    if (!PUSH_VAPID || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+        const reg = await pushRegistrace();
+        const fm = await nactiPushSdk();
+        const m = fm.getMessaging(fbApp);
+        /* getToken tu jen předá messagingu náš sw.js (token už je, vrátí ho
+           z IndexedDB) – deleteToken by si jinak sám registroval
+           firebase-messaging-sw.js, který na webu není. */
+        await fm.getToken(m, { vapidKey: PUSH_VAPID, serviceWorkerRegistration: reg });
+        await fm.deleteToken(m);
+    } catch (err) {
+        console.warn("Odběr upozornění v prohlížeči se nezrušil:", (err && (err.code || err.kod)) || "chyba");
+    }
+};
+
+/** Zkušební upozornění přes Apps Script na všechna zařízení → { ok, zarizeni, doruceno, chyba }. */
+KB.zkouskaPush = () => zkouskaPresServer("pushZkouska");
+
+/* Obnova tokenu. Token FCM se časem mění (prohlížeč obnoví odběr, SDK ho
+   po týdnu přegeneruje) a se starým by upozornění tiše přestala chodit.
+   Po přihlášení se proto nejvýš jednou za den zeptá a změněný přepíše –
+   jen tam, kde upozornění povolená jsou a zařízení pořád je v seznamu
+   (odebrané odjinud se samo nevrací). Pár sekund po načtení, ať nezdržuje
+   stránku; chyby jen do konzole. */
+let pushObnovaNaplanovana = false;
+function naplanujObnovuPush() {
+    if (pushObnovaNaplanovana || !PUSH_VAPID) return;
+    pushObnovaNaplanovana = true;
+    setTimeout(() => {
+        obnovPushToken().catch(err => console.warn("Obnova upozornění z webu se nepovedla:",
+            (err && (err.kod || err.code)) || "chyba"));
+    }, 4000);
+}
+
+async function obnovPushToken() {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted" ||
+        !("serviceWorker" in navigator)) return;
+    const zid = KB.pushMojeZid();
+    if (!zid || Date.now() - (Number(ctiUloziste(PUSH_OBNOVA_KLIC)) || 0) < PUSH_OBNOVA_MS) return;
+    const uid = KB.currentUid();
+    if (!db || !uid) return;
+    zapisUloziste(PUSH_OBNOVA_KLIC, String(Date.now()));     // i po chybě až zítra, ne na každé stránce
+    const snap = await getDoc(upozDoc(uid));
+    const ulozene = snap.exists() ? ((snap.data() || {}).push || {})[zid] : null;
+    if (!ulozene) return;
+    const token = await ziskejPushToken();
+    if (token && token !== ulozene.token) await ulozPushToken(uid, zid, token);
+}
 
 /* ------------------------------------------- ZŮSTATKY DOVOLENÉ ----------
    Kolik komu zbývá dovolené a kolik má naběháno přesčasů. Web nemá
