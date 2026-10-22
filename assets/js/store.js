@@ -855,6 +855,9 @@ KB.saveQuickTodo = async (id, data) => {
     if ("opakovaniDen" in data) zapis.opakovaniDen = Number(data.opakovaniDen) || 0;
     if ("opakovaniKoren" in data) zapis.opakovaniKoren = String(data.opakovaniKoren || "").slice(0, 80);
     if ("opakovanyZ" in data) zapis.opakovanyZ = String(data.opakovanyZ || "").slice(0, 80);
+    /* Odkazy „#projekt / #úkol" v textu (22. 10. 2026) – jen když přijdou;
+       tvar hlídá KBUI.cisteOdkazy (ui.js je na stránce vždy před store.js). */
+    if ("odkazy" in data && window.KBUI) zapis.odkazy = window.KBUI.cisteOdkazy(data.odkazy);
 
     await setDoc(quickDoc(id), zapis, { merge: true });
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
@@ -1286,13 +1289,15 @@ KB.posliZpravu = async (lid, data) => {
     if (!text && !fotky.length) return "";
     const id = novePoznId("pz_");
     const ted = Date.now();
-    await setDoc(poznDoc(id), {
+    // odkazy „#projekt / #úkol" – pole jen u zprávy, která nějaký má
+    const odkazy = window.KBUI ? window.KBUI.cisteOdkazy(d.odkazy) : [];
+    await setDoc(poznDoc(id), Object.assign({
         listId: lid, listNazev: String(l.nazev || "").slice(0, 80),
         text: text, uid: ja, jmeno: window.KB_USER || "",
         // čtenáři = přesně účastníci konverzace (pravidla to hlídají)
         sdileni: ucastnici, createdMs: ted, ms: ted,
         nahled: String(d.nahled || "").slice(0, 90000), obrazku: fotky.length
-    });
+    }, odkazy.length ? { odkazy: odkazy } : {}));
     for (let i = 0; i < fotky.length; i++) {
         await setDoc(poznObrazek(id, "img_" + ted + "_" + i), { data: fotky[i], ms: ted + i });
     }
@@ -4239,7 +4244,8 @@ function nasledovnikQuick(q, ted) {
         : (q.proUid ? [q.proUid] : []);
     return {
         id: idNasledovnika(q, doKdy),
-        data: {
+        // odkazy „#" v textu jdou s textem i do další kopie
+        data: Object.assign(Array.isArray(q.odkazy) && q.odkazy.length ? { odkazy: q.odkazy } : {}, {
             text: q.text || "", proUids: komu, proUid: komu[0] || "",
             odKoho: q.odKoho || "", odKohoJmeno: q.odKohoJmeno || "",
             doKdy: doKdy, asap: false, projekt: q.projekt || "",
@@ -4248,7 +4254,7 @@ function nasledovnikQuick(q, ted) {
             poznamka: q.poznamka || "", hlidka: "", ms: ted,
             opakovani: q.opakovani, opakovaniDen: den,
             opakovaniKoren: String(q.opakovaniKoren || q.id), opakovanyZ: q.id
-        }
+        })
     };
 }
 /* OPAKOVANI-KONEC */

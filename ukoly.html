@@ -465,7 +465,7 @@
             // svoji poznámku spraví každý, cizí jen manažer
             const smiMenit = jeManazer() || (p.uid && p.uid === uid);
             return '<div class="note" data-poznradek="' + esc(klic + "|" + p.id) + '">' +
-                '<span class="note__text">' + esc(p.text) + "</span>" +
+                '<span class="note__text">' + window.KBUI.textSOdkazy(p.text, p.odkazy) + "</span>" +
                 '<span class="note__who">' + esc(p.kdo || "neznámý") +
                     (p.ms ? " · " + esc(casRazitko(p.ms)) : "") +
                     (smiMenit
@@ -481,7 +481,8 @@
         const formular = poznFormy.has(klic)
             ? '<div class="row" style="gap:8px;margin-top:6px">' +
                 '<input type="text" class="field grow" data-pozn-vstup="' + esc(klic) + '" ' +
-                    'placeholder="např. čekám, až to na stavbě udělají">' +
+                    'data-napoveda autocomplete="off" ' +
+                    'placeholder="např. čekám, až to na stavbě udělají (@ kolega, # projekt či úkol)">' +
                 '<button type="button" class="btn btn--sm btn--primary" data-pozn-uloz="' +
                     esc(klic) + '">Přidat</button>' +
               "</div>"
@@ -856,6 +857,10 @@
                 window.KBUI.can("vykaz.view") && {
                     text: "Zobrazit výkazy", ikona: "lupa",
                     odkaz: "vykazy.html?ukolFiltr=" + encodeURIComponent(u.id) },
+                /* vzkaz k úkolu: v textu odkaz #úkol, adresáti = kdo na něm dělá */
+                { text: "Quick TO-DO k úkolu…", ikona: "zprava",
+                    fn: () => window.KBUI.otevriQuickPanel({
+                        odkaz: odkazNaUkol(u), komu: u.prirazeni || [], projekt: u.projekt || "" }) },
                 smiPsatNa(u) && !hotovy && {
                     text: "Označit hotové", ikona: "hotovo", fn: () => oznacHotove(u) },
                 window.KBUI.isAdmin() && hotovy && u.potvrzeno !== true && {
@@ -954,9 +959,31 @@
         try {
             await window.KB.ulozUkolPostup(ukolId, todo, hotovo ? "hotovo" : "otevreny",
                 null, popis);
+            return true;
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Nepovedlo se – k úkolu píše jen přiřazený člověk.", "error");
+            return false;
+        }
+    }
+
+    /* Zmínka přes @ v poznámce u TO-DO: zmíněný dostane vzkaz do Quick
+       TO-DO s odkazem na úkol (#název vede na ukoly.html?otevri=…). Při
+       opravě poznámky jen ti, kdo v ní předtím zmínění nebyli. */
+    const odkazNaUkol = (u) => ({ t: "u", id: u.id, n: String(u.nazev || "úkol").replace(/\s+/g, " ").trim().slice(0, 120) });
+
+    async function ohlasZminkyPoznamky(u, text, odkazy, predtim) {
+        const pred = window.KBUI.zminkyVTextu(predtim || "");
+        const novi = window.KBUI.zminkyVTextu(text).filter(x => pred.indexOf(x) === -1);
+        if (!novi.length) return;
+        const ukol = odkazNaUkol(u);
+        try {
+            const jmena = await window.KBUI.ohlasZminky(novi,
+                "Zmínil tě v poznámce u úkolu #" + ukol.n + ": " + text,
+                { projekt: u.projekt || "", odkazy: [ukol].concat(odkazy) });
+            if (jmena.length) window.KBUI.toast("Zmínka poslána do Quick TO-DO: " + jmena.join(", ") + ".");
+        } catch (err) {
+            console.warn("Vzkaz o zmínce se nezapsal:", err);
         }
     }
 
@@ -1016,15 +1043,17 @@
         const u = najdiUkol(ukolId);
         if (!u) return;
         poznFormy.delete(klic);
-        await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
-            pozn: (t.pozn || []).concat([{
+        const odkazy = window.KBUI.odkazyPole(vstup);
+        const ulozeno = await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
+            pozn: (t.pozn || []).concat([Object.assign({
                 id: "pz_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
                 text: text.slice(0, 300),
                 kdo: window.KB_USER || "",
                 uid: window.KB.currentUid() || "",
                 ms: Date.now()
-            }])
+            }, odkazy.length ? { odkazy: odkazy } : {})])
         })), "přidal poznámku k TO-DO");
+        if (ulozeno) ohlasZminkyPoznamky(u, text.slice(0, 300), odkazy, "");
     }
 
     async function smazPoznamku(klic) {
@@ -1048,9 +1077,10 @@
         const radek = document.querySelector('[data-poznradek="' + klic + '"]');
         const misto = radek && radek.querySelector(".note__text");
         if (!misto) return;
-        misto.innerHTML = '<input type="text" class="field note__vstup" data-todo-input>';
+        misto.innerHTML = '<input type="text" class="field note__vstup" data-todo-input data-napoveda autocomplete="off">';
         const vstup = misto.querySelector("input");
         vstup.value = pozn.text;
+        vstup.kbOdkazy = window.KBUI.cisteOdkazy(pozn.odkazy);
         vstup.focus();
         vstup.select();
 
@@ -1063,10 +1093,12 @@
             vstup.removeAttribute("data-todo-input");
             const text = vstup.value.trim();
             if (!ulozit || !text || text === pozn.text) return void vykresli();
-            await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
+            const odkazy = window.KBUI.odkazyPole(vstup);
+            const ulozeno = await ulozTodo(ukolId, sPolozkou(u, todoId, t => Object.assign({}, t, {
                 pozn: (t.pozn || []).map(x => x.id === poznId
-                    ? Object.assign({}, x, { text: text.slice(0, 300) }) : x)
+                    ? Object.assign({}, x, { text: text.slice(0, 300), odkazy: odkazy }) : x)
             })), "opravil poznámku u TO-DO");
+            if (ulozeno) ohlasZminkyPoznamky(u, text.slice(0, 300), odkazy, pozn.text);
         };
         vstup.addEventListener("keydown", (e) => {
             if (e.key === "Enter") { e.preventDefault(); konec(true); }
