@@ -18,9 +18,19 @@
    nové verzi webu se natáhne všech pět (HTML ~80 kB; soubory má většinou
    už stažené stránka, logo a písma jen poprvé) a soubory starých verzí se
    smažou. Ostatní stránky bez signálu ukážou rozcestník na těch pět.
+
+   UPOZORNĚNÍ Z WEBU (22. 10. 2026): tenhle service worker zároveň ukazuje
+   upozornění, která posílá Apps Script přes Firebase Cloud Messaging
+   (přihlášení zařízení k odběru dělá store.js, KB.pushZapnout).
+   • push: VŽDY ukázat upozornění – iPhone odběr zruší, když push nic
+     neukáže. Data z FCM: { data: { titulek, text, odkaz, tag } }; pro
+     jistotu se bere i notification.title/body a fcmOptions.link.
+   • notificationclick: zavřít, najít otevřené okno webu a přepnout ho na
+     odkaz (jinak nové okno). Odkaz jen pod adresou webu – cizí adresa nebo
+     javascript: z podvržené zprávy otevře úvodní stránku.
    ========================================================================== */
 
-const CACHE = "kb-teren-1";      // zvednout JEN při změně tohoto souboru – staré se smažou
+const CACHE = "kb-teren-2";      // zvednout JEN při změně tohoto souboru – staré se smažou
 const TERENNI = {
     "index.html": "Nástěnka",
     "plany.html": "Plány",
@@ -180,4 +190,68 @@ function bezSignalu() {
         "<p>Tahle stránka se bez připojení neotevře. Bez signálu jdou (s tím, co bylo naposledy načtené):</p>" +
         "<ul>" + odkazy + '</ul><button type="button" onclick="location.reload()">Zkusit znovu</button>' +
         "</main></body></html>");
+}
+
+/* ------------------------------------------------------- upozornění ---- */
+
+const IKONA = KOREN + "ikona-192.png";
+
+self.addEventListener("push", (event) => {
+    event.waitUntil(ukazUpozorneni(event.data));
+});
+
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    const odkaz = adresaWebu((event.notification.data || {}).odkaz);
+    event.waitUntil(otevriOdkaz(odkaz));
+});
+
+/** Odkaz jen na tenhle web (pod `scope`), jinak úvodní stránka. */
+function adresaWebu(adresa) {
+    try {
+        const url = new URL(String(adresa || ""), KOREN);
+        if (url.href.startsWith(KOREN)) return url.href;
+    } catch (err) { /* nesmysl v adrese – úvodní stránka */ }
+    return KOREN;
+}
+
+/** Co z pushe ukázat. Chybějící nebo rozbitá data nevadí – upozornění se ukáže vždy. */
+function obsahPushe(data) {
+    let json = null;
+    try { json = data ? data.json() : null; } catch (err) {
+        try { json = { data: { text: data.text() } }; } catch (e) { json = null; }
+    }
+    const obj = (x) => (x && typeof x === "object") ? x : {};
+    const d = obj(json && json.data);
+    const n = obj(json && json.notification);
+    const f = obj(json && json.fcmOptions);
+    return {
+        titulek: String(d.titulek || n.title || "Pasport Kaňa").slice(0, 120),
+        text: String(d.text || n.body || "").slice(0, 500),
+        odkaz: adresaWebu(d.odkaz || f.link || ""),
+        tag: String(d.tag || "").slice(0, 64)
+    };
+}
+
+function ukazUpozorneni(data) {
+    let o;
+    try { o = obsahPushe(data); } catch (err) { o = { titulek: "Pasport Kaňa", text: "", odkaz: KOREN, tag: "" }; }
+    const volby = { body: o.text, icon: IKONA, lang: "cs", data: { odkaz: o.odkaz } };
+    // stejný tag = nové upozornění nahradí staré (další zpráva v téže konverzaci); renotify, ať znovu pípne
+    if (o.tag) { volby.tag = o.tag; volby.renotify = true; }
+    return self.registration.showNotification(o.titulek, volby);
+}
+
+/** Otevřené okno webu přepnout na odkaz; když žádné není (nebo nejde přepnout), nové okno. */
+async function otevriOdkaz(odkaz) {
+    const okna = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const okno = okna.find(c => c.url === odkaz) || okna.find(c => c.url.startsWith(KOREN));
+    if (okno) {
+        try {
+            const zamerene = (await okno.focus()) || okno;
+            if (zamerene.url !== odkaz) await zamerene.navigate(odkaz);
+            return;
+        } catch (err) { /* okno neřídí tenhle service worker nebo nejde zaměřit – nové okno */ }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(odkaz);
 }

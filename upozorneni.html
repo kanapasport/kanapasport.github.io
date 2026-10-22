@@ -81,6 +81,13 @@
         .upntfy__qrtext a { word-break: break-all; }
         .upntfy .upvolba { border-bottom: 0; padding: 4px 2px; }
         .upntfy__telefon { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        /* Upozornění z webu (FCM, 22. 10. 2026) – seznam zařízení v kartě nad ntfy. */
+        .upntfy__zar { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+        .upntfy__zar:last-child { border-bottom: 0; }
+        .upntfy__zartext { min-width: 0; font-size: var(--fs-2); line-height: 1.5; }
+        .upntfy__tady { font-size: var(--fs-1); font-weight: 900; color: var(--ok); margin-left: 6px;
+            white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -129,6 +136,40 @@
             zrovna jede, je vidět nahoře.
         </p>
 
+        <!-- Upozornění z webu (Firebase Cloud Messaging) – bez další aplikace,
+             zapíná se na každém zařízení zvlášť. Obsah kreslí vykresliPush()
+             podle KB.pushPodpora(); token zařízení stránka vůbec nedostane
+             (KB.pushZarizeni ho vynechá). -->
+        <div class="card col upntfy" id="pushKarta" style="padding:16px 18px;gap:12px">
+            <div class="upntfy__hlava">
+                <span class="upntfy__nadpis">Upozornění do mobilu a počítače</span>
+                <span id="pushStitek" class="upntfy__stitek">vypnuto</span>
+            </div>
+            <p class="small muted" style="margin:0;line-height:1.6">
+                Nová zpráva v Poznámkách (a když chceš, i krátké ohlášení k e-mailům)
+                ti vyskočí přímo v telefonu nebo v počítači — bez další aplikace.
+                Zapíná se na každém zařízení zvlášť.
+            </p>
+            <div id="pushTady" class="col" style="gap:10px"></div>
+            <div id="pushSeznam" class="col" style="gap:10px" hidden>
+                <div>
+                    <div class="upskupina__nadpis" style="margin-top:0">Moje zařízení</div>
+                    <div id="pushZarizeni"></div>
+                </div>
+                <label class="upvolba">
+                    <input type="checkbox" id="pushOstatni">
+                    <span class="upvolba__text">
+                        <b class="upvolba__nazev">Posílat i krátká ohlášení k e-mailům</b>
+                        <span class="upvolba__popis">Ke každému e-mailu odsud krátké upozornění – jen kolik čeho přišlo. Stejná volba platí i pro ntfy.</span>
+                    </span>
+                </label>
+                <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+                    <button type="button" id="btnPushTest" class="btn btn--primary">Poslat zkoušku</button>
+                </div>
+                <div id="pushZprava" class="small muted"></div>
+            </div>
+        </div>
+
         <!-- Upozornění do mobilu přes aplikaci ntfy. Téma je tajné jako
              heslo: kdo ho zná, čte. Nikdy se nevypisuje do konzole ani do
              aktivit; ukazuje se jen tady jeho majiteli. -->
@@ -140,7 +181,9 @@
             <p class="small muted" style="margin:0;line-height:1.6">
                 Nová zpráva v Poznámkách ti hned pípne v telefonu — přes aplikaci
                 <b>ntfy</b> (zdarma, bez registrace). Do mobilu jde jen to, kdo píše,
-                a odkaz na web, nikdy text zprávy.
+                a odkaz na web, nikdy text zprávy. Když máš zapnutá upozornění z webu
+                (karta výš), chodí přednostně tudy a ntfy je jen záloha — pípne, jen když
+                se upozornění z webu nepodaří odeslat.
             </p>
             <div id="ntfyNeumi" class="upbeh upbeh--pozor" hidden>
                 <b>Tahle část ještě čeká na novou verzi webu.</b> Zapnout se dá,
@@ -610,6 +653,7 @@
         if (!ntfyUmi() || ntfyPrace) return false;
         ntfyPrace = true;
         vykresliNtfy();
+        vykresliPush();
         try {
             await window.KB.ulozNtfy(data);
             if (hotovo) window.KBUI.toast(hotovo.text, "", hotovo.volby);
@@ -621,6 +665,7 @@
         } finally {
             ntfyPrace = false;
             vykresliNtfy();
+            vykresliPush();      // `ntfyOstatni` má i karta upozornění z webu
         }
     }
 
@@ -639,8 +684,10 @@
         }, "Vypnutí se nepovedlo.");
     }
 
-    function ntfyOstatni() {
-        const ano = $("ntfyOstatni").checked;
+    /* Jedna volba ve dvou kartách (ntfy i upozornění z webu) – ukládá se
+       jednou (`ntfyOstatni`) a po uložení se srovnají obě. */
+    function ntfyOstatni(event) {
+        const ano = event.target.checked;
         ulozNtfy({ ostatni: ano },
             { text: ano ? "Do mobilu půjdou i ostatní upozornění." : "Do mobilu půjdou jen zprávy z Poznámek." },
             "Uložení se nepovedlo.");
@@ -714,8 +761,136 @@
         }
     }
 
+    /* ------------------------------------------- UPOZORNĚNÍ Z WEBU ------
+       Firebase Cloud Messaging: prohlížeč se přihlásí k odběru a jeho adresa
+       (token) se uloží do vlastního dokumentu upozornění (`push.<zid>`);
+       posílá Apps Script. Všechno kolem tokenu dělá store.js – stránka
+       tokeny ani nevidí. Zapíná se na každém zařízení zvlášť, seznam
+       zařízení je společný. */
+    let pushPrace = false;
+    const pushUmi = () => !!(window.KB && typeof window.KB.pushPodpora === "function");
+
+    /** Co ukázat k TOMUTO zařízení podle KB.pushPodpora(). */
+    function pushTadyHtml(podpora, tady) {
+        if (podpora.duvod === "nastaveni") {
+            return '<p class="small muted" style="margin:0">Připravuje se.</p>';
+        }
+        if (podpora.duvod === "ios-plocha") {
+            return '<div class="upbeh upbeh--pozor"><b>Na iPhonu a iPadu jdou upozornění jen z webu ' +
+                "přidaného na plochu</b> (iOS 16.4 a novější).</div>" +
+                '<ol class="upntfy__kroky">' +
+                    "<li>Tady v Safari dej <b>⎋ Sdílet</b> (čtvereček se šipkou nahoru).</li>" +
+                    "<li>Vyber <b>Přidat na plochu</b> a potvrď <b>Přidat</b>.</li>" +
+                    "<li>Otevři <b>Pasport</b> z plochy, přihlas se a tady dej <b>Zapnout na tomto zařízení</b>.</li>" +
+                "</ol>";
+        }
+        if (podpora.duvod === "zakazano") {
+            return '<div class="upbeh upbeh--pozor"><b>Upozornění pro tento web máš zakázaná.</b> ' +
+                "Web se na ně znovu zeptat nesmí – povolit je musíš sám:<br>" +
+                "• v počítači klikni na ikonu vlevo od adresy webu → <b>Oznámení</b> → <b>Povolit</b>,<br>" +
+                "• v Androidu <b>Nastavení → Aplikace → Chrome</b> (nebo Pasport) <b>→ Oznámení</b>,<br>" +
+                "• v iPhonu <b>Nastavení → Oznámení → Pasport</b>.<br>" +
+                "Pak tuhle stránku obnov.</div>";
+        }
+        if (podpora.duvod === "nepodporuje") {
+            return '<div class="upbeh upbeh--vyp"><b>Tenhle prohlížeč upozornění z webu neumí.</b> ' +
+                "Zkus jiný (Chrome, Edge, Firefox, Safari), nebo použij aplikaci ntfy níž.</div>";
+        }
+        if (tady) return '<p class="small" style="margin:0">Na <b>tomto zařízení</b> je zapnuto.</p>';
+        return '<div class="row" style="gap:12px;flex-wrap:wrap;align-items:center">' +
+            '<button type="button" class="btn btn--primary" data-push-zapnout' + (pushPrace ? " disabled" : "") + ">" +
+                (pushPrace ? "Zapínám…" : "Zapnout na tomto zařízení") + "</button>" +
+            '<span class="small muted">Prohlížeč se zeptá, jestli smí posílat upozornění – dej <b>Povolit</b>.</span>' +
+        "</div>";
+    }
+
+    function vykresliPush() {
+        const podpora = pushUmi() ? window.KB.pushPodpora() : { umi: false, duvod: "nastaveni" };
+        const zarizeni = pushUmi() ? window.KB.pushZarizeni() : [];
+        // „zapnuto tady“ jen s povolením – kdo ho v prohlížeči vrátil na „zeptat se“, zapne znovu
+        const tady = zarizeni.some(z => z.moje) &&
+            typeof Notification !== "undefined" && Notification.permission === "granted";
+        const st = $("pushStitek");
+        const zap = podpora.duvod !== "nastaveni" && zarizeni.length > 0;
+        st.textContent = podpora.duvod === "nastaveni" ? "připravuje se" : zap ? "zapnuto" : "vypnuto";
+        st.classList.toggle("upntfy__stitek--zap", zap);
+        $("pushTady").innerHTML = pushTadyHtml(podpora, tady);
+        $("pushSeznam").hidden = !zarizeni.length;
+        $("pushZarizeni").innerHTML = zarizeni.map(z =>
+            '<div class="upntfy__zar">' +
+                '<span class="upntfy__zartext"><b>' + esc(z.zarizeni || "Zařízení") + "</b>" +
+                    (z.moje ? '<span class="upntfy__tady">toto zařízení</span>' : "") +
+                    (z.ms ? '<br><span class="tiny muted">zapnuto ' +
+                        esc(new Date(z.ms).toLocaleDateString("cs-CZ")) + "</span>" : "") +
+                "</span>" +
+                '<button type="button" class="btn btn--ghost btn--sm" data-push-odebrat="' + esc(z.zid) + '"' +
+                    (pushPrace ? " disabled" : "") + ">Odebrat</button>" +
+            "</div>").join("");
+        $("pushOstatni").checked = !(nactene && nactene.ntfyOstatni === false);
+        $("pushOstatni").disabled = !ntfyUmi() || ntfyPrace;
+        $("btnPushTest").disabled = pushPrace;
+    }
+
+    function pushZapnout() {
+        // PRVNÍ příkaz v kliknutí: store.js tu hned žádá o povolení (Safari na iPhonu jinak žádost zahodí)
+        const slib = window.KB.pushZapnout();
+        pushPrace = true;
+        vykresliPush();
+        Promise.resolve(slib).then((v) => {
+            if (v && v.ok) window.KBUI.toast("Upozornění na tomto zařízení zapnutá. Zkus Poslat zkoušku.");
+            else window.KBUI.toast((v && v.chyba) || "Zapnutí se nepovedlo.", "error");
+        }, () => window.KBUI.toast("Zapnutí se nepovedlo.", "error")).then(() => {
+            pushPrace = false;
+            vykresliPush();
+        });
+    }
+
+    async function pushOdebrat(zid) {
+        if (pushPrace) return;
+        pushPrace = true;
+        vykresliPush();
+        try {
+            await window.KB.pushOdebrat(zid);
+            window.KBUI.toast("Zařízení odebrané – upozornění na něj už chodit nebudou.");
+        } catch (err) {
+            console.error("Zařízení se neodebralo (" + ((err && err.code) || "chyba") + ").");
+            window.KBUI.toast("Odebrání se nepovedlo.", "error");
+        } finally {
+            pushPrace = false;
+            vykresliPush();
+        }
+    }
+
+    /* Zkouška jde přes Apps Script na všechna zařízení – stejnou cestou jako
+       skutečná upozornění, takže ukáže i chybu klíče nebo neplatný token. */
+    async function pushZkouska() {
+        $("btnPushTest").disabled = true;
+        $("pushZprava").textContent = "Posílám…";
+        try {
+            const v = await window.KB.zkouskaPush();
+            const chyba = String((v && v.chyba) || "").replace(/\.$/, "");
+            $("pushZprava").textContent = v && v.ok
+                ? "Doručeno na " + (Number(v.doruceno) || 0) + " z " + (Number(v.zarizeni) || 0) + " zařízení" +
+                  (chyba ? " · " + chyba : "")
+                : "Nepodařilo se: " + (chyba || "neznámá chyba") + ".";
+        } catch (err) {
+            $("pushZprava").textContent = "Server neodpověděl (nejspíš ještě není nasazená nová verze skriptu).";
+        } finally {
+            $("btnPushTest").disabled = pushPrace;
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "upozorneni.html" });
+        $("pushKarta").addEventListener("click", (event) => {
+            if (event.target.closest("[data-push-zapnout]")) { pushZapnout(); return; }
+            const b = event.target.closest("[data-push-odebrat]");
+            if (b) pushOdebrat(b.dataset.pushOdebrat);
+        });
+        $("btnPushTest").addEventListener("click", pushZkouska);
+        $("pushOstatni").addEventListener("change", ntfyOstatni);
+        // povolení se mění v nastavení prohlížeče/telefonu – po návratu na stránku srovnat
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) vykresliPush(); });
         $("btnUloz").addEventListener("click", uloz);
         $("btnNtfyZapnout").addEventListener("click", ntfyZapnout);
         $("btnNtfyVypnout").addEventListener("click", ntfyVypnout);
@@ -745,7 +920,7 @@
            (Michal 14. 9. 2026). */
         /* Mobil se kreslí zvlášť: e-mailová část se během úprav nepřekresluje
            (`upravovano`), zapnutí ntfy se ale musí ukázat hned. */
-        window.KB.on("upozorneni", () => { nactene = window.KB.upozorneni; vykresli(); vykresliNtfy(); });
+        window.KB.on("upozorneni", () => { nactene = window.KB.upozorneni; vykresli(); vykresliNtfy(); vykresliPush(); });
         window.KB.on("upozorneni-stav", vykresliBeh);
         window.KB.on("users", vykresli);
         document.addEventListener("kb-role", vykresli);
@@ -754,6 +929,7 @@
         vykresli();
         vykresliBeh();
         vykresliNtfy();
+        vykresliPush();
     });
 })();
 </script>
