@@ -5278,6 +5278,28 @@ KB.ulozNtfy = async (data) => {
     await setDoc(upozDoc(uid), zapis, { merge: true });
 };
 
+/** Zkušební pípnutí do mobilu PŘES Apps Script (ne z prohlížeče) – vrátí {ok, kod, chyba}.
+    Ukáže, jestli ntfy.sh bere zprávy ze serverů Googlu, odkud chodí ohlášení zpráv. */
+KB.zkouskaNtfyServer = async () => {
+    if (authReady) await authReady;
+    if (!KB.gsyncUrl) return { ok: false, chyba: "adresa skriptu není nastavená" };
+    const token = await auth.currentUser.getIdToken();
+    const odp = await fetch(KB.gsyncUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ akce: "ntfyZkouska", token: token })
+    });
+    return await odp.json();
+};
+
+/** Přehled doručování do mobilu (zapisuje Apps Script, čte jen správce): řádky od nejnovějšího. */
+KB.ntfyStav = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const s = await getDoc(doc(db, "artifacts", APP_ID, "private", "upozorneni", "ntfy", "stav"));
+    return s.exists() && Array.isArray(s.data().radky) ? s.data().radky : [];
+};
+
 /* ------------------------------------------- ZŮSTATKY DOVOLENÉ ----------
    Kolik komu zbývá dovolené a kolik má naběháno přesčasů. Web nemá
    historii z doby před sebou, takže se u každého člověka nastaví, OD KDY

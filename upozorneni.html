@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Upozornění – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=299">
+    <link rel="stylesheet" href="assets/css/app.css?v=300">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -189,6 +189,12 @@
                     <button type="button" id="btnNtfyVypnout" class="btn btn--ghost">Vypnout</button>
                     <span id="ntfyZprava" class="small muted"></span>
                 </div>
+                <!-- Přehled doručování (jen správce): co Apps Script poslal na ntfy.sh a s jakým
+                     výsledkem – bez témat a jmen. Kvůli 22. 10. 2026: zprávy nedorazily. -->
+                <details id="ntfyStavBox" class="small" hidden>
+                    <summary style="cursor:pointer;font-weight:700">Doručování do mobilu – posledních 30 pokusů (vidí správce)</summary>
+                    <div id="ntfyStavRadky" class="tiny muted" style="margin-top:6px;line-height:1.7"></div>
+                </details>
                 <p class="tiny muted" style="margin:0;line-height:1.6">
                     Název tématu je jako heslo: kdo ho zná, vidí tvoje upozornění.
                     Nikomu ho neposílej. Kdyby unikl, dej Vypnout a znovu Zapnout —
@@ -200,10 +206,10 @@
 
 </main>
 
-<script src="assets/js/taxonomy.js?v=299"></script>
-<script src="assets/js/ui.js?v=299"></script>
-<script src="assets/js/vykazy.js?v=299"></script>
-<script type="module" src="assets/js/store.js?v=299"></script>
+<script src="assets/js/taxonomy.js?v=300"></script>
+<script src="assets/js/ui.js?v=300"></script>
+<script src="assets/js/vykazy.js?v=300"></script>
+<script type="module" src="assets/js/store.js?v=300"></script>
 
 <script>
 (function () {
@@ -652,14 +658,40 @@
                 referrerPolicy: "no-referrer"
             });
             if (!odp.ok) throw new Error(String(odp.status));
-            $("ntfyZprava").textContent = "Odesláno – v telefonu by to mělo pípnout do pár vteřin.";
+            $("ntfyZprava").textContent = "Z prohlížeče odesláno. Zkouším i přes server…";
         } catch (err) {
             $("ntfyZprava").textContent = (err && err.message === "429")
                 ? "ntfy.sh teď odmítá moc požadavků – zkus to za chvíli."
                 : "Nepodařilo se odeslat – zkontroluj připojení a zkus to znovu.";
+            $("btnNtfyTest").disabled = !ntfyUmi();
+            return;
+        }
+        /* Zprávy z Poznámek ohlašuje server (Apps Script), ne prohlížeč – proto
+           druhá zkouška tou cestou. Výsledek ukáže kód ntfy.sh, když zprávu odmítne. */
+        try {
+            const s = await window.KB.zkouskaNtfyServer();
+            $("ntfyZprava").textContent = s && s.ok
+                ? "Odesláno dvakrát (z prohlížeče i přes server) – v telefonu by měla pípnout dvě upozornění."
+                : "Z prohlížeče odesláno, přes server NE: " +
+                  (s && s.kod ? "ntfy.sh " + s.kod + " " : "") + ((s && s.chyba) || "neznámá chyba") + ".";
+        } catch (err) {
+            $("ntfyZprava").textContent = "Z prohlížeče odesláno, server neodpověděl (nejspíš ještě není nasazená nová verze skriptu).";
         } finally {
             $("btnNtfyTest").disabled = !ntfyUmi();
+            nactiNtfyStav();
         }
+    }
+
+    /** Přehled doručování – jen správci (data v private). */
+    async function nactiNtfyStav() {
+        if (!window.KBUI.isAdmin() || !window.KB.ntfyStav) return;
+        try {
+            const radky = await window.KB.ntfyStav();
+            $("ntfyStavRadky").innerHTML = radky.length
+                ? radky.map(r => "<div>" + window.KBUI.esc(r) + "</div>").join("")
+                : "Zatím žádný záznam – objeví se po první zprávě nebo zkoušce přes server.";
+            $("ntfyStavBox").hidden = false;
+        } catch (err) { /* bez práv nebo bez dokumentu – přehled se neukáže */ }
     }
 
     async function ntfyKopie() {
@@ -679,6 +711,8 @@
         $("btnNtfyZapnout").addEventListener("click", ntfyZapnout);
         $("btnNtfyVypnout").addEventListener("click", ntfyVypnout);
         $("btnNtfyTest").addEventListener("click", ntfyZkouska);
+        $("ntfyStavBox").addEventListener("toggle", () => { if ($("ntfyStavBox").open) nactiNtfyStav(); });
+        nactiNtfyStav();
         $("btnNtfyKopie").addEventListener("click", ntfyKopie);
         $("ntfyOstatni").addEventListener("change", ntfyOstatni);
         $("upZapnuto").addEventListener("change", () => { upravovano = true; srovnejVypnuto(); });
