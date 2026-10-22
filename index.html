@@ -918,10 +918,14 @@
         const odlozenoMne = (q) => jeProMe(q) && !window.KBUI.quickHotovoPro(q, uid) &&
             window.KBUI.quickOdlozeno(q, uid);
 
+        /* Oznámení (přidal tě do konverzace, zmínka, milníky…): štítek místo
+           termínu, „Beru na vědomí" místo Splněno, „Otevřít" místo Poznámka. */
+        const info = (q) => window.KBUI.jeOznameni(q);
+
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' +
                 (hotovoPro(q, mujVzkaz) ? " qtrad--hotovo"
-                    : (q.asap ? " qtrad--asap" : "")) +
+                    : (q.asap && !info(q) ? " qtrad--asap" : "")) +
                 (!hotovoPro(q, mujVzkaz) && (window.KBUI.quickVzal(q, uid) || odlozenoMne(q))
                     ? " qtrad--vzato" : "") + '" data-quick-radek="' + esc(q.id) + '">' +
                 '<span class="grow" style="min-width:0;font-size:var(--fs-3);line-height:1.5">' +
@@ -932,9 +936,10 @@
                         /* Oddělovač se dává jen MEZI kusy, ne před první –
                            u vlastního vzkazu chybí „Zadal:" a řádek by jinak
                            začínal osamocenou tečkou. */
-                        [ mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?"),
+                        [ info(q) ? '<span class="quickrad__info">ℹ oznámení</span>' : "",
+                          mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmenoUid(q.odKoho) || "?"),
                           q.projekt ? esc(q.projekt) : "",
-                          termin(q),
+                          info(q) ? "" : termin(q),
                           esc(window.KBUI.quickOpakovani(q))      // „↻ každý týden"
                         ].filter(Boolean).join(" · ") +
                         // s kým je na tom člověk společně – sebe v seznamu nepotřebuje
@@ -950,7 +955,8 @@
                               esc(window.KBUI.quickVedomiJmena(q).join(", ")) + '">ví o tom ' +
                               esc(window.KBUI.quickVedomi(q)) + "</span>" : "") +
                         (q.rezim !== "kazdy" && q.hotovo && q.hotovoKdo
-                            ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
+                            ? '<br><span class="quickrad__splnil">' + (info(q) ? "vzal na vědomí " : "splnil ") +
+                              esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatum(new Date(q.hotovoMs)
                                   .toISOString().slice(0, 10))) : "") + "</span>" : "") +
                         /* U vzkazu k poznámce je vidět, o co jde – dřív tu
@@ -962,15 +968,16 @@
                             esc(window.KBUI.odlozenoText(q.odlozeno[uid])) + "</span>" : "") +
                     "</span>" +
                 "</span>" +
-                (q.poznamka
+                (q.poznamka && !info(q)
                     ? '<button type="button" class="btn btn--ghost btn--sm"' +
                       ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
+                window.KBUI.quickOtevritHtml(q) +
                 // splněné mizí ze seznamu – proto pořádné tlačítko, ne zaškrtávátko
                 /* Zadavatel, který mezi adresáty není, nemá u „každý sám" co
                    odškrtávat – splnění je na těch, komu vzkaz patří. */
                 /* Beru na vědomí: na připomínku akce se nedá říct „splněno",
                    ale má přestat svítit (Michal 16. 9. 2026). */
-                (adresati(q).indexOf(uid) !== -1 && !hotovoPro(q, mujVzkaz)
+                (adresati(q).indexOf(uid) !== -1 && !hotovoPro(q, mujVzkaz) && !info(q)
                     ? (window.KBUI.quickVzal(q, uid)
                         ? '<button type="button" class="linkbtn" data-quick-vzal="' + esc(q.id) +
                             '" data-zpet="1" title="Zrušit beru na vědomí">Beru ✓</button>'
@@ -984,11 +991,14 @@
                             esc(q.id) + '">Vrátit hned</button>'
                         : window.KBUI.odlozitTlacitko('data-quick-odlozit="' + esc(q.id) + '"'))
                     : "") +
-                (mujVzkaz && q.rezim === "kazdy"
+                (mujVzkaz && (q.rezim === "kazdy" || info(q))
                     ? ""
                     : (hotovoPro(q, mujVzkaz)
                         ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
                             esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                        : info(q)
+                        ? '<button type="button" class="btn btn--sm btn--primary" data-quick-hotovo="' +
+                            esc(q.id) + '">Beru na vědomí</button>'
                         : '<button type="button" class="btn btn--sm quicksplnit" data-quick-hotovo="' +
                             esc(q.id) + '">Splněno</button>')) +
                 (q.odKoho === uid
@@ -2027,7 +2037,9 @@
             ukoly.map(u => radek("Nový úkol: " + (u.nazev || ""),
                 [u.projekt, u.termin ? "termín " + czDatum(u.termin) : ""]
                     .filter(Boolean).join(" · "))).join("") +
-            vzkazy.map(q => radek("Quick TO-DO: " + (q.text || ""),
+            vzkazy.map(q => window.KBUI.jeOznameni(q)
+                ? radek("Oznámení: " + (q.text || ""), "od " + (q.odKohoJmeno || jmenoUid(q.odKoho) || "?"))
+                : radek("Quick TO-DO: " + (q.text || ""),
                 "od " + (q.odKohoJmeno || jmenoUid(q.odKoho) || "?") +
                 (q.asap ? " · co nejdříve" : q.doKdy ? " · do " + czDatum(q.doKdy) : "")))
                 .join("");

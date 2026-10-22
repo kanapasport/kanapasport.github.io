@@ -1107,18 +1107,22 @@
         const radky = seznam.slice(0, MAX).map(q => {
             const text = String(q.text || "").trim() || "Vzkaz s obrázkem";
             const vzal = ui.quickVzal(q, uid);
+            // oznámení: bez termínu, ✓ = Beru na vědomí (ui.js, KBUI.jeOznameni)
+            const info = ui.jeOznameni(q);
+            const akce = info ? "Beru na vědomí" : "Splněno";
             const poTerminu = q.doKdy && String(q.doKdy) < s.dnes;
             const odKoho = q.odKoho === uid ? "jen pro mě" : (q.odKohoJmeno || jmenoUid(q.odKoho));
             const meta = [
+                info ? "oznámení" : "",
                 odKoho ? esc(q.odKoho === uid ? odKoho : "od " + odKoho) : "",
                 q.projekt ? esc(q.projekt) : "",
-                q.asap ? '<span class="mini__asap">co nejdříve</span>' : "",
-                q.doKdy ? '<span class="' + (poTerminu ? "mini__po" : "") + '">do ' + esc(kratkeDatum(q.doKdy)) + "</span>" : "",
+                q.asap && !info ? '<span class="mini__asap">co nejdříve</span>' : "",
+                q.doKdy && !info ? '<span class="' + (poTerminu ? "mini__po" : "") + '">do ' + esc(kratkeDatum(q.doKdy)) + "</span>" : "",
                 vzal ? "beru na vědomí" : ""
             ].filter(Boolean).join(" · ");
             return '<li class="mini__radek">' +
-                '<button type="button" class="mini__splnit" data-mini-qhotovo="' + esc(q.id) + '" title="Splněno" ' +
-                    'aria-label="' + esc("Splněno: " + text) + '">✓</button>' +
+                '<button type="button" class="mini__splnit" data-mini-qhotovo="' + esc(q.id) + '" title="' + akce + '" ' +
+                    'aria-label="' + esc(akce + ": " + text) + '">✓</button>' +
                 '<button type="button" class="mini__odkaz" data-mini-qdetail="' + esc(q.id) + '" ' +
                     'title="Otevřít vzkaz v hlavním okně webu"><b>' + esc(text) + "</b>" +
                     (meta ? "<small>" + meta + "</small>" : "") + "</button>" +
@@ -1128,7 +1132,8 @@
         box.innerHTML =
             '<h2 class="mini__nadpis">Quick TO-DO <b class="mini__odznak' + (kolik ? "" : " mini__odznak--nula") + '">' +
                 esc(kolik) + "</b></h2>" +
-            (posledni ? '<div class="mini__vratitpruh"><span>' + esc("Splněno: " + posledni.text) + "</span>" +
+            (posledni ? '<div class="mini__vratitpruh"><span>' +
+                esc((posledni.info ? "Vzato na vědomí: " : "Splněno: ") + posledni.text) + "</span>" +
                 '<button type="button" data-mini-qvratit="' + esc(posledni.id) + '">Vrátit</button></div>' : "") +
             (radky ? '<ul class="mini__radky">' + radky + "</ul>"
                    : '<p class="mini__prazdne">Nikdo po tobě nic nechce.</p>') +
@@ -1605,7 +1610,8 @@
         if (tlacitko) tlacitko.disabled = true;
         try {
             await UI().quickPrepni(q, hotovo);
-            s.posledniHotovo = hotovo ? { id: q.id, text: String(q.text || "").trim() || "vzkaz", ms: Date.now() } : null;
+            s.posledniHotovo = hotovo ? { id: q.id, text: String(q.text || "").trim() || "vzkaz", ms: Date.now(),
+                info: UI().jeOznameni(q) } : null;
             hlaska(hotovo ? "" : "Vzkaz je zpátky mezi nevyřízenými.", hotovo ? "" : "ok");
             if (hotovo) setTimeout(naplanuj, 15500);       // proužek „Vrátit" pak zmizí
         } catch (err) {

@@ -837,6 +837,8 @@ KB.saveQuickTodo = async (id, data) => {
     const komu = Array.isArray(data.proUids) && data.proUids.length
         ? data.proUids.slice()
         : [data.proUid || KB.currentUid()];
+    // oznámení (druh "info") nemá termín, „co nejdříve" ani opakování
+    const info = data.druh === "info";
 
     const zapis = {
         text:    String(data.text || "").slice(0, 300),
@@ -844,11 +846,11 @@ KB.saveQuickTodo = async (id, data) => {
         proUid:  komu[0],
         odKoho:  data.odKoho || KB.currentUid(),
         odKohoJmeno: data.odKohoJmeno || window.KB_USER || "",
-        doKdy:   data.doKdy || "",
+        doKdy:   info ? "" : (data.doKdy || ""),
         /* „Co nejdříve" je zvláštní stav, ne datum – kdo neví, do kdy to má
            být, by jinak musel vymyslet termín, který stejně nic neznamená.
            Řadí se před všechny termíny. */
-        asap:    data.asap === true,
+        asap:    !info && data.asap === true,
         projekt: data.projekt || "",       // nepovinná vazba na projekt
         /* DVA ZPŮSOBY SPLNĚNÍ (Michal 3. 9. 2026):
              "" (společný)  jeden odškrtne za všechny – vzkaz zhasne partě
@@ -902,7 +904,12 @@ KB.saveQuickTodo = async (id, data) => {
        posílá celý vzkaz zpátky, takže se nic neztratí; kdo vzkaz zakládá
        bez opakování, nic navíc nezapíše. Další kopii po splnění zakládá
        KB.zalozDalsiQuick. */
-    if ("opakovani" in data) zapis.opakovani = jeOpakovani(data.opakovani) ? data.opakovani : "";
+    if ("opakovani" in data) zapis.opakovani = !info && jeOpakovani(data.opakovani) ? data.opakovani : "";
+    /* Druh vzkazu (22. 10. 2026): "" = úkol (Splněno), "info" = oznámení
+       (Beru na vědomí – stejné pole jako splnění). Jen když ho volající
+       posílá: odškrtnutí posílá celý vzkaz zpátky, takže se zachová, a starší
+       vzkazy bez pole pozná KBUI.jeOznameni podle textu. */
+    if ("druh" in data) zapis.druh = info ? "info" : "";
     if ("opakovaniDen" in data) zapis.opakovaniDen = Number(data.opakovaniDen) || 0;
     if ("opakovaniKoren" in data) zapis.opakovaniKoren = String(data.opakovaniKoren || "").slice(0, 80);
     if ("opakovanyZ" in data) zapis.opakovanyZ = String(data.opakovanyZ || "").slice(0, 80);
@@ -914,8 +921,8 @@ KB.saveQuickTodo = async (id, data) => {
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
        vidět, o jaký vzkaz šlo. Vzkaz tím pádem čtou i manažeři. */
     KB.zapisAktivitu("quicktodo", (data.hotovo === true
-        ? "splnil quick to-do: "
-        : "zadal quick to-do (" + komu.length + " lidem): ") +
+        ? (info ? "vzal na vědomí oznámení: " : "splnil quick to-do: ")
+        : (info ? "poslal oznámení (" : "zadal quick to-do (") + komu.length + " lidem): ") +
         String(data.text || "").slice(0, 150),
         data.hlidka ? "Systém" : null);
     return id;
@@ -1218,6 +1225,7 @@ function ohlasPridani(nazev, uids, zpravaId) {
     KB.saveQuickTodo(KB.newQuickId(), {
         text: "Přidal tě do konverzace „" + String(nazev || "bez názvu").slice(0, 80) + "“ v Poznámkách.",
         proUids: uids.slice(),
+        druh: "info", rezim: "kazdy",       // oznámení – každý bere na vědomí sám
         poznamka: zpravaId || ""
     }).catch(err => console.warn("Vzkaz o přidání do konverzace se nezapsal:", err));
 }
@@ -4379,8 +4387,9 @@ function nasledovnikQuick(q, ted) {
         : (q.proUid ? [q.proUid] : []);
     return {
         id: idNasledovnika(q, doKdy),
-        // odkazy „#" v textu jdou s textem i do další kopie
-        data: Object.assign(Array.isArray(q.odkazy) && q.odkazy.length ? { odkazy: q.odkazy } : {}, {
+        // odkazy „#" v textu a druh vzkazu jdou s textem i do další kopie
+        data: Object.assign(Array.isArray(q.odkazy) && q.odkazy.length ? { odkazy: q.odkazy } : {},
+            "druh" in q ? { druh: q.druh } : {}, {
             text: q.text || "", proUids: komu, proUid: komu[0] || "",
             odKoho: q.odKoho || "", odKohoJmeno: q.odKohoJmeno || "",
             doKdy: doKdy, asap: false, projekt: q.projekt || "",

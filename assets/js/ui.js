@@ -2152,6 +2152,29 @@
     /** Vzal si vzkaz tenhle člověk aspoň na vědomí? */
     UI.quickVzal = (q, uid) => !!(q && (q.vzaliUids || []).indexOf(uid) !== -1);
 
+    /* ---------------------------------------- oznámení (22. 10. 2026) ---
+       Vzkaz, na který se „Splněno" nehodí – přidal tě do konverzace, zmínka,
+       nové milníky, zpětný zápis (Michal). Bere se na vědomí STEJNÝM polem
+       jako splnění (rezim "kazdy" → hotoviUids), takže počty, filtry,
+       historie i pravidla platí beze změny – liší se jen popisky. Starší
+       vzkazy bez pole `druh` se poznají podle začátku textu. */
+    const OZNAMENI_TEXT = /^(Přidal tě do konverzace|Zmínil tě|Máš nově zveřejněné milníky|Změnil se termín milníků|Zpětný zápis povolen|Zpětný zápis na .+ povolen nebyl)/;
+    UI.jeOznameni = (q) => !!q && (q.druh === "info" ||
+        (q.druh == null && OZNAMENI_TEXT.test(String(q.text || ""))));
+
+    /** Kam oznámení bez vlastního odkazu vede – jen pevné adresy, nic z databáze. */
+    const cilOznameni = (q) => {
+        const t = String((q && q.text) || "");
+        return /^(Máš nově zveřejněné milníky|Změnil se termín milníků)/.test(t) ? "milniky.html"
+            : /^Zpětný zápis/.test(t) ? "vykazy.html" : "";
+    };
+
+    /** „Otevřít" u oznámení (poznámka / konverzace, milníky, výkazy); otevření ho vezme na vědomí. */
+    UI.quickOtevritHtml = (q) => !UI.jeOznameni(q) ? ""
+        : q.poznamka ? '<button type="button" class="btn btn--ghost btn--sm" data-pozn-nahled="' +
+            esc(q.poznamka) + '">Otevřít</button>'
+        : cilOznameni(q) ? '<a class="btn btn--ghost btn--sm" href="' + esc(cilOznameni(q)) + '">Otevřít</a>' : "";
+
     /* ------------------------------------------ odložení (bod 26) -------
        Vzkaz Quick TO-DO a upozornění pro kontrolu jde odložit na zítra
        nebo na pondělí (rešerše 19. 10. 2026): do té doby se neukazuje ani
@@ -2236,6 +2259,8 @@
             ? [{ text: "Vrátit hned (odloženo do " + UI.odlozenoText(q.odlozeno[uid]) + ")", ikona: "vratit",
                 fn: () => UI.quickOdloz(q, 0) }]
             : UI.odlozitPolozky((ms) => UI.quickOdloz(q, ms));
+        // oznámení: totéž co tlačítko v řádku
+        if (UI.jeOznameni(q)) polozky.unshift({ text: "Beru na vědomí", ikona: "hotovo", fn: () => vezmiNaVedomi(q) });
         if (!tl) polozky.unshift({ text: "Otevřít vzkaz", ikona: "otevrit", fn: () => UI.otevriQuick(q.id) });
         return { nadpis: String(q.text || "Vzkaz").slice(0, 60), radek: radek, polozky: polozky };
     }
@@ -2288,7 +2313,7 @@
         const vypis = chybi.length > 4
             ? chybi.slice(0, 4).join(", ") + " a další " + (chybi.length - 4)
             : chybi.join(", ");
-        return hotovych.length + " z " + komu.length + " splnilo" +
+        return hotovych.length + " z " + komu.length + (UI.jeOznameni(q) ? " vzali na vědomí" : " splnilo") +
             (vypis ? " · chybí " + vypis : "");
     };
 
@@ -2317,6 +2342,7 @@
      * vzkazu hned, u cizího, až má zadavatel web otevřený.
      */
     UI.quickHlaskaSplneno = (q) => {
+        if (UI.jeOznameni(q)) return "Vzato na vědomí.";
         const dalsi = q && q.opakovani && window.KB && window.KB.dalsiTerminOpakovani
             ? window.KB.dalsiTerminOpakovani(q.doKdy, q.opakovani, q.opakovaniDen) : "";
         return dalsi ? "Splněno. Další opakování: do " + czDatumKratke(dalsi) + "." : "Splněno.";
@@ -2345,6 +2371,34 @@
             hotovoMs: hotovo ? Date.now() : 0
         }));
     };
+
+    /** Oznámení „Beru na vědomí" (nabídka, otevření odkazu) – s hláškou a Zpět. */
+    function vezmiNaVedomi(q) {
+        return UI.quickPrepni(q, true)
+            .then(() => UI.toast("Vzato na vědomí.", undefined, {
+                zpet: () => UI.quickPrepni((window.KB.quicktodo || []).find(x => x.id === q.id) || q, false)
+            }))
+            .catch(() => UI.toast("Uložení selhalo.", "error"));
+    }
+
+    /* Otevření odkazu z oznámení (Otevřít, odkaz v textu) ho rovnou vezme na
+       vědomí – kdo se šel podívat, ví o tom. Odchod ze stránky počká na
+       zápis nejvýš 1,5 s (bez signálu ho drží fronta v prohlížeči). */
+    document.addEventListener("click", (e) => {
+        const cil = e.target.closest && e.target.closest("a[href], [data-pozn-nahled]");
+        const misto = cil && cil.closest("[data-quick-radek], #kbQuickOkno");
+        if (!misto) return;
+        const id = misto.id === "kbQuickOkno" ? quickOknoId : misto.getAttribute("data-quick-radek");
+        const q = id && (window.KB.quicktodo || []).find(x => x.id === id);
+        const uid = window.KB.currentUid && window.KB.currentUid();
+        if (!q || !UI.jeOznameni(q) || UI.quickAdresati(q).indexOf(uid) === -1 || UI.quickHotovoPro(q, uid)) return;
+        const odchod = cil.tagName === "A" && !e.defaultPrevented && e.button === 0 &&
+            !(e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) && !cil.target;
+        if (!odchod) return void vezmiNaVedomi(q);
+        e.preventDefault();
+        const zapis = UI.quickPrepni(q, true).catch(err => console.warn("Oznámení se nevzalo na vědomí:", err));
+        Promise.race([zapis, new Promise(r => setTimeout(r, 1500))]).then(() => { location.href = cil.href; });
+    });
 
     /* ------------------------------------------- náhled poznámky ---------
        Vzkaz svázaný s poznámkou dřív vedl odkazem na poznamky.html. Kdo si
@@ -2776,6 +2830,13 @@
                            na projekt nebo úkol (22. 10. 2026) */
                         '<input type="text" class="field" data-quick-text data-napoveda maxlength="300" ' +
                             'placeholder="Napiš rychlý úkol (@ kolega, # projekt či úkol)" autocomplete="off">' +
+                        /* Úkol, nebo jen pro informaci (22. 10. 2026): oznámení
+                           si každý adresát bere na vědomí sám, bez termínu. */
+                        '<div class="quickpanel__druh" role="radiogroup" aria-label="Druh vzkazu">' +
+                            '<label><input type="radio" name="kbQuickDruh" value="" data-quick-druh checked> Úkol</label>' +
+                            '<label><input type="radio" name="kbQuickDruh" value="info" data-quick-druh>' +
+                                " Jen pro informaci</label>" +
+                        "</div>" +
 
                         /* Lidí může být víc – stejný vzkaz se často posílá
                            celé partě. Zaškrtávátka místo roletky, ať je vidět,
@@ -2794,7 +2855,7 @@
                             '<div class="quickpanel__lide" data-quick-komu></div>' +
                         "</div>" +
 
-                        '<div class="quickpanel__radek">' +
+                        '<div class="quickpanel__radek" data-quick-jen-ukol>' +
                             '<label class="quickpanel__do">Do:' +
                                 '<input type="date" class="field" data-quick-kdy aria-label="Do kdy">' +
                             "</label>" +
@@ -2810,7 +2871,7 @@
                                 "</select>" +
                             "</label>" +
                         "</div>" +
-                        '<label class="quickpanel__asap">' +
+                        '<label class="quickpanel__asap" data-quick-jen-ukol>' +
                             '<input type="checkbox" data-quick-asap> <b>Udělej co nejdříve</b>' +
                             '<span>bez termínu, řadí se první</span>' +
                         "</label>" +
@@ -2819,7 +2880,7 @@
                            = jak to bylo dosud: kdo první odškrtne, zhasne to
                            všem. Zaškrtnuto = každý si škrtá své, hodí se na
                            „zkontrolujte si fotky ve své technologii". */
-                        '<label class="quickpanel__asap">' +
+                        '<label class="quickpanel__asap" data-quick-jen-ukol>' +
                             '<input type="checkbox" data-quick-kazdy> <b>Každý si odškrtne sám</b>' +
                             '<span>jinak stačí, když to splní jeden za všechny</span>' +
                         "</label>" +
@@ -2905,6 +2966,20 @@
         event.target.value = "";
     });
 
+    /* „Jen pro informaci" schová termín, opakování, „co nejdříve" i „každý
+       sám" – oznámení je nemá, každý ho bere na vědomí sám. */
+    function prepniDruhQuick(panel) {
+        if (!panel) return;
+        const info = !!panel.querySelector('[data-quick-druh][value="info"]:checked');
+        panel.querySelectorAll("[data-quick-jen-ukol]").forEach(el => { el.hidden = info; });
+        panel.querySelector("[data-quick-uloz]").textContent = info ? "Poslat pro informaci" : "Zadat quick to-do";
+    }
+    document.addEventListener("change", (event) => {
+        if (event.target.matches && event.target.matches("[data-quick-druh]")) {
+            prepniDruhQuick(event.target.closest("#kbQuickPanel"));
+        }
+    });
+
     /* ------------------------------------------------- okno vzkazu ------
        Vzkaz se screenshotem se do řádku nevejde. Rozkliknutím se otevře
        okno přes stránku: obrázek v plné velikosti, splnění a komentáře –
@@ -2959,16 +3034,18 @@
         const hotovoMne = jsemAdresat ? UI.quickHotovoPro(q, uid) : UI.quickHotovoVse(q);
         const ostatni = UI.quickAdresati(q).filter(x => x !== uid).map(jmeno).filter(Boolean);
         const obrazky = quickOknoObrazky.id === quickOknoId ? quickOknoObrazky.seznam : [];
+        const info = UI.jeOznameni(q);
 
         telo.innerHTML =
             '<div class="small muted" style="margin-bottom:8px">' +
-                [ mujVzkaz ? "Zadal jsem" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
+                [ info ? '<span class="quickrad__info">ℹ oznámení</span>' : "",
+                  mujVzkaz ? "Zadal jsem" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
                   q.projekt ? esc(q.projekt) : "",
-                  q.asap ? "co nejdříve" : "",
-                  q.doKdy ? "do " + esc(czDatumKratke(q.doKdy)) : "",
+                  q.asap && !info ? "co nejdříve" : "",
+                  q.doKdy && !info ? "do " + esc(czDatumKratke(q.doKdy)) : "",
                   esc(UI.quickOpakovani(q))
                 ].filter(Boolean).join(" · ") +
-                (hotovoMne ? ' · <b style="color:var(--ok)">splněno</b>' : "") +
+                (hotovoMne ? ' · <b style="color:var(--ok)">' + (info ? "vzato na vědomí" : "splněno") + "</b>" : "") +
             "</div>" +
             '<div style="font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere">' +
                 UI.textSOdkazy(q.text || "", q.odkazy) + "</div>" +
@@ -2976,6 +3053,9 @@
                 ? '<div class="tiny muted" style="margin-top:6px">Spoluúčast: ' +
                   esc(ostatni.join(", ")) + (q.rezim === "kazdy" ? " · každý sám" : "") + "</div>"
                 : "") +
+            // u oznámení „každý sám" i tady, kolik lidí ho už vzalo na vědomí
+            (info && q.rezim === "kazdy" && ostatni.length
+                ? '<div class="tiny muted" style="margin-top:4px">' + esc(UI.quickStav(q)) + "</div>" : "") +
             (UI.quickVedomi(q)
                 ? '<div class="tiny muted" style="margin-top:4px">Ví o tom: ' +
                   esc(UI.quickVedomiJmena(q).join(", ")) + " · " + esc(UI.quickVedomi(q)) + "</div>"
@@ -2993,12 +3073,17 @@
                     (q.zadostZpetne && !hotovoMne
                         ? '<a class="btn btn--sm btn--primary" href="vykazy.html#zpetne">Vyřídit ve Výkazech</a>'
                         : "") +
+                    UI.quickOtevritHtml(q) +
                     (hotovoMne
                         ? '<button type="button" class="btn btn--sm btn--ghost"' +
                             ' data-quick-hotovo="' + esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                        : info
+                        ? '<button type="button" class="btn btn--sm btn--primary"' +
+                            ' data-quick-hotovo="' + esc(q.id) + '">Beru na vědomí</button>'
                         : '<button type="button" class="btn btn--sm quicksplnit"' +
                             ' data-quick-hotovo="' + esc(q.id) + '">Splněno</button>') +
-                    (!hotovoMne
+                    // oznámení má „Beru na vědomí" místo Splněno – druhé tlačítko by bylo navíc
+                    (!hotovoMne && !info
                         ? (UI.quickVzal(q, uid)
                             ? '<button type="button" class="btn btn--sm btn--ghost"' +
                                 ' data-quick-vzal="' + esc(q.id) + '" data-zpet="1">Zrušit beru na vědomí</button>'
@@ -3136,7 +3221,8 @@
                 (q.ms || 0) > casNacteni);
             if (novy) {
                 pipni();
-                UI.toast("Nový quick to-do od " + (novy.odKohoJmeno || "?") +
+                UI.toast((UI.jeOznameni(novy) ? "Nové oznámení od " : "Nový quick to-do od ") +
+                    (novy.odKohoJmeno || "?") +
                     ": " + novy.text.slice(0, 60));
             }
         }
@@ -3340,7 +3426,9 @@
             const jsemAdresat = adresati(q).indexOf(uid) !== -1;
             const vzatoMne = jsemAdresat && !hotovoMne && UI.quickVzal(q, uid);
             const odlozenoMne = jsemAdresat && !hotovoMne && UI.quickOdlozeno(q, uid);
-            const poTerminu = !hotovoMne && q.doKdy && q.doKdy < dnesISO();
+            // oznámení: štítek místo termínu a „co nejdříve", Beru na vědomí místo Splněno
+            const info = UI.jeOznameni(q);
+            const poTerminu = !hotovoMne && !info && q.doKdy && q.doKdy < dnesISO();
             /* U společného vzkazu se vypisuje, s kým na tom člověk je –
                sebe v tom seznamu vidět nepotřebuje. */
             const ostatni = adresati(q).filter(x => x !== uid).map(jmeno).filter(Boolean);
@@ -3365,7 +3453,7 @@
                     : "");
 
             return '<div class="quickrad' +
-                (hotovoMne ? " quickrad--hotovo" : (q.asap ? " quickrad--asap" : "")) +
+                (hotovoMne ? " quickrad--hotovo" : (q.asap && !info ? " quickrad--asap" : "")) +
                 (vzatoMne || odlozenoMne ? " quickrad--vzato" : "") + '" data-quick-radek="' + esc(q.id) + '">' +
                 '<span class="quickrad__text quickrad__text--klik" data-quick-detail="' +
                     esc(q.id) + '" role="button" tabindex="0"' +
@@ -3379,10 +3467,11 @@
                         /* Oddělovač se dává jen MEZI kusy, ne před první –
                            u vlastního vzkazu chybí „Zadal:" a řádek by jinak
                            začínal osamocenou tečkou. */
-                        [ mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
+                        [ info ? '<span class="quickrad__info">ℹ oznámení</span>' : "",
+                          mujVzkaz ? "" : "Zadal: " + esc(q.odKohoJmeno || jmeno(q.odKoho) || "?"),
                           q.projekt ? esc(q.projekt) : "",
-                          q.asap ? '<span class="quickrad__asap">co nejdříve</span>' : "",
-                          q.doKdy ? '<span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
+                          q.asap && !info ? '<span class="quickrad__asap">co nejdříve</span>' : "",
+                          q.doKdy && !info ? '<span class="' + (poTerminu ? "quickrad__po" : "") + '">do ' +
                             esc(czDatumKratke(q.doKdy)) + "</span>" : "",
                           esc(UI.quickOpakovani(q))
                         ].filter(Boolean).join(" · ") +
@@ -3403,23 +3492,27 @@
                             ? '<br><span class="quickrad__vzato">odloženo do ' +
                               esc(UI.odlozenoText(q.odlozeno[uid])) + "</span>" : "") +
                         (q.rezim !== "kazdy" && q.hotovo && q.hotovoKdo
-                            ? '<br><span class="quickrad__splnil">splnil ' + esc(q.hotovoKdo) +
+                            ? '<br><span class="quickrad__splnil">' + (info ? "vzal na vědomí " : "splnil ") +
+                              esc(q.hotovoKdo) +
                               (q.hotovoMs ? " · " + esc(czDatumKratke(new Date(q.hotovoMs)
                                   .toISOString().slice(0, 10))) : "") + "</span>" : "") +
                     "</span>" +
                 "</span>" +
                 foto +
                 /* vzkaz svázaný s poznámkou nese odkaz – proklik přistane
-                   rovnou na té poznámce (poznamky.html si ji samo otevře) */
-                (q.poznamka ? '<button type="button" class="btn btn--ghost btn--sm"' +
+                   rovnou na té poznámce (poznamky.html si ji samo otevře);
+                   oznámení má místo toho „Otevřít" */
+                (q.poznamka && !info ? '<button type="button" class="btn btn--ghost btn--sm"' +
                     ' data-pozn-nahled="' + esc(q.poznamka) + '">Poznámka</button>' : "") +
+                UI.quickOtevritHtml(q) +
                 /* žádost o zpětný zápis se vyřizuje ve Výkazech – jedním
                    kliknutím povolit den, od dne, nebo odmítnout (22. 9. 2026) */
                 (q.zadostZpetne && jsemAdresat && !hotovoMne
                     ? '<a class="btn btn--primary btn--sm" href="vykazy.html#zpetne">Vyřídit</a>' : "") +
                 /* Beru na vědomí – jen pro adresáta a jen dokud to není
-                   splněné. Zpátky se to vezme kliknutím na totéž. */
-                (jsemAdresat && !hotovoMne
+                   splněné. Zpátky se to vezme kliknutím na totéž. Oznámení
+                   ho nemá – tam „Beru na vědomí" stojí místo Splněno. */
+                (jsemAdresat && !hotovoMne && !info
                     ? (vzatoMne
                         ? '<button type="button" class="linkbtn" data-quick-vzal="' + esc(q.id) +
                             '" data-zpet="1" title="Zrušit beru na vědomí">Beru ✓</button>'
@@ -3436,12 +3529,16 @@
                     : "") +
                 // splněné mizí ze seznamu, proto pořádné tlačítko a ne zaškrtávátko
                 /* Zadavatel, který mezi adresáty není, nemá co odškrtávat –
-                   splnění je na těch, komu vzkaz patří. */
-                (mujVzkaz && q.rezim === "kazdy"
+                   splnění je na těch, komu vzkaz patří (oznámení za ně na
+                   vědomí nebere ani u společného). */
+                (mujVzkaz && (q.rezim === "kazdy" || info)
                     ? ""
                     : (hotovoMne
                         ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-hotovo="' +
                             esc(q.id) + '" data-zpet="1">Vrátit</button>'
+                        : info
+                        ? '<button type="button" class="btn btn--sm btn--primary" data-quick-hotovo="' +
+                            esc(q.id) + '">Beru na vědomí</button>'
                         : '<button type="button" class="btn btn--sm quicksplnit" data-quick-hotovo="' +
                             esc(q.id) + '">Splněno</button>')) +
                 (q.odKoho === uid ? '<button type="button" class="linkbtn" data-quick-smaz="' +
@@ -4197,7 +4294,8 @@
             if (q) {
                 const hotovo = !hotovoBtn.dataset.zpet;
                 UI.quickPrepni(q, hotovo)
-                    .then(() => UI.toast(hotovo ? UI.quickHlaskaSplneno(q) : "Vráceno mezi nesplněné.", undefined, {
+                    .then(() => UI.toast(hotovo ? UI.quickHlaskaSplneno(q)
+                        : UI.jeOznameni(q) ? "Vráceno mezi nová oznámení." : "Vráceno mezi nesplněné.", undefined, {
                         // vrací se nad čerstvým vzkazem – mezitím ho mohl odškrtnout i někdo další
                         zpet: () => UI.quickPrepni((window.KB.quicktodo || [])
                             .find(x => x.id === q.id) || q, !hotovo)
@@ -4218,11 +4316,13 @@
         }
         if (!komu.length) return UI.toast("Vyber, komu vzkaz patří – nebo zaškrtni Jen pro mě.", "warn");
 
-        const asap = panel.querySelector("[data-quick-asap]").checked;
-        const kazdy = panel.querySelector("[data-quick-kazdy]").checked;
-        const doKdy = panel.querySelector("[data-quick-kdy]").value;
+        // „Jen pro informaci" = oznámení: bez termínu a opakování, každý bere na vědomí sám
+        const info = !!panel.querySelector('[data-quick-druh][value="info"]:checked');
+        const asap = !info && panel.querySelector("[data-quick-asap]").checked;
+        const kazdy = info || panel.querySelector("[data-quick-kazdy]").checked;
+        const doKdy = info ? "" : panel.querySelector("[data-quick-kdy]").value;
         const projekt = panel.querySelector("[data-quick-projekt]").value;
-        const opakovani = panel.querySelector("[data-quick-opakovani]").value;
+        const opakovani = info ? "" : panel.querySelector("[data-quick-opakovani]").value;
         // další termín se počítá od termínu – bez něj (i u „co nejdříve") není od čeho
         if (opakovani && (asap || !doKdy)) {
             return UI.toast("Opakovaný vzkaz potřebuje termín „Do“ – další se počítá od něj.", "warn");
@@ -4238,6 +4338,7 @@
                 doKdy: asap ? "" : doKdy,   // „co nejdříve" termín nemá
                 asap: asap,
                 rezim: kazdy ? "kazdy" : "",
+                druh: info ? "info" : "",
                 projekt: projekt,
                 opakovani: opakovani
             }, odkazy.length ? { odkazy: odkazy } : {}));
@@ -4275,11 +4376,15 @@
             panel.querySelectorAll("[data-quick-komu] input:checked")
                 .forEach(ch => { ch.checked = false; });
             panel.querySelector("[data-quick-hledej]").value = "";
+            panel.querySelector('[data-quick-druh][value=""]').checked = true;
+            prepniDruhQuick(panel);
             profiltrujLidi(panel);
 
             const jenJa = komu.length === 1 && komu[0] === window.KB.currentUid();
             const opak = opakovani ? " Opakuje se " + ((window.KB.OPAKOVANI_POPIS || {})[opakovani] || "") + "." : "";
             UI.toast((jenJa ? "Poznámka uložena jen pro tebe."
+                : info ? (komu.length === 1 ? "Oznámení posláno."
+                    : "Oznámení posláno " + komu.length + " lidem – každý si ho vezme na vědomí sám.")
                 : komu.length === 1 ? "Quick to-do zadáno."
                 : (kazdy ? "Zadáno " + komu.length + " lidem – každý si odškrtne sám."
                     : "Společný quick to-do zadán " + komu.length + " lidem.")) + opak +
@@ -5192,7 +5297,8 @@
     /**
      * Zmíněným přes @ vzkaz do Quick TO-DO („Zmínil tě v …") – stávající
      * cesta upozornění: pípnutí, odznak i e-mail z Apps Scriptu. Sebe
-     * vynechá; víc lidí = jeden vzkaz, každý si ho odškrtne sám.
+     * vynechá; víc lidí = jeden vzkaz. Je to oznámení – každý ho bere na
+     * vědomí sám (druh "info").
      * @returns {Promise<string[]>} jména, komu vzkaz šel
      */
     UI.ohlasZminky = async (uids, text, volby) => {
@@ -5201,8 +5307,9 @@
         const komu = (uids || []).filter((u, i, a) => u && u !== ja && a.indexOf(u) === i);
         if (!komu.length) return [];
         const odkazy = UI.cisteOdkazy(o.odkazy);
+        // oznámení – každý zmíněný ho bere na vědomí sám
         await window.KB.saveQuickTodo(window.KB.newQuickId(), Object.assign({
-            text: text, proUids: komu, rezim: komu.length > 1 ? "kazdy" : "", projekt: o.projekt || ""
+            text: text, proUids: komu, rezim: "kazdy", druh: "info", projekt: o.projekt || ""
         }, odkazy.length ? { odkazy: odkazy } : {}));
         const lide = lideKZmince();
         return komu.map(u => (lide.find(x => x.id === u) || {}).jmeno).filter(Boolean);
