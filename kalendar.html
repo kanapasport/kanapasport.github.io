@@ -76,6 +76,8 @@
         .ud--volno { background: #6b8e23; }
         .ud--ukol { background: #c26a00; }
         .ud--milnik { background: #b3006b; }
+        /* štítek „nový" (app.css) v proužku nesmí proužek zvýšit */
+        .ud .milpil { flex: none; padding: 0 6px; line-height: 1.15; }
         /* Online hovor a osobní schůzka – dvě běžné věci, které se do
            „firemní akce" schovávaly a nešlo je odlišit (Michal 3. 9. 2026). */
         .ud--teams { background: #4b53bc; }
@@ -655,17 +657,21 @@
             if (m.datum === den && !m.hotovo) {
                 const text = "milník: " + (m.cinnost || "") +
                     (m.zakazka ? " (" + m.zakazka + ")" : "");
-                out.push({ typ: "milnik", kdo: "", co: text, text: text });
+                // štítek „nový" – stejné pravidlo jako na stránce Milníky (V.milnikNovy)
+                out.push({ typ: "milnik", kdo: "", co: text, text: text, novy: V.milnikNovy(m) });
             }
         });
 
         return out;
     }
 
+    const novyStitek = (u) => u.novy
+        ? '<span class="milpil milpil--novy" title="Zveřejněný za posledních 7 dní">nový</span> ' : "";
+
     function udalostHtml(u) {
         return '<button type="button" class="ud ud--' + esc(u.typ) + '"' +
             (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
-            ' title="' + esc(u.text) + '">' + esc(u.text) + "</button>";
+            ' title="' + esc((u.novy ? "nový " : "") + u.text) + '">' + novyStitek(u) + esc(u.text) + "</button>";
     }
 
     /** Celodenní pruh v týdnu a 3 dnech: druh a za ním jméno, přes celou šířku dne. */
@@ -677,7 +683,7 @@
         // v pruhu jsou jen celodenní věci, takže tu není žádný čas k vypsání
         return '<button type="button" class="ud udcely ud--' + esc(u.typ) + '"' +
             (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
-            ' title="' + esc(u.text) + '">' +
+            ' title="' + esc((u.novy ? "nový " : "") + u.text) + '">' + novyStitek(u) +
             '<b class="udcely__druh">' + esc(u.co || u.text) + "</b>" + kdo + "</button>";
     }
 

@@ -9,6 +9,7 @@
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
     <link rel="stylesheet" href="assets/css/app.css?v=300">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=300">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -129,6 +130,12 @@
         /* odbavený nález: zůstává vidět, ale už nekřičí */
         .kontrola__radek--ok { background: var(--bg-soft); border-color: var(--line); opacity: .75; }
         .kontrola__radek--ok .kontrola__datum { color: var(--muted); }
+        /* Podezřelý zápis nese dvě tlačítka (Odložit, V pořádku) – na telefonu
+           by text zmáčkla do úzkého sloupce, proto jdou pod něj. */
+        @media (max-width: 600px) {
+            .kontrola__radek[data-kontrola-radek] { flex-wrap: wrap; justify-content: flex-end; }
+            .kontrola__radek[data-kontrola-radek] > .kontrola__odkaz { flex: 1 1 100%; }
+        }
 
         /* Co je nového: jedno okno doprostřed po přihlášení. Nadpis nese
            stejný červený pruh jako dlaždice, ať je jasné, že patří k webu. */
@@ -458,6 +465,7 @@
 <script src="assets/js/taxonomy.js?v=300"></script>
 <script src="assets/js/doc.js?v=300"></script>
 <script src="assets/js/ui.js?v=300"></script>
+<script src="assets/js/nabidka.js?v=300"></script>
 <script src="assets/js/vykazy.js?v=300"></script>
 <script type="module" src="assets/js/store.js?v=300"></script>
 
@@ -903,12 +911,17 @@
         const hotovoPro = (q, mujVzkaz) => mujVzkaz
             ? window.KBUI.quickHotovoVse(q) : window.KBUI.quickHotovoPro(q, uid);
 
+        /* Odložené (na zítra / na pondělí, rešerše bod 26) jsou osobní – jen
+           u vzkazů pro mě; do té doby se schovají pod odkaz v patičce. */
+        const odlozenoMne = (q) => jeProMe(q) && !window.KBUI.quickHotovoPro(q, uid) &&
+            window.KBUI.quickOdlozeno(q, uid);
+
         const radek = (q, mujVzkaz) =>
             '<div class="row qtrad' +
                 (hotovoPro(q, mujVzkaz) ? " qtrad--hotovo"
                     : (q.asap ? " qtrad--asap" : "")) +
-                (!hotovoPro(q, mujVzkaz) && window.KBUI.quickVzal(q, uid)
-                    ? " qtrad--vzato" : "") + '">' +
+                (!hotovoPro(q, mujVzkaz) && (window.KBUI.quickVzal(q, uid) || odlozenoMne(q))
+                    ? " qtrad--vzato" : "") + '" data-quick-radek="' + esc(q.id) + '">' +
                 '<span class="grow" style="min-width:0;font-size:var(--fs-3);line-height:1.5">' +
                     '<span style="font-weight:700">' + esc(q.text) + "</span>" +
                     '<span class="muted" style="display:block;font-size:var(--fs-1)">' +
@@ -943,6 +956,8 @@
                            odejít z nástěnky, aby zjistil na jakou
                            (přání Michala 2. 9. 2026). */
                         (q.poznamka ? "<br>" + poznUkazka(q.poznamka) : "") +
+                        (odlozenoMne(q) ? '<br><span class="quickrad__vzato">odloženo do ' +
+                            esc(window.KBUI.odlozenoText(q.odlozeno[uid])) + "</span>" : "") +
                     "</span>" +
                 "</span>" +
                 (q.poznamka
@@ -959,6 +974,13 @@
                             '" data-zpet="1" title="Zrušit beru na vědomí">Beru ✓</button>'
                         : '<button type="button" class="btn btn--ghost btn--sm" data-quick-vzal="' +
                             esc(q.id) + '">Beru na vědomí</button>')
+                    : "") +
+                // Odložit (volby v nabídce, obsluha v ui.js) / odložený vrátit hned
+                (adresati(q).indexOf(uid) !== -1 && !hotovoPro(q, mujVzkaz)
+                    ? (odlozenoMne(q)
+                        ? '<button type="button" class="btn btn--ghost btn--sm" data-quick-odlozit-zrus="' +
+                            esc(q.id) + '">Vrátit hned</button>'
+                        : window.KBUI.odlozitTlacitko('data-quick-odlozit="' + esc(q.id) + '"'))
                     : "") +
                 (mujVzkaz && q.rezim === "kazdy"
                     ? ""
@@ -987,7 +1009,9 @@
         const hotovoTady = (q) => mojeRezim
             ? window.KBUI.quickHotovoPro(q, uid) : window.KBUI.quickHotovoVse(q);
         const aktivni = (mojeRezim ? proMe : odeMe)
-            .filter(q => !hotovoTady(q) && (!jenPozn || q.poznamka)).sort(naporadi);
+            .filter(q => !hotovoTady(q) && !odlozenoMne(q) && (!jenPozn || q.poznamka)).sort(naporadi);
+        const odlozene = mojeRezim
+            ? proMe.filter(q => odlozenoMne(q) && (!jenPozn || q.poznamka)).sort(naporadi) : [];
         const splnene = (mojeRezim ? proMe : odeMe)
             .filter(q => hotovoTady(q) && (!jenPozn || q.poznamka)
                 && (q.hotovoMs || q.ms || 0) >= tydenZpet);
@@ -1005,16 +1029,23 @@
                     : mojeRezim ? "Žiješ šťastný život, nikdo po tobě nic nechce."
                               : "Nic zadaného – co jsi poslal, je splněné nebo smazané.") + "</div>") +
             // rozbalená historie zůstává u seznamu, tlačítko k ní je v patičce
+            (quickOdlozeneTile ? odlozene.map(q => radek(q, false)).join("") : "") +
             (quickSplneneTile ? splnene.map(q => radek(q, !mojeRezim)).join("") : "");
 
-        document.getElementById("quickPata").innerHTML = splnene.length
-            ? '<button type="button" class="linkbtn" data-quick-splnene-tile>' +
-                (quickSplneneTile ? "Skrýt historii"
-                    : "Splněné za poslední týden (" + splnene.length + ")") + "</button>"
-            : "";
+        document.getElementById("quickPata").innerHTML =
+            (odlozene.length
+                ? '<button type="button" class="linkbtn" data-quick-odlozene-tile>' +
+                    (quickOdlozeneTile ? "Skrýt odložené" : "Odložené (" + odlozene.length + ")") + "</button>"
+                : "") +
+            (splnene.length
+                ? '<button type="button" class="linkbtn" data-quick-splnene-tile>' +
+                    (quickSplneneTile ? "Skrýt historii"
+                        : "Splněné za poslední týden (" + splnene.length + ")") + "</button>"
+                : "");
     }
 
     let quickSplneneTile = false;
+    let quickOdlozeneTile = false;
     let quickRozsah = "moje";
 
     /* Splněno / Vrátit / smazání / rozbalení splněných – panel v pásu má
@@ -1053,10 +1084,20 @@
             ukazOdbavene = !ukazOdbavene;
             return void renderKontrola();
         }
+        if (event.target.closest("[data-kontrola-odlozene]")) {
+            ukazOdlozene = !ukazOdlozene;
+            return void renderKontrola();
+        }
+        const nevracet = event.target.closest("[data-kontrola-odlozit-zrus]");
+        if (nevracet) return void odlozKontrolu(nevracet.dataset.kontrolaOdlozitZrus, 0);
         const qrozsah = event.target.closest("[data-qrozsah]");
         if (qrozsah) { quickRozsah = qrozsah.dataset.qrozsah; return void renderQuick(); }
         if (event.target.closest("[data-quick-splnene-tile]")) {
             quickSplneneTile = !quickSplneneTile;
+            return void renderQuick();
+        }
+        if (event.target.closest("[data-quick-odlozene-tile]")) {
+            quickOdlozeneTile = !quickOdlozeneTile;
             return void renderQuick();
         }
         const hotovoBtn = event.target.closest("#quickSeznam [data-quick-hotovo]," +
@@ -1239,7 +1280,10 @@
                 '<span class="milrad__datum">' + esc(czDatum(m.datum)) +
                     '<span>' + esc(kdy) + "</span></span>" +
                 '<span class="grow" style="min-width:0">' +
-                    '<span class="milrad__nazev">' + esc(m.cinnost || "Bez názvu") + "</span>" +
+                    '<span class="milrad__nazev">' +
+                        // zveřejněný za posledních 7 dní – stejné pravidlo jako na stránce Milníky
+                        (V.milnikNovy(m) ? '<span class="milpil milpil--novy" title="Zveřejněný za posledních 7 dní">nový</span> ' : "") +
+                        esc(m.cinnost || "Bez názvu") + "</span>" +
                     (meta ? '<span class="milrad__meta">' + esc(meta) + "</span>" : "") +
                 "</span>" +
             "</a>";
@@ -1687,6 +1731,7 @@
        dlaždice prázdná – existuje pro tu chvíli, kdy něco nesedí. */
 
     let ukazOdbavene = false;
+    let ukazOdlozene = false;
     const DNY_KRATCE = ["ne", "po", "út", "st", "čt", "pá", "so"];
     /** „út 21. 10." – v okně 14 dní je rok navíc. */
     const denKratce = (iso) => {
@@ -1716,6 +1761,38 @@
             if (btn) btn.disabled = false;
         }
     }
+
+    /** Odloží upozornění do `ms` (0 = vrátit hned) – jen pro mě, s „Zpět". */
+    async function odlozKontrolu(klic, ms) {
+        const bylo = Number((window.KB.kontrolaOdlozeno || {})[klic]) || 0;
+        try {
+            await window.KB.odlozKontrolu(klic, ms);
+            window.KBUI.toast(ms ? "Odloženo do " + window.KBUI.odlozenoText(ms) + " – pak se upozornění vrátí samo."
+                : "Upozornění je zpátky.", undefined,
+                { zpet: () => window.KB.odlozKontrolu(klic, bylo > Date.now() ? bylo : 0) });
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Uložení se nepovedlo.", "error");
+        }
+    }
+
+    /* Nabídka u upozornění: tlačítko Odložit (je to ⋯ řádku), pravé tlačítko
+       a podržení prstu mimo odkaz. Odkaz sám nechává nabídku prohlížeče. */
+    if (window.KBNabidka) window.KBNabidka.pripoj((cil) => {
+        const tl = cil.closest("[data-kontrola-odlozit]");
+        const radek = cil.closest("[data-kontrola-radek]");
+        const klic = tl ? tl.getAttribute("data-kontrola-odlozit")
+            : (radek ? radek.getAttribute("data-kontrola-radek") : "");
+        if (!klic || (window.KB.kontrolaOk || {})[klic]) return null;
+        const doKdy = Number((window.KB.kontrolaOdlozeno || {})[klic]) || 0;
+        return {
+            nadpis: "Upozornění pro kontrolu", radek: radek,
+            polozky: window.KBUI.odlozeno(doKdy)
+                ? [{ text: "Vrátit hned (odloženo do " + window.KBUI.odlozenoText(doKdy) + ")", ikona: "vratit",
+                    fn: () => odlozKontrolu(klic, 0) }]
+                : window.KBUI.odlozitPolozky((ms) => odlozKontrolu(klic, ms))
+        };
+    });
 
     function renderKontrola() {
         const box = document.getElementById("kontrolaSeznam");
@@ -1760,14 +1837,23 @@
 
         chyby.sort((a, b) => b.datum.localeCompare(a.datum));
 
-        const otevrene = chyby.filter(ch => !ok[ch.klic]);
+        /* Odložené na zítra / na pondělí (rešerše bod 26) – jen moje, do té
+           doby schované pod odkazem dole, pak se vrátí samy. */
+        const odlozeno = window.KB.kontrolaOdlozeno || {};
+        const odlozenoDo = (ch) => window.KBUI.odlozeno(odlozeno[ch.klic], "kontrola-ok")
+            ? Number(odlozeno[ch.klic]) : 0;
+        const otevrene = chyby.filter(ch => !ok[ch.klic] && !odlozenoDo(ch));
+        const odlozene = chyby.filter(ch => !ok[ch.klic] && odlozenoDo(ch));
         const odbavene = chyby.filter(ch => !!ok[ch.klic]);
 
         /* Řádek: kdy, kdo, proč – klik vede do výkazů na ten den toho člověka
-           (zápis se tam zvýrazní); vpravo „V pořádku" (odbavené: „Vrátit"). */
+           (zápis se tam zvýrazní); vpravo „Odložit" a „V pořádku" (odbavené:
+           „Vrátit", odložené: „Vrátit hned"). */
         const radek = (ch, hotovo) => {
             const kdoOk = hotovo ? (ok[ch.klic] || []).filter(Boolean) : [];
-            return '<div class="kontrola__radek' + (hotovo ? " kontrola__radek--ok" : "") + '">' +
+            const doKdy = hotovo ? 0 : odlozenoDo(ch);
+            return '<div class="kontrola__radek' + (hotovo || doKdy ? " kontrola__radek--ok" : "") + '"' +
+                ' data-kontrola-radek="' + esc(ch.klic) + '">' +
                 '<a class="kontrola__odkaz" href="' + esc(ch.zapis
                         ? "vykazy.html?zapis=" + encodeURIComponent(ch.zapis) : "vykazy.html") + '"' +
                     ' title="' + esc(ch.zapis ? "Otevřít výkazy toho dne" : "Otevřít výkazy") + '">' +
@@ -1777,7 +1863,14 @@
                         esc(ch.stitek || denKratce(ch.datum)) + "</span>" +
                     "<span>" + (ch.kdo ? "<b>" + esc(ch.kdo) + "</b> – " : "") + esc(ch.text) +
                         (kdoOk.length ? ' <span class="kontrola__kdo">· v pořádku: ' +
-                            esc(kdoOk.join(", ")) + "</span>" : "") + "</span></a>" +
+                            esc(kdoOk.join(", ")) + "</span>" : "") +
+                        (doKdy ? ' <span class="kontrola__kdo">· odloženo do ' +
+                            esc(window.KBUI.odlozenoText(doKdy)) + "</span>" : "") + "</span></a>" +
+                (hotovo ? ""
+                    : doKdy
+                        ? '<button type="button" class="btn btn--ghost btn--sm kontrola__ok"' +
+                            ' data-kontrola-odlozit-zrus="' + esc(ch.klic) + '">Vrátit hned</button>'
+                        : window.KBUI.odlozitTlacitko('data-kontrola-odlozit="' + esc(ch.klic) + '"', "kontrola__ok")) +
                 '<button type="button" class="btn btn--ghost btn--sm kontrola__ok" data-ok="' + esc(ch.klic) + '"' +
                     ' title="' + (hotovo ? "Vrátit mezi upozornění" : "Je to v pořádku – schovat") + '">' +
                     (hotovo ? "Vrátit" : "V pořádku") + "</button>" +
@@ -1808,8 +1901,14 @@
                 ? otevrene.slice(0, 25).map(ch => radek(ch, false)).join("")
                 : ((kPotvrzeni.length || milKPotvrzeni.length) ? "" :
                   '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
-                  "Vše v pořádku – za posledních " + esc(V.PODEZRELE_DNI) +
-                  " dní žádný výkaz nevypadá podezřele.</div>")) +
+                  (odlozene.length ? "Teď nic – odložená upozornění se vrátí sama."
+                    : "Vše v pořádku – za posledních " + esc(V.PODEZRELE_DNI) +
+                      " dní žádný výkaz nevypadá podezřele.") + "</div>")) +
+            (odlozene.length
+                ? '<button type="button" class="linkbtn" data-kontrola-odlozene style="align-self:flex-start;margin-top:6px">' +
+                    (ukazOdlozene ? "Skrýt " : "Zobrazit ") + "odložené (" + odlozene.length + ")</button>" +
+                  (ukazOdlozene ? odlozene.map(ch => radek(ch, false)).join("") : "")
+                : "") +
             /* Odbavené se nemažou, jen schovají – ať se dá odškrtnutí vzít
                zpět a ať je vidět, že se na to někdo díval. */
             (odbavene.length

@@ -918,6 +918,21 @@ KB.quickVzetiNaVedomi = async (id, vzal) => {
     }, { merge: true });
 };
 
+/**
+ * „Odložit na zítra / na pondělí" (rešerše 19. 10. 2026, bod 26). Osobní:
+ * `odlozeno.{uid}` = ms, kdy se vzkaz tomu člověku vrátí; 0 = zrušit.
+ * Pole se jako „beru na vědomí" dopisuje zvlášť – saveQuickTodo ho nezná,
+ * takže ho odškrtnutí ani úprava vzkazu nesmaže.
+ */
+KB.odlozQuick = async (id, doMs) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid || !id) throw new Error("Není kdo odkládá.");
+    const ms = Number(doMs) || 0;
+    await setDoc(quickDoc(id), { odlozeno: { [uid]: ms > 0 ? ms : deleteField() } }, { merge: true });
+};
+
 /** Komentář ke vzkazu – stejně jako u poznámek, ať se dá odpovědět na místě. */
 KB.pridejQuickKomentar = async (id, text) => {
     if (authReady) await authReady;
@@ -2615,6 +2630,7 @@ const kontrolaManazeriCol = () => collection(db, "artifacts", APP_ID, "private",
 const kontrolaManazerDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "kontrola", "manazeri", uid);
 
 KB.kontrolaOk = {};             // klíč → [kdo ho odklikl]
+KB.kontrolaOdlozeno = {};       // klíč → ms návratu; jen MOJE odložení (pole `odlozeno` vlastního dokumentu)
 KB.kontrolaOkPrislo = false;
 let kontrolaOkOdber = null;
 let kontrolaOkDocs = {};        // uid manažera → { klice, kdo }
@@ -2643,9 +2659,13 @@ KB.watchKontrolaOk = async () => {
     if (!jsemManazer() || kontrolaOkOdber) return;
     kontrolaOkOdber = onSnapshot(kontrolaManazeriCol(), (snap) => {
         kontrolaOkDocs = {};
+        KB.kontrolaOdlozeno = {};
+        const ja = KB.currentUid();
         snap.forEach(d => {
             const x = d.data() || {};
             kontrolaOkDocs[d.id] = { klice: Array.isArray(x.klice) ? x.klice : [], kdo: String(x.kdo || "") };
+            // odložení je osobní – cizí dokumenty ho nesou taky, ale nečtou se
+            if (d.id === ja && x.odlozeno && typeof x.odlozeno === "object") KB.kontrolaOdlozeno = x.odlozeno;
         });
         slijKontrolaOk();
     }, (err) => console.error("Chyba čtení odbavených upozornění:", err));
@@ -2691,6 +2711,25 @@ KB.zrusKontrolaOk = async (klic) => {
         kontrolaOkStare = kontrolaOkStare.filter(x => x !== k);       // starý se neposlouchá živě
         slijKontrolaOk();
     }
+};
+
+/**
+ * „Odložit na zítra / na pondělí" u upozornění (rešerše bod 26) – vedle
+ * odkliknutí ve vlastním dokumentu manažera: `odlozeno.{klíč}` = ms návratu,
+ * 0 = zrušit. Prošlá odložení se při tom uklidí, ať mapa neroste.
+ */
+KB.odlozKontrolu = async (klic, doMs) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid || !klic) throw new Error("Není co odložit.");
+    const ms = Number(doMs) || 0;
+    const odlozeno = {};
+    Object.keys(KB.kontrolaOdlozeno || {}).forEach(k => {
+        if (!(Number(KB.kontrolaOdlozeno[k]) > Date.now())) odlozeno[k] = deleteField();
+    });
+    odlozeno[String(klic)] = ms > 0 ? ms : deleteField();
+    await setDoc(kontrolaManazerDoc(uid), { odlozeno: odlozeno }, { merge: true });
 };
 
 /* ------------------------------------------------- přesun starých tabulí --
