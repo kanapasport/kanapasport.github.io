@@ -200,7 +200,9 @@
        zpet = funkce, která akci vrátí (může vrátit Promise): v hlášce je
        pak tlačítko „Zpět“, hláška vydrží 8 s a pod myší nezmizí. Jen pro
        akce, které mají v kódu jednoduchý opak (Splněno, beru na vědomí,
-       zveřejnění…) – mazání má dál potvrzovací okno (UI.potvrd níž). */
+       zveřejnění…) – mazání má dál potvrzovací okno (UI.potvrd níž).
+       akce = { text, fn } – místo „Zpět“ tlačítko s vlastním popiskem
+       (např. „Otevřít“ po přeposlání zprávy); vydrží stejně, „Vráceno“ neříká. */
 
     UI.toast = (message, tone, volby) => {
         let el = document.getElementById("kbToast");
@@ -233,34 +235,40 @@
             document.body.appendChild(el);
         }
         const zpet = volby && typeof volby.zpet === "function" ? volby.zpet : null;
+        const akce = !zpet && volby && volby.akce && typeof volby.akce.fn === "function" ? volby.akce : null;
+        const tlacitko = zpet || (akce && akce.fn);
         el.style.background = tone === "error" ? "#b91c1c" : tone === "warn" ? "#b45309" : "#16794a";
         el.textContent = message;
-        el._zpet = zpet;
-        if (zpet) {
+        el._zpet = tlacitko;
+        if (tlacitko) {
             const b = document.createElement("button");
             b.type = "button";
-            b.textContent = "Zpět";
+            b.textContent = zpet ? "Zpět" : String(akce.text || "Otevřít");
             b.style.cssText = "flex:none;min-height:32px;padding:0 14px;border:1px solid rgba(255,255,255,.65);" +
                 "border-radius:var(--r,6px);background:rgba(255,255,255,.16);color:#fff;font:inherit;" +
                 "font-weight:900;cursor:pointer";
             b.addEventListener("click", () => {
-                if (el._zpet !== zpet) return;     // hláška mezitím patří jiné akci
+                if (el._zpet !== tlacitko) return;     // hláška mezitím patří jiné akci
                 el._zpet = null;
                 clearTimeout(el._timer);
                 el._schovej();
+                if (!zpet) {
+                    try { akce.fn(); } catch (err) { console.error(err); }
+                    return;
+                }
                 Promise.resolve().then(zpet).then(
                     () => UI.toast("Vráceno."),
                     (err) => { console.error(err); UI.toast("Vrátit se nepodařilo.", "error"); });
             });
             el.appendChild(b);
         }
-        el.style.pointerEvents = zpet ? "auto" : "none";
+        el.style.pointerEvents = tlacitko ? "auto" : "none";
         requestAnimationFrame(() => {
             el.style.transform = "translate(-50%, 0)";
             el.style.opacity = "1";
         });
         clearTimeout(el._timer);
-        el._timer = setTimeout(el._schovej, zpet ? 8000 : 3400);
+        el._timer = setTimeout(el._schovej, tlacitko ? 8000 : 3400);
     };
 
     /* ------------------------------------------- okna Potvrď a Zeptej se ----

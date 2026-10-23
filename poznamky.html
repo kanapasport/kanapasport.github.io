@@ -112,6 +112,15 @@
         .kchat__odeslat { flex: none; height: 40px; }
         .kchat__jencteni { flex: none; padding: 12px 14px; border-top: 1px solid var(--line);
             background: var(--surface); color: var(--muted); font-size: var(--fs-2); line-height: 1.5; }
+        /* proužek „Odpověď na …" nad polem psaní */
+        .kodp { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 2px 2px 10px;
+            border-left: 3px solid var(--accent); border-radius: var(--r-sm); background: var(--bg-soft); }
+        .kodp__text { flex: 1; min-width: 0; color: var(--text-soft); font-size: var(--fs-2);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kodp__text b { color: var(--accent); }
+        .kodp__zrus { flex: none; width: 32px; height: 32px; border: 0; border-radius: var(--r);
+            background: none; color: var(--muted); font-size: var(--fs-5); line-height: 1; cursor: pointer; }
+        .kodp__zrus:hover { background: var(--bg); color: var(--text); }
 
         /* oddělovače dnů, „Nové zprávy" a události (kdo koho přidal) */
         .kden { align-self: center; margin: 12px 0 4px; padding: 2px 10px; border-radius: var(--r-pill);
@@ -143,6 +152,41 @@
             opacity: 0; }
         .kz:hover .nabidka-vic, .kz .nabidka-vic:focus-visible, .kz .nabidka-vic[aria-expanded="true"] { opacity: 1; }
         @media (hover: none) { .kz .nabidka-vic { opacity: .75; } }
+        /* rychlé akce vlevo v patičce (kopírovat, odpovědět, přeposlat): na PC
+           nenápadné a naplno pod myší, na telefonu vidět a s cílem pro prst 32 px */
+        .kz__rychle { display: flex; gap: 2px; margin-right: auto; }
+        .kz__akce { flex: none; width: 24px; height: 22px; display: inline-flex; align-items: center;
+            justify-content: center; padding: 0; border: 0; border-radius: var(--r-sm); background: none;
+            color: var(--muted); cursor: pointer; opacity: .45; }
+        .kz__akce svg { width: 15px; height: 15px; }
+        .kz:hover .kz__akce, .kz__akce:focus-visible { opacity: 1; }
+        .kz__akce:hover { background: var(--bg); color: var(--accent); }
+        @media (hover: none) {
+            .kz__akce { width: 32px; height: 32px; opacity: .75; }
+            .kz__akce svg { width: 17px; height: 17px; }
+        }
+        /* splněno = celá bublina zeleně, moje i cizí (štítek nese i slovo – kvůli barvoslepým) */
+        .kz.kz--splneno .kz__bublina { border-color: var(--ok); background: var(--ok-tint); }
+        /* přeposláno a citace zprávy, na kterou se odpovídá – nahoře v bublině */
+        .kz__prep { margin-bottom: 3px; color: var(--muted); font-size: var(--fs-1); font-style: italic;
+            overflow-wrap: anywhere; }
+        .kz__citace { display: block; width: 100%; min-width: 0; margin: 2px 0 5px; padding: 4px 8px;
+            border: 0; border-left: 3px solid var(--accent); border-radius: var(--r-sm);
+            background: color-mix(in srgb, var(--accent) 7%, transparent); color: inherit; font: inherit;
+            text-align: left; }
+        button.kz__citace { cursor: pointer; }
+        button.kz__citace:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+        .kz__citace b { display: block; color: var(--accent); font-size: var(--fs-1); font-weight: 900;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kz__citace span { display: block; color: var(--text-soft); font-size: var(--fs-2);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kz__citace--pryc span { font-style: italic; }
+        /* po kliku na citaci původní zpráva krátce blikne */
+        .kz--blik .kz__bublina { animation: kzBlik 1.6s ease-out; }
+        @keyframes kzBlik { 0%, 45% { box-shadow: 0 0 0 3px var(--accent); }
+                            100% { box-shadow: 0 0 0 3px transparent; } }
+        @media (prefers-reduced-motion: reduce) { .kz--blik .kz__bublina { animation: none;
+            outline: 3px solid var(--accent); outline-offset: 2px; } }
         /* štítek řeší se / splněno (barva i slovo – kvůli barvoslepým) */
         .kz__stitek { display: inline-block; margin-bottom: 4px; padding: 1px 7px; border-radius: var(--r-sm);
             color: #fff; font-size: var(--fs-1); font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
@@ -206,6 +250,29 @@
         .kvyber__clovek .kav { width: 24px; height: 24px; border-width: 0; flex: none; }
         .kvyber__clovek .kchip__jmeno { padding: 0; }
         .kvyber__nic { grid-column: 1 / -1; padding: 8px; font-size: var(--fs-1); color: var(--muted); }
+
+        /* ------------------------------------------- okno: přeposlat zprávu */
+        .pokno--stred { align-items: center; }
+        .kprep__zprava { padding: 8px 10px; border-left: 3px solid var(--line); border-radius: var(--r-sm);
+            background: var(--bg-soft); font-size: var(--fs-2); line-height: 1.45; overflow-wrap: anywhere; }
+        .kprep__zprava b { display: block; font-size: var(--fs-1); color: var(--muted); }
+        .kprep__zprava span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+            overflow: hidden; white-space: pre-wrap; }
+        .kprep { max-height: min(280px, 40vh); overflow-y: auto; margin-top: 8px; padding: 4px;
+            border: 1px solid var(--line); border-radius: var(--r); display: flex; flex-direction: column; gap: 2px; }
+        .kprep__radek { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 8px;
+            border-radius: var(--r); cursor: pointer; }
+        .kprep__radek:hover { background: var(--bg-soft); }
+        .kprep__radek:has(input:checked) { background: var(--accent-tint); }
+        .kprep__radek input { flex: none; width: 17px; height: 17px; margin: 0; }
+        .kprep__popis { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .kprep__nazev { font-size: var(--fs-3); font-weight: 800;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kprep__lide { font-size: var(--fs-1); color: var(--muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kprep__nic { padding: 8px; font-size: var(--fs-1); color: var(--muted); }
+        #prepKomentar { min-height: 60px; resize: vertical; }
+        #btnPrepPoslat:disabled { opacity: .5; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -253,6 +320,11 @@
             </div>
             <div class="kchat__zpravy" id="chatZpravy" role="log" aria-label="Zprávy"></div>
             <form class="kchat__psani" id="chatPsani" autocomplete="off">
+                <div class="kodp" id="psaniOdpoved" hidden>
+                    <div class="kodp__text"><b id="psaniOdpovedKdo"></b> <span id="psaniOdpovedUryvek"></span></div>
+                    <button type="button" class="kodp__zrus" id="btnOdpovedZrus" title="Zrušit odpověď (Esc)"
+                            aria-label="Zrušit odpověď">×</button>
+                </div>
                 <div class="pnahledy" id="psaniNahledy" hidden></div>
                 <div class="kchat__radek">
                     <button type="button" class="kikona" id="btnObrazek" title="Přiložit obrázek z počítače / telefonu"
@@ -314,6 +386,30 @@
     </div>
 </div>
 
+<!-- ============================ okno: přeposlat zprávu do jiné konverzace -->
+<div class="pokno pokno--stred" id="oknoPrep" hidden role="dialog" aria-modal="true" aria-labelledby="oknoPrepNadpis">
+    <div class="pokno__telo">
+        <div class="pokno__hlava"><b id="oknoPrepNadpis">Přeposlat zprávu</b>
+            <button type="button" class="pokno__zavrit" data-zavri-prep aria-label="Zavřít">×</button></div>
+        <div class="kprep__zprava" id="prepZprava"></div>
+        <div>
+            <label class="label" for="prepHledat">Do které konverzace</label>
+            <input type="search" id="prepHledat" class="field" placeholder="Hledat konverzaci nebo člověka…"
+                   autocomplete="off">
+            <div class="kprep" id="prepSeznam" role="radiogroup" aria-label="Moje konverzace"></div>
+        </div>
+        <div>
+            <label class="label" for="prepKomentar">Komentář (nepovinný – přijde jako další zpráva)</label>
+            <textarea id="prepKomentar" class="field" rows="2" maxlength="4000"
+                      placeholder="Např. Mrkni na tohle…"></textarea>
+        </div>
+        <div class="row" style="gap:8px;justify-content:flex-end">
+            <button type="button" class="btn btn--ghost" data-zavri-prep>Zrušit</button>
+            <button type="button" class="btn btn--primary" id="btnPrepPoslat" disabled>Přeposlat</button>
+        </div>
+    </div>
+</div>
+
 <script src="assets/js/taxonomy.js?v=303"></script>
 <script src="assets/js/doc.js?v=303"></script>
 <script src="assets/js/ui.js?v=303"></script>
@@ -345,6 +441,7 @@
     let uDna = true;                 // okno zpráv je dole (dorazí-li obrázek, zůstat dole)
     let odesilam = false;
     let noveObrazky = [];            // rozepsané screenshoty (data URL)
+    let odpovidam = null;            // rychlá odpověď: { id, uid, jmeno, text } zprávy, na kterou se odpovídá
     let seznam = [];                 // naposledy spočítané konverzace
     let casovacPrecteno = null;
     const koncepty = new Map();      // id konverzace → rozepsaný text a obrázky
@@ -547,13 +644,55 @@
         return "";
     }
 
-    function bublinaHtml(p, navazuje) {
+    const uryvek = (t, n) => String(t == null ? "" : t).replace(/\s+/g, " ").trim().slice(0, n);
+    function casPreposlani(ms) {
+        const d = new Date(ms);
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". " +
+            (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + " " : "") + hodina(ms);
+    }
+
+    /* „↪ Přeposláno · Petr · 23. 10. 10:06" – autor a čas originálu (odkud
+       zpráva je, se schválně nikam nepíše). Hodnoty jsou od uživatelů → esc. */
+    function preposlanoHtml(pr) {
+        if (!pr || typeof pr !== "object") return "";
+        const kdo = uryvek(pr.jmeno, 80);
+        const ms = Number(pr.ms) || 0;
+        return '<div class="kz__prep">↪ Přeposláno' + (kdo ? " · " + esc(kdo) : "") +
+            (ms > 0 ? " · " + esc(casPreposlani(ms)) : "") + "</div>";
+    }
+
+    /* Citace zprávy, na kterou se odpovídá. Klik skočí na originál; když už
+       neexistuje, zůstane jen citace (úryvek je ve zprávě zkopírovaný). */
+    function citaceHtml(o) {
+        if (!o || typeof o !== "object" || typeof o.id !== "string" || !o.id) return "";
+        const vnitrek = "<b>" + esc(jmeno(String(o.uid || ""), uryvek(o.jmeno, 80))) + "</b>" +
+            "<span>" + esc(uryvek(o.text, 100) || "📷 obrázek") + "</span>";
+        return najdiZpravu(o.id)
+            ? '<button type="button" class="kz__citace" data-citace="' + esc(o.id) + '" title="Ukázat původní zprávu">' +
+                vnitrek + "</button>"
+            : '<div class="kz__citace kz__citace--pryc" title="Původní zpráva už neexistuje">' + vnitrek + "</div>";
+    }
+
+    /* Ikonky v patičce: kopírovat (i staré odpovědi), odpovědět (jen kdo smí
+       psát), přeposlat. Stejné akce jsou i v nabídce ⋯. */
+    function rychleAkceHtml(odpoved, k) {
+        const tl = (akce, popis, ikona) => '<button type="button" class="kz__akce" data-akce="' + akce + '"' +
+            ' title="' + popis + '" aria-label="' + popis + '">' + window.KBNabidka.ikona(ikona) + "</button>";
+        return '<span class="kz__rychle">' + tl("kopirovat", "Kopírovat text", "kopirovat") +
+            (odpoved ? "" :
+                (k && !k.jenCteni ? tl("odpovedet", "Odpovědět", "odpovedet") : "") +
+                tl("preposlat", "Přeposlat", "preposlat")) +
+            "</span>";
+    }
+
+    function bublinaHtml(p, navazuje, k) {
         const z = p.z;
         const moje = p.autor === me();
         const odpoved = p.druh === "odpoved";
         const text = String((odpoved ? p.c.text : z.text) || "");
         const stav = !odpoved && (z.stav === 0 || z.stav === 1) ? Number(z.stav) : null;
         return '<div class="kz ' + (moje ? "kz--moje" : "kz--cizi") + (navazuje ? " kz--navazuje" : "") +
+                (stav === 1 ? " kz--splneno" : "") +
                 (odpoved ? " kz--odpoved" : "") + (!odpoved && z.id === zvyraznena ? " kz--zvyraznena" : "") + '" ' +
                 (odpoved ? 'data-odpoved="' + esc(z.id) + '" data-odpoved-i="' + esc(p.i) + '"'
                          : 'data-zprava="' + esc(z.id) + '"') + ">" +
@@ -562,11 +701,13 @@
                 (!moje && !navazuje ? '<div class="kz__autor">' + esc(jmeno(p.autor, p.jmeno)) + "</div>" : "") +
                 (odpoved ? '<div class="kz__odkaz">↪ k poznámce „' +
                     esc(String(z.text || "obrázek").replace(/\s+/g, " ").slice(0, 60)) + "“</div>" : "") +
+                (odpoved ? "" : preposlanoHtml(z.preposlano) + citaceHtml(z.odpovedNa)) +
                 (stav !== null ? '<span class="kz__stitek ' + (stav ? "kz__stitek--hotovo" : "kz__stitek--resi") +
                     '">' + (stav ? "Splněno" : "Řeší se") + "</span>" : "") +
                 (odpoved ? "" : fotoHtml(z)) +
                 (text ? '<div class="kz__text">' + window.KBUI.textSOdkazy(text, odpoved ? null : z.odkazy) + "</div>" : "") +
                 '<div class="kz__pata">' +
+                    rychleAkceHtml(odpoved, k) +
                     (!odpoved && z.upraveno ? "<span>upraveno</span>" : "") +
                     '<span title="' + esc(celyCas(p.cas)) + '">' + esc(hodina(p.cas)) + "</span>" +
                     window.KBNabidka.tlacitko("Akce se zprávou") +
@@ -607,7 +748,7 @@
                 cara = true; pred = null;
             }
             if (p.druh === "udalost") { html += udalostHtml(p); pred = null; return; }
-            html += bublinaHtml(p, !!(pred && pred.autor === p.autor && p.klic - pred.klic < PET_MINUT));
+            html += bublinaHtml(p, !!(pred && pred.autor === p.autor && p.klic - pred.klic < PET_MINUT), k);
             pred = p;
         });
         return html;
@@ -682,6 +823,7 @@
         if (cekamNa && najdiKonv(cekamNa)) { const id = cekamNa; cekamNa = ""; otevri(id, odkudOtevrit()); return; }
         zpracujParametry();
         if (otevrena) vykresliChat();
+        if (!$("oknoPrep").hidden) vykresliPrep();
         if (!$("oknoKonv").hidden) {
             if (okno.rezim === "lidi") vykresliUcastnikyOkna();
             // seznam lidí dorazil až po otevření okna – nabídku doplnit
@@ -787,8 +929,9 @@
     function ulozKoncept() {
         if (!otevrena) return;
         const text = $("psaniText").value;
-        if (text || noveObrazky.length) {
-            koncepty.set(otevrena, { text: text, obrazky: noveObrazky.slice(), odkazy: $("psaniText").kbOdkazy || [] });
+        if (text || noveObrazky.length || odpovidam) {
+            koncepty.set(otevrena, { text: text, obrazky: noveObrazky.slice(), odkazy: $("psaniText").kbOdkazy || [],
+                odpoved: odpovidam });
         } else koncepty.delete(otevrena);
     }
 
@@ -797,8 +940,52 @@
         $("psaniText").value = c.text;
         $("psaniText").kbOdkazy = (c.odkazy || []).slice();     // vybrané #odkazy rozepsané zprávy
         noveObrazky = c.obrazky.slice();
+        odpovidam = c.odpoved || null;
         vykresliNahledy();
+        vykresliOdpoved();
         prizpusobVysku();
+    }
+
+    /* ------------------------------------------------ rychlá odpověď --- */
+
+    function odpovez(z) {
+        const k = konvZpravy(z);
+        if (!k || k.jenCteni || k.id !== otevrena) return;
+        odpovidam = { id: z.id, uid: String(z.uid || ""), jmeno: jmeno(z.uid, z.jmeno), text: uryvek(z.text, 100) };
+        vykresliOdpoved();
+        // i na telefonu – kdo ťukne na Odpovědět, chce psát
+        try { $("psaniText").focus({ preventScroll: true }); } catch (e) { /* nic */ }
+    }
+
+    function zrusOdpoved() {
+        odpovidam = null;
+        vykresliOdpoved();
+    }
+
+    function vykresliOdpoved() {
+        $("psaniOdpoved").hidden = !odpovidam;
+        if (!odpovidam) return;
+        $("psaniOdpovedKdo").textContent = "Odpověď na " + jmeno(odpovidam.uid, odpovidam.jmeno) + ":";
+        $("psaniOdpovedUryvek").textContent = odpovidam.text || "📷 obrázek";
+    }
+
+    /* Klik na citaci: posun na původní zprávu a krátké bliknutí. */
+    function ukazPuvodni(id) {
+        const el = $("chatZpravy").querySelector('[data-zprava="' + CSS.escape(id) + '"]');
+        if (!el) { toast("Původní zpráva už neexistuje.", "warn"); return; }
+        const klidne = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollIntoView({ block: "center", behavior: klidne ? "auto" : "smooth" });
+        el.classList.remove("kz--blik");
+        void el.offsetWidth;            // ať bliknutí naběhne znovu i při druhém kliku
+        el.classList.add("kz--blik");
+        setTimeout(() => el.classList.remove("kz--blik"), 1700);
+    }
+
+    /* Kopírování: zpráva jen s obrázkem text nemá – řekne se to. */
+    function kopirujText(text) {
+        const t = String(text || "").trim();
+        if (!t) { toast("Zpráva je jen obrázek – text ke zkopírování nemá.", "warn"); return; }
+        window.KBNabidka.kopiruj(t, "Zkopírováno.");
     }
 
     function prizpusobVysku() {
@@ -835,18 +1022,22 @@
         odesilam = true;
         $("btnOdeslat").disabled = true;
         const obrazky = noveObrazky.slice();
+        const odpovedNa = odpovidam;
         let mimo = [];      // zmínění přes @, kteří v konverzaci nejsou – zmínku by neviděli
         try {
             const nahled = obrazky.length ? await window.KBUI.nahledObrazku(obrazky[0]) : "";
             const odkazy = window.KBUI.odkazyPole($("psaniText"));
-            const id = await window.KB.posliZpravu(k.id, { text: text, obrazky: obrazky, nahled: nahled, odkazy: odkazy });
+            const id = await window.KB.posliZpravu(k.id, { text: text, obrazky: obrazky, nahled: nahled, odkazy: odkazy,
+                odpovedNa: odpovedNa });
             if (id && obrazky.length) obrazkyCache.set(id, obrazky.map(o => window.KBUI.bezpecnyObrazek(o)).filter(Boolean));
             if (id) mimo = window.KBUI.zminkyVTextu(text).filter(u => k.ucastnici.indexOf(u) === -1);
             $("psaniText").value = "";
             $("psaniText").kbOdkazy = [];
             noveObrazky = [];
+            odpovidam = null;
             koncepty.delete(k.id);
             vykresliNahledy();
+            vykresliOdpoved();
             prizpusobVysku();
             drzetDole = true;
             vykresli();
@@ -1015,6 +1206,8 @@
             polozky: [
                 z.text && { text: "Kopírovat text", ikona: "kopirovat",
                     fn: () => window.KBNabidka.kopiruj(z.text, "Text zprávy zkopírován.") },
+                ucastnik && k.id === otevrena && { text: "Odpovědět", ikona: "odpovedet", fn: () => odpovez(z) },
+                { text: "Přeposlat…", ikona: "preposlat", fn: () => otevriPrep(z) },
                 obrazek && { text: "Zvětšit obrázek", ikona: "lupa", fn: () => lupa(z.id, 0) },
                 smiStitek && stav !== 0 && { text: "Štítek: řeší se", ikona: "vlajka", fn: () => nastavStav(z, 0) },
                 smiStitek && stav !== 1 && { text: "Štítek: splněno", ikona: "hotovo", fn: () => nastavStav(z, 1) },
@@ -1026,6 +1219,24 @@
         };
     }
 
+    /** Ikonka v patičce bubliny: kopírovat / odpovědět / přeposlat. */
+    function akceZpravy(tlacitko) {
+        const druh = tlacitko.getAttribute("data-akce");
+        const stara = tlacitko.closest("[data-odpoved]");
+        if (stara) {       // stará odpověď (komentář) – jen ke čtení, umí jen kopírovat
+            const z = najdiZpravu(stara.getAttribute("data-odpoved"));
+            const c = z && Array.isArray(z.komentare) ? z.komentare[Number(stara.getAttribute("data-odpoved-i"))] : null;
+            if (druh === "kopirovat") kopirujText(c && c.text);
+            return;
+        }
+        const el = tlacitko.closest("[data-zprava]");
+        const z = el ? najdiZpravu(el.getAttribute("data-zprava")) : null;
+        if (!z) return;
+        if (druh === "kopirovat") kopirujText(z.text);
+        else if (druh === "odpovedet") odpovez(z);
+        else if (druh === "preposlat") otevriPrep(z);
+    }
+
     function nabidkaOdpovedi(prvek) {
         const z = najdiZpravu(prvek.getAttribute("data-odpoved"));
         const c = z && Array.isArray(z.komentare) ? z.komentare[Number(prvek.getAttribute("data-odpoved-i"))] : null;
@@ -1034,6 +1245,119 @@
             { text: "Kopírovat text", ikona: "kopirovat",
               fn: () => window.KBNabidka.kopiruj(String(c.text), "Text zkopírován.") }
         ] };
+    }
+
+    /* ---------------------------------------- okno: přeposlat zprávu --- */
+
+    let prep = { zprava: null, cil: "" };
+    let preposilam = false;
+
+    /** Kam se dá přeposlat: moje konverzace, kde smím psát, bez té, odkud
+        zpráva je. Pořadí jako vlevo – poslední aktivita nahoře. */
+    function cilePrep() {
+        const z = prep.zprava;
+        const odkud = z ? konvZpravy(z) : null;
+        return seznam.filter(k => !k.jenCteni && (!odkud || k.id !== odkud.id));
+    }
+
+    function otevriPrep(z) {
+        if (!z || z.typ === "udalost") return;
+        prep = { zprava: z, cil: "" };
+        const obr = Number(z.obrazku) || (window.KBUI.bezpecnyObrazek(z.nahled) ? 1 : 0);
+        $("prepZprava").innerHTML = "<b>" + esc("Zpráva od " + jmeno(z.uid, z.jmeno) + " · " + casPreposlani(window.KB.poznCas(z))) +
+            "</b><span>" + esc((obr ? "📷 " + window.KBNabidka.pocet(obr, ["obrázek", "obrázky", "obrázků"]) +
+                (z.text ? " · " : "") : "") +
+                String(z.text || "")) + "</span>";
+        $("prepHledat").value = "";
+        $("prepKomentar").value = "";
+        $("prepSeznam").kbHtml = null;      // čerstvý seznam bez výběru z minula
+        vykresliPrep();
+        $("oknoPrep").hidden = false;
+        // na telefonu bez fokusu – klávesnice by zakryla půl seznamu
+        if (!dotyk()) setTimeout(() => { try { $("prepHledat").focus(); } catch (e) { /* nic */ } }, 0);
+    }
+    const zavriPrep = () => { $("oknoPrep").hidden = true; prep = { zprava: null, cil: "" }; };
+
+    /** Co propustí hledání; vybraná konverzace zůstává vidět vždycky –
+        jinak by se dalo poslat někam, kam člověk zrovna nevidí. */
+    function viditelneCilePrep() {
+        const slova = window.KBUI.fold($("prepHledat").value).split(/\s+/).filter(Boolean);
+        return cilePrep().filter(k => {
+            if (k.id === prep.cil) return true;
+            const t = window.KBUI.fold(k.nazev + " " + k.ucastnici.map(u => jmeno(u)).join(" "));
+            return slova.every(s => t.indexOf(s) !== -1);
+        });
+    }
+
+    function vykresliPrep() {
+        const vse = cilePrep();
+        const vidim = viditelneCilePrep();
+        if (prep.cil && !vse.some(k => k.id === prep.cil)) prep.cil = "";
+        const html = vidim.length
+            ? vidim.map(k => '<label class="kprep__radek"><input type="radio" name="prepCil" data-prep-cil="' +
+                    esc(k.id) + '">' +
+                    '<span class="kprep__popis"><span class="kprep__nazev">' + esc(k.nazev) + "</span>" +
+                        '<span class="kprep__lide">' + esc(k.ucastnici.map(u => jmenoKratke(u)).join(", ")) + "</span></span>" +
+                    '<span class="kcas">' + esc(casKratce(k.aktivita)) + "</span></label>").join("")
+            : '<div class="kprep__nic">' + (vse.length ? "Nic takového."
+                : "Jinou konverzaci, kam zprávu poslat, nemáš – založ ji tlačítkem + Nová konverzace.") + "</div>";
+        // překreslit jen při změně – snímek databáze nesmí shodit výběr pod rukama
+        if (html !== $("prepSeznam").kbHtml) {
+            $("prepSeznam").innerHTML = html;
+            $("prepSeznam").kbHtml = html;
+            const vybrana = prep.cil && $("prepSeznam").querySelector('[data-prep-cil="' + CSS.escape(prep.cil) + '"]');
+            if (vybrana) vybrana.checked = true;
+        }
+        $("btnPrepPoslat").disabled = !prep.cil || preposilam;
+    }
+
+    /** Plné obrázky zprávy – načtené stejně jako pro lupu (z podkolekce),
+        stará poznámka bez podkolekce aspoň s náhledem. */
+    async function obrazkyProPreposlani(z) {
+        if (Number(z.obrazku) > 0) {
+            const obr = await window.KB.nactiPoznObrazky(z.id);
+            const plne = obr.map(o => window.KBUI.bezpecnyObrazek(o && o.data)).filter(Boolean);
+            if (!plne.length) throw new Error("Obrázky zprávy se nenačetly.");
+            return plne;
+        }
+        const nahled = window.KBUI.bezpecnyObrazek(z.nahled);
+        return nahled ? [nahled] : [];
+    }
+
+    /* Přeposlání = nová zpráva v cílové konverzaci stejnou cestou jako
+       běžné odeslání (čtenáři = účastníci cíle, ohlášení do mobilu). Nese
+       text, obrázky a odkazy originálu a `preposlano` (autor a čas
+       originálu; u přeposlané zprávy zůstává původní autor). Citace
+       odpovědi a štítek se nepřenáší – patří do původní konverzace. */
+    async function preposli() {
+        const z = prep.zprava && (najdiZpravu(prep.zprava.id) || prep.zprava);
+        const cil = najdiKonv(prep.cil);
+        if (preposilam || !z || !cil || cil.jenCteni) return;
+        preposilam = true;
+        $("btnPrepPoslat").disabled = true;
+        const komentar = $("prepKomentar").value.trim();
+        let id = "";
+        try {
+            const obrazky = await obrazkyProPreposlani(z);
+            const nahled = obrazky.length ? await window.KBUI.nahledObrazku(obrazky[0]) : "";
+            const puvod = (z.preposlano && typeof z.preposlano === "object") ? z.preposlano
+                : { jmeno: jmeno(z.uid, z.jmeno), ms: window.KB.poznCas(z) };
+            id = await window.KB.posliZpravu(cil.id, { text: String(z.text || ""), obrazky: obrazky,
+                nahled: nahled, odkazy: z.odkazy, preposlano: puvod });
+            if (!id) throw new Error("Zpráva nemá co přeposlat.");
+            // komentář jako další běžná zpráva – až po přeposlané, ať nevisí bez ní
+            if (komentar) await window.KB.posliZpravu(cil.id, { text: komentar });
+            zavriPrep();
+            toast("Přeposláno do „" + cil.nazev + "“.", undefined,
+                { akce: { text: "Otevřít", fn: () => otevri(cil.id, odkudOtevrit()) } });
+        } catch (err) {
+            console.error(err);
+            if (id) { zavriPrep(); toast("Přeposláno, ale komentář se neodeslal.", "warn"); }
+            else toast("Přeposlat se nepovedlo – nic se neposlalo.", "error");
+        } finally {
+            preposilam = false;
+            if (!$("oknoPrep").hidden) vykresliPrep();
+        }
     }
 
     /* ---------------------------------- okno: nová konverzace / lidé --- */
@@ -1185,7 +1509,33 @@
         $("chatPsani").addEventListener("submit", (e) => { e.preventDefault(); odesli(); });
         $("psaniText").addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !dotyk()) { e.preventDefault(); odesli(); }
+            // Esc zruší rozepsanou odpověď (otevřenou nápovědu @/# zavře ui.js dřív)
+            if (e.key === "Escape" && odpovidam) { e.preventDefault(); zrusOdpoved(); }
         });
+        $("btnOdpovedZrus").addEventListener("click", () => {
+            zrusOdpoved();
+            try { $("psaniText").focus({ preventScroll: true }); } catch (err) { /* nic */ }
+        });
+
+        /* okno Přeposlat: hledání, výběr cíle (Enter vybere jediný nalezený), odeslání */
+        $("prepHledat").addEventListener("input", vykresliPrep);
+        $("prepHledat").addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" || e.isComposing) return;
+            e.preventDefault();
+            const vidim = viditelneCilePrep();
+            if (vidim.length === 1) {
+                prep.cil = vidim[0].id;
+                $("prepSeznam").kbHtml = null;
+                vykresliPrep();
+            }
+        });
+        $("prepSeznam").addEventListener("change", (e) => {
+            const id = e.target.getAttribute("data-prep-cil");
+            if (!id || !e.target.checked) return;
+            prep.cil = id;
+            $("btnPrepPoslat").disabled = preposilam;
+        });
+        $("btnPrepPoslat").addEventListener("click", preposli);
         $("psaniText").addEventListener("input", prizpusobVysku);
         $("psaniText").placeholder = dotyk() ? "Napiš zprávu… (@ kolega, # projekt či úkol)"
             : "Napiš zprávu… (Enter odešle, Shift+Enter nový řádek, @ kolega, # projekt či úkol, Ctrl+V screenshot)";
@@ -1215,7 +1565,7 @@
         });
         // Ctrl+V kdekoliv v otevřené konverzaci (kromě jiných polí)
         document.addEventListener("paste", (e) => {
-            if (!otevrena || $("chatPsani").hidden || !$("oknoKonv").hidden) return;
+            if (!otevrena || $("chatPsani").hidden || !$("oknoKonv").hidden || !$("oknoPrep").hidden) return;
             const cil = e.target;
             if (cil !== $("psaniText") && cil && cil.closest &&
                 cil.closest("input, textarea, select, [contenteditable='true']")) return;
@@ -1234,6 +1584,12 @@
             if (t.closest("[data-nova-konv]")) { otevriOkno("nova"); return; }
             const foto = t.closest("[data-foto]");
             if (foto) { lupa(foto.getAttribute("data-foto"), Number(foto.getAttribute("data-foto-i")) || 0); return; }
+            // ikonky v patičce bubliny a citace odpovědi
+            const akce = t.closest("[data-akce]");
+            if (akce && $("chatZpravy").contains(akce)) { akceZpravy(akce); return; }
+            const citace = t.closest("[data-citace]");
+            if (citace && $("chatZpravy").contains(citace)) { ukazPuvodni(citace.getAttribute("data-citace")); return; }
+            if (t.closest("[data-zavri-prep]") || t === $("oknoPrep")) { zavriPrep(); return; }
             const odeberU = t.closest("[data-odeber-ucastnika]");
             if (odeberU) {
                 const uid = odeberU.getAttribute("data-odeber-ucastnika");
@@ -1260,6 +1616,7 @@
                 !document.querySelector(".kbdlg")) {
                 zavriOkno();
             }
+            if (e.key === "Escape" && !$("oknoPrep").hidden && !document.querySelector(".kbdlg")) zavriPrep();
         });
         window.addEventListener("popstate", () => {
             const id = new URLSearchParams(location.search).get("konv") || "";
