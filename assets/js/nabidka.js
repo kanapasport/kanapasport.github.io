@@ -72,7 +72,9 @@
         uloz: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8"/><path d="M8 21v-7h8v7"/>',
         clovek: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/>',
         kalendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-        zprava: '<path d="M4 5h16v11H8l-4 4z"/>'
+        zprava: '<path d="M4 5h16v11H8l-4 4z"/>',
+        odpovedet: '<path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 00-4-4H4"/>',
+        preposlat: '<path d="M15 14l5-5-5-5"/><path d="M4 20v-7a4 4 0 014-4h12"/>'
     };
     N.ikona = (nazev) => IKONY[nazev]
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +

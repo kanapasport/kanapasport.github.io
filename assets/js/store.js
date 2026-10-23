@@ -1036,7 +1036,9 @@ KB.pridejQuickKomentar = async (id, text) => {
                                      autor, jmeno, sdileni = VŠICHNI účastníci
                                      (podle toho ji databáze vydá), createdMs,
                                      ms, nahled, obrazku, stav? (0 řeší se,
-                                     1 splněno), typ? ("udalost": akce, kdo) }
+                                     1 splněno), typ? ("udalost": akce, kdo),
+                                     odpovedNa? { id, uid, jmeno, text },
+                                     preposlano? { jmeno, ms } }
      osobni/poznamky/zaznamy/{id}/obrazky/{n}   screenshoty (JPEG base64)
 
    Upozornění (ntfy, e-mail) rozesílá Apps Script (KB.ohlasZpravu níž) –
@@ -1357,9 +1359,27 @@ KB.oznacPrecteno = async (lid, ms) => {
     await updateDoc(poznListDoc(lid), { ["precteno." + KB.currentUid()]: kdy });
 };
 
+const kratce = (v, n) => String(v == null ? "" : v).slice(0, n);
+
+/** Na co zpráva odpovídá: { id, uid, jmeno, text ≤ 100 znaků } – kopie úryvku,
+    ať citace přežije i smazání originálu. Pravidla obsah nehlídají, proto
+    jen holé řetězce s oříznutou délkou (kreslí se vždy přes esc). */
+function cistaOdpoved(o) {
+    if (!o || typeof o !== "object" || typeof o.id !== "string" || !o.id) return null;
+    return { id: kratce(o.id, 100), uid: kratce(o.uid, 128), jmeno: kratce(o.jmeno, 80), text: kratce(o.text, 100) };
+}
+
+/** Přeposlaná zpráva nese jen autora a čas originálu – NIKDY název
+    konverzace, odkud je (cílovou konverzaci můžou číst jiní lidé). */
+function cistePreposlani(p) {
+    if (!p || typeof p !== "object") return null;
+    return { jmeno: kratce(p.jmeno, 80), ms: Number(p.ms) || 0 };
+}
+
 /**
  * Odešle zprávu: text a/nebo screenshoty (data URL z UI.zmensiObrazek),
- * `nahled` = malý náhled prvního obrázku. Vrací id zprávy.
+ * `nahled` = malý náhled prvního obrázku, `odpovedNa` (rychlá odpověď)
+ * a `preposlano` (přeposlání) – viz funkce výš. Vrací id zprávy.
  */
 KB.posliZpravu = async (lid, data) => {
     if (authReady) await authReady;
@@ -1377,13 +1397,17 @@ KB.posliZpravu = async (lid, data) => {
     const ted = Date.now();
     // odkazy „#projekt / #úkol" – pole jen u zprávy, která nějaký má
     const odkazy = window.KBUI ? window.KBUI.cisteOdkazy(d.odkazy) : [];
+    const odpovedNa = cistaOdpoved(d.odpovedNa);
+    const preposlano = cistePreposlani(d.preposlano);
     await setDoc(poznDoc(id), Object.assign({
         listId: lid, listNazev: String(l.nazev || "").slice(0, 80),
         text: text, uid: ja, jmeno: window.KB_USER || "",
         // čtenáři = přesně účastníci konverzace (pravidla to hlídají)
         sdileni: ucastnici, createdMs: ted, ms: ted,
         nahled: String(d.nahled || "").slice(0, 90000), obrazku: fotky.length
-    }, odkazy.length ? { odkazy: odkazy } : {}));
+    }, odkazy.length ? { odkazy: odkazy } : {},
+       odpovedNa ? { odpovedNa: odpovedNa } : {},
+       preposlano ? { preposlano: preposlano } : {}));
     for (let i = 0; i < fotky.length; i++) {
         await setDoc(poznObrazek(id, "img_" + ted + "_" + i), { data: fotky[i], ms: ted + i });
     }
