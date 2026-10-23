@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Poznámky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=304">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=304">
+    <link rel="stylesheet" href="assets/css/app.css?v=305">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=305">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -152,9 +152,13 @@
             opacity: 0; }
         .kz:hover .nabidka-vic, .kz .nabidka-vic:focus-visible, .kz .nabidka-vic[aria-expanded="true"] { opacity: 1; }
         @media (hover: none) { .kz .nabidka-vic { opacity: .75; } }
-        /* rychlé akce vlevo v patičce (kopírovat, odpovědět, přeposlat): na PC
-           nenápadné a naplno pod myší, na telefonu vidět a s cílem pro prst 32 px */
-        .kz__rychle { display: flex; gap: 2px; margin-right: auto; }
+        /* rychlé akce v pravém horním rohu bubliny (kopírovat, odpovědět, přeposlat –
+           Michal 23. 10.): řádek se jménem autora, ikonky vpravo; na PC nenápadné
+           a naplno pod myší, na telefonu vidět a s cílem pro prst 32 px */
+        .kz__hlava { display: flex; align-items: center; gap: 8px; margin: -3px -6px 2px 0; }
+        .kz__hlava .kz__autor { flex: 1 1 auto; min-width: 0; margin-bottom: 0;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kz__rychle { display: flex; gap: 2px; margin-left: auto; }
         .kz__akce { flex: none; width: 24px; height: 22px; display: inline-flex; align-items: center;
             justify-content: center; padding: 0; border: 0; border-radius: var(--r-sm); background: none;
             color: var(--muted); cursor: pointer; opacity: .45; }
@@ -419,12 +423,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=304"></script>
-<script src="assets/js/doc.js?v=304"></script>
-<script src="assets/js/ui.js?v=304"></script>
-<script src="assets/js/nabidka.js?v=304"></script>
-<script src="assets/js/vykazy.js?v=304"></script>
-<script type="module" src="assets/js/store.js?v=304"></script>
+<script src="assets/js/taxonomy.js?v=305"></script>
+<script src="assets/js/doc.js?v=305"></script>
+<script src="assets/js/ui.js?v=305"></script>
+<script src="assets/js/nabidka.js?v=305"></script>
+<script src="assets/js/vykazy.js?v=305"></script>
+<script type="module" src="assets/js/store.js?v=305"></script>
 
 <script>
 (function () {
@@ -724,8 +728,8 @@
             : '<div class="kz__citace kz__citace--pryc" title="Původní zpráva už neexistuje">' + vnitrek + "</div>";
     }
 
-    /* Ikonky v patičce: kopírovat (i staré odpovědi), odpovědět (jen kdo smí
-       psát), přeposlat. Stejné akce jsou i v nabídce ⋯. */
+    /* Ikonky v pravém horním rohu bubliny: kopírovat (i staré odpovědi),
+       odpovědět (jen kdo smí psát), přeposlat. Stejné akce jsou i v nabídce ⋯. */
     function rychleAkceHtml(odpoved, k) {
         const tl = (akce, popis, ikona) => '<button type="button" class="kz__akce" data-akce="' + akce + '"' +
             ' title="' + popis + '" aria-label="' + popis + '">' + window.KBNabidka.ikona(ikona) + "</button>";
@@ -749,7 +753,10 @@
                          : 'data-zprava="' + esc(z.id) + '"') + ">" +
             (moje ? "" : (navazuje ? '<span class="kz__misto"></span>' : avatar(p.autor, p.jmeno))) +
             '<div class="kz__bublina">' +
-                (!moje && !navazuje ? '<div class="kz__autor">' + esc(jmeno(p.autor, p.jmeno)) + "</div>" : "") +
+                '<div class="kz__hlava">' +
+                    (!moje && !navazuje ? '<div class="kz__autor">' + esc(jmeno(p.autor, p.jmeno)) + "</div>" : "") +
+                    rychleAkceHtml(odpoved, k) +
+                "</div>" +
                 (odpoved ? '<div class="kz__odkaz">↪ k poznámce „' +
                     esc(String(z.text || "obrázek").replace(/\s+/g, " ").slice(0, 60)) + "“</div>" : "") +
                 (odpoved ? "" : preposlanoHtml(z.preposlano) + citaceHtml(z.odpovedNa)) +
@@ -758,7 +765,6 @@
                 (odpoved ? "" : fotoHtml(z)) +
                 (text ? '<div class="kz__text">' + window.KBUI.textSOdkazy(text, odpoved ? null : z.odkazy) + "</div>" : "") +
                 '<div class="kz__pata">' +
-                    rychleAkceHtml(odpoved, k) +
                     (!odpoved && z.upraveno ? "<span>upraveno</span>" : "") +
                     '<span title="' + esc(celyCas(p.cas)) + '">' + esc(hodina(p.cas)) + "</span>" +
                     window.KBNabidka.tlacitko("Akce se zprávou") +
