@@ -2203,16 +2203,24 @@ mark { background: #fde68a; color: #6b4b00; border-radius: var(--r-sm); padding:
     background: rgba(11, 13, 16, .9);
     display: none; align-items: center; justify-content: center;
     padding: 28px;
+    touch-action: none;   /* prsty obsluhuje prohlížeč sám (přejetí, dva prsty) */
 }
 .lightbox.is-open { display: flex; }
+.lightbox:focus { outline: none; }
 .lightbox img {
     max-width: 96vw; max-height: 86vh;
     border-radius: var(--r-lg); background: #fff;
     box-shadow: 0 30px 60px -20px #000;
+    user-select: none; -webkit-user-select: none; cursor: zoom-in;
 }
+.lightbox--blizko img { cursor: grab; }
+.lightbox--blizko img:active { cursor: grabbing; }
+/* ovládání nad přiblíženým obrázkem */
+.lightbox__close, .lightbox__cap, .lightbox__pocet, .lightbox__lupa, .lightbox__sipka { z-index: 1; }
 .lightbox__cap {
     position: absolute; bottom: 18px; left: 0; right: 0;
     text-align: center; font-size: var(--fs-2); color: #d3d7dc;
+    text-shadow: 0 1px 3px #000; pointer-events: none;
 }
 .lightbox__close {
     position: absolute; top: 14px; right: 18px;
@@ -2221,6 +2229,29 @@ mark { background: #fde68a; color: #6b4b00; border-radius: var(--r-sm); padding:
     background: none; border: none; cursor: pointer;
 }
 .lightbox__close:hover { color: #fff; }
+.lightbox__pocet {
+    position: absolute; top: 24px; left: 18px;
+    font-size: var(--fs-2); font-weight: 700; color: #d3d7dc; text-shadow: 0 1px 3px #000;
+}
+.lightbox__lupa {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px;
+}
+.lightbox__lupa button, .lightbox__sipka {
+    min-width: 40px; height: 40px; padding: 0 10px;
+    border: 0; border-radius: var(--r-pill); background: rgba(255, 255, 255, .16);
+    color: #fff; font: inherit; font-weight: 800; cursor: pointer;
+}
+.lightbox__lupa button:hover:not(:disabled), .lightbox__sipka:hover:not(:disabled) { background: rgba(255, 255, 255, .3); }
+.lightbox__lupa button:disabled, .lightbox__sipka:disabled { opacity: .3; cursor: default; }
+.lightbox__sipka {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; padding: 0; font-size: var(--fs-6); line-height: 1;
+}
+.lightbox__sipka--l { left: 10px; }
+.lightbox__sipka--p { right: 10px; }
+.lightbox:not(.lightbox--galerie) .lightbox__sipka,
+.lightbox:not(.lightbox--galerie) .lightbox__pocet { display: none; }
 
 /* ========================================================= MINIATURY ==== */
 

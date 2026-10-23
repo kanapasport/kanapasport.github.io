@@ -196,12 +196,21 @@
             border: 0; border-radius: var(--r); background: none; cursor: zoom-in; overflow: hidden; }
         .kz__foto img { display: block; max-width: min(320px, 100%); max-height: 240px; object-fit: cover;
             border-radius: var(--r); }
-        .kz__vic { position: absolute; right: 6px; bottom: 6px; padding: 1px 8px; border-radius: var(--r-pill);
-            background: rgba(16, 20, 26, .75); color: #fff; font-size: var(--fs-1); font-weight: 900; }
-        .kz__fotky { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }
-        .kz__fotky button { padding: 0; border: 0; background: none; cursor: zoom-in; }
-        .kz__fotky img { display: block; width: 120px; height: 84px; object-fit: cover;
-            border: 1px solid var(--line); border-radius: var(--r); }
+        /* víc fotek = mřížka jako v chatech (2 vedle sebe, 3 = jedna široká a dvě,
+           4 = 2×2, víc = tři a „+N“); dlaždice mají pevný tvar, takže se okno
+           zpráv nepohne, až plné obrázky dorazí */
+        .kz__mriz { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 280px; max-width: 100%;
+            margin: 2px 0 4px; border-radius: var(--r); overflow: hidden; }
+        .kz__mriz--1 { grid-template-columns: 1fr; width: 220px; }
+        .kz__dl { position: relative; min-width: 0; aspect-ratio: 1; padding: 0; border: 0;
+            background: var(--line); cursor: zoom-in; overflow: hidden; }
+        .kz__mriz--1 .kz__dl { aspect-ratio: 4 / 3; }
+        .kz__mriz--3 .kz__dl:first-child { grid-column: 1 / -1; aspect-ratio: 2; }
+        .kz__dl:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        .kz__dl img { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .kz__dl img:not([src]) { visibility: hidden; }
+        .kz__zbyva { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(16, 20, 26, .55); color: #fff; font-size: var(--fs-5); font-weight: 900; }
 
         /* telefon: konverzace přes celou obrazovku, zpátky šipkou */
         @media (max-width: 760px) {
@@ -446,7 +455,8 @@
     let casovacPrecteno = null;
     const koncepty = new Map();      // id konverzace → rozepsaný text a obrázky
     const obrazkyCache = new Map();  // id zprávy → plné obrázky (ověřené data URL)
-    const nacitaSe = new Set();
+    const nacitani = new Map();      // id zprávy → běžící načítání (samo i na klik se sejdou)
+    let hlidacFotek = null;          // IntersectionObserver – načte fotky zpráv, které jsou vidět
 
     /* ------------------------------------------------------------ lidé --- */
 
@@ -620,28 +630,69 @@
             esc(hodina(p.cas)) + "</div>";
     }
 
+    /* Fotky zprávy: jedna = větší náhled, víc = mřížka (nejvýš 4 dlaždice,
+       pátá a další schované pod „+N“). Plné obrázky do HTML nejdou – dosadí je
+       doplnFotky(), jinak by desítky velkých data URL zpomalily každé překreslení. */
     function fotoHtml(z) {
-        const plne = obrazkyCache.get(z.id);
+        const id = esc(z.id);
         const nahled = window.KBUI.bezpecnyObrazek(z.nahled);
-        const pocet = Number(z.obrazku) || 0;
-        if (plne && plne.length > 1) {
-            return '<div class="kz__fotky">' + plne.map((src, i) =>
-                '<button type="button" data-foto="' + esc(z.id) + '" data-foto-i="' + i + '"' +
-                ' aria-label="Zvětšit obrázek ' + (i + 1) + '"><img src="' + esc(src) + '" alt=""></button>').join("") +
-                "</div>";
+        const pocet = Math.max(Number(z.obrazku) || 0, nahled ? 1 : 0);
+        if (!pocet) return "";
+        if (pocet === 1 && nahled) {
+            return '<button type="button" class="kz__foto" data-foto="' + id + '" data-foto-i="0"' +
+                ' aria-label="Zvětšit obrázek"><img src="' + esc(nahled) + '" data-plna="0" alt=""></button>';
         }
-        const src = (plne && plne[0]) || nahled;
-        if (src) {
-            return '<button type="button" class="kz__foto" data-foto="' + esc(z.id) + '" data-foto-i="0"' +
-                ' aria-label="Zvětšit obrázek"><img src="' + esc(src) + '" alt="">' +
-                (pocet > 1 ? '<span class="kz__vic">+' + esc(pocet - 1) + "</span>" : "") + "</button>";
+        const dlazdic = Math.min(pocet, 4);
+        let html = '<div class="kz__mriz kz__mriz--' + dlazdic + '" data-nacti-fotky="' + id + '">';
+        for (let i = 0; i < dlazdic; i++) {
+            const zbyva = pocet > 4 && i === 3 ? pocet - 3 : 0;
+            html += '<button type="button" class="kz__dl" data-foto="' + id + '" data-foto-i="' + i + '" aria-label="' +
+                    esc(zbyva ? "Další obrázky (" + zbyva + ")" : "Zvětšit obrázek " + (i + 1) + " z " + pocet) + '">' +
+                '<img' + (i === 0 && nahled ? ' src="' + esc(nahled) + '"' : "") + ' data-plna="' + i + '" alt="">' +
+                (zbyva ? '<span class="kz__zbyva">+' + zbyva + "</span>" : "") + "</button>";
         }
-        if (pocet > 0) {
-            return '<button type="button" class="linkbtn" data-foto="' + esc(z.id) + '" data-foto-i="0">📷 ' +
-                (nacitaSe.has(z.id) ? "Načítám obrázek…" : pocet === 1 ? "Zobrazit obrázek" :
-                    "Zobrazit obrázky (" + esc(pocet) + ")") + "</button>";
+        return html + "</div>";
+    }
+
+    /** Dosadí do vykreslených dlaždic plné obrázky, které už jsou načtené. */
+    function doplnFotky(koren) {
+        koren.querySelectorAll("[data-foto] img[data-plna]").forEach(img => {
+            const plne = obrazkyCache.get(img.closest("[data-foto]").getAttribute("data-foto"));
+            const src = plne && plne[Number(img.getAttribute("data-plna"))];
+            if (src) { img.src = src; img.removeAttribute("data-plna"); }
+        });
+    }
+
+    /** Plné obrázky zprávy (z podkolekce) – jednou, i když o ně žádá víc míst naráz. */
+    function nactiFotky(id) {
+        if (obrazkyCache.has(id)) return Promise.resolve(obrazkyCache.get(id));
+        if (!nacitani.has(id)) {
+            nacitani.set(id, window.KB.nactiPoznObrazky(id).then(obr => {
+                const plne = obr.map(o => window.KBUI.bezpecnyObrazek(o && o.data)).filter(Boolean);
+                obrazkyCache.set(id, plne);
+                doplnFotky($("chatZpravy"));
+                return plne;
+            }).finally(() => nacitani.delete(id)));
         }
-        return "";
+        return nacitani.get(id);
+    }
+
+    /* Fotky se načtou, až zpráva dojede na obrazovku (s předstihem 300 px) –
+       ne všechny naráz při otevření dlouhé konverzace. */
+    function hlidejFotky(box) {
+        if (!("IntersectionObserver" in window)) return;     // bez něj až na klik
+        if (!hlidacFotek) {
+            hlidacFotek = new IntersectionObserver((zaznamy) => zaznamy.forEach(zaz => {
+                if (!zaz.isIntersecting) return;
+                hlidacFotek.unobserve(zaz.target);
+                nactiFotky(zaz.target.getAttribute("data-nacti-fotky"))
+                    .catch(err => console.warn("Fotky zprávy se nenačetly:", err));
+            }), { root: box, rootMargin: "300px 0px" });
+        }
+        hlidacFotek.disconnect();
+        box.querySelectorAll("[data-nacti-fotky]").forEach(el => {
+            if (!obrazkyCache.has(el.getAttribute("data-nacti-fotky"))) hlidacFotek.observe(el);
+        });
     }
 
     const uryvek = (t, n) => String(t == null ? "" : t).replace(/\s+/g, " ").trim().slice(0, n);
@@ -780,6 +831,8 @@
             const kde = box.scrollTop;
             box.innerHTML = html;
             posledniHtml = html;
+            doplnFotky(box);
+            hlidejFotky(box);
             const cil = zvyraznena && !zvyraznenaUkazana && box.querySelector('[data-zprava="' + CSS.escape(zvyraznena) + '"]');
             if (cil) { zvyraznenaUkazana = true; cil.scrollIntoView({ block: "center" }); }
             else if (drzetDole || dole) box.scrollTop = box.scrollHeight;
@@ -1074,29 +1127,26 @@
 
     /* ------------------------------------------------------ obrázky --- */
 
+    /** Prohlížeč se všemi fotkami zprávy, otevřený na i-té. */
     async function lupa(id, i) {
         const z = najdiZpravu(id);
         let plne = obrazkyCache.get(id);
-        if (!plne && z && Number(z.obrazku) > 0 && !nacitaSe.has(id)) {
-            nacitaSe.add(id);
-            posledniHtml = "";
-            vykresli();
-            try {
-                const obr = await window.KB.nactiPoznObrazky(id);
-                plne = obr.map(o => window.KBUI.bezpecnyObrazek(o && o.data)).filter(Boolean);
-                obrazkyCache.set(id, plne);
-            } catch (err) {
+        if (!plne && z && Number(z.obrazku) > 0) {
+            try { plne = await nactiFotky(id); }
+            catch (err) {
                 console.error(err);
                 toast("Obrázek se nepodařilo načíst.", "error");
-            } finally {
-                nacitaSe.delete(id);
-                vykresli();
             }
         }
-        const src = (plne && (plne[i] || plne[0])) || window.KBUI.bezpecnyObrazek(z && z.nahled);
-        if (src && window.KBDoc && window.KBDoc.openImage) {
-            window.KBDoc.openImage(src, z && z.text ? String(z.text).slice(0, 140) : "");
+        if (!window.KBDoc || !window.KBDoc.openImage) return;
+        const popisek = z && z.text ? String(z.text).slice(0, 140) : "";
+        if (plne && plne.length) {
+            const kde = Math.min(i, plne.length - 1);
+            window.KBDoc.openImage(plne[kde], popisek, { obrazky: plne, index: kde });
+            return;
         }
+        const nahled = window.KBUI.bezpecnyObrazek(z && z.nahled);
+        if (nahled) window.KBDoc.openImage(nahled, popisek);
     }
 
     /* ------------------------------------------- akce s konverzací --- */
