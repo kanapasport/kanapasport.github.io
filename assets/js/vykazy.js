@@ -312,23 +312,101 @@
        (−1312 h a podobně, Michal 8. 10. 2026). Na dovolenou to vliv nemá:
        ta stojí na `cerpanoPred` a na zapsaných dnech. */
 
-    /** Fond pracovních hodin mezi dvěma dny – bez víkendů a svátků. */
-    V.fondHodin = (odIso, doIso) => {
-        if (!odIso || !doIso || odIso > doIso) return 0;
+    /** Státní svátek podle ui.js; bez něj (test, samostatný skript) nic. */
+    const svatek = (iso) => !!(window.KBUI && window.KBUI.svatek && window.KBUI.svatek(iso));
+
+    /**
+     * Pracovní dny od–do včetně jako ISO data – bez víkendů a státních
+     * svátků. Jediné místo, které říká, co je pracovní den: fond, chybějící
+     * zápisy i rozpad absence ve formuláři stojí na něm, ať se neliší.
+     */
+    V.pracovniDnyIso = (odIso, doIso) => {
+        const dny = [];
+        if (!odIso || !doIso || odIso > doIso) return dny;
         const d = new Date(odIso + "T00:00:00");
         const konec = new Date(doIso + "T00:00:00");
-        let dnu = 0, pojistka = 0;
+        let pojistka = 0;
         while (d <= konec && pojistka++ < 4000) {
             const den = d.getDay();
             if (den !== 0 && den !== 6) {
                 const iso = d.getFullYear() + "-" +
                     String(d.getMonth() + 1).padStart(2, "0") + "-" +
                     String(d.getDate()).padStart(2, "0");
-                if (!(window.KBUI.svatek && window.KBUI.svatek(iso))) dnu++;
+                if (!svatek(iso)) dny.push(iso);
             }
             d.setDate(d.getDate() + 1);
         }
-        return dnu * 8;
+        return dny;
+    };
+
+    /** Fond pracovních hodin mezi dvěma dny – bez víkendů a svátků. */
+    V.fondHodin = (odIso, doIso) => V.pracovniDnyIso(odIso, doIso).length * 8;
+
+    /* ------------------------------------------- absence proti fondu ----
+       Michal 26. 10. 2026 rozhodl dvě výjimky z pravidla „absence se počítá
+       jako odpracovaný čas":
+         • Volno = NÁHRADNÍ volno. Člověk si vybírá naběhaný přesčas, takže
+           se jeho hodiny k fondu nepřičítají – den volna je −8 h (čerpá
+           přesčas). Zápis zůstává absence (0 Kč, potvrzuje manažer).
+         • Absence na státní svátek se nepočítá vůbec: fond je ten den nula,
+           tak nemá co nahrazovat (0 h, dovolenou nečerpá). Zapsat už nejde
+           (formulář svátky přeskočí, Rychlý zápis ji odmítne); staré zápisy
+           hlásí manažerovi kontrola podezřelých zápisů.
+       Jeden pomocník pro zůstatek, Vytížení i mini okno – ať to není
+       třikrát a nerozejde se to. */
+
+    /** Náhradní volno – jediná absence, která čerpá přesčas. */
+    V.NAHRADNI_VOLNO = "Volno";
+
+    /* Kdo vůbec fond hodin má. OSVČ a student ne – přesčas ani dovolená
+       se jim nikde neukazují a nic se u nich nenastavuje (Michal 26. 10.
+       2026). Jedna odpověď pro dlaždice, Vytížení, mini okno, Nastavení
+       i mřížku týdne. Bez člověka (seznam lidí ještě nedorazil) = ne. */
+    V.maFond = (u) => !!u && !!window.KBUI && window.KBUI.typUvazku(u) === "zamestnanec";
+
+    /** Vede se člověku přesčas? Zaměstnanec, kterému ho Nastavení nevypnulo. */
+    V.prescasVeden = (uid) => V.maFond(V.clovek(uid)) &&
+        (((window.KB.zustatky || {})[uid] || {}).bezPrescasu !== true);
+
+    /** Je zápis absence (podle příznaku nebo názvu)? */
+    const zapisAbsence = (z) => !!z && (z.absence === true || V.jeAbsence(z.zakazka));
+
+    /** Absence zapsaná na státní svátek – do ničeho se nepočítá. */
+    V.absenceNaSvatek = (z) => zapisAbsence(z) && svatek(z.datum);
+
+    /**
+     * Hodiny zápisu, které se počítají proti fondu (do přesčasu):
+     * práce celá, absence taky – kromě náhradního volna (0, čerpá přesčas)
+     * a absence na svátek (0, fond je nula).
+     */
+    V.hodinyKFondu = (z) => {
+        if (!z) return 0;
+        const h = Number(z.hodiny) || 0;
+        if (!zapisAbsence(z)) return h;
+        if (String(z.zakazka || "").trim() === V.NAHRADNI_VOLNO) return 0;
+        if (svatek(z.datum)) return 0;
+        return h;
+    };
+
+    /**
+     * Pracovní dny člověka bez jakéhokoliv zápisu (práce ani absence) od
+     * začátku počítání (`odIso` ze zůstatku, nebo zadané `od`, platí
+     * pozdější z obou) do `doIso` včetně. Fond za ně běží dál (−8 h za den)
+     * – pomocník jen říká, KTERÉ dny to jsou, ať je to vidět v dlaždici
+     * Přesčas, v mřížce týdne, v mini okně i v uzávěrce (jedna logika).
+     * Bez data začátku nic: web historii toho člověka nevede.
+     * @returns {string[]} ISO data vzestupně
+     */
+    V.chybejiciDny = (uid, doIso, od) => {
+        const z = (window.KB.zustatky || {})[uid] || {};
+        const odZust = /^\d{4}-\d{2}-\d{2}$/.test(String(z.odIso || "")) ? z.odIso : "";
+        const zacatek = od && od > odZust ? od : odZust;
+        if (!uid || !zacatek || !doIso || zacatek > doIso) return [];
+        const ma = {};
+        (window.KB.vykazy || []).forEach(v => {
+            if (v && v.uid === uid && v.datum) ma[v.datum] = true;
+        });
+        return V.pracovniDnyIso(zacatek, doIso).filter(d => !ma[d]);
     };
 
     V.zustatek = (uid) => {
@@ -341,8 +419,9 @@
             v.uid === uid && v.datum && v.datum >= od && v.datum <= dnes);
 
         /* Dovolená se ukládá rozepsaná po pracovních dnech, takže jeden
-           zápis = jeden den. Volno a nemoc se do nároku nepočítají. */
-        const dovolenaDnu = moje.filter(v => v.zakazka === "Dovolená").length;
+           zápis = jeden den. Volno a nemoc se do nároku nepočítají.
+           Dovolená omylem zapsaná na svátek nárok nečerpá. */
+        const dovolenaDnu = moje.filter(v => v.zakazka === "Dovolená" && !V.absenceNaSvatek(v)).length;
         const narok = Number(z.narok) || 0;
         const cerpano = (Number(z.cerpanoPred) || 0) + dovolenaDnu;
 
@@ -355,10 +434,13 @@
            ráno a odpoledne práce) se dřív připsalo osm hodin k tomu, co
            člověk ten den odpracoval – a z osmihodinového dne vyšel přesčas
            +6,5 h. Marcela si toho všimla 14. 10. 2026; stejně nafouklý
-           přesčas měli i Jakub (+12 h) a Dominik (+5,5 h). */
+           přesčas měli i Jakub (+12 h) a Dominik (+5,5 h).
+
+           Které hodiny absence k fondu jdou, říká `V.hodinyKFondu`:
+           náhradní volno a absence na svátek nesou nulu (viz výš). */
         const absence = moje.filter(v => v.absence === true);
         const absenceDnu = absence.length;
-        const absenceHodin = absence.reduce((n, v) => n + (Number(v.hodiny) || 0), 0);
+        const absenceHodin = absence.reduce((n, v) => n + V.hodinyKFondu(v), 0);
         const prace = moje.filter(v => v.absence !== true)
             .reduce((n, v) => n + (Number(v.hodiny) || 0), 0);
         const fond = V.fondHodin(od, dnes);
@@ -373,6 +455,14 @@
         /* Manažer poslouchá výkazy jen v okně několika měsíců – když je
            začátek počítání starší, chybí mu data a číslo by bylo mimo. */
         const okno = window.KB.vykazyOknoOd || "";
+
+        /* Nezapsané pracovní dny do včerejška (dnešek se ještě dopisuje).
+           Fond za ně stejně běží; tady se jen vyjmenují, ať člověk vidí,
+           proč je v mínusu, a dopíše je (Michal 26. 10. 2026). Před oknem
+           dat manažera by každý den vypadal prázdný – ty se nehlásí. */
+        const chybi = nastaveno && z.bezPrescasu !== true
+            ? V.chybejiciDny(uid, V.posunIso(dnes, -1), okno > od ? okno : "")
+            : [];
         return {
             nastaveno: nastaveno,
             od: od,
@@ -385,7 +475,8 @@
             bezPrescasu: z.bezPrescasu === true,
             fond: fond,
             prace: Math.round(prace * 10) / 10,
-            neuplne: nastaveno && !!okno && od < okno
+            neuplne: nastaveno && !!okno && od < okno,
+            chybi: chybi
         };
     };
 
@@ -1316,11 +1407,13 @@
 
     /* --------------------------------------------------------- vykreslení */
 
-    V.dlazdice = (label, value, note, money) =>
+    /** `extra` = hotové HTML pod poznámkou (řádek „chybí zápis" u přesčasu). */
+    V.dlazdice = (label, value, note, money, extra) =>
         '<div class="card vyktile' + (money ? " vyktile--money" : "") + '">' +
             '<div class="vyktile__label">' + esc(label) + "</div>" +
             '<div class="vyktile__value">' + value + "</div>" +
             (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
+            (extra || "") +
         "</div>";
 
     /**
@@ -1599,6 +1692,10 @@
          absence  práce v den celodenní absence
          hotovy   hodiny na úkol, který byl ten den už hotový
          vypomoc  zápis na cizí úkol (výpomoc) bez vlastní poznámky
+         svatek   absence zapsaná na státní svátek – do přesčasu ani dovolené
+                  se nepočítá (Michal 26. 10. 2026) a nově ani nejde zapsat;
+                  staré zápisy má manažer vidět a smazat. Proto BEZ okna
+                  14 dní: bere se všechno, co je načtené, do dneška.
 
        Klíč položky (`klic`) si pamatuje odkliknutí „V pořádku" – u starších
        druhů je stejný jako dřív, ať odkliknuté nevyskočí znovu. */
@@ -1651,8 +1748,17 @@
         const dny = {};
 
         (zaznamy || []).forEach(z => {
-            if (!z || !z.uid || !jeIso(z.datum) || z.datum < od || z.datum > dnes) return;
+            if (!z || !z.uid || !jeIso(z.datum) || z.datum > dnes) return;
             const k = z.uid + "|" + z.datum;
+            /* Absence na svátek – kdykoliv v načtených datech, jednou za den
+               a člověka (týden dovolené přes 28. 10. je jedno hlášení). */
+            if (V.absenceNaSvatek(z)) {
+                pridej({ klic: k + "|svatek", druh: "svatek", uid: z.uid, datum: z.datum,
+                    zapis: z.id || "",
+                    duvod: "absence zapsaná na státní svátek (" + V.czDatum(z.datum) + " – " +
+                        (window.KBUI.svatek(z.datum) || "svátek") + "), do přesčasu ani dovolené se nepočítá" });
+            }
+            if (z.datum < od) return;
             const den = dny[k] || (dny[k] = { uid: z.uid, datum: z.datum, prace: [], absenceCely: false, hodiny: 0 });
             if (!jePrace(z)) {
                 if (z.od === "00:00" && z.do === "23:59") den.absenceCely = true;
@@ -1714,7 +1820,7 @@
             }
         });
 
-        const PORADI = { hodiny: 0, prekryv: 1, absence: 2, hotovy: 3, vypomoc: 4 };
+        const PORADI = { hodiny: 0, prekryv: 1, svatek: 2, absence: 3, hotovy: 4, vypomoc: 5 };
         return out.sort((a, b) => b.datum.localeCompare(a.datum) ||
             String(a.uid).localeCompare(String(b.uid)) || PORADI[a.druh] - PORADI[b.druh]);
     };

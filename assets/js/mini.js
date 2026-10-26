@@ -373,23 +373,30 @@
      * jako odpracovaný čas – stejně jako zůstatek přesčasů ve výkazech, jinak
      * by týden dovolené vypadal jako 40 chybějících hodin.
      * fond(odIso, doIso) = V.fondHodin (bez víkendů a svátků).
+     * kFondu(z) = V.hodinyKFondu – kolik hodin zápisu jde k fondu: náhradní
+     * volno a absence na svátek nic (Michal 26. 10. 2026); bez něj všechno.
+     * `tydenVolno` = hodiny absence, které k fondu nešly (do poznámky).
      */
-    function souhrnHodin(zapisy, dnes, fond, jeAbsence) {
+    function souhrnHodin(zapisy, dnes, fond, jeAbsence, kFondu) {
         const t = tyden(dnes);
         const f = typeof fond === "function" ? fond : null;
+        const k = typeof kFondu === "function" ? kFondu : (z) => Number(z.hodiny) || 0;
         const r = {
             od: t.od, do: t.do,
-            dnes: 0, dnesAbsence: 0, tyden: 0, tydenAbsence: 0,
+            dnes: 0, dnesAbsence: 0, tyden: 0, tydenAbsence: 0, tydenVolno: 0,
             fondDnes: f ? f(dnes, dnes) : HODIN_ZA_DEN,
             fondTyden: f ? f(t.od, t.do) : 5 * HODIN_ZA_DEN,
             fondDoDnes: f ? f(t.od, dnes) : 0
         };
         (zapisy || []).forEach(z => {
             if (!z || !z.datum || z.datum < t.od || z.datum > dnes) return;
-            const h = Number(z.hodiny) || 0;
+            const h = k(z);
             const abs = z.absence === true || (jeAbsence ? jeAbsence(z.zakazka) : false);
             r.tyden += h;
-            if (abs) r.tydenAbsence += h;
+            if (abs) {
+                r.tydenAbsence += h;
+                r.tydenVolno += Math.max(0, (Number(z.hodiny) || 0) - h);
+            }
             if (z.datum === dnes) {
                 r.dnes += h;
                 if (abs) r.dnesAbsence += h;
@@ -824,6 +831,7 @@
         if (s.odbery === chci || s.odbery === "vse") return;
         s.odbery = chci;
         tise(kb.watchMojeSazba());
+        tise(kb.watchZustatky());        // odkdy se počítá přesčas → „chybí ti zápis za N dní"
         if (chci === "vse") {
             tise(kb.watchVykazy());
             tise(kb.watchProjekty());
@@ -1068,7 +1076,21 @@
         const box = $("[data-mini-hodiny]");
         if (!box) return;
         const v = V();
-        const r = souhrnHodin(mojeZapisy(), s.dnes, v.fondHodin, v.jeAbsence);
+        /* Hodiny proti fondu vidí jen zaměstnanec – OSVČ a student fond
+           nemají (Michal 26. 10. 2026); karta se jim schová celá. */
+        const uid = mojeUid();
+        if (!v.maFond(v.clovek(uid))) {
+            box.hidden = true;
+            box.innerHTML = "";
+            return;
+        }
+        box.hidden = false;
+        const r = souhrnHodin(mojeZapisy(), s.dnes, v.fondHodin, v.jeAbsence, v.hodinyKFondu);
+        /* Nezapsané pracovní dny do včerejška – jen komu se přesčas vede
+           (přepínač „počítat" v Nastavení; bez data začátku vrátí pomocník
+           prázdno). Stejná logika jako dlaždice Přesčas (`V.chybejiciDny`). */
+        const zst = (KB().zustatky || {})[uid] || {};
+        const chybi = v.prescasVeden(uid) ? v.chybejiciDny(uid, posunDny(s.dnes, -1)) : [];
         const radek = (nazev, h, fond, pozn) => {
             const plno = fond > 0 && h >= fond;
             const procent = fond > 0 ? Math.max(0, Math.min(100, Math.round(h / fond * 100))) : (h > 0 ? 100 : 0);
@@ -1085,11 +1107,18 @@
         const poznTyden = r.fondDoDnes > 0
             ? "Fond do dneška " + cislo(r.fondDoDnes) + " h · " + (rozdil < 0 ? "chybí " + cislo(-rozdil) + " h"
                 : rozdil > 0 ? "o " + cislo(rozdil) + " h víc" : "přesně podle fondu") +
-              (r.tydenAbsence ? " · z toho absence " + cislo(r.tydenAbsence) + " h" : "")
+              (r.tydenAbsence ? " · z toho absence " + cislo(r.tydenAbsence) + " h" : "") +
+              (r.tydenVolno ? " · náhradní volno " + cislo(r.tydenVolno) + " h čerpá přesčas" : "")
             : "";
         box.innerHTML = '<h2 class="mini__nadpis">Hodiny <span>proti fondu</span></h2>' +
             radek("Dnes", r.dnes, r.fondDnes, r.fondDnes ? "" : "Dnes je víkend nebo svátek – fond je nula.") +
-            radek("Tento týden", r.tyden, r.fondTyden, poznTyden);
+            radek("Tento týden", r.tyden, r.fondTyden, poznTyden) +
+            (chybi.length
+                ? '<p class="mini__pozn" style="color:var(--danger)" title="' +
+                    esc(chybi.map(v.czDatum).join(", ")) + '">Chybí ti zápis za ' +
+                    esc(v.pocet(chybi.length, ["den", "dny", "dní"])) + " (od " + esc(v.czDatum(zst.odIso)) +
+                    " do včerejška) – fond 8 h za každý běží dál.</p>"
+                : "");
     }
 
     function kresliQuickSeznam() {
@@ -1770,7 +1799,7 @@
         }
 
         ["vykazy", "ukoly", "projekty-docs", "quicktodo", "users", "uzaverka",
-         "vykazy-meta", "status", "moje-sazba", "kalendar", "milniky"].forEach(udalost => KB().on(udalost, naplanuj));
+         "vykazy-meta", "status", "moje-sazba", "kalendar", "milniky", "zustatky"].forEach(udalost => KB().on(udalost, naplanuj));
         KB().on("ukoly", () => { s.ukolyPrisly = true; });
         document.addEventListener("kb-role", naplanuj);
 

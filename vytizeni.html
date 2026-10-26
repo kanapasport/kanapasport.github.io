@@ -187,6 +187,7 @@
         window.KB.watchProjekty();
         window.KB.watchUkoly();
         window.KB.watchKontrolaTydnu();     // značky „zkontrolováno" (Týdny)
+        window.KB.watchZustatky();          // komu se přesčas nevede (sloupec Přesčas „—")
     }
 
     /**
@@ -273,10 +274,12 @@
                 /* Absence se do fondu počítá SKUTEČNÝMI hodinami, ne plnou
                    směnou – celodenní jich nese osm, ale půldenní doktor
                    by jinak přidal osm k tomu, co se ten den odpracovalo
-                   (Michal 14. 10. 2026). */
+                   (Michal 14. 10. 2026). Kolik z nich k fondu jde, říká
+                   `V.hodinyKFondu` (jako zůstatek ve výkazech a mini okno):
+                   náhradní volno nic (čerpá přesčas), absence na svátek nic. */
                 if (z.absence === true) {
                     s.absenceDnu++;
-                    s.absenceHodin += Number(z.hodiny) || 0;
+                    s.absenceHodin += V.hodinyKFondu(z);
                 } else s.prace += Number(z.hodiny) || 0;
                 soucty.set(z.uid, s);
             }
@@ -310,9 +313,9 @@
     }
 
     /* Dvě čísla vpravo za mřížkou: kolik má člověk za měsíc dohromady
-       a o kolik je nad fondem. Dovolená a volno se počítají jako
-       odpracovaný čas, aby přesčas kvůli nim nespadl do mínusu –
-       skutečnými hodinami, ne paušální směnou.
+       a o kolik je nad fondem. Dovolená se počítá jako odpracovaný čas,
+       aby přesčas kvůli ní nespadl do mínusu – skutečnými hodinami, ne
+       paušální směnou; náhradní volno ne, to přesčas čerpá.
        Přesčas dává smysl jen u zaměstnance – OSVČ a studenti fond nemají. */
     function souhrnCloveka(u, data) {
         const s = data.soucty.get(u.id) || { prace: 0, absenceDnu: 0, absenceHodin: 0 };
@@ -324,18 +327,25 @@
             (data.fond.doDneska ? "Fond k dnešku: " : "Fond měsíce: ") +
             data.fond.dnu + " prac. dní × 8 h = " +
             data.fond.hodin + " h · odpracováno " + hodinyTxt(s.prace) + " h" +
-            (s.absenceDnu ? " · absence " + s.absenceDnu + " dní (" +
-                hodinyTxt(s.absenceHodin) + " h)" : "");
+            (s.absenceDnu ? " · absence " + s.absenceDnu + " dní (k fondu " +
+                hodinyTxt(s.absenceHodin) + " h; náhradní volno a svátek se nepočítají)" : "");
 
-        /* Přesčas se ukazuje všem – u OSVČ a studentů to není nárok na
-           proplacení, ale je z toho vidět, kdo kolik odpracoval
-           (přání Michala 1. 9. 2026). */
+        /* Do 26. 10. 2026 se přesčas ukazoval všem (Michal 1. 9. 2026 –
+           ať je vidět, kdo kolik odpracoval). Teď jen zaměstnanci: OSVČ
+           a student fond nemají, a komu se přesčas nevede (Nastavení),
+           tomu by jen svítil mínusem. Sloupec Celkem zůstává všem. */
+        const proc = !V.maFond(u)
+            ? "Přesčas se u OSVČ a studentů nepočítá – nemají fond hodin."
+            : (!V.prescasVeden(u.id)
+                ? "Přesčas se u tohoto člověka nevede (Nastavení → Dovolená a přesčasy)." : "");
         return '<td class="vt__soucet" title="' + esc(titulek) + '">' +
                 esc(hodinyTxt(celkem)) + "</td>" +
-            '<td class="vt__soucet' + (rozdil < 0 ? " vt__soucet--minus" : "") +
-                '" title="' + esc(titulek) + '">' +
-                (rozdil ? esc((rozdil > 0 ? "+" : "") + hodinyTxt(rozdil)) : "0") +
-            "</td>";
+            (proc
+                ? '<td class="vt__soucet muted" title="' + esc(proc) + '">—</td>'
+                : '<td class="vt__soucet' + (rozdil < 0 ? " vt__soucet--minus" : "") +
+                    '" title="' + esc(titulek) + '">' +
+                    (rozdil ? esc((rozdil > 0 ? "+" : "") + hodinyTxt(rozdil)) : "0") +
+                  "</td>");
     }
 
     /* Nabídka filtru z toho, co je skutečně vykázané – prázdný projekt
@@ -491,6 +501,7 @@
         document.addEventListener("kb-role", render);
         window.KB.on("users", render);
         window.KB.on("vykazy", render);
+        window.KB.on("zustatky", render);   // přepínač „přesčas počítat" v Nastavení
         render();
     });
 })();
