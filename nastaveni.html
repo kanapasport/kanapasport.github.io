@@ -449,9 +449,13 @@
     function naplnZustatky() {
         if (upravovano) return;
         const z = window.KB.zustatky || {};
-        const lide = V.lide();
+        /* Jen zaměstnanci: OSVČ a student fond hodin nemají, přesčas se
+           jim nikde neukazuje a nic se u nich nenastavuje (Michal
+           26. 10. 2026; do té doby tu byli všichni – „i student si může
+           nést přesčas"). */
+        const lide = V.lide().filter(V.maFond);
         $("pocetZustatku").textContent =
-            Object.keys(z).length + " z " + lide.length + " nastaveno";
+            lide.filter(u => !!z[u.id]).length + " z " + lide.length + " nastaveno";
 
         const radek = (u) => {
             const d = z[u.id] || {};
@@ -480,16 +484,15 @@
             "</div>";
         };
 
-        /* Stejné dělení jako u sazeb. Dovolená se týká hlavně zaměstnanců,
-           ale nechává se všem – i student na dohodě si může nést přesčas. */
-        $("zustatky").innerHTML = window.KBUI.TYPY.map(t => {
-            const skupina = lide.filter(u => window.KBUI.typUvazku(u) === t.id);
-            return skupina.length
-                ? '<div class="popisek" style="margin:10px 0 2px">' + esc(t.mnozne) +
-                    ' <span class="muted">(' + skupina.length + ")</span></div>" +
-                  skupina.map(radek).join("")
-                : "";
-        }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+        /* Jedna skupina (zaměstnanci) – nadpis jako u sazeb, ať je na
+           první pohled jasné, proč tu někdo chybí. */
+        $("zustatky").innerHTML = (lide.length
+            ? '<div class="popisek" style="margin:10px 0 2px">Zaměstnanci' +
+                ' <span class="muted">(' + lide.length + ")</span></div>" +
+              lide.map(radek).join("")
+            : '<div class="tiny muted">V seznamu zatím žádný zaměstnanec není.</div>') +
+            '<p class="tiny muted" style="margin:8px 0 0">OSVČ a studenti fond hodin nemají –' +
+                " přesčas ani dovolená se u nich nevedou.</p>";
     }
 
     async function ulozZustatky() {

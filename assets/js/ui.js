@@ -3753,10 +3753,16 @@
         const den2html = (den) => {
             const tlacitka = HO_TYPY.map(t => {
                 const muj = mujHoZaznam(den.iso, t.id);
+                /* Absence na státní svátek se nezapisuje (fond je ten den
+                   nula, Michal 26. 10. 2026) – tlačítko je vypnuté; starý
+                   zápis odkliknout jde. HO je jen kalendář, toho se to netýká. */
+                const svatekBlokuje = !!den.svatek && t.id !== "homeoffice" && !muj;
                 return '<button type="button" class="hoden__btn' +
                     (muj ? " hoden__btn--zap" : "") +
                     '" data-ho-den="' + den.iso + '" data-ho-typ="' + t.id + '"' +
-                    ' title="' + t.cely + '">' + t.popis + "</button>";
+                    (svatekBlokuje ? " disabled" : "") +
+                    ' title="' + (svatekBlokuje ? esc(den.svatek) + " – na státní svátek se absence nezapisuje"
+                        : t.cely) + '">' + t.popis + "</button>";
             }).join("");
             /* Kdo další ten den chybí – NEJEN home office. Dovolená, volno
                i doktor patří k plánování stejně (přání Michala 1. 9. 2026).
@@ -3788,9 +3794,10 @@
         telo.innerHTML =
             '<p class="tiny muted" style="margin:0;line-height:1.6;grid-column:1/-1">' +
                 "Zaklikni si dny dopředu. <b>Dovolená</b> = jedeš pryč," +
-                " <b>Volno</b> = jsi doma a nepracuješ, <b>HO</b> = pracuješ" +
-                " z domu. Uvidí to všichni v kalendáři; dovolená a volno se" +
-                " rovnou zapíšou i do výkazu a potvrzuje je manažer.</p>" +
+                " <b>Volno</b> = náhradní volno, jsi doma a čerpáš přesčas (−8 h)," +
+                " <b>HO</b> = pracuješ z domu. Uvidí to všichni v kalendáři;" +
+                " dovolená a volno se rovnou zapíšou i do výkazu a potvrzuje je" +
+                " manažer. Na státní svátek se absence nezapisuje.</p>" +
             tydnyPracovnichDnu(HO_DNU).map((tyden, i) =>
                 '<section class="hotyden hotyden--' + (i % 2) + '">' +
                     '<div class="hotyden__hlava">Týden ' + esc(tyden.popis) + "</div>" +
@@ -3825,6 +3832,14 @@
             const sahaNaVykaz = predtim ? !!predtim.vykazId : typ !== "homeoffice";
             if (cara && iso < cara && sahaNaVykaz && !UI.can("vykaz.view")) {
                 UI.toast("Měsíc je uzavřený – oprava přes Nahlásit chybu ve Výkazech.", "warn");
+                return;
+            }
+            /* Nový zápis absence na státní svátek nejde – fond je ten den
+               nula a do přesčasu ani dovolené by se nepočítala (Michal
+               26. 10. 2026). Tlačítko je vypnuté, tohle je pojistka. */
+            if (!predtim && typ !== "homeoffice" && UI.svatek(iso)) {
+                UI.toast(UI.svatek(iso) + " (" + iso.slice(8, 10).replace(/^0/, "") + ". " +
+                    iso.slice(5, 7).replace(/^0/, "") + ".) je státní svátek – absence se ten den nezapisuje.", "warn");
                 return;
             }
             volba.disabled = true;

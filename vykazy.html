@@ -97,7 +97,14 @@
         .ty__soucet { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: var(--r-sm);
             font-size: var(--fs-1); font-weight: 700; letter-spacing: 0; text-transform: none;
             font-variant-numeric: tabular-nums; color: var(--muted); }
+        /* pracovní den bez jediného zápisu – stejná červená jako „moc hodin",
+           ale s rámečkem, ať je poznat, že tam nic není, ne že je tam moc */
+        .ty__soucet--chybi { background: #f6cfd6; color: #111; box-shadow: inset 0 0 0 1px var(--danger); }
         .ty th.ty--dnes { box-shadow: inset 0 -3px 0 var(--accent); color: var(--accent); }
+        /* řádek „chybí zápis" v dlaždici Přesčas – data se rozbalí kliknutím */
+        .vyktile__chybi { margin-top: 4px; font-size: var(--fs-1); color: var(--danger); }
+        .vyktile__chybi summary { cursor: pointer; font-weight: 700; }
+        .vyktile__chybi div { margin-top: 2px; color: var(--dim); line-height: 1.5; }
         .ty .ty--vik { background: var(--bg-soft); }
         .ty .ty--zamceno { background: var(--bg-soft); }
         .ty__bunka { display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -655,8 +662,10 @@
     /* Dovolená, nemoc, školení a volno se zapisují jako zvláštní „projekty":
        bez části, bez činnosti a bez peněz, jen datum a čas (nebo celý den).
        Evidují se, ale do součtů odpracovaných hodin se nepočítají.
-       Volno = neplacené / náhradní volno; chová se přesně jako dovolená
-       včetně potvrzování manažerem. */
+       Volno = náhradní volno; chová se jako dovolená včetně potvrzování
+       manažerem, ale ČERPÁ PŘESČAS – k fondu se nepřičítá, den volna je
+       −8 h (Michal 26. 10. 2026, `V.hodinyKFondu`). Absence na státní
+       svátek nejde zapsat vůbec (fond je ten den nula). */
     const ABSENCE = V.ABSENCE;              // jeden seznam pro formulář i přehledy
     /* Režie, která se nevykazuje na konkrétní zakázku. Není to absence –
        je to odpracovaný čas, jen bez projektu. Porada stejně (přání
@@ -2286,23 +2295,18 @@
     /** Srovná zápis do podoby, ve které se ukládá – absence i režie. */
     const srovnejZapis = (p) => srovnejRezii(srovnejAbsenci(p));
 
-    /** Dny od–do včetně, ale jen pracovní: týden dovolené je pět dnů, ne sedm. */
+    /**
+     * Dny od–do včetně, ale jen pracovní: týden dovolené je pět dnů, ne
+     * sedm – a týden přes 28. 10. čtyři, státní svátek se přeskočí (Michal
+     * 26. 10. 2026; stejný seznam dnů jako fond, `V.pracovniDnyIso`).
+     * Rozsah bez pracovního dne: víkend se nechá (jeden den, jako dřív),
+     * svátek ne – vrátí prázdno a zápis se odmítne v `ulozZapisy`.
+     */
     function pracovniDny(odIso, doIso) {
-        const dny = [];
         const konec = doIso && doIso > odIso ? doIso : odIso;
-        const d = new Date(odIso + "T00:00:00");
-        const posledni = new Date(konec + "T00:00:00");
-
-        while (d <= posledni && dny.length < 200) {   // pojistka proti překlepu v roce
-            const den = d.getDay();
-            if (den !== 0 && den !== 6) {
-                dny.push(d.getFullYear() + "-" +
-                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                    String(d.getDate()).padStart(2, "0"));
-            }
-            d.setDate(d.getDate() + 1);
-        }
-        return dny.length ? dny : [odIso];
+        const dny = V.pracovniDnyIso(odIso, konec).slice(0, 200);   // pojistka proti překlepu v roce
+        if (dny.length) return dny;
+        return (window.KBUI.svatek && window.KBUI.svatek(odIso)) ? [] : [odIso];
     }
 
     /* ------------------------------------------------------ uzávěrka ----
@@ -2732,17 +2736,9 @@
     function kontrolaUzaverky(odIso, doIso) {
         const dnes = V.dnesISO();
         const konec = doIso < dnes ? doIso : dnes;
-        const svatek = (iso) => !!(window.KBUI.svatek && window.KBUI.svatek(iso));
 
-        // pracovní dny rozsahu: bez víkendů a státních svátků
-        const pracovni = [];
-        const d = new Date(odIso + "T00:00:00");
-        const posledni = new Date(konec + "T00:00:00");
-        for (let i = 0; d <= posledni && i < 800; i++) {
-            const iso = isoDne(d);
-            if (d.getDay() !== 0 && d.getDay() !== 6 && !svatek(iso)) pracovni.push(iso);
-            d.setDate(d.getDate() + 1);
-        }
+        // pracovní dny rozsahu: bez víkendů a státních svátků (jako fond)
+        const pracovni = V.pracovniDnyIso(odIso, konec);
 
         // kdo má který den jakýkoliv zápis – práci i absenci
         const dnyCloveka = new Map();
@@ -2773,12 +2769,16 @@
                 return;
             }
             /* Dny před tím, od kdy web hodiny člověka má (Nastavení →
-               Dovolená a přesčasy), nechybí – web je prostě nevede. */
+               Dovolená a přesčasy), nechybí – web je prostě nevede.
+               Které dny chybí, říká `V.chybejiciDny` – totéž, co vidí
+               člověk v dlaždici Přesčas, v mřížce týdne a v mini okně;
+               bez data začátku se tu bere začátek rozsahu (jako dřív). */
             const odWebu = /^\d{4}-\d{2}-\d{2}$/.test(String(zst.odIso || "")) ? zst.odIso : "";
-            const jehoDny = pracovni.filter(x => !odWebu || x >= odWebu);
-            const prazdne = jehoDny.filter(x => !dny.has(x));
+            const jehoOd = odWebu > odIso ? odWebu : odIso;
+            const prazdne = V.chybejiciDny(u.id, konec, jehoOd);
             if (prazdne.length) {
-                chybi.push({ uid: u.id, jmeno: jmeno, dny: prazdne, zDni: jehoDny.length });
+                chybi.push({ uid: u.id, jmeno: jmeno, dny: prazdne,
+                             zDni: pracovni.filter(x => x >= jehoOd).length });
             }
         });
 
@@ -3137,6 +3137,15 @@
         if (chybny) {
             window.KBUI.toast(chybny._popis +
                 ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
+            return 0;
+        }
+        /* Absence na státní svátek se nezapisuje: fond je ten den nula a do
+           přesčasu ani dovolené by se nepočítala (Michal 26. 10. 2026).
+           Rozsah přes svátek projde – svátek se jen vynechá. */
+        const naSvatek = polozky.find(p => p.absence && !pracovniDny(p.datum, p.datumDo).length);
+        if (naSvatek) {
+            window.KBUI.toast(naSvatek._popis + " (" + V.czDatum(naSvatek.datum) + "): " +
+                "na státní svátek se absence nezapisuje – fond je ten den nula.", "warn");
             return 0;
         }
         /* Uzavřený měsíc nepustí nic – ani zpětný zápis, ani projekt bez
@@ -3907,18 +3916,31 @@
     function tyObnovSoucty(stav) {
         const tabulka = $("tyTabulka");
         if (!tabulka || $("tyden").hidden) return;
+        const uid = mojeUid();
         const dny = tyDnyTydne(tyPondeli);
-        const s = stav || tyStav(mojeUid(), dny);
+        const s = stav || tyStav(uid, dny);
         const den = (d) => (s.zaDen[d] || 0) + (s.noveDen[d] || 0);
         // stejné meze jako mřížka Vytížení
         const barva = (h) => h > 8 ? "vt--hodne" : h >= 7 ? "vt--akorat" : h > 0 ? "vt--malo" : "";
+        /* Fond („/ 8 h", „/ 40 h") má jen zaměstnanec – OSVČ a student
+           žádný nemají, u nich se ukáže jen, co je zapsané (Michal
+           26. 10. 2026). Chybějící pracovní den (do včerejška, bez
+           jediného zápisu) se zaměstnanci zvýrazní – fond za něj běží dál. */
+        const sFondem = V.maFond(V.clovek(uid));
+        const chybi = {};
+        // bez data začátku (Nastavení) vrátí pomocník prázdno – web historii nevede
+        if (V.prescasVeden(uid)) {
+            V.chybejiciDny(uid, posunDen(V.dnesISO(), -1)).forEach(d => { chybi[d] = true; });
+        }
 
         tabulka.querySelectorAll("[data-ty-soucet]").forEach(el => {
             const d = el.dataset.tySoucet;
             const h = den(d);
-            const fond = V.fondHodin(d, d);
+            const fond = sFondem ? V.fondHodin(d, d) : 0;
+            const chybiDen = !!chybi[d] && !h;
             el.textContent = fond ? tyCislo(h) + " / " + tyCislo(fond) + " h" : (h ? V.hod(h) : "–");
-            el.className = "ty__soucet " + barva(h);
+            el.className = "ty__soucet " + (chybiDen ? "ty__soucet--chybi" : barva(h));
+            el.title = chybiDen ? "Pracovní den bez zápisu – dopiš ho, fond 8 h za něj běží dál" : "";
         });
         tabulka.querySelectorAll("[data-ty-soucet-vikend]").forEach(el => {
             const h = den(dny[5]) + den(dny[6]);
@@ -3927,7 +3949,9 @@
         });
         tabulka.querySelectorAll("[data-ty-tyden]").forEach(el => {
             const h = dny.reduce((n, d) => n + den(d), 0);
-            el.textContent = tyCislo(h) + " / " + tyCislo(V.fondHodin(dny[0], dny[6])) + " h";
+            el.textContent = sFondem
+                ? tyCislo(h) + " / " + tyCislo(V.fondHodin(dny[0], dny[6])) + " h"
+                : tyCislo(h) + " h";
         });
         tabulka.querySelectorAll("[data-ty-radek]").forEach(el => {
             const id = el.dataset.tyRadek;
@@ -4338,9 +4362,22 @@
            Ukazují se jen u JEDNOHO člověka; „Všichni lidé" by je slil
            dohromady a nedávalo by to smysl. */
         const kdoZustatek = spravce ? filtr.uid : window.KB.currentUid();
-        const zst = (kdoZustatek && jedenClovek) ? V.zustatek(kdoZustatek) : null;
+        /* Dovolená a přesčas jen u ZAMĚSTNANCE – OSVČ a student fond
+           nemají, nic se u nich nenastavuje a dlaždice by jen mátla
+           (Michal 26. 10. 2026). */
+        const zst = (kdoZustatek && jedenClovek && V.maFond(V.clovek(kdoZustatek)))
+            ? V.zustatek(kdoZustatek) : null;
         const zbyvaText = zst && (zst.zbyva === Math.round(zst.zbyva)
             ? V.cislo(zst.zbyva) : zst.zbyva.toFixed(1).replace(".", ","));
+        /* Nezapsané pracovní dny: řádek v dlaždici, data po rozkliknutí
+           (na PC i po najetí). Fond za ně běží dál – proto je přesčas
+           v mínusu; tohle říká, co dopsat. */
+        const chybiHtml = zst && zst.chybi && zst.chybi.length
+            ? '<details class="vyktile__chybi" title="' + esc(zst.chybi.map(V.czDatum).join(", ")) + '">' +
+                "<summary>chybí zápis: " + esc(V.pocet(zst.chybi.length, ["den", "dny", "dní"])) +
+                " (−" + esc(V.hod(zst.chybi.length * 8)) + ")</summary>" +
+                "<div>" + esc(zst.chybi.map(V.czDatum).join(", ")) + "</div></details>"
+            : "";
 
         $("souhrn").innerHTML =
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
@@ -4360,7 +4397,8 @@
                           zst.bezZapisu ? "—" : V.hod(zst.prescas),
                           zst.bezZapisu
                               ? "od " + V.czDatum(zst.od) + " · žádné zápisy"
-                              : "od " + V.czDatum(zst.od) + (zst.neuplne ? " · neúplné" : "")))
+                              : "od " + V.czDatum(zst.od) + (zst.neuplne ? " · neúplné" : ""),
+                          false, zst.bezZapisu ? "" : chybiHtml))
                 : "");
 
         // po překreslení se peníze zase schovají, dokud si je někdo nevyžádá
