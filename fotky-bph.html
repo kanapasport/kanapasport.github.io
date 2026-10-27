@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Fotky BPH – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=310">
+    <link rel="stylesheet" href="assets/css/app.css?v=311">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -24,6 +24,11 @@
         .hlavicka__text { min-width: 0; }
 
         /* ------------------------------------------------ dlaždice technologií */
+        /* Lišta dlaždic technologií zůstane při rolování přilepená pod lištou
+           webu (Michal 27. 10. 2026: „abych si mohl překliknout a zůstalo mi to,
+           kde jsem"). Výšku lišty webu dopočítá lepkaLista() do --fb-lista. */
+        :root { --fb-lista: 0px; }
+        .fb-lepka { position: sticky; top: var(--fb-lista); z-index: var(--z-sticky, 110); }
         .fb-tech { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 9px; }
         .fb-tech button {
             border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
@@ -177,7 +182,7 @@
 
     <div id="fbObsah" hidden style="display:flex;flex-direction:column;gap:16px">
 
-    <div class="card" style="padding:14px 16px">
+    <div class="card fb-lepka" style="padding:14px 16px">
         <div class="fb-tech" id="fbDlazdice"></div>
     </div>
 
@@ -276,9 +281,9 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=310"></script>
-<script src="assets/js/ui.js?v=310"></script>
-<script type="module" src="assets/js/store.js?v=310"></script>
+<script src="assets/js/taxonomy.js?v=311"></script>
+<script src="assets/js/ui.js?v=311"></script>
+<script type="module" src="assets/js/store.js?v=311"></script>
 
 <script>
 (function () {
@@ -338,6 +343,24 @@
     }
 
     /* ------------------------------------------------ dlaždice technologií */
+    /** Výška nalepené lišty webu – pod ni se lepí dlaždice technologií (jako v Milnících). */
+    function lepkaLista() {
+        const header = document.querySelector(".appbar");
+        if (!header) return;
+        const spocti = () => {
+            // na telefonu lišta odroluje pryč (position: static) – dlaždice se lepí k hornímu okraji
+            const pos = getComputedStyle(header).position;
+            const bar = header.querySelector(".appbar__bar");
+            const nad = bar && bar.offsetParent ? Math.max(0, bar.offsetTop) : 0;
+            const vyska = pos === "sticky" || pos === "fixed" ? Math.max(0, header.offsetHeight - nad) : 0;
+            document.documentElement.style.setProperty("--fb-lista", vyska + "px");
+        };
+        spocti();
+        window.addEventListener("resize", spocti);
+        if (window.ResizeObserver) new ResizeObserver(spocti).observe(header);
+    }
+    lepkaLista();
+
     function vykresliDlazdice() {
         const box = $("fbDlazdice");
         box.textContent = "";
