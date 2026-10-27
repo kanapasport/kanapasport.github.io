@@ -84,6 +84,18 @@
         .fb-kod--nic { background: var(--nic-bg); color: var(--nic-fg); }
         .fb-kod--navic { background: var(--p75-bg); color: var(--p75-fg); }
         .fb-kod--zadne { background: var(--bg); color: var(--muted); }
+        /* dlaždice místnosti po najetí myší + kopírování cesty pravým tlačítkem */
+        [data-mk] { cursor: context-menu; }
+        .fb-tip { position: fixed; z-index: 80; min-width: 220px; max-width: 320px; pointer-events: none;
+                  background: var(--surface); color: var(--text); border: 1px solid var(--line);
+                  border-radius: var(--r); box-shadow: var(--shadow); padding: 9px 12px; font-size: var(--fs-1); }
+        .fb-tip__k { display: block; font-size: var(--fs-2); font-weight: 900; }
+        .fb-tip__n { color: var(--muted); margin: 1px 0 7px; }
+        .fb-tip table { width: 100%; border-collapse: collapse; }
+        .fb-tip td { padding: 1px 0; vertical-align: top; }
+        .fb-tip td.c { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; padding-left: 12px; white-space: nowrap; }
+        .fb-tip tr.s td { border-top: 1px solid var(--line); padding-top: 4px; }
+        .fb-tip__h { margin-top: 7px; color: var(--muted); font-size: 11px; }
 
         /* ---------------------------------------------- tabulka místností */
         .fb-scroll { overflow-x: auto; }
@@ -366,8 +378,7 @@
                     }
                     if (!r.g) cls += " negdb";
                     const d = el("div", cls);
-                    d.title = r.k + " · " + pp + " · " + vybrana + ": " + n + " fotek"
-                        + (!r.s ? " · složka v BPH není" : "") + (!r.g ? " · není v GDB" : "");
+                    d.dataset.mk = r._i;          // dlaždice místnosti + cesta pravým tlačítkem
                     d.appendChild(el("span", "kk", r.k.replace(/^G6[12]-/, "")));
                     d.appendChild(el("span", "nn", !r.s ? "–" : cislo(n)));
                     radek.appendChild(d);
@@ -395,7 +406,11 @@
             lab.appendChild(el("i", null, "· " + kus.length));
             blok.appendChild(lab);
             const rada = el("div", "fb-kp__v");
-            kus.forEach((r) => rada.appendChild(el("span", "fb-kod " + trida, r.k)));
+            kus.forEach((r) => {
+                const k = el("span", "fb-kod " + trida, r.k);
+                k.dataset.mk = r._i;
+                rada.appendChild(k);
+            });
             blok.appendChild(rada);
             box.appendChild(blok);
         });
@@ -432,6 +447,7 @@
 
         vidi.slice(strana * NA_STRANU, (strana + 1) * NA_STRANU).forEach((r) => {
             const tr = document.createElement("tr");
+            tr.dataset.mk = r._i;
             tr.appendChild(el("td", "kod", r.k));
             tr.appendChild(el("td", null, r.b));
             tr.appendChild(el("td", "pat", r.p));
@@ -593,8 +609,113 @@
         }
         $("fbChyba").hidden = true;
         $("fbObsah").hidden = false;
+        D.mistnosti.forEach((r, i) => { r._i = i; });
         vykresliVse();
     }
+
+    /* ------------------------------------- dlaždice místnosti a cesta na P:
+       Najetí myší na místnost (matice, seznamy kódů, tabulka) ukáže, jaké
+       složky v ní jsou a kolik mají fotek; pravé tlačítko zkopíruje cestu.
+       Cesta (`D.koren` + `r.d`) je jen v datech ve Firestore – název zakázky
+       do veřejného kódu webu nepatří. */
+    const tip = el("div", "fb-tip");
+    tip.hidden = true;
+    document.body.appendChild(tip);
+    let tipMistnost = null;
+
+    function mistnostPod(e) {
+        const x = D && e.target.closest ? e.target.closest("[data-mk]") : null;
+        return x ? D.mistnosti[Number(x.dataset.mk)] || null : null;
+    }
+
+    function cestaMistnosti(r) {
+        return D.koren && r.d ? D.koren + "\\" + r.d : "";
+    }
+
+    function naplnTip(r) {
+        tip.textContent = "";
+        tip.appendChild(el("b", "fb-tip__k", r.k));
+        const nazev = r.d ? r.d.split("\\").pop().replace(/^\S+\s+-\s+/, "") : "";
+        tip.appendChild(el("div", "fb-tip__n", (nazev ? nazev + " · " : "") + r.b + " " + r.p
+            + (r.g ? "" : " · není v GDB")));
+        if (!r.s) {
+            tip.appendChild(el("div", null, "Místnost nemá v BPH složku."));
+            return;
+        }
+        // starší data bez seznamu složek: aspoň počty podle technologií
+        const sl = r.sl || TECH.filter((t) => r.m[t]).map((t) => [t, r.m[t], 0, 0]);
+        if (!sl.length) {
+            tip.appendChild(el("div", null, "Složka je prázdná – žádná fotka ani video."));
+        } else {
+            const tb = el("table");
+            let f = 0, v = 0;
+            sl.forEach(([nazevSl, fo, vi, ji]) => {
+                f += fo; v += vi;
+                const tr = el("tr");
+                tr.appendChild(el("td", null, nazevSl));
+                const kus = [];
+                if (fo || (!vi && !ji)) kus.push(cislo(fo) + " fotek");
+                if (vi) kus.push(cislo(vi) + " videí");
+                if (ji) kus.push(cislo(ji) + " jiných");
+                tr.appendChild(el("td", "c", kus.join(" · ")));
+                tb.appendChild(tr);
+            });
+            if (sl.length > 1) {
+                const tr = el("tr", "s");
+                tr.appendChild(el("td", null, "Celkem"));
+                tr.appendChild(el("td", "c", cislo(f) + " fotek" + (v ? " · " + cislo(v) + " videí" : "")));
+                tb.appendChild(tr);
+            }
+            tip.appendChild(tb);
+        }
+        if (cestaMistnosti(r)) tip.appendChild(el("div", "fb-tip__h", "Pravým tlačítkem zkopíruješ cestu na P:"));
+    }
+
+    function posunTip(e) {
+        const m = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+        let x = e.clientX + m, y = e.clientY + m;
+        if (x + w > window.innerWidth - 8) x = Math.max(8, e.clientX - w - m);
+        if (y + h > window.innerHeight - 8) y = Math.max(8, e.clientY - h - m);
+        tip.style.left = x + "px";
+        tip.style.top = y + "px";
+    }
+
+    document.addEventListener("mouseover", (e) => {
+        const r = mistnostPod(e);
+        if (!r) { tip.hidden = true; tipMistnost = null; return; }
+        if (r !== tipMistnost) { naplnTip(r); tipMistnost = r; }
+        tip.hidden = false;
+        posunTip(e);
+    });
+    document.addEventListener("mousemove", (e) => { if (!tip.hidden) posunTip(e); });
+    window.addEventListener("scroll", () => { tip.hidden = true; tipMistnost = null; }, true);
+
+    document.addEventListener("contextmenu", async (e) => {
+        const r = mistnostPod(e);
+        if (!r) return;
+        e.preventDefault();
+        const c = cestaMistnosti(r);
+        if (!c) {
+            window.KBUI.toast(r.s ? "Cesta v datech není – nahraj nový přehled." : "Místnost nemá v BPH složku.", "warn");
+            return;
+        }
+        let ok = false;
+        try {
+            await navigator.clipboard.writeText(c);
+            ok = true;
+        } catch (err) {
+            // záloha pro prohlížeč, který schránku nepustí
+            const t = document.createElement("textarea");
+            t.value = c;
+            t.style.position = "fixed";
+            t.style.opacity = "0";
+            document.body.appendChild(t);
+            t.select();
+            try { ok = document.execCommand("copy"); } catch (e2) { ok = false; }
+            t.remove();
+        }
+        window.KBUI.toast(ok ? "Cesta zkopírována: " + c : "Kopírování nešlo – cesta: " + c, ok ? undefined : "warn");
+    });
 
     /* Nahrání nového přehledu. Soubor se nejdřív přebere, ať se do databáze
        nedostane něco, co stránka neumí vykreslit. */
