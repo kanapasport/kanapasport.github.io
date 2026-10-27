@@ -6,8 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=309">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=309">
+    <link rel="stylesheet" href="assets/css/app.css?v=310">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=310">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -670,13 +670,13 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=309"></script>
-<script src="assets/js/doc.js?v=309"></script>
-<script src="assets/js/ui.js?v=309"></script>
-<script src="assets/js/nabidka.js?v=309"></script>
+<script src="assets/js/taxonomy.js?v=310"></script>
+<script src="assets/js/doc.js?v=310"></script>
+<script src="assets/js/ui.js?v=310"></script>
+<script src="assets/js/nabidka.js?v=310"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=309"></script>
-<script type="module" src="assets/js/store.js?v=309"></script>
+<script src="assets/js/vykazy.js?v=310"></script>
+<script type="module" src="assets/js/store.js?v=310"></script>
 
 <script>
 (function () {
@@ -1379,11 +1379,15 @@
        pomlčkou, když má 2–5 znaků), jinak iniciály slov (nejvýš 4), u jediného
        slova první tři písmena. Celý název je v bublině po najetí. Projekt
        v datech zkratku nemá – kdyby přibyla do nastavení projektu, bere se
-       odsud. */
+       odsud. Od v310 ji projekt mít může (Správa projektů → Údaje → Zkratka,
+       Michal 27. 10. 2026: „BPH bude jen ta zkratka") – pak má přednost. */
     const ZKRATKY = {};
     function zkratkaProjektu(nazev) {
         const n = String(nazev || "").replace(/\s+/g, " ").trim();
         if (!n) return "—";
+        const doc = (window.KB.projektyDocs || []).find(p => String(p.nazev || "").replace(/\s+/g, " ").trim() === n);
+        const vlastni = doc && /^[\p{L}\p{N}]{2,5}$/u.test(String(doc.zkratka || "").trim()) ? String(doc.zkratka).trim().toUpperCase() : "";
+        if (vlastni) return vlastni;
         if (ZKRATKY[n]) return ZKRATKY[n];
         let z;
         const pred = /^([\p{L}\p{N}]{2,5})\s*[–—\-:]/u.exec(n);

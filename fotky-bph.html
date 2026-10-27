@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Fotky BPH – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=309">
+    <link rel="stylesheet" href="assets/css/app.css?v=310">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -46,6 +46,7 @@
         .fb-leg i.ma { background: var(--ma2); border-color: var(--ma-fg); }
         .fb-leg i.nic { background: var(--nic-bg); border-color: var(--nic-line); }
         .fb-leg i.chybi { background: var(--chybi-bg); border-style: dashed; }
+        .fb-leg i.nefoti { background: var(--bg); }
 
         .fb-patro { border-top: 1px solid var(--line-soft); padding-top: 11px; margin-top: 13px; }
         .fb-patro:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
@@ -58,9 +59,9 @@
                  padding-right: 4px; line-height: 1.25; font-variant-numeric: tabular-nums; }
         .fb-bunka { border: 1px solid var(--line); border-radius: var(--r); padding: 3px 4px;
                     display: flex; flex-direction: column; min-width: 0; background: var(--bg-soft); }
-        .fb-bunka .kk { font-size: 10px; color: var(--muted); overflow: hidden;
-                        text-overflow: ellipsis; white-space: nowrap; }
-        .fb-bunka .nn { font-size: var(--fs-2); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.2; }
+        .fb-bunka .kk { font-size: 12px; font-weight: 800; color: var(--text); overflow: hidden;
+                        text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
+        .fb-bunka .nn { font-size: var(--fs-2); font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1.2; }
         .fb-bunka.ma { background: var(--ma1); border-color: var(--ma2); }
         .fb-bunka.ma.v2 { background: var(--ma2); }
         .fb-bunka.ma.v3 { background: var(--ma3); }
@@ -69,6 +70,9 @@
         .fb-bunka.nic .nn { color: var(--nic-fg); }
         .fb-bunka.chybi { background: var(--chybi-bg); border-style: dashed; }
         .fb-bunka.chybi .nn { color: var(--dim); }
+        /* výtah / šachta bez fotek – nefotí se, proto šedě, ne červeně */
+        .fb-bunka.nefoti { background: var(--bg); border-color: var(--line); }
+        .fb-bunka.nefoti .kk, .fb-bunka.nefoti .nn { color: var(--dim); }
         .fb-bunka.negdb .kk::after { content: " ·"; color: var(--warn); font-weight: 900; }
 
         /* ------------------------------------------------- porovnání s GDB */
@@ -122,13 +126,14 @@
         .fb-tab td.tech { padding-right: 0; }
 
         /* Stejně široká políčka, ať technologie sedí ve sloupcích pod sebou. */
-        .fb-tm { display: grid; grid-template-columns: repeat(13, 74px); gap: 3px; }
+        .fb-tm { display: grid; grid-template-columns: 90px repeat(11, 74px); gap: 3px; }
         .fb-td { font-size: var(--fs-1); padding: 2px 5px; border-radius: var(--r-sm); white-space: nowrap;
                  display: flex; justify-content: space-between; gap: 3px; overflow: hidden;
                  background: var(--ma1); color: var(--ma-fg); }
         .fb-td b { font-weight: 900; font-variant-numeric: tabular-nums; }
         .fb-td--obec { background: var(--accent-tint); color: var(--accent); }
         .fb-td--nula { background: var(--nic-bg); color: var(--nic-fg); }
+        .fb-td--seda { background: var(--bg); color: var(--dim); }
 
         .fb-znacka { font-size: var(--fs-1); font-weight: 900; letter-spacing: .05em; text-transform: uppercase;
                      border-radius: var(--r-sm); padding: 2px 6px; white-space: nowrap; }
@@ -139,7 +144,7 @@
         .fb-str .info { font-size: var(--fs-1); color: var(--muted); font-variant-numeric: tabular-nums; }
 
         @media (max-width: 900px) {
-            .fb-tm { grid-template-columns: repeat(13, 68px); }
+            .fb-tm { grid-template-columns: 84px repeat(11, 68px); }
         }
     </style>
 </head>
@@ -200,6 +205,7 @@
             <span><i class="ma"></i>fotky jsou (sytější odstín = víc)</span>
             <span><i class="nic"></i>ani jedna fotka</span>
             <span><i class="chybi"></i>místnost v BPH nemá složku</span>
+            <span><i class="nefoti"></i>výtah / šachta – nefotí se</span>
             <span style="color:var(--warn)">· není v GDB</span>
         </div>
         <div id="fbMatice"></div>
@@ -269,9 +275,9 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=309"></script>
-<script src="assets/js/ui.js?v=309"></script>
-<script type="module" src="assets/js/store.js?v=309"></script>
+<script src="assets/js/taxonomy.js?v=310"></script>
+<script src="assets/js/ui.js?v=310"></script>
+<script type="module" src="assets/js/store.js?v=310"></script>
 
 <script>
 (function () {
@@ -304,6 +310,32 @@
         return e;
     }
 
+    /* Obecné a STAVBA se na webu ukazují jako jedna technologie. Ve složkách i v datech
+       zůstávají zvlášť – dlaždice místnosti po najetí myší je ukáže odděleně (r.sl). */
+    const OBECNE = "Obecné", STAVBA = "STAVBA";
+    const popisTech = (t) => (t === OBECNE ? "Obecné + STAVBA" : t);
+
+    function sloucitObecneStavbu() {
+        if (!D.tech.some((x) => x.t === STAVBA)) return;
+        D.mistnosti.forEach((r) => {
+            const s = r.m[STAVBA] || 0;
+            if (s) r.m[OBECNE] = (r.m[OBECNE] || 0) + s;
+            delete r.m[STAVBA];
+        });
+        D.tech = D.tech.filter((x) => x.t !== STAVBA).map((x) => (x.t !== OBECNE ? x : {
+            t: OBECNE,
+            f: D.mistnosti.reduce((a, r) => a + (r.m[OBECNE] || 0), 0),
+            m: D.mistnosti.filter((r) => (r.m[OBECNE] || 0) > 0).length,
+        }));
+    }
+
+    /* Výtahy a šachty se nefotí: bez fotek jsou šedé a nepočítají se mezi „bez fotek“.
+       Pozná se podle názvu složky místnosti nebo podle patra „šachty“. */
+    const NEFOTI = /výtah|vytah|šacht|sacht/i;
+    function nefoti(r) {
+        return NEFOTI.test(r.d ? r.d.split("\\").pop() : "") || /achty$/i.test(r.p);
+    }
+
     /* ------------------------------------------------ dlaždice technologií */
     function vykresliDlazdice() {
         const box = $("fbDlazdice");
@@ -312,7 +344,7 @@
             const b = el("button", x.t === vybrana ? "je" : "");
             b.type = "button";
             b.dataset.t = x.t;
-            b.appendChild(el("span", "t", x.t));
+            b.appendChild(el("span", "t", popisTech(x.t)));
             b.appendChild(el("span", "f", cislo(x.f)));
             b.appendChild(el("span", "m", cislo(x.m) + " místností"));
             b.addEventListener("click", () => {
@@ -339,7 +371,7 @@
     }
 
     function vykresliMatici() {
-        $("fbMaticeTech").textContent = vybrana;
+        $("fbMaticeTech").textContent = popisTech(vybrana);
         const box = $("fbMatice");
         const naR = naRadek();
         box.textContent = "";
@@ -349,7 +381,7 @@
             if (q && r.k.toLowerCase().indexOf(q) === -1) return false;
             if (mBudova && r.b !== mBudova) return false;
             if (mPatro && (r.b + " " + r.p) !== mPatro) return false;
-            if (mJenNula && (r.m[vybrana] || 0) > 0) return false;
+            if (mJenNula && ((r.m[vybrana] || 0) > 0 || r._nf)) return false;
             return true;
         });
 
@@ -360,13 +392,16 @@
         patra.forEach((pp) => {
             const vp = vidi.filter((r) => (r.b + " " + r.p) === pp);
             if (!vp.length) return;
-            const bez = vp.filter((r) => !(r.m[vybrana] > 0)).length;
+            const sF = vp.filter((r) => r.m[vybrana] > 0).length;
+            const nf = vp.filter((r) => !(r.m[vybrana] > 0) && r._nf).length;
+            const bez = vp.length - sF - nf;
 
             const blok = el("div", "fb-patro");
             const hl = el("div", "fb-patro__hl");
             hl.appendChild(el("b", null, pp));
             hl.appendChild(el("span", null,
-                vp.length + " místností · " + (vp.length - bez) + " s fotkami · " + bez + " bez"));
+                vp.length + " místností · " + sF + " s fotkami · " + bez + " bez"
+                + (nf ? " · " + nf + " výtah/šachta" : "")));
             blok.appendChild(hl);
 
             const mrizka = el("div", "fb-mrizka");
@@ -379,7 +414,7 @@
                 radek.appendChild(el("div", "fb-rl", od + "–" + dokud));
                 kus.forEach((r) => {
                     const n = r.m[vybrana] || 0;
-                    let cls = "fb-bunka " + (!r.s ? "chybi" : n > 0 ? "ma" : "nic");
+                    let cls = "fb-bunka " + (!r.s ? "chybi" : n > 0 ? "ma" : r._nf ? "nefoti" : "nic");
                     if (n > 0 && maxv > 0) {
                         const pomer = n / maxv;
                         if (pomer > 0.5) cls += " v3";
@@ -422,7 +457,7 @@
             blok.appendChild(lab);
             const rada = el("div", "fb-kp__v");
             kus.forEach((r) => {
-                const k = el("span", "fb-kod " + trida, r.k);
+                const k = el("span", "fb-kod " + (r._nf && trida === "fb-kod--nic" ? "fb-kod--zadne" : trida), r.k);
                 k.dataset.mk = r._i;
                 rada.appendChild(k);
             });
@@ -441,6 +476,7 @@
         const q = tHledani.trim().toLowerCase();
         return D.mistnosti.filter((r) => {
             if (q && r.k.toLowerCase().indexOf(q) === -1) return false;
+            if (tBez && r._nf) return false;          // výtah / šachta se nefotí
             if (tTech) {
                 const n = r.m[tTech] || 0;
                 if (tBez ? n > 0 : n === 0) return false;
@@ -476,11 +512,11 @@
             TECH.forEach((t) => {
                 const n = r.m[t] || 0;
                 let cls = "fb-td";
-                if (!n) cls += " fb-td--nula";
-                else if (t === "Obecné") cls += " fb-td--obec";
+                if (!n) cls += r._nf ? " fb-td--seda" : " fb-td--nula";
+                else if (t === OBECNE) cls += " fb-td--obec";
                 const b = el("span", cls);
-                b.title = t + ": " + cislo(n) + " fotek";
-                b.appendChild(el("span", null, t));
+                b.title = popisTech(t) + ": " + cislo(n) + " fotek";
+                b.appendChild(el("span", null, t === OBECNE ? "Obec.+ST" : t));
                 b.appendChild(el("b", null, cislo(n)));
                 mrizka.appendChild(b);
             });
@@ -540,9 +576,11 @@
 
         const fotekCelkem = D.tech.reduce((s, x) => s + x.f, 0);
         const sFotkami = D.mistnosti.filter((r) => Object.keys(r.m).length > 0).length;
+        const nefotiBez = D.mistnosti.filter((r) => !Object.keys(r.m).length && r._nf).length;
         $("fbLede").textContent = "V BPH je " + cislo(fotekCelkem) + " fotek v "
             + cislo(D.mistnosti.length) + " místnostech. Fotky má " + cislo(sFotkami)
-            + " z nich, " + cislo(D.mistnosti.length - sFotkami) + " zatím ani jednu.";
+            + " z nich, " + cislo(D.mistnosti.length - sFotkami - nefotiBez) + " zatím ani jednu"
+            + (nefotiBez ? " (" + cislo(nefotiBez) + " výtahů a šachet se nefotí)." : ".");
 
         patra = [];
         D.mistnosti.forEach((r) => {
@@ -562,7 +600,7 @@
 
         const selT = $("fbTech");
         TECH.forEach((t) => {
-            const o = el("option", null, t);
+            const o = el("option", null, popisTech(t));
             o.value = t;
             selT.appendChild(o);
         });
@@ -625,7 +663,11 @@
         }
         $("fbChyba").hidden = true;
         $("fbObsah").hidden = false;
-        D.mistnosti.forEach((r, i) => { r._i = i; });
+        D.mistnosti.forEach((r, i) => {
+            r._i = i;
+            r._nf = nefoti(r);
+        });
+        sloucitObecneStavbu();
         vykresliVse();
     }
 
