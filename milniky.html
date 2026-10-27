@@ -1105,11 +1105,8 @@
         const muzeMenit = window.KBUI.can("milnik.manage");
         /* Svůj milník si odškrtne i řadový člověk – vidí u něj zelené
            Splněno a řádek má podbarvený, ať své najde na první pohled. */
-        /* Při náhledu „Zobrazit jako <člověk>" se počítá za NĚJ – jinak by
-           si manažer v cizí kůži pořád viděl svoje milníky i termíny
-           a náhled by lhal (Michal 8. 10. 2026). */
-        const ja = (window.KBUI.nahledUid && window.KBUI.nahledUid()) ||
-                   (window.KB.currentUid && window.KB.currentUid()) || "";
+        // vždy přihlášený – náhled „Zobrazit jako" byl 27. 10. 2026 zrušený
+        const ja = (window.KB.currentUid && window.KB.currentUid()) || "";
         const jeMuj = (m) => !!ja && (m.owners || []).indexOf(ja) !== -1;
         const harmonogram = zalozka === "harmonogram";
         // Můj postup je pohled harmonogramu – ve výpisu „Co se chystá" neplatí
@@ -1134,11 +1131,11 @@
         let vsechny = serazene();
         if (activeZak) vsechny = vsechny.filter(m => slug(zakName(m)) === activeZak);
 
-        /* „Zobrazit jako" mění jen rozhraní, ne dotaz do databáze – manažer
-           by si v náhledu zaměstnance pořád viděl vlastní data. U porad se
-           na to přišlo až v provozu (Michal 25. 9. 2026), tak ať se to tady
-           neopakuje. V ostrém provozu tyhle milníky zaměstnanec stejně
-           nedostane, takže tenhle řádek nic nezkazí. */
+        /* Pojistka v rozhraní: v ostrém provozu tyhle milníky zaměstnanec
+           z databáze stejně nedostane, takže tenhle řádek nic nezkazí.
+           Zbyl z dob náhledu „Zobrazit jako" (zrušený 27. 10. 2026), kdy
+           si manažer v náhledu zaměstnance pořád viděl vlastní data – u porad
+           se na to přišlo až v provozu (Michal 25. 9. 2026). */
         if (!muzeMenit) {
             vsechny = vsechny
                 // nezveřejněné milníky patří jen do Mého postupu
@@ -2216,8 +2213,7 @@
         const m = najdiMilnik(tr.getAttribute("data-mid"));
         if (!m) return null;
         const manazer = window.KBUI.can("milnik.manage");
-        const ja = (window.KBUI.nahledUid && window.KBUI.nahledUid()) ||
-                   (window.KB.currentUid && window.KB.currentUid()) || "";
+        const ja = (window.KB.currentUid && window.KB.currentUid()) || "";
         const muj = !!ja && (m.owners || []).indexOf(ja) !== -1;
         const skryty = m.zverejneno === false;
         const ukol = manazer ? ukolMilniku(m) : null;

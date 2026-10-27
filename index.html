@@ -809,8 +809,8 @@
     /* ------------------------------------------- dvě sekce nástěnky ----
        Manažer má dlaždice rozdělené: ZÁKLADNÍ je to, co vidí zaměstnanci,
        MANAŽERSKÁ jsou okna navíc (dovolené, kontrola, aktivita). Přepíná
-       se nahoře v modré liště vedle „Zobrazit jako". Zaměstnanci žádné
-       přepínání nevidí – mají jen základ. */
+       se nahoře v modré liště (slot vlevo, na telefonu dole v pásu).
+       Zaměstnanci žádné přepínání nevidí – mají jen základ. */
 
     const REZIM_KLIC = "kb-nastenka-rezim";
     const MANAZERSKE_DLAZDICE = ["wDovolene", "wRychly", "wFakturyPlatby", "wFakturyNove",
@@ -840,7 +840,10 @@
 
     function pripravRezimy() {
         if (document.getElementById("rezimBox")) return;
-        const kotva = document.querySelector("[data-nahled-box]");
+        /* Slot vlevo nahoře v hlavičce (ui.js ho na telefonu stěhuje do
+           pásu). Dřív vedle přepínače „Zobrazit jako" – ten byl 27. 10. 2026
+           zrušený, slot zůstal jen pro tenhle přepínač. */
+        const kotva = document.querySelector("[data-nahled-slot]");
         const box = document.createElement("div");
         box.id = "rezimBox";
         box.className = "row no-print";
@@ -849,7 +852,7 @@
         box.innerHTML =
             '<button type="button" class="chip" data-rezim="zakladni">Základní</button>' +
             '<button type="button" class="chip" data-rezim="manazerska">Manažerská</button>';
-        if (kotva && kotva.parentNode) kotva.parentNode.insertBefore(box, kotva);
+        if (kotva) kotva.appendChild(box);
         else document.getElementById("nastenka").prepend(box);
         box.addEventListener("click", (event) => {
             const b = event.target.closest("[data-rezim]");
