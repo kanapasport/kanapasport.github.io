@@ -647,56 +647,19 @@
         return window.KB_ROLE || "student";
     };
 
-    /* ------------------------------------------------------ náhled role ---
+    /* Přepínač „Zobrazit jako" (hlavní správce se díval na web očima jiné
+       role nebo konkrétního člověka) byl zrušený 27. 10. 2026 – Michal:
+       „chtěl bych se zbavit toho překlikávání, stejně mi to nefunguje
+       správně". Stránka se tedy vždycky vykresluje podle SKUTEČNÉ role
+       přihlášeného. Co po náhledu zůstalo v prohlížeči, se při startu
+       uklidí – starý zápis v sessionStorage by jinak ležel ladem a mátl
+       při ladění. Slot `[data-nahled-slot]` v hlavičce zůstává: nástěnka do
+       něj dává přepínač Základní / Manažerská (placeNahled ho na telefonu
+       stěhuje do pásu). */
+    try { sessionStorage.removeItem("company_kb_nahled"); } catch (err) { /* soukromý režim */ }
 
-       Hlavní správce si může web prohlédnout očima zaměstnance nebo studenta,
-       aby viděl, co na koho vyskočí. Tři pojistky, aby z toho nebyla díra:
-
-       1. Náhled se uzná JEN tomu, jehož skutečná role v databázi je hlavní
-          správce. Kdokoliv jiný si ho do prohlížeče může zapsat, jak chce,
-          a nedostane tím ani o kousek víc – proto se to nedá zneužít.
-       2. Náhled jde vždycky jen dolů. Hlavní správce smí všechno, takže
-          každá jiná role je zúžení, nikdy rozšíření.
-       3. Sedí v sessionStorage, ne v localStorage – zavřením záložky zmizí.
-
-       A hlavně: je to náhled TOHO, CO SE VYKRESLÍ. Data z databáze chodí
-       pořád podle skutečného účtu, protože pravidla Firestore čtou UID.
-       Na otestování zabezpečení tohle není – na to je potřeba druhý účet. */
-
-    const NAHLED_KEY = "company_kb_nahled";
-
-    UI.nahled = () => {
-        if (UI.skutecnaRole() !== "hlavni-spravce") return "";
-        try { return sessionStorage.getItem(NAHLED_KEY) || ""; } catch (err) { return ""; }
-    };
-
-    UI.setNahled = (role) => {
-        if (UI.skutecnaRole() !== "hlavni-spravce") return;
-        try {
-            if (role) sessionStorage.setItem(NAHLED_KEY, role);
-            else sessionStorage.removeItem(NAHLED_KEY);
-        } catch (err) { /* soukromý režim */ }
-        document.dispatchEvent(new CustomEvent("kb-role"));
-        UI.paintUser();
-    };
-
-    /** Náhled na konkrétního člověka: hodnota "uid:<id>" v přepínači. */
-    UI.nahledUid = () => {
-        const n = UI.nahled();
-        return n.indexOf("uid:") === 0 ? n.slice(4) : "";
-    };
-
-    /** Role, podle které se stránka vykresluje – tedy náhled, když je zapnutý.
-        U náhledu na člověka se bere JEHO role ze seznamu lidí. */
-    UI.role = () => {
-        const n = UI.nahled();
-        if (!n) return UI.skutecnaRole();
-        if (n.indexOf("uid:") === 0) {
-            const u = ((window.KB && window.KB.users) || []).find(x => x.id === n.slice(4));
-            return (u && u.role) || "zamestnanec";
-        }
-        return n;
-    };
+    /** Role, podle které se stránka vykresluje = skutečná role přihlášeného. */
+    UI.role = () => UI.skutecnaRole();
     UI.roleTitle = (id) => (UI.ROLES.find(r => r.id === (id || UI.role())) || {}).title || "Student";
 
     /** Smí daná role tuhle věc? Hlavní správce smí všechno. */
@@ -781,75 +744,7 @@
 
         // skupina pásu bez jediné viditelné položky se schová celá
         srovnejSkupiny(true);
-        paintNahled();
     };
-
-    /** Přepínač náhledu a pruh, který připomíná, že je zapnutý. */
-    function paintNahled() {
-        const jeHlavni = UI.skutecnaRole() === "hlavni-spravce";
-        const nahled = UI.nahled();
-
-        document.querySelectorAll("[data-nahled-box]").forEach(box => { box.hidden = !jeHlavni; });
-        document.querySelectorAll("[data-nahled]").forEach(sel => {
-            /* Kromě rolí i konkrétní lidé – když si někdo stěžuje, hlavní
-               správce se na web podívá přímo jeho očima (jeho role a co
-               s ní vidí; data mu zůstávají vlastní). */
-            if (jeHlavni && !sel.querySelector("optgroup") &&
-                ((window.KB && window.KB.users) || []).length) {
-                /* Po skupinách jako všude jinde – zaměstnanci, OSVČ,
-                   studenti – ať se člověk najde rychle. */
-                const lide = window.KB.users
-                    .filter(u => u.active !== false && !UI.jeSluzebni(u) &&
-                        u.id !== (window.KB.currentUid && window.KB.currentUid()))
-                    .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
-                sel.insertAdjacentHTML("beforeend", UI.TYPY.map(t => {
-                    const moji = lide.filter(u => UI.typUvazku(u) === t.id);
-                    if (!moji.length) return "";
-                    return '<optgroup label="' + esc(t.mnozne) + '">' +
-                        moji.map(u => '<option value="uid:' + esc(u.id) + '">' +
-                            esc(((u.first || "") + " " + (u.last || "")).trim() || u.email || "?") +
-                            "</option>").join("") + "</optgroup>";
-                }).join(""));
-            }
-            sel.value = nahled;
-        });
-
-        let pruh = document.getElementById("kbNahledPruh");
-        if (!nahled) { if (pruh) pruh.remove(); return; }
-
-        const role = UI.ROLES.find(r => r.id === nahled) || {};
-        if (!pruh) {
-            pruh = document.createElement("div");
-            pruh.id = "kbNahledPruh";
-            pruh.className = "nahledpruh no-print";
-            const header = document.querySelector(".appbar");
-            if (header && header.parentNode) header.parentNode.insertBefore(pruh, header.nextSibling);
-            else document.body.insertBefore(pruh, document.body.firstChild);
-        }
-        const uidNahledu = UI.nahledUid();
-        const clovekNahledu = uidNahledu
-            ? ((window.KB && window.KB.users) || []).find(u => u.id === uidNahledu) : null;
-        const popisNahledu = clovekNahledu
-            ? ((clovekNahledu.first || "") + " " + (clovekNahledu.last || "")).trim() +
-              " (" + (UI.roleTitle(clovekNahledu.role) || "").toLowerCase() + ")"
-            : (role.title || nahled).toLowerCase();
-        pruh.innerHTML = "<span><b>Prohlížíš web jako " + esc(popisNahledu) +
-            "</b> — vidíš jen to, co vidí on. Tvoje oprávnění se nezměnila.</span>" +
-            '<button type="button" class="btn btn--sm" data-nahled-konec>Zpět na hlavního správce</button>';
-    }
-
-    /* Přepínač se nesprávci musí schovat i tehdy, když se role změní jinudy
-       než přes paintUser – třeba když dorazí seznam lidí až po vykreslení. */
-    document.addEventListener("kb-role", paintNahled);
-
-    // přepnutí náhledu a návrat zpět – kdekoliv na stránce
-    document.addEventListener("change", (event) => {
-        const sel = event.target.closest("[data-nahled]");
-        if (sel) UI.setNahled(sel.value);
-    });
-    document.addEventListener("click", (event) => {
-        if (event.target.closest("[data-nahled-konec]")) UI.setNahled("");
-    });
 
     /* ---------------------------------------------------------- přihlášení */
 
@@ -927,10 +822,10 @@
     UI.logout = async () => {
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(EMAIL_KEY);
-        /* Co o člověku zůstává v prohlížeči: role, náhled role a odemčení
-           zamčených stránek. Volby vzhledu (záložky, filtry, oblíbené) nic
+        /* Co o člověku zůstává v prohlížeči: role a odemčení zamčených
+           stránek. Volby vzhledu (záložky, filtry, oblíbené) nic
            neprozradí, ty zůstávají. */
-        [ROLE_KEY, NAHLED_KEY, "company_kb_zamek"].forEach(k => localStorage.removeItem(k));
+        [ROLE_KEY, "company_kb_zamek"].forEach(k => localStorage.removeItem(k));
         try { sessionStorage.clear(); } catch (err) { /* nevadí */ }
         window.KB_USER = "";
         window.KB_EMAIL = "";
@@ -1637,23 +1532,12 @@
                         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">' +
                             '<path stroke-linecap="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16"/></svg>' +
                     "</button>" +
-                    // vlevo nahoře přepínač náhledu – vykreslí se jen hlavnímu
-                    // správci, ostatním zůstane skrytý (paintUser). Obal
-                    // (display: contents) se na telefonu stěhuje do pásu
-                    // i s tím, co k přepínači přidá stránka (nástěnka:
-                    // Základní / Manažerská) – placeNahled.
-                    '<div class="appbar__vlevo" data-nahled-slot>' +
-                    '<label class="appbar__nahled" data-nahled-box hidden>' +
-                        '<span>Zobrazit jako</span>' +
-                        '<select data-nahled>' +
-                            /* 4. pád, protože se to čte jako „zobrazit jako koho" */
-                            '<option value="">hlavního správce</option>' +
-                            '<option value="spravce">manažera</option>' +
-                            '<option value="zamestnanec">zaměstnance</option>' +
-                            '<option value="student">studenta</option>' +
-                        "</select>" +
-                    "</label>" +
-                    "</div>" +
+                    // vlevo nahoře slot pro to, co si sem dá stránka (nástěnka:
+                    // přepínač Základní / Manažerská). Dřív tu byl i přepínač
+                    // „Zobrazit jako" – zrušený 27. 10. 2026 (viz UI.role).
+                    // Obal (display: contents) se na telefonu stěhuje do pásu
+                    // i s obsahem – placeNahled.
+                    '<div class="appbar__vlevo" data-nahled-slot></div>' +
                     // barvy webu jsou jen mezi ikonami nástrojů a jen pro
                     // hlavního správce – v pruhu je to zbytečně na očích
                     // stav synchronizace se ukazuje dole ve svislém pásu;
@@ -2033,7 +1917,8 @@
                 [skupinaStranek()].concat(SKUPINY_PASU).map(skupinaPasu).join("") +
             "</nav>" +
             '<div class="siderail__spodek">' +
-                // na telefonu sem přistěhuje placeNahled přepínač „Zobrazit jako"
+                // na telefonu sem přistěhuje placeNahled slot z hlavičky
+                // (nástěnka: přepínač Základní / Manažerská)
                 '<div class="siderail__nahled" data-rail-nahled></div>' +
                 '<div class="siderail__ja" data-rail-ja></div>' +
                 '<div class="siderail__stav" data-cloud-status>Připojuji…</div>' +
@@ -2076,10 +1961,11 @@
         document.body.classList.add("ma-spodnilistu");
     }
 
-    /* Přepínač „Zobrazit jako" (jen hlavní správce) se do zkrácené hlavičky
-       telefonu nevejde – bydlí tam dole v pásu u jména. Stěhuje se celý
-       obal i s tím, co k němu přidala stránka; posluchače visí na dokumentu
-       nebo na prvcích samých, takže se nic neztratí. */
+    /* Slot vlevo nahoře (nástěnka: přepínač Základní / Manažerská) se do
+       zkrácené hlavičky telefonu nevejde – bydlí tam dole v pásu u jména.
+       Stěhuje se celý obal i s tím, co do něj stránka dala; posluchače visí
+       na dokumentu nebo na prvcích samých, takže se nic neztratí. Jméno
+       zůstalo z dob přepínače „Zobrazit jako", který tu bydlel původně. */
     function placeNahled() {
         const box = document.querySelector("[data-nahled-slot]");
         const doPasu = document.querySelector("[data-rail-nahled]");

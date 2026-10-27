@@ -171,6 +171,11 @@
         .sazbapole { border: 0; background: none; font: inherit; font-weight: 800;
             width: 74px; padding: 0; min-height: 0; }
         .sazbapole:focus { outline: none; }
+        /* Peníze ve formuláři (sazba, částka, rozpis paušálů) jsou vidět až
+           po „Zobrazit peníze" v nabídce ⋯ – třídu na body přepíná
+           prepniPenize; formulář se při tom nepřekresluje, aby se neztratilo,
+           co je v něm rozepsané (viz SKRYTÉ PENÍZE ve skriptu). */
+        body:not(.penize-videt) .jen-penize { display: none !important; }
 
         /* Rozsah dnů dává smysl jen u absence – běžný záznam je vždycky jeden den. */
         .datumdo { display: none; }
@@ -360,6 +365,9 @@
                 <span id="filtrUkol" class="chip chip--active" hidden style="cursor:pointer"
                     title="Zrušit filtr úkolu"></span>
                 <div class="grow"></div>
+                <!-- ⋯ nad dlaždicemi: „Zobrazit peníze" – jen tomu, kdo je smí
+                     vidět (plní a odkrývá render). Tlačítko dodá KBNabidka. -->
+                <span id="souhrnAkce" hidden></span>
                 <button type="button" id="btnCsv" class="btn btn--ghost btn--sm">Stáhnout CSV</button>
             </div>
         </div>
@@ -685,7 +693,7 @@
        se v cizích výkazech ani nezobrazí. */
     const jeMujWeb = () => window.KBUI.role() === "hlavni-spravce";
 
-    /* KDO VIDÍ PENÍZE. Manažer (`vykaz.view`) u všech. Kdo si práci
+    /* KDO SMÍ VIDĚT PENÍZE. Manažer (`vykaz.view`) u všech. Kdo si práci
        fakturuje sám – OSVČ a student na dohodu – u SVÉHO výkazu taky:
        podle odpracovaných hodin píše fakturu a musí vědět, kolik mu za ně
        vychází (Michal 2. 9. 2026). Zaměstnanec má domluvenou měsíční
@@ -696,8 +704,12 @@
     /* `mojeCastkyPrisly` čeká, až databáze částky opravdu vydá. Kdyby se
        jen předpokládalo, že to půjde, ukázaly by se po nasazení webu, ale
        před nasazením pravidel, sloupce s penězi plné nul. */
-    const vidimPenize = () => menimSazbu() ||
+    const smimPenize = () => menimSazbu() ||
         !!(window.KB.fakturujeSi && window.KB.fakturujeSi() && window.KB.mojeCastkyPrisly);
+    /* Smět ještě neznamená vidět: peníze se kreslí až po zapnutí v nabídce ⋯
+       (SKRYTÉ PENÍZE níž) a po novém načtení jsou zase schované. */
+    let penizeVidet = false;
+    const vidimPenize = () => penizeVidet && smimPenize();
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
 
@@ -1602,16 +1614,18 @@
         const absentni = o.sZakazkou && jeAbsence(d.zakazka || "");
         const rezijni = o.sZakazkou && jeRezie(d.zakazka || "");
 
-        /* Sazba a částka v ZÁPISU DNE dávají smysl jen manažerovi – jen on
-           sazbu zná a nastavuje. OSVČ a studentovi se ukážou až v OKNĚ
-           ÚPRAVY (`o.sZakazkou`), kde je částka spočítaná a uložená; při
-           psaní nového dne by jim formulář sliboval 0 Kč. */
+        /* Sazba a částka v ZÁPISU DNE: manažer sazbu zná a nastavuje. OSVČ
+           a student ji dřív viděli až v OKNĚ ÚPRAVY (`o.sZakazkou`), kde je
+           částka spočítaná – při psaní nového dne nebylo odkud ji vzít
+           a formulář by sliboval 0 Kč. Od 13. 10. 2026 má každý, kdo si
+           fakturuje sám, zrcadlo své sazby (`KB.mojeSazba`), takže ji vidí
+           i při psaní. */
         const sazbuMenim = menimSazbu();
-        /* Dřív se OSVČ a studentovi sazba ukázala až v okně úpravy, protože
-           při psaní nového dne nebylo odkud ji vzít a formulář by sliboval
-           0 Kč. Od 13. 10. 2026 má každý, kdo si fakturuje sám, zrcadlo své
-           sazby (`KB.mojeSazba`), takže ji vidí i při psaní. */
-        const sazbuVidim = sazbuMenim || vidimPenize();
+        /* Blok se kreslí každému, kdo peníze vidět SMÍ, ale ukáže se až po
+           „Zobrazit peníze" v nabídce ⋯ (třída `jen-penize`, SKRYTÉ PENÍZE
+           níž). Skryté pole sazby je v DOM vždycky, ať ji ctiPolozku přečte
+           a uložení nesáhne na sazbu přepsanou u staršího zápisu. */
+        const sazbuVidim = smimPenize();
         return '<div class="polozka' + (absentni ? " polozka--absence" : "") +
             (o.sZakazkou && jeSkoleni(d.zakazka || "") ? " polozka--skoleni" : "") +
             (rezijni ? " polozka--rezie" : "") + '" data-polozka>' +
@@ -1690,7 +1704,7 @@
                    při zapisování často někdo stojí za zády. Hodnota jede ve
                    skrytém poli, ať ji ctiPolozku přečte jako dřív. */
                 (sazbuVidim
-                    ? '<div><label class="label">Sazba (Kč/h)</label>' +
+                    ? '<div class="jen-penize"><label class="label">Sazba (Kč/h)</label>' +
                           '<span class="field tajne" style="display:flex;align-items:center;gap:8px">' +
                               /* Po odkrytí jde přepsat – u cizího zápisu nešla
                                  sazba opravit vůbec, pole bylo skryté
@@ -1744,9 +1758,9 @@
 
             '<div class="polozka__vysledek">' +
                 '<span class="polozka__hod" data-vysledek-hod>0 h</span>' +
-                '<span class="polozka__kc" data-vysledek-kc' +
+                '<span class="polozka__kc jen-penize" data-vysledek-kc' +
                     (sazbuVidim ? "" : " hidden") + ">0 Kč</span>" +
-                '<span class="polozka__rozpis" data-vysledek-rozpis hidden></span>' +
+                '<span class="polozka__rozpis jen-penize" data-vysledek-rozpis hidden></span>' +
                 '<span class="polozka__varovani" data-vysledek-pozn hidden></span>' +
             "</div>" +
         "</div>";
@@ -1860,31 +1874,35 @@
 
     /** Přepočítá hodiny a částku pod položkou. */
     /* =================================================== SKRYTÉ PENÍZE ==
-       Peníze se nezobrazí samy. Kdo si zapisuje výkaz v kanceláři a někdo
-       mu stojí za zády, nechce mít sazbu a vydělek rovnou na obrazovce –
-       odkryje si je tlačítkem v rohu dlaždice a stejným je zase schová.
+       Peníze se po načtení nevykreslují VŮBEC – ani manažerovi: žádné
+       sloupce Sazba a Částka, žádné dlaždice s penězi, žádná částka
+       v součtu dne ani ve formuláři. Při zapisování výkazu často někdo
+       stojí za zády nebo je stránka na promítačce (Michal 27. 10. 2026:
+       „to nechci primárně vidět, můžu to vidět, když si rozkliknu 3 tečky").
+       Dřív se kreslily za tečkami „•••" s tlačítkem v rohu dlaždice.
+       Zapínají se jen z nabídky ⋯ – u každého řádku výkazu i tlačítkem
+       vedle filtrů nad dlaždicemi – položkou „Zobrazit peníze"; tatáž
+       položka („Skrýt peníze") je zase schová. Nepamatuje se to: po novém
+       načtení jsou zase schované. Kdo peníze vidět nesmí (`smimPenize`),
+       položku v nabídce nemá. Tabulka a dlaždice se při přepnutí kreslí
+       znovu (`render`); formulář dne se nepřekresluje – jeho sazba a částka
+       mají třídu `jen-penize` a schovává je CSS podle `body.penize-videt`.
        Není to zabezpečení, jen slušnost k okolí; data má stejně jen ten,
        komu je databáze vydá. */
 
-    let penizeVidet = false;
-
-    function penizeDlazdice(label, value, note, money) {
-        return '<div class="card vyktile vyktile--tajne' + (money ? " vyktile--money" : "") + '">' +
-            '<button type="button" class="vyktile__oko" data-penize-prepni></button>' +
-            '<div class="vyktile__label">' + esc(label) + "</div>" +
-            '<div class="vyktile__value"><span class="tajne">' + value + "</span>" +
-                '<span class="tajne__zastup">•••</span></div>' +
-            (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
-        "</div>";
-    }
-
-    /** Projede stránku a nastaví, co je vidět a co zastupují tečky. */
-    function pouzijSkryti() {
+    function prepniPenize() {
+        penizeVidet = !penizeVidet;
         document.body.classList.toggle("penize-videt", penizeVidet);
-        document.querySelectorAll("[data-penize-prepni]").forEach(b => {
-            b.textContent = penizeVidet ? "skrýt" : "zobrazit";
-        });
+        render();
     }
+
+    /** Položka nabídky ⋯; false tomu, kdo peníze vidět nesmí (nabídka ji vynechá). */
+    const polozkaPenize = (oddel) => smimPenize() && {
+        text: penizeVidet ? "Skrýt peníze" : "Zobrazit peníze (sazby a částky)",
+        ikona: penizeVidet ? "skryt" : "oko",
+        oddel: !!oddel,
+        fn: prepniPenize
+    };
 
     /* ================================================ VYTÍŽENÍ ČLOVĚKA ==
        Stejná mřížka jako na stránce Vytížení týmu, jen na jednoho člověka –
@@ -2046,7 +2064,8 @@
         });
         $("denSoucet").innerHTML = hodiny
             ? "Celkem: <b>" + V.hod(hodiny) + "</b>" +
-                (menimSazbu() ? " · <b>" + V.kc(castka) + "</b>" : "")
+                // částka jen po „Zobrazit peníze" (CSS podle třídy, viz SKRYTÉ PENÍZE)
+                (menimSazbu() ? ' <b class="jen-penize">· ' + V.kc(castka) + "</b>" : "")
             : "";
     }
 
@@ -4301,14 +4320,17 @@
         $("stop").hidden = true;
         $("obsah").hidden = false;
 
-        /* Správce vidí všechny a peníze, zaměstnanec jen svoje hodiny.
-           Není to jen schované tlačítko – databáze mu cizí zápisy ani sazby
-           nevydá (firestore.rules). */
+        /* Správce vidí všechny, zaměstnanec jen svoje hodiny. Není to jen
+           schované tlačítko – databáze mu cizí zápisy ani sazby nevydá
+           (firestore.rules). */
         const spravce = window.KBUI.can("vykaz.view");
-        // manažer vidí peníze u všech, OSVČ a student u svého výkazu
+        /* peníze (manažer u všech, OSVČ a student u svého výkazu) až po
+           zapnutí v nabídce ⋯ – po načtení se nekreslí nikomu */
         const penize = vidimPenize();
         // pole člověka ve filtru schovává naplnFiltry níž (obal našeptávače)
         $("btnCsv").hidden = !spravce;
+        // ⋯ s položkou „Zobrazit peníze" jen tomu, kdo je smí vidět
+        $("souhrnAkce").hidden = !smimPenize();
         $("dOsobaBox").hidden = !spravce;
 
         zapniSledovani();
@@ -4383,8 +4405,8 @@
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
             V.dlazdice("Odpracovaných dní", V.cislo(s.dny), vicLidi ? "napříč lidmi" : "") +
             (penize
-                ? penizeDlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
-                  penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
+                ? V.dlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
+                  V.dlazdice("Fakturováno", V.kc(s.castka), "", true)
                 : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady")) +
             (zst && zst.nastaveno
                 ? V.dlazdice("Dovolená zbývá", zbyvaText + " dní",
@@ -4400,9 +4422,6 @@
                               : "od " + V.czDatum(zst.od) + (zst.neuplne ? " · neúplné" : ""),
                           false, zst.bezZapisu ? "" : chybiHtml))
                 : "");
-
-        // po překreslení se peníze zase schovají, dokud si je někdo nevyžádá
-        pouzijSkryti();
 
         $("prazdno").hidden = !!zaznamy.length;
         $("tabulkaWrap").hidden = !zaznamy.length;
@@ -4440,7 +4459,7 @@
                 return '<tr class="vyk__den kt-predel"><td colspan="' + sloupcu + '">' +
                         "<b>" + esc(V.czDatum(datum)) + "</b>" +
                         "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
-                            (penize ? " · <span class=\"tajne\">" + V.kc(den.castka) + "</span><span class=\"tajne__zastup\">•••</span>" : "") + "</span>" +
+                            (penize ? " · " + V.kc(den.castka) : "") + "</span>" +
                     "</td></tr>" + radky.map(radek).join("");
             }).join("") +
             "</tbody>";
@@ -4498,8 +4517,8 @@
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
                 '<td class="vyk__num" data-l="Hodin">' + esc(V.hod(z.hodiny)) + "</td>" +
                 (penize
-                    ? '<td class="vyk__num" data-l="Sazba">' + "<span class=\"tajne\">" + esc(V.cislo(z.sazba)) + "</span><span class=\"tajne__zastup\">•••</span>" + "</td>" +
-                      '<td class="vyk__num" data-l="Částka"><b>' + "<span class=\"tajne\">" + esc(V.kc(z.castka)) + "</span><span class=\"tajne__zastup\">•••</span>" + "</b></td>"
+                    ? '<td class="vyk__num" data-l="Sazba">' + esc(V.cislo(z.sazba)) + "</td>" +
+                      '<td class="vyk__num" data-l="Částka"><b>' + esc(V.kc(z.castka)) + "</b></td>"
                     : "") +
                 '<td class="vyk__akce kt-akce">' +
                     /* Vlastní záznam jde opravit v den zápisu a u budoucích
@@ -4937,10 +4956,19 @@
                     text: "Jen " + V.osobaText(z), ikona: "clovek", fn: () => filtrujNa("uid", z.uid) },
                 z.datum && !(filtr.od === z.datum && filtr.do === z.datum) && {
                     text: "Jen den " + V.czDatum(z.datum), ikona: "kalendar", fn: () => jenDen(z.datum) },
+                // peníze celé stránky – tatáž položka jako u ⋯ vedle filtrů (SKRYTÉ PENÍZE)
+                polozkaPenize(true),
                 smimSmazat(z) && { text: "Smazat záznam…", ikona: "smazat", nebezpeci: true,
                     fn: () => smazZapis(z.id) }
             ]
         };
+    });
+
+    /* ⋯ vedle filtrů nad dlaždicemi: zatím jen přepínač peněz. Tlačítko
+       dodává KBNabidka, ať vypadá stejně jako v řádcích. */
+    window.KBNabidka.pripoj((cil) => {
+        if (!cil.closest || !cil.closest("#souhrnAkce")) return null;
+        return { nadpis: "Dlaždice a tabulka", polozky: [polozkaPenize()] };
     });
 
     /* Hromadné mazání (jen manažer): zaškrtávátko v řádku, Shift = rozsah.
@@ -5523,13 +5551,8 @@
             render();
         });
 
-        // odkrytí peněz platí pro celou stránku – dlaždice i tabulku
-        document.addEventListener("click", (event) => {
-            if (!event.target.closest("[data-penize-prepni]")) return;
-            penizeVidet = !penizeVidet;
-            pouzijSkryti();
-        });
-        pouzijSkryti();
+        // ⋯ nad dlaždicemi (nabídku skládá KBNabidka.pripoj výš, SKRYTÉ PENÍZE)
+        $("souhrnAkce").innerHTML = window.KBNabidka.tlacitko("Další akce: dlaždice a tabulka");
 
         // měsíc v mřížce vytížení se přepíná nezávisle na filtru období výše
         $("vtZpet").addEventListener("click", () => {
