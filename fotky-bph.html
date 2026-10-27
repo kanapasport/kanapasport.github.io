@@ -628,6 +628,11 @@
         return x ? D.mistnosti[Number(x.dataset.mk)] || null : null;
     }
 
+    // 1 fotka · 2–4 fotky · 5 fotek
+    const tvar = (n, jeden, dva, pet) => cislo(n) + " " + (n === 1 ? jeden : n >= 2 && n <= 4 ? dva : pet);
+    const fotek = (n) => tvar(n, "fotka", "fotky", "fotek");
+    const videi = (n) => tvar(n, "video", "videa", "videí");
+
     function cestaMistnosti(r) {
         return D.koren && r.d ? D.koren + "\\" + r.d : "";
     }
@@ -654,16 +659,16 @@
                 const tr = el("tr");
                 tr.appendChild(el("td", null, nazevSl));
                 const kus = [];
-                if (fo || (!vi && !ji)) kus.push(cislo(fo) + " fotek");
-                if (vi) kus.push(cislo(vi) + " videí");
-                if (ji) kus.push(cislo(ji) + " jiných");
+                if (fo || (!vi && !ji)) kus.push(fotek(fo));
+                if (vi) kus.push(videi(vi));
+                if (ji) kus.push(tvar(ji, "jiný soubor", "jiné soubory", "jiných souborů"));
                 tr.appendChild(el("td", "c", kus.join(" · ")));
                 tb.appendChild(tr);
             });
             if (sl.length > 1) {
                 const tr = el("tr", "s");
                 tr.appendChild(el("td", null, "Celkem"));
-                tr.appendChild(el("td", "c", cislo(f) + " fotek" + (v ? " · " + cislo(v) + " videí" : "")));
+                tr.appendChild(el("td", "c", fotek(f) + (v ? " · " + videi(v) : "")));
                 tb.appendChild(tr);
             }
             tip.appendChild(tb);
