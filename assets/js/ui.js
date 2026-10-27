@@ -195,6 +195,225 @@
         document.addEventListener("keydown", obnov);
     };
 
+    /* ------------------------------------- opona před citlivými údaji ----
+       Stránky pod PROJEKTY (správa, plán, zaměstnanci, firmy, celkový
+       přehled) a sazby v Nastavení jsou za heslem navíc (Michal 27. 10. 2026:
+       „k projektům se bude přistupovat heslem, které je stejné jako u toho
+       nastavení"). Je to JEN OPONA před obsahem: přihlášený manažer data
+       z databáze dostane tak jako tak, protože pravidla Firestore čtou roli
+       a UID, ne tohle heslo. Zámek chrání před kolemjdoucím u odemčeného
+       počítače, ne před útočníkem – nic z pravidel databáze nenahrazuje.
+
+       Heslo zakládá a mění jen hlavní správce v Nastavení; v databázi leží
+       jen otisk (salt + hash, store.js zamekDoc). Odemčení se pamatuje
+       v sessionStorage pod UI.ZAMEK_KLIC (otisk hesla, ne heslo – otisk je
+       i v databázi, a změnou hesla se odemčení samo zruší). Platí
+       UI.ZAMEK_PLATNOST od poslední práce a je společné pro všechny stránky
+       v záložce: přechod ze Správy na Plán heslo znovu nechce.
+
+       UI.zamekCitlive({ obsah, slot, need, nadpis, popis, bezHeslaSpravce, onZmena })
+         obsah            id prvků, které zámek schová (atribut data-zamceno;
+                          schválně ne `hidden`, to si stránka přepíná sama)
+         slot             id prvku, kam se karta vykreslí – bez něj se vloží
+                          před první prvek z `obsah`
+         need             právo, bez kterého se karta vůbec neukáže
+                          (stránka má na to vlastní #stop); výchozí vykaz.view
+         bezHeslaSpravce  text pro hlavního správce, když heslo ještě není
+         onZmena(odemceno) zavolá se po každé změně stavu
+       Vrací ovladač { odemceno, meta, stav, nacti, paint, zamkni, nastavMeta }
+       – Nastavení přes něj zakládá a mění heslo. */
+
+    UI.ZAMEK_KLIC = "company_kb_zamek";
+
+    const ZAMEK_STYL =
+        "[data-zamceno]{display:none!important}" +
+        ".zamek__hlava{display:flex;align-items:flex-start;gap:12px}" +
+        ".zamek__ikona{width:26px;height:26px;flex:none;color:var(--accent)}" +
+        /* pevné tři sloupce: pole sedí na stejném místě, ať se odemyká,
+           zakládá nebo mění heslo, a formulář pod rukama nepřeskakuje */
+        ".zamek__mrizka{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;max-width:780px}" +
+        ".zamek__mrizka label{display:block;min-width:0}" +
+        ".zamek__mrizka .field{width:100%}" +
+        "@media (max-width:780px){.zamek__mrizka{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+        "@media (max-width:520px){.zamek__mrizka{grid-template-columns:minmax(0,1fr)}}" +
+        ".subbar__zamek{width:11px;height:11px;vertical-align:-1px;margin-right:4px;opacity:.7}";
+
+    const ZAMEK_IKONA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
+        'd="M7 10V7a5 5 0 0 1 10 0v3M6 10h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></svg>';
+
+    function zajistiZamekStyl() {
+        if (document.getElementById("kbZamekStyl")) return;
+        const styl = document.createElement("style");
+        styl.id = "kbZamekStyl";
+        styl.textContent = ZAMEK_STYL;
+        document.head.appendChild(styl);
+    }
+
+    UI.zamekCitlive = (options = {}) => {
+        const KLIC = UI.ZAMEK_KLIC;
+        const obsah = options.obsah || ["obsah"];
+        const need = options.need || "vykaz.view";
+
+        let meta = null;          // { salt, hash } z databáze, null = nikdo nezaložil
+        let stav = "nacitam";     // nacitam | hotovo | chyba
+        let nacita = false;
+        let odemceno = false;     // heslo sedí (nebo je zapamatované)
+        let videt = false;        // obsah je odkrytý – i hlavnímu správci bez hesla
+
+        zajistiZamekStyl();
+
+        /* karta: hlava s nadpisem a popisem, pole s heslem a Odemknout;
+           data- atributy místo id, ať se nepletou s prvky stránky */
+        const karta = document.createElement("section");
+        karta.className = "card col zamek";
+        karta.setAttribute("data-zamek-karta", "");
+        karta.style.cssText = "padding:18px 20px;gap:14px";
+        karta.hidden = true;
+        karta.innerHTML =
+            '<div class="zamek__hlava">' +
+                ZAMEK_IKONA.replace("<svg ", '<svg class="zamek__ikona" ') +
+                "<div>" +
+                    '<b data-zamek-nadpis style="font-size:var(--fs-4)"></b>' +
+                    '<p class="small muted" data-zamek-popis style="margin-top:4px;line-height:1.6"></p>' +
+                "</div>" +
+            "</div>" +
+            '<div class="col" data-zamek-form style="gap:12px" hidden>' +
+                '<div class="zamek__mrizka"><label>' +
+                    '<span class="label">Heslo k citlivým sekcím</span>' +
+                    '<input type="password" class="field" data-zamek-heslo autocomplete="off">' +
+                "</label></div>" +
+                '<div class="row row--wrap" style="gap:10px">' +
+                    '<button type="button" class="btn btn--primary" data-zamek-odemknout>Odemknout</button>' +
+                "</div>" +
+            "</div>" +
+            '<p class="tiny muted" style="margin:0;line-height:1.6">Tohle <b>není</b> heslo k přihlášení ' +
+                "na web – jen zakrývá citlivé údaje o firmě na tomhle počítači.</p>";
+
+        const slot = options.slot ? document.getElementById(options.slot) : null;
+        if (slot) slot.appendChild(karta);
+        else {
+            const prvni = document.getElementById(obsah[0]);
+            if (prvni && prvni.parentNode) prvni.parentNode.insertBefore(karta, prvni);
+        }
+        const q = (sel) => karta.querySelector(sel);
+
+        const oznam = () => { if (typeof options.onZmena === "function") options.onZmena(odemceno); };
+
+        function paint() {
+            const smi = !!window.KB_USER && UI.can(need);
+            const hlavni = UI.isOwner();
+            const zalozeno = !!(meta && meta.hash);
+            /* bez hesla je obsah odemčený jen hlavnímu správci – on jediný ho
+               může založit, ostatní čekají, až to udělá */
+            videt = smi && stav === "hotovo" && (odemceno || (!zalozeno && hlavni));
+            obsah.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (videt) el.removeAttribute("data-zamceno");
+                else el.setAttribute("data-zamceno", "");
+            });
+
+            karta.hidden = !(smi && (stav !== "hotovo" || !odemceno));
+            q("[data-zamek-form]").hidden = !(stav === "hotovo" && zalozeno && !odemceno);
+
+            q("[data-zamek-nadpis]").textContent =
+                stav !== "hotovo" || zalozeno
+                    ? (options.nadpis || "Zamčeno – zadej heslo k citlivým sekcím")
+                    : "Heslo k citlivým sekcím zatím není";
+            q("[data-zamek-popis]").textContent =
+                stav === "nacitam" ? "Zjišťuji, jestli je zámek nastavený…"
+                : stav === "chyba" ? "Nedaří se spojit s databází. Zkus stránku načíst znovu."
+                : zalozeno
+                    ? (options.popis || "Jsou tu citlivé údaje o firmě. Odemčení platí tři minuty od " +
+                        "poslední práce a přenese se na všechny stránky pod Projekty i do Nastavení.")
+                    : hlavni
+                        ? (options.bezHeslaSpravce || "Heslo k citlivým sekcím zatím nikdo nenastavil – " +
+                            "nastaví ho hlavní správce v Nastavení. Do té doby vidíš obsah jen ty.")
+                        : "Heslo k citlivým sekcím zatím nikdo nenastavil – nastaví ho hlavní správce v Nastavení.";
+        }
+
+        async function nacti() {
+            // bez práva nemá smysl se databáze ptát (pravidla by to stejně
+            // odmítly); `nacita` brání dvěma dotazům naráz
+            if (stav === "hotovo" || nacita || !window.KB || !window.KB.loadZamek || !UI.can(need)) return;
+            nacita = true;
+            try {
+                meta = await window.KB.loadZamek();
+                stav = "hotovo";
+            } catch (err) {
+                // typicky ještě neproběhlo přihlášení – zkusí se znovu při kb-role
+                stav = "chyba";
+            } finally {
+                nacita = false;
+            }
+            odemceno = !!(meta && meta.hash && UI.zamekPamet(KLIC) === meta.hash);
+            paint();
+            oznam();
+        }
+
+        async function odemkni() {
+            if (!meta) return void UI.toast("Zámek zatím není nastavený.", "warn");
+            const pole = q("[data-zamek-heslo]");
+            if (!pole.value) return void UI.toast("Zadej heslo.", "warn");
+            const otisk = await UI.hashPassword(pole.value, meta.salt);
+            if (otisk !== meta.hash) return void UI.toast("Nesprávné heslo.", "error");
+            pole.value = "";
+            odemceno = true;
+            UI.zamekZapamatuj(KLIC, otisk);
+            paint();
+            oznam();
+            UI.toast("Odemčeno. Platí tři minuty od poslední práce, i na ostatních stránkách.");
+        }
+
+        q("[data-zamek-odemknout]").addEventListener("click", odemkni);
+        q("[data-zamek-heslo]").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); odemkni(); }
+        });
+
+        // práce se stránkou prodlužuje odemčení; po třech minutách bez ní
+        // se obsah zase schová a heslo se chce znovu
+        UI.zamekObnovujPri(KLIC);
+        setInterval(() => {
+            if (odemceno && !UI.zamekPamet(KLIC)) {
+                odemceno = false;
+                paint();
+                oznam();
+            }
+        }, 15000);
+
+        // role (a tím i to, jestli jde o hlavního správce) může dorazit až
+        // se seznamem lidí (kb-role) – karta se překreslí a zámek se dočte
+        document.addEventListener("kb-role", () => { paint(); nacti(); });
+
+        paint();
+        nacti();
+
+        return {
+            odemceno: () => odemceno,
+            videt: () => videt,
+            meta: () => meta,
+            stav: () => stav,
+            nacti: nacti,
+            paint: paint,
+            zamkni: () => {
+                odemceno = false;
+                UI.zamekZapamatuj(KLIC, "");
+                paint();
+                oznam();
+            },
+            /** Po založení nebo změně hesla (Nastavení): nový otisk platí hned. */
+            nastavMeta: (nova) => {
+                meta = nova;
+                stav = "hotovo";
+                odemceno = !!(nova && nova.hash);
+                UI.zamekZapamatuj(KLIC, odemceno ? nova.hash : "");
+                paint();
+                oznam();
+            }
+        };
+    };
+
     /* ------------------------------------------------------------- toast
        UI.toast(text, typ, { zpet }) – typ "error" / "warn" / nic (zelená).
        zpet = funkce, která akci vrátí (může vrátit Promise): v hlášce je
@@ -1428,13 +1647,19 @@
     UI.paintSubbar = (polozky, aktivni) => {
         const slot = document.getElementById("appSubbar");
         if (!slot) return;
+        // položka za heslem (zamek: true) nese drobný zámek a nápovědu
+        if (polozky.some(p => p.zamek)) zajistiZamekStyl();
         slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
             polozky.map(p => {
                 const gate = p.need ? ' data-need="' + esc(p.need) + '" hidden' : "";
+                const zamek = p.zamek
+                    ? ' title="Za heslem k citlivým sekcím"' : "";
+                const text = (p.zamek ? ZAMEK_IKONA.replace("<svg ", '<svg class="subbar__zamek" ') : "") +
+                    esc(p.title);
                 return p.href === aktivni
-                    ? '<span class="subbar__cat"' + gate + ">" + esc(p.title) + "</span>"
+                    ? '<span class="subbar__cat"' + gate + zamek + ">" + text + "</span>"
                     : '<a class="subbar__cat subbar__cat--up" href="' + esc(p.href) + '"' +
-                      gate + ">" + esc(p.title) + "</a>";
+                      gate + zamek + ">" + text + "</a>";
             }).join("") +
         "</div></div>";
         // odkazy vznikly až teď, práva se na nich musí dorovnat
@@ -1443,12 +1668,16 @@
 
     /** Podlišta projektů – seznam, plán a správa patří k sobě. */
     /* Seznam projektů tu byl zdvojený se Správou – jeden projekt se vyplňoval
-       na dvou místech. Zůstala Správa, kde je všechno pohromadě. */
+       na dvou místech. Zůstala Správa, kde je všechno pohromadě.
+       Celkový přehled (peníze a hodiny celé firmy) sem přešel z Výkazů
+       27. 10. 2026 – u výkazů zůstal zápis a vytížení týmu. Všechny položky
+       jsou za heslem k citlivým sekcím (UI.zamekCitlive), proto `zamek`. */
     UI.PODLISTA_PROJEKTY = [
-        { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view" },
-        { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view" },
-        { title: "SPRÁVA ZAMĚSTNANCŮ", href: "zamestnanci.html", need: "vykaz.view" },
-        { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view" }
+        { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view", zamek: true },
+        { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view", zamek: true },
+        { title: "SPRÁVA ZAMĚSTNANCŮ", href: "zamestnanci.html", need: "vykaz.view", zamek: true },
+        { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view", zamek: true },
+        { title: "CELKOVÝ PŘEHLED", href: "vykazy-prehled.html", need: "vykaz.view", zamek: true }
     ];
     /* FAKTURY byly v podliště projektů – od 22. 9. 2026 jsou v levém pásu
        vedle Pokladny (přání Michala: mimo projekty, jen manažeři a asistentka). */
@@ -1671,7 +1900,10 @@
 
                 '<div class="appbar__bar"><div class="appbar__barin">' +
                     navHtml(active) +
-                    searchHtml(active) +
+                    /* `hledani`: stránka, podle které se pozná pole hledání,
+                       když v liště svítí jiná položka (Celkový přehled bydlí
+                       pod PROJEKTY, ale filtruje výkazy) */
+                    searchHtml(options.hledani || active) +
                 "</div></div>" +
 
                 // druhý řádek lišty – stránka si ho naplní sama (filtry kategorie)
