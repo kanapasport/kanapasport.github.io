@@ -169,8 +169,10 @@
             .kz__akce { width: 32px; height: 32px; opacity: .75; }
             .kz__akce svg { width: 17px; height: 17px; }
         }
-        /* splněno = celá bublina zeleně, moje i cizí (štítek nese i slovo – kvůli barvoslepým) */
+        /* splněno = celá bublina zeleně, řeší se = celá oranžově, moje i cizí
+           (štítek nese i slovo – kvůli barvoslepým) */
         .kz.kz--splneno .kz__bublina { border-color: var(--ok); background: var(--ok-tint); }
+        .kz.kz--resi .kz__bublina { border-color: var(--warn); background: var(--warn-tint); }
         /* přeposláno a citace zprávy, na kterou se odpovídá – nahoře v bublině */
         .kz__prep { margin-bottom: 3px; color: var(--muted); font-size: var(--fs-1); font-style: italic;
             overflow-wrap: anywhere; }
@@ -450,8 +452,10 @@
     let cekamNa = "";                // právě založená konverzace – otevře se, až dorazí
     let hranice = { id: "", od: Infinity };   // čára „Nové zprávy" v otevřené konverzaci
     let posledniHtml = "";           // obsah okna zpráv – beze změny se nepřekresluje
-    let drzetDole = true;            // po otevření a odeslání skočit na poslední zprávu
-    let uDna = true;                 // okno zpráv je dole (dorazí-li obrázek, zůstat dole)
+    let uDna = true;                 // okno zpráv je u poslední zprávy – při každé změně výšky
+                                     // (zpráva, obrázek, pole psaní, klávesnice) tam zůstat;
+                                     // zruší to jen odrolování nahoru (čtení starších)
+    let posledniScroll = 0;          // scrollTop po posledním posunu (vlastním i uživatele)
     let odesilam = false;
     let noveObrazky = [];            // rozepsané screenshoty (data URL)
     let odpovidam = null;            // rychlá odpověď: { id, uid, jmeno, text } zprávy, na kterou se odpovídá
@@ -747,7 +751,7 @@
         const text = String((odpoved ? p.c.text : z.text) || "");
         const stav = !odpoved && (z.stav === 0 || z.stav === 1) ? Number(z.stav) : null;
         return '<div class="kz ' + (moje ? "kz--moje" : "kz--cizi") + (navazuje ? " kz--navazuje" : "") +
-                (stav === 1 ? " kz--splneno" : "") +
+                (stav === 1 ? " kz--splneno" : stav === 0 ? " kz--resi" : "") +
                 (odpoved ? " kz--odpoved" : "") + (!odpoved && z.id === zvyraznena ? " kz--zvyraznena" : "") + '" ' +
                 (odpoved ? 'data-odpoved="' + esc(z.id) + '" data-odpoved-i="' + esc(p.i) + '"'
                          : 'data-zprava="' + esc(z.id) + '"') + ">" +
@@ -833,21 +837,39 @@
         const box = $("chatZpravy");
         const html = zpravyHtml(k);
         if (html !== posledniHtml) {
-            const dole = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
             const kde = box.scrollTop;
             box.innerHTML = html;
             posledniHtml = html;
             doplnFotky(box);
             hlidejFotky(box);
+            // skok na zvýrazněnou zprávu (odkaz ?pozn=) má přednost; jinak dolů na
+            // poslední zprávu (otevření, vlastní zpráva, nová zpráva, když jsem dole),
+            // a kdo čte starší, zůstane, kde byl
             const cil = zvyraznena && !zvyraznenaUkazana && box.querySelector('[data-zprava="' + CSS.escape(zvyraznena) + '"]');
-            if (cil) { zvyraznenaUkazana = true; cil.scrollIntoView({ block: "center" }); }
-            else if (drzetDole || dole) box.scrollTop = box.scrollHeight;
+            if (cil) { zvyraznenaUkazana = true; cil.scrollIntoView({ block: "center" }); zapamatujPolohu(box); }
+            else if (uDna) sjedDolu(box);
             else box.scrollTop = kde;
-            drzetDole = false;
-            uDna = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
         }
         oznacPrectenoPozdeji(k);
     }
+
+    /* ------------------------------------------- posun na poslední zprávu --- */
+
+    const jeUDna = (box) => box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    function zapamatujPolohu(box) { posledniScroll = box.scrollTop; uDna = jeUDna(box); }
+
+    /* Sjede na poslední zprávu hned po vložení HTML (ještě před vykreslením –
+       žádné bliknutí) a pro jistotu znovu po prvním vykreslení, kdy už mají
+       náhledy fotek svou výšku. Po tom už drží dole události load (obrázky)
+       a ResizeObserver (okno zpráv změnilo výšku). */
+    function sjedDolu(box) {
+        const dolu = () => { box.scrollTop = box.scrollHeight; posledniScroll = box.scrollTop; };
+        uDna = true;
+        dolu();
+        requestAnimationFrame(() => { if (uDna) dolu(); });
+    }
+    /** Změnila se výška obsahu nebo okna zpráv – kdo byl dole, zůstane dole. */
+    const drzDole = () => { if (otevrena && uDna) sjedDolu($("chatZpravy")); };
 
     /* Přečteno se zapíše, až je konverzace opravdu na očích. Značka je čas
        poslední zprávy (ne hodiny tohohle počítače), ať se nic nepřeskočí. */
@@ -928,7 +950,7 @@
             // čára „Nové zprávy" – jen když při otevření něco nepřečteného je
             hranice = { id: id, od: k.nove ? (Number(window.KB.poznPrecteno[id]) || 0) : Infinity };
             posledniHtml = "";
-            drzetDole = true;
+            uDna = true;                 // otevřená konverzace začíná u poslední zprávy
             nactiKoncept();
         }
         if (odkud !== "historie") {
@@ -1098,8 +1120,8 @@
             vykresliNahledy();
             vykresliOdpoved();
             prizpusobVysku();
-            drzetDole = true;
             vykresli();
+            sjedDolu($("chatZpravy"));   // vlastní zpráva: vždy dolů, i když jsem četl starší
         } catch (err) {
             console.error(err);
             toast("Zprávu se nepodařilo odeslat.", "error");
@@ -1679,14 +1701,25 @@
             if (id && najdiKonv(id)) otevri(id, "historie");
             else if (otevrena) zavri();
         });
-        // dorazil obrázek a byl jsem dole → zůstat dole (obrázek výšku zvětší)
+        /* Nahoru = čtu starší zprávy, nic nedržet. Dolů (nebo posun, který
+           udělal prohlížeč, když nad oknem dorostl obrázek) = u dna zůstat.
+           Vlastní skoky (sjedDolu) mají scrollTop == posledniScroll – ty
+           uDna nemění, i kdyby mezitím obsah dorostl a okno „ujelo". */
         $("chatZpravy").addEventListener("scroll", () => {
             const box = $("chatZpravy");
-            uDna = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+            if (box.scrollTop < posledniScroll) uDna = jeUDna(box);
+            else if (jeUDna(box)) uDna = true;
+            posledniScroll = box.scrollTop;
         }, { passive: true });
+        // dorazil obrázek (náhled nebo plná fotka) a byl jsem dole → zůstat dole
         $("chatZpravy").addEventListener("load", (e) => {
-            if (uDna && e.target && e.target.tagName === "IMG") $("chatZpravy").scrollTop = $("chatZpravy").scrollHeight;
+            if (e.target && e.target.tagName === "IMG") drzDole();
         }, true);
+        // okno zpráv změnilo výšku (delší text v poli, náhledy, odpověď, klávesnice
+        // v telefonu, velikost okna) → poslední zpráva zůstane vidět
+        if ("ResizeObserver" in window) new ResizeObserver(drzDole).observe($("chatZpravy"));
+        // písmo doběhlo až po vykreslení – text se přeskládal, výška se změnila
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(drzDole);
         window.addEventListener("resize", nastavVysku);
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible" && otevrena) vykresliChat();
