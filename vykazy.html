@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=311">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=311">
+    <link rel="stylesheet" href="assets/css/app.css?v=312">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=312">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -631,11 +631,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=311"></script>
-<script src="assets/js/ui.js?v=311"></script>
-<script src="assets/js/nabidka.js?v=311"></script>
-<script src="assets/js/vykazy.js?v=311"></script>
-<script type="module" src="assets/js/store.js?v=311"></script>
+<script src="assets/js/taxonomy.js?v=312"></script>
+<script src="assets/js/ui.js?v=312"></script>
+<script src="assets/js/nabidka.js?v=312"></script>
+<script src="assets/js/vykazy.js?v=312"></script>
+<script type="module" src="assets/js/store.js?v=312"></script>
 
 <script>
 (function () {
@@ -706,10 +706,9 @@
        před nasazením pravidel, sloupce s penězi plné nul. */
     const smimPenize = () => menimSazbu() ||
         !!(window.KB.fakturujeSi && window.KB.fakturujeSi() && window.KB.mojeCastkyPrisly);
-    /* Smět ještě neznamená vidět: peníze se kreslí až po zapnutí v nabídce ⋯
-       (SKRYTÉ PENÍZE níž) a po novém načtení jsou zase schované. */
+    /* Smět ještě neznamená vidět: peníze se kreslí za tečkami „•••" a odkryjí
+       se až klikem (SKRYTÉ PENÍZE níž); po novém načtení jsou zase schované. */
     let penizeVidet = false;
-    const vidimPenize = () => penizeVidet && smimPenize();
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
 
@@ -1874,26 +1873,52 @@
 
     /** Přepočítá hodiny a částku pod položkou. */
     /* =================================================== SKRYTÉ PENÍZE ==
-       Peníze se po načtení nevykreslují VŮBEC – ani manažerovi: žádné
-       sloupce Sazba a Částka, žádné dlaždice s penězi, žádná částka
-       v součtu dne ani ve formuláři. Při zapisování výkazu často někdo
-       stojí za zády nebo je stránka na promítačce (Michal 27. 10. 2026:
-       „to nechci primárně vidět, můžu to vidět, když si rozkliknu 3 tečky").
-       Dřív se kreslily za tečkami „•••" s tlačítkem v rohu dlaždice.
-       Zapínají se jen z nabídky ⋯ – u každého řádku výkazu i tlačítkem
-       vedle filtrů nad dlaždicemi – položkou „Zobrazit peníze"; tatáž
-       položka („Skrýt peníze") je zase schová. Nepamatuje se to: po novém
-       načtení jsou zase schované. Kdo peníze vidět nesmí (`smimPenize`),
-       položku v nabídce nemá. Tabulka a dlaždice se při přepnutí kreslí
-       znovu (`render`); formulář dne se nepřekresluje – jeho sazba a částka
-       mají třídu `jen-penize` a schovává je CSS podle `body.penize-videt`.
-       Není to zabezpečení, jen slušnost k okolí; data má stejně jen ten,
-       komu je databáze vydá. */
+       Peníze se po načtení neukazují – ani manažerovi. Dlaždice Průměrná
+       sazba a Fakturováno, sloupce Sazba a Částka i částka v součtu dne se
+       kreslí tomu, kdo je vidět SMÍ (`smimPenize`), ale za tečkami „•••";
+       sazba a částka ve formuláři dne mají třídu `jen-penize`. Při
+       zapisování výkazu často někdo stojí za zády nebo je stránka na
+       promítačce (Michal 27. 10. 2026: „to nechci primárně vidět, můžu to
+       vidět, když si rozkliknu 3 tečky"). Mezi 27. 10. ráno a v312 se
+       peníze nekreslily vůbec a zapínaly se jen z nabídky ⋯ – Michalovi
+       chyběly dlaždice („chci to mít trochu hezčí, jako to bylo předtím").
+       Odkrytí platí pro celou stránku a jde třemi cestami: klik na tečky,
+       tlačítko „zobrazit / skrýt" v rohu dlaždice, nebo položka „Zobrazit
+       peníze / Skrýt peníze" v nabídce ⋯ (u řádku výkazu i vedle filtrů).
+       Přepíná se jen třída `body.penize-videt` (CSS ukáže `.tajne`, schová
+       `.tajne__zastup` a `.jen-penize`) – nic se nepřekresluje, takže se
+       neztratí, co je ve formuláři rozepsané. Nepamatuje se to: po novém
+       načtení jsou peníze zase za tečkami. Kdo je vidět nesmí, nemá tečky,
+       dlaždice ani položku v nabídce. Není to zabezpečení, jen slušnost
+       k okolí; data má stejně jen ten, komu je databáze vydá. */
+
+    /** Hodnota za tečkami: číslo je v DOM, vidět je až po odkrytí; tečky se dají kliknout. */
+    const tajne = (html) => '<span class="tajne">' + html + "</span>" +
+        '<span class="tajne__zastup" data-penize-prepni title="Zobrazit peníze (sazby a částky)">•••</span>';
+
+    /** Dlaždice s penězi: hodnota za tečkami a vpravo v témže řádku tlačítko zobrazit / skrýt
+        (v rohu dlaždice překrývalo popisek „Průměrná sazba" na užších oknech). */
+    function penizeDlazdice(label, value, note, money) {
+        return '<div class="card vyktile vyktile--tajne' + (money ? " vyktile--money" : "") + '">' +
+            '<div class="vyktile__label">' + esc(label) + "</div>" +
+            '<div class="vyktile__value"><span>' + tajne(value) + "</span>" +
+                '<button type="button" class="vyktile__oko" data-penize-prepni></button></div>' +
+            (note ? '<div class="vyktile__note">' + esc(note) + "</div>" : "") +
+        "</div>";
+    }
+
+    /** Projede stránku a nastaví, co je vidět a co zastupují tečky. */
+    function pouzijSkryti() {
+        document.body.classList.toggle("penize-videt", penizeVidet);
+        document.querySelectorAll(".vyktile__oko").forEach(b => {
+            b.textContent = penizeVidet ? "skrýt" : "zobrazit";
+            b.title = penizeVidet ? "Skrýt peníze" : "Zobrazit peníze (sazby a částky)";
+        });
+    }
 
     function prepniPenize() {
         penizeVidet = !penizeVidet;
-        document.body.classList.toggle("penize-videt", penizeVidet);
-        render();
+        pouzijSkryti();
     }
 
     /** Položka nabídky ⋯; false tomu, kdo peníze vidět nesmí (nabídka ji vynechá). */
@@ -4324,9 +4349,9 @@
            schované tlačítko – databáze mu cizí zápisy ani sazby nevydá
            (firestore.rules). */
         const spravce = window.KBUI.can("vykaz.view");
-        /* peníze (manažer u všech, OSVČ a student u svého výkazu) až po
-           zapnutí v nabídce ⋯ – po načtení se nekreslí nikomu */
-        const penize = vidimPenize();
+        /* peníze (manažer u všech, OSVČ a student u svého výkazu) se kreslí
+           za tečkami „•••" – odkryjí se klikem (SKRYTÉ PENÍZE) */
+        const penize = smimPenize();
         // pole člověka ve filtru schovává naplnFiltry níž (obal našeptávače)
         $("btnCsv").hidden = !spravce;
         // ⋯ s položkou „Zobrazit peníze" jen tomu, kdo je smí vidět
@@ -4405,8 +4430,8 @@
             V.dlazdice("Odpracováno", V.hod(s.hodiny), V.pocet(s.pocet, ["záznam", "záznamy", "záznamů"])) +
             V.dlazdice("Odpracovaných dní", V.cislo(s.dny), vicLidi ? "napříč lidmi" : "") +
             (penize
-                ? V.dlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
-                  V.dlazdice("Fakturováno", V.kc(s.castka), "", true)
+                ? penizeDlazdice("Průměrná sazba", s.hodiny ? V.kc(s.sazba) + "/h" : "—", "vážený průměr") +
+                  penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
                 : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady")) +
             (zst && zst.nastaveno
                 ? V.dlazdice("Dovolená zbývá", zbyvaText + " dní",
@@ -4422,6 +4447,8 @@
                               : "od " + V.czDatum(zst.od) + (zst.neuplne ? " · neúplné" : ""),
                           false, zst.bezZapisu ? "" : chybiHtml))
                 : "");
+        // nová tlačítka v rozích dlaždic musí říkat, co stránka zrovna ukazuje
+        pouzijSkryti();
 
         $("prazdno").hidden = !!zaznamy.length;
         $("tabulkaWrap").hidden = !zaznamy.length;
@@ -4459,7 +4486,7 @@
                 return '<tr class="vyk__den kt-predel"><td colspan="' + sloupcu + '">' +
                         "<b>" + esc(V.czDatum(datum)) + "</b>" +
                         "<span>" + esc(V.denVTydnu(datum)) + " · " + V.hod(den.hodiny) +
-                            (penize ? " · " + V.kc(den.castka) : "") + "</span>" +
+                            (penize ? " · " + tajne(V.kc(den.castka)) : "") + "</span>" +
                     "</td></tr>" + radky.map(radek).join("");
             }).join("") +
             "</tbody>";
@@ -4517,8 +4544,8 @@
                     (navic.length ? '<span class="vyk__pozn">' + esc(navic.join(" · ")) + "</span>" : "") + "</td>" +
                 '<td class="vyk__num" data-l="Hodin">' + esc(V.hod(z.hodiny)) + "</td>" +
                 (penize
-                    ? '<td class="vyk__num" data-l="Sazba">' + esc(V.cislo(z.sazba)) + "</td>" +
-                      '<td class="vyk__num" data-l="Částka"><b>' + esc(V.kc(z.castka)) + "</b></td>"
+                    ? '<td class="vyk__num" data-l="Sazba">' + tajne(esc(V.cislo(z.sazba))) + "</td>" +
+                      '<td class="vyk__num" data-l="Částka"><b>' + tajne(esc(V.kc(z.castka))) + "</b></td>"
                     : "") +
                 '<td class="vyk__akce kt-akce">' +
                     /* Vlastní záznam jde opravit v den zápisu a u budoucích
@@ -5553,6 +5580,12 @@
 
         // ⋯ nad dlaždicemi (nabídku skládá KBNabidka.pripoj výš, SKRYTÉ PENÍZE)
         $("souhrnAkce").innerHTML = window.KBNabidka.tlacitko("Další akce: dlaždice a tabulka");
+        // odkrytí peněz platí pro celou stránku – tečky i tlačítko v rohu dlaždice
+        document.addEventListener("click", (event) => {
+            if (!event.target.closest("[data-penize-prepni]")) return;
+            prepniPenize();
+        });
+        pouzijSkryti();
 
         // měsíc v mřížce vytížení se přepíná nezávisle na filtru období výše
         $("vtZpet").addEventListener("click", () => {
