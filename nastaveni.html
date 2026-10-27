@@ -18,20 +18,9 @@
            blok roztáhl na celou šířku a tlačítka by spadla na druhý řádek. */
         .hlavicka__popis { margin-top: 6px; max-width: 820px; line-height: 1.6; }
 
+        /* vzhled karet zámku (.zamek__hlava, __ikona, __mrizka) dodává
+           KBUI.zamekCitlive v ui.js – je společný se stránkami pod PROJEKTY */
 
-        .zamek__hlava { display: flex; align-items: flex-start; gap: 12px; }
-        .zamek__ikona { width: 26px; height: 26px; flex: none; color: var(--accent); }
-        /* Pevné tři sloupce, ne auto-fit: pole pak sedí na stejném místě bez
-           ohledu na to, jestli se zrovna odemyká, zakládá nebo mění heslo,
-           a formulář pod rukama nepřeskakuje. */
-        .zamek__mrizka {
-            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px; align-items: end; max-width: 780px;
-        }
-        .zamek__mrizka label { display: block; min-width: 0; }
-        .zamek__mrizka .field { width: 100%; }
-        @media (max-width: 780px) { .zamek__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 520px) { .zamek__mrizka { grid-template-columns: minmax(0, 1fr); } }
         /* Řádek dovolené: jméno vlevo, čtyři políčka vedle sebe. Na úzké
            obrazovce se zalomí pod sebe, ať se dá vyplnit i na tabletu. */
         .zustatky { display: flex; flex-direction: column; gap: 8px; }
@@ -85,6 +74,12 @@
         </div>
 
         <!-- ============================================ ZÁMEK CITLIVÝCH SEKCÍ -->
+        <!-- Karta s heslem a Odemknout (opona) se sem vykreslí z ui.js
+             (KBUI.zamekCitlive) – stejná jako na stránkách pod PROJEKTY. -->
+        <!-- display:contents – schovaná karta pak nenechá v sloupci prázdnou mezeru -->
+        <div id="zamekSlot" style="display:contents"></div>
+
+        <!-- založení a změna hesla zůstávají jen tady, v Nastavení -->
         <section class="card col zamek" id="zamek" style="padding:18px 20px;gap:14px" hidden>
             <div class="zamek__hlava">
                 <svg class="zamek__ikona" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
@@ -97,22 +92,9 @@
                 </div>
             </div>
 
-            <!-- odemknutí: zámek už někdo založil -->
-            <div id="zamekOdemk" class="col" style="gap:12px" hidden>
-                <div class="zamek__mrizka">
-                    <label>
-                        <span class="label">Heslo k citlivým sekcím</span>
-                        <input type="password" id="zHeslo" class="field" autocomplete="off">
-                    </label>
-                </div>
-                <div class="row row--wrap" style="gap:10px">
-                    <button type="button" id="btnOdemknout" class="btn btn--primary">Odemknout</button>
-                </div>
-            </div>
-
             <!-- založení i změna hesla: stejný formulář, jen se stávajícím
                  heslem navíc (to se ověřuje, když už nějaké je) -->
-            <div id="zamekZmena" class="col" style="gap:12px" hidden>
+            <div id="zamekZmena" class="col" style="gap:12px">
                 <div class="zamek__mrizka">
                     <label id="zStareBox">
                         <span class="label">Stávající heslo</span>
@@ -261,116 +243,55 @@
 
     /* ------------------------------------------- zámek citlivých sekcí ----
        Sazby lidí jsou to nejcitlivější, co na webu je. Role je hlídá, ale to
-       nestačí – stačí odejít od odemčeného počítače. Proto se nevykreslí samy
-       od sebe a chce to ještě heslo navíc.
-
-       Odemčení si pamatuje sessionStorage, takže platí do zavření záložky
-       a přenese se i na Uživatele a hesla. Ukládá se do něj otisk hesla, ne
-       heslo: nic navíc tím neprozradíme (otisk je i v databázi) a hlavně se
-       odemčení samo zruší, jakmile hlavní správce heslo změní.
+       nestačí – stačí odejít od odemčeného počítače. Proto jsou za oponou
+       KBUI.zamekCitlive (ui.js) – tou samou, jakou mají od 27. 10. 2026
+       stránky pod PROJEKTY: karta s heslem, odemčení v sessionStorage na tři
+       minuty od poslední práce, společné pro všechny stránky v záložce.
+       Tady navíc hlavní správce heslo zakládá a mění – to zůstává jen
+       v Nastavení (karta #zamek).
 
        POZOR: tohle NENÍ heslo k přihlášení. Zámek jen schovává obsah
        stránky; trezor na hesla lidí se zrušil 1. 9. 2026. */
 
-    const ZAMEK_KLIC = "company_kb_zamek";
-    const ZAMEK_NADPIS = "Hodinové sazby jsou zamčené";
-
-    let zamekMeta = null;        // { salt, hash } z databáze, null = nikdo nezaložil
-    let zamekStav = "nacitam";   // nacitam | hotovo | chyba
-    let zamekNacteno = false;
-    let zamekNacita = false;
-    let zamekOdemceno = false;
+    let zamek = null;            // ovladač opony (KBUI.zamekCitlive)
     let zmenaOtevrena = false;
 
-    /* Odemčení má tříminutovou platnost od poslední práce se stránkou
-       (KBUI.zamekPamet) – kdo odejde od počítače, nenechá sazby otevřené. */
-    const zamekPamet = () => window.KBUI.zamekPamet(ZAMEK_KLIC);
-    const zamekZapamatuj = (hash) => window.KBUI.zamekZapamatuj(ZAMEK_KLIC, hash);
-
+    /** Karta založení / změny hesla a tlačítka v hlavičce – oponu samotnou
+        (heslo, Odemknout, odkrytí sazeb) kreslí pomocník. */
     function paintZamek() {
+        if (!zamek) return;
         const hlavni = window.KBUI.isOwner();
-        const zalozeno = !!zamekMeta;
+        const meta = zamek.meta();
+        const zalozeno = !!(meta && meta.hash);
         // zakládat heslo smí jen hlavní správce a jen když ještě žádné není
-        const zakladat = !zalozeno && hlavni && zamekStav === "hotovo";
-        const kartaVidet = !zamekOdemceno || zmenaOtevrena;
+        const zakladat = !zalozeno && hlavni && zamek.stav() === "hotovo";
 
-        $("zamek").hidden = !kartaVidet;
-        $("sekce-sazby").hidden = !zamekOdemceno;
-        $("zamekAkce").hidden = !zamekOdemceno;
+        $("zamek").hidden = !(zakladat || zmenaOtevrena);
+        $("zamekAkce").hidden = !(zamek.odemceno() && zalozeno);
         $("btnZmenit").hidden = !hlavni || zmenaOtevrena;
-
-        $("zamekOdemk").hidden = !(kartaVidet && !zamekOdemceno && zalozeno);
-        $("zamekZmena").hidden = !(kartaVidet && (zakladat || zmenaOtevrena));
         $("zStareBox").hidden = !zalozeno;
         $("btnZmenaZrus").hidden = !zmenaOtevrena;
         $("btnZmenaUloz").textContent = zalozeno ? "Uložit nové heslo" : "Nastavit heslo";
 
-        $("zamekNadpis").textContent = zmenaOtevrena
+        $("zamekNadpis").textContent = zalozeno
             ? "Změna hesla k citlivým sekcím"
-            : (zalozeno ? ZAMEK_NADPIS : "Heslo k citlivým sekcím zatím není");
-
-        $("zamekPopis").textContent = zmenaOtevrena
-            ? "Nové heslo platí hned. Komu se stránka odemkla starým heslem, bude ho muset zadat znovu."
-            : zamekStav === "nacitam"
-                ? "Zjišťuji, jestli je zámek nastavený…"
-                : zamekStav === "chyba"
-                    ? "Nedaří se spojit s databází. Zkus stránku načíst znovu."
-                    : zalozeno
-                        ? "Odemčení platí tři minuty od poslední práce a přenese se i na Uživatele a hesla."
-                        : hlavni
-                            ? "Zvol heslo, kterým se budou citlivé sekce otevírat. Zapiš si ho – z databáze se zpětně přečíst nedá."
-                            : "Zámek zatím nikdo nezaložil. Ozvi se hlavnímu správci, ať heslo nastaví.";
+            : "Založení hesla k citlivým sekcím";
+        $("zamekPopis").textContent = zalozeno
+            ? "Nové heslo platí hned. Komu se stránky odemkly starým heslem, bude ho muset zadat znovu."
+            : "Zvol heslo, kterým se budou otevírat sazby a stránky pod Projekty. Zapiš si ho – z databáze se zpětně přečíst nedá.";
     }
 
-    /** Co se má stát, jakmile je odemčeno – teprve teď smí sazby do stránky. */
-    function poOdemceni() {
-        zapniSledovani();
+    /** Po každé změně opony: teprve odkryté sazby smí do stránky. */
+    function poZmeneZamku() {
+        paintZamek();
         naplnSazby();
-    }
-
-    async function nactiZamek() {
-        // dokud není jasné, že je to správce, nemá smysl se databáze ptát;
-        // `zamekNacita` brání tomu, aby se dotaz pustil dvakrát naráz
-        if (zamekNacteno || zamekNacita || !window.KBUI.can("vykaz.view")) return;
-        zamekNacita = true;
-        try {
-            zamekMeta = await window.KB.loadZamek();
-            zamekStav = "hotovo";
-            zamekNacteno = true;
-        } catch (err) {
-            // typicky ještě neproběhlo přihlášení – zkusí se znovu při kb-role
-            zamekStav = "chyba";
-        } finally {
-            zamekNacita = false;
-        }
-        zamekOdemceno = !!(zamekMeta && zamekMeta.hash && zamekPamet() === zamekMeta.hash);
-        paintZamek();
-        if (zamekOdemceno) poOdemceni();
-    }
-
-    async function odemkni() {
-        if (!zamekMeta) return void window.KBUI.toast("Zámek zatím není nastavený.", "warn");
-        const heslo = $("zHeslo").value;
-        if (!heslo) return void window.KBUI.toast("Zadej heslo.", "warn");
-
-        const otisk = await window.KBUI.hashPassword(heslo, zamekMeta.salt);
-        if (otisk !== zamekMeta.hash) return void window.KBUI.toast("Nesprávné heslo.", "error");
-
-        zamekOdemceno = true;
-        zamekZapamatuj(otisk);
-        $("zHeslo").value = "";
-        paintZamek();
-        poOdemceni();
-        window.KBUI.toast("Odemčeno do zavření záložky.");
+        if (zamek.videt()) zapniSledovani();
     }
 
     function zamkni() {
-        zamekOdemceno = false;
         zmenaOtevrena = false;
-        zamekZapamatuj("");
-        // sazby musí ze stránky pryč, ne se jen schovat pod display:none
-        naplnSazby();
-        paintZamek();
+        // opona sazby schová a zapomene odemčení; ze stránky je vymaže poZmeneZamku
+        zamek.zamkni();
         window.KBUI.toast("Zamčeno.");
     }
 
@@ -378,9 +299,10 @@
     async function ulozZamek() {
         if (!window.KBUI.isOwner()) return void window.KBUI.toast("Heslo mění jen hlavní správce.", "warn");
 
-        if (zamekMeta) {
-            const stare = await window.KBUI.hashPassword($("zStare").value, zamekMeta.salt);
-            if (stare !== zamekMeta.hash) return void window.KBUI.toast("Stávající heslo nesedí.", "error");
+        const meta = zamek.meta();
+        if (meta && meta.hash) {
+            const stare = await window.KBUI.hashPassword($("zStare").value, meta.salt);
+            if (stare !== meta.hash) return void window.KBUI.toast("Stávající heslo nesedí.", "error");
         }
 
         const nove = $("zNove").value;
@@ -396,15 +318,10 @@
             return void window.KBUI.toast("Heslo se nepodařilo uložit.", "error");
         }
 
-        zamekMeta = { salt: salt, hash: hash };
-        zamekStav = "hotovo";
-        zamekNacteno = true;
-        zamekOdemceno = true;
         zmenaOtevrena = false;
-        zamekZapamatuj(hash);
         ["zStare", "zNove", "zNove2"].forEach(id => { $(id).value = ""; });
-        paintZamek();
-        poOdemceni();
+        // nový otisk platí hned – opona se odemkne a zapamatuje si ho
+        zamek.nastavMeta({ salt: salt, hash: hash });
         window.KBUI.toast("Heslo k citlivým sekcím uloženo.");
     }
 
@@ -413,7 +330,7 @@
     function naplnSazby() {
         // dokud je zamčeno, nesmí být sazby ve stránce vůbec – schovat je
         // přes display:none by nestačilo, v kódu stránky by pořád byly
-        if (!zamekOdemceno) {
+        if (!zamek || !zamek.videt()) {
             $("sazby").innerHTML = "";
             $("pocetSazeb").textContent = "";
             return;
@@ -572,41 +489,38 @@
         }
         $("stop").hidden = true;
         $("obsah").hidden = false;
+        // sekci sazeb odkrývá a schovává opona (data-zamceno), ne `hidden`
+        $("sekce-sazby").hidden = false;
         paintZamek();
         naplnSazby();
         naplnZustatky();
         $("sekce-zustatky").hidden = false;
-        nactiZamek();
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        // práce se stránkou prodlužuje odemčení; bez ní se po třech
-        // minutách sekce zase zamkne a heslo se chce znovu
-        window.KBUI.zamekObnovujPri(ZAMEK_KLIC);
-        setInterval(() => {
-            if (zamekOdemceno && !zamekPamet()) {
-                zamekOdemceno = false;
-                paintZamek();
-            }
-        }, 15000);
-
         window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
         paintPodlista("sazby");
+
+        /* Opona před sazbami – stejná jako na stránkách pod PROJEKTY (i tříminutová
+           platnost a obnovování prací se stránkou jsou v ní). Zámek se dočte sám
+           po přihlášení (kb-role). */
+        zamek = window.KBUI.zamekCitlive({
+            obsah: ["sekce-sazby"], slot: "zamekSlot",
+            nadpis: "Hodinové sazby jsou zamčené",
+            bezHeslaSpravce: "Zvol ho níže – do té doby sazby vidíš jen ty.",
+            onZmena: poZmeneZamku
+        });
 
         $("btnUloz").addEventListener("click", uloz);
         $("btnZustatkyUloz").addEventListener("click", ulozZustatky);
         $("zustatky").addEventListener("input", () => { upravovano = true; });
         window.KB.on("zustatky", naplnZustatky);
         window.KB.watchZustatky();
-        $("btnOdemknout").addEventListener("click", odemkni);
-        $("zHeslo").addEventListener("keydown", (event) => {
-            if (event.key === "Enter") { event.preventDefault(); odemkni(); }
-        });
         $("btnZamknout").addEventListener("click", zamkni);
         $("btnZmenit").addEventListener("click", () => {
             zmenaOtevrena = true;
             paintZamek();
-            $(zamekMeta ? "zStare" : "zNove").focus();
+            $(zamek.meta() && zamek.meta().hash ? "zStare" : "zNove").focus();
         });
         $("btnZmenaZrus").addEventListener("click", () => {
             zmenaOtevrena = false;

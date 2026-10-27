@@ -367,25 +367,10 @@
             filtr.tech, "Všechny technologie");
     }
 
-    /**
-     * Druhý řádek lišty – stejný rozcestník jako na vykazy.html
-     * a vytizeni.html. Všechny tři stránky počítají z výkazů, proto
-     * v horní liště svítí VÝKAZY a rozlišuje se až tady: aktivní položka
-     * je `<span>`, ostatní jsou odkazy `subbar__cat--up`.
-     */
-    function paintSubbar() {
-        const slot = $("appSubbar");
-        if (!slot) return;
-        slot.innerHTML = '<div class="subbar__in"><div class="subbar__left">' +
-            '<a class="subbar__cat subbar__cat--up" href="vykazy.html" ' +
-                'data-need="vykaz.otevrit" hidden>PŘEHLED VÝKAZŮ</a>' +
-            '<span class="subbar__cat">CELKOVÝ PŘEHLED</span>' +
-            '<a class="subbar__cat subbar__cat--up" href="vytizeni.html" ' +
-                'data-need="vykaz.view" hidden>VYTÍŽENÍ TÝMU</a>' +
-        "</div></div>";
-        // odkazy vznikly až teď, práva se na nich musí dorovnat
-        window.KBUI.paintUser();
-    }
+    /* Druhý řádek lišty je podlišta PROJEKTY (KBUI.PODLISTA_PROJEKTY):
+       celkový přehled jsou peníze a hodiny celé firmy, proto od 27. 10. 2026
+       bydlí u projektů, za stejným heslem jako správa – ne u výkazů, kde si
+       každý zapisuje svoje. */
 
     /* --------------------------------------------------------- skládání */
 
@@ -695,10 +680,12 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
-        // přehled se počítá z výkazů, proto v horní liště svítí VÝKAZY
-        // a mezi jejich stránkami se přepíná podlištou
-        window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
-        paintSubbar();
+        // v horní liště svítí PROJEKTY (přehled je o firmě, ne o vlastním
+        // zápisu); pole hledání ale dál filtruje výkazy – proto `hledani`
+        window.KBUI.mountNav({ active: "sprava.html", subbar: true, hledani: "vykazy-prehled.html" });
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_PROJEKTY, "vykazy-prehled.html");
+        // opona: peníze celé firmy až po hesle k citlivým sekcím
+        window.KBUI.zamekCitlive({ obsah: ["obsah"] });
         nastavObdobi("mesic");
 
         document.querySelectorAll("[data-obdobi]").forEach(chip => {
