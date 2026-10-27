@@ -450,11 +450,11 @@
             const videt = new Set(vsechny.map(b => b.getAttribute("data-vyber")));
             if (!api.bezi) Array.from(vybrane).forEach(id => { if (!videt.has(id) || !smi()) vybrane.delete(id); });
             vsechny.forEach(b => { b.checked = vybrane.has(b.getAttribute("data-vyber")); });
-            const vse = k ? k.querySelector("[data-vyber-vse]") : null;
-            if (vse) {
+            // „vybrat vše" může být na stránce víckrát (hlavička tabulky + lišta pro telefon)
+            (k ? Array.from(k.querySelectorAll("[data-vyber-vse]")) : []).forEach(vse => {
                 vse.checked = vsechny.length > 0 && vybrane.size === vsechny.length;
                 vse.indeterminate = vybrane.size > 0 && vybrane.size < vsechny.length;
-            }
+            });
             const radkyVybrane = k ? k.querySelectorAll(".je-vybrany") : [];
             Array.from(radkyVybrane).forEach(r => r.classList.remove("je-vybrany"));
             vsechny.forEach(b => {

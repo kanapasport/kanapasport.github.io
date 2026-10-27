@@ -1756,6 +1756,7 @@ const milnikTerminDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky
 let milnikySeznam = {};      // id -> milník ze zveřejněných
 let milnikyPostup = {};      // id -> milník z mojí technologie (i nezveřejněný)
 let syroveTerminy = {};      // id -> termín, jen ty, na které mám právo
+let syrovePuvodni = {};      // id -> původní termín (štítek „posunuto“ na stránce Milníky)
 let milnikyOdbery = [];
 
 /**
@@ -1797,6 +1798,8 @@ function slijMilniky() {
             owners: zpracovatele,
             zakazka: m.projekt || "",
             datum: termin,
+            // původní termín (před posuny) – stránka Milníky z něj dělá štítek „posunuto“
+            terminPuvodni: termin ? (syrovePuvodni[m.id] || "") : "",
             // termín existuje, ale není pro mě – ne totéž co milník bez termínu
             terminSkryty: !termin && !manazer && !muj,
             /* Tenhle milník mám jen jako výhled své profese – v běžných
@@ -1842,7 +1845,12 @@ KB.watchMilniky = async () => {
 
     milnikyOdbery.push(onSnapshot(dotazTerminy, (snap) => {
         syroveTerminy = {};
-        snap.forEach(d => { syroveTerminy[d.id] = (d.data() || {}).termin || ""; });
+        syrovePuvodni = {};
+        snap.forEach(d => {
+            const t = d.data() || {};
+            syroveTerminy[d.id] = t.termin || "";
+            syrovePuvodni[d.id] = t.terminPuvodni || "";
+        });
         slijMilniky();
     }, (err) => console.error("Chyba čtení termínů milníků:", err)));
 };
