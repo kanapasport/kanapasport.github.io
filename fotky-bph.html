@@ -96,6 +96,15 @@
         .fb-tip td.c { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; padding-left: 12px; white-space: nowrap; }
         .fb-tip tr.s td { border-top: 1px solid var(--line); padding-top: 4px; }
         .fb-tip__h { margin-top: 7px; color: var(--muted); font-size: 11px; }
+        /* tlačítko „Otevřít v Průzkumníku“ v rohu buňky – jen při najetí myší (pomocník v PC: NASTROJE\web\otevreni_slozky) */
+        .fb-bunka { position: relative; }
+        .fb-otevri { display: none; position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; z-index: 2;
+                     align-items: center; justify-content: center; border-radius: 5px; cursor: pointer;
+                     background: var(--accent); color: #fff; box-shadow: var(--shadow); }
+        .fb-otevri:hover { background: var(--accent-lt); }
+        .fb-otevri svg { width: 12px; height: 12px; }
+        .fb-bunka:hover .fb-otevri { display: flex; }
+        @media (hover: none) { .fb-bunka:hover .fb-otevri { display: none; } }
 
         /* ---------------------------------------------- tabulka místností */
         .fb-scroll { overflow-x: auto; }
@@ -381,6 +390,12 @@
                     d.dataset.mk = r._i;          // dlaždice místnosti + cesta pravým tlačítkem
                     d.appendChild(el("span", "kk", r.k.replace(/^G6[12]-/, "")));
                     d.appendChild(el("span", "nn", !r.s ? "–" : cislo(n)));
+                    if (r.s && r.d) {
+                        const o = el("span", "fb-otevri");
+                        o.title = "Otevřít v Průzkumníku";
+                        o.innerHTML = IKONA_SLOZKA;
+                        d.appendChild(o);
+                    }
                     radek.appendChild(d);
                 });
                 mrizka.appendChild(radek);
@@ -673,8 +688,42 @@
             }
             tip.appendChild(tb);
         }
-        if (cestaMistnosti(r)) tip.appendChild(el("div", "fb-tip__h", "Pravým tlačítkem zkopíruješ cestu na P:"));
+        if (cestaMistnosti(r)) tip.appendChild(el("div", "fb-tip__h",
+            "Pravým tlačítkem zkopíruješ cestu na P: · tlačítko v rohu otevře Průzkumník"));
     }
+
+    /* Otevření složky v Průzkumníku. Prohlížeč sám složku na disku otevřít nesmí,
+       proto odkaz `pasport-slozka:` – obslouží ho pomocník ve Windows
+       (NASTROJE\web\otevreni_slozky\instaluj.cmd, jednou na počítač). Když v PC
+       není, prohlížeč nedělá nic – pak se okno nepřepne a ukážeme nápovědu. */
+    const IKONA_SLOZKA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" '
+        + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+
+    function otevriSlozku(r) {
+        const c = cestaMistnosti(r);
+        if (!c) return void window.KBUI.toast("Cesta v datech není – nahraj nový přehled.", "warn");
+        let odeslo = false;
+        const priOdchodu = () => { odeslo = true; };
+        window.addEventListener("blur", priOdchodu, { once: true });
+        window.location.href = "pasport-slozka:" + encodeURIComponent(c);
+        setTimeout(() => {
+            window.removeEventListener("blur", priOdchodu);
+            if (!odeslo && document.hasFocus()) {
+                window.KBUI.toast("Průzkumník se neotevřel? V tomhle počítači chybí pomocník "
+                    + "„Otevřít v Průzkumníku“ – nainstaluj ho jednou dvojklikem (instaluj.cmd).", "warn");
+            }
+        }, 2500);
+    }
+
+    document.addEventListener("click", (e) => {
+        const o = e.target.closest ? e.target.closest(".fb-otevri") : null;
+        if (!o) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const r = mistnostPod(e);
+        if (r) otevriSlozku(r);
+    });
 
     function posunTip(e) {
         const m = 14, w = tip.offsetWidth, h = tip.offsetHeight;
