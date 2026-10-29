@@ -1596,16 +1596,15 @@
             "</b> · rozdíl <b>" + V.kc(rozpocetVse - soucetVse) + "</b></p></div>";
     }
 
-    /** Budovy, patra a technologie projektu – z polí, nebo z číselníku. */
+    /** Budovy, patra a technologie projektu – z polí, nebo z číselníku.
+        Počítá V.osyProjektu (vykazy.js, sdílí ho Vyhodnocení milníků);
+        tady se jí jen předá, co je zrovna rozepsané ve formuláři Údajů. */
     function osyProjektu(p) {
-        const b = (window.KB.budgetCiselnik || {})[p.nazev || ""] || {};
-        const zPole = (id, klic) => seznamZTextu($(id).value).length
-            ? seznamZTextu($(id).value) : (b[klic] || []);
-        const zPatra = patraZTextu($("fPatra").value);
-        return { budovy: zPole("fBudovy", "budovy"),
-                 patra: zPatra.patra.length ? zPatra.patra : (b.patra || []),
-                 patraBudov: zPatra.patra.length ? zPatra.patraBudov : (b.patraBudov || {}),
-                 technologie: zPole("fTech", "technologie") };
+        return V.osyProjektu(p, {
+            budovy: seznamZTextu($("fBudovy").value),
+            patra: patraZTextu($("fPatra").value),
+            technologie: seznamZTextu($("fTech").value)
+        });
     }
 
     const ukolyProjektu = (p) => (window.KB.ukoly || [])

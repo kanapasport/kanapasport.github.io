@@ -564,6 +564,31 @@
     };
 
     /**
+     * Budovy, patra (+ omezení pater na budovy) a technologie projektu
+     * z nastavení projektu – číselník `budget` v meta/zakazky pod NÁZVEM
+     * projektu. Dřív žila jen ve Správě; od 29. 10. 2026 ji potřebuje
+     * i Vyhodnocení milníků (z pater a budov skládá párování), proto je
+     * tady, ať se dvě kopie nerozejdou.
+     * `rozepsane` = co je právě vyplněné ve formuláři Údajů ve Správě
+     * ({ budovy: [], patra: { patra: [], patraBudov: {} }, technologie: [] }):
+     * neuložená změna má přednost, aby matice a okno úkolu viděly, co člověk
+     * zrovna píše. Prázdné pole formuláře = platí číselník.
+     */
+    V.osyProjektu = (p, rozepsane) => {
+        const b = ((window.KB && window.KB.budgetCiselnik) || {})[(p && p.nazev) || ""] || {};
+        const r = rozepsane || {};
+        const pole = (x) => (Array.isArray(x) ? x : []);
+        const zPatra = r.patra || {};
+        const patraZPole = pole(zPatra.patra).length > 0;
+        return {
+            budovy: pole(r.budovy).length ? r.budovy : pole(b.budovy),
+            patra: patraZPole ? zPatra.patra : pole(b.patra),
+            patraBudov: patraZPole ? (zPatra.patraBudov || {}) : (b.patraBudov || {}),
+            technologie: pole(r.technologie).length ? r.technologie : pole(b.technologie)
+        };
+    };
+
+    /**
      * Matice plnění: jedna tabulka jako v excelovém budgetu – řádek je
      * technologie a vedle ní malé buňky po budovách a patrech (hlavička
      * má dvě patra: budova nahoře, její patra pod ní). Procento buňky je
@@ -1203,6 +1228,232 @@
             tech: (tech) => cti(techy, tech),
             celkem: celkem,
             hodiny: hodinCelkem
+        };
+    };
+
+    /* ------------------------------------- párování milníků s úkoly ----
+
+       Milník (harmonogram ze smlouvy) nemá budovu ani patro – jen volný text
+       náplně („A1 - 1.NP zásuvky; A2 - 1.NP", „Rozvaděče – 3.PP; 2.PP
+       a 1.NP"). Úkoly se ale dělí po budovách a patrech a výkazy se píšou
+       na úkoly. Aby šlo říct, kolik hodin a peněz stál který milník, musí
+       se milník s úkoly spárovat – stroj to navrhne z technologie a z budov
+       a pater, které v náplni najde, a manažer návrh potvrdí (stránka
+       Vyhodnocení milníků, Michal 29. 10. 2026). Budovy a patra se berou
+       z nastavení projektu, nic z nich není v kódu – stejně to musí běžet
+       na jiném projektu s jinými budovami. */
+
+    const bezDiakritiky = (text) => String(text == null ? "" : text)
+        .normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const proRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // jen pro porovnání: „1.NP", „1 NP" i „1np" je totéž patro
+    const klicOsy = (text) => String(text == null ? "" : text).toUpperCase().replace(/[\s.]+/g, "");
+    const unikatni = (pole) => pole.filter((x, i) => x && pole.indexOf(x) === i);
+
+    /**
+     * Technologie jako množina zkratek. Milníky a úkoly je píšou jinak
+     * („MaR" × „MAR", „SHZ" × „HAS/SHZ", společný milník „STAVBA + SLN"),
+     * proto se rozdělí na `/`, `+` a `,` a srovnají velikostí písmen;
+     * shoda = aspoň jedna společná zkratka.
+     */
+    V.techTokeny = (text) => unikatni(String(text == null ? "" : text).toUpperCase()
+        .split(/[\/+,]/).map(x => x.trim()));
+
+    const sdiliTech = (tokeny, technologie) => {
+        const jeho = V.techTokeny(technologie);
+        return tokeny.some(t => jeho.indexOf(t) !== -1);
+    };
+
+    /* Rozpoznávače budov a pater se skládají z os projektu; projekt má
+       stovky milníků se stejnými osami, tak se nestaví pro každý znovu. */
+    const rozpoznavace = new Map();
+
+    function rozpoznavac(osy, ukoly) {
+        /* Patro nebo budova úkolu, které v osách chybí (osy se po založení
+           úkolů změnily), se pozná taky – úkol by jinak nešlo spárovat. */
+        const budovy = unikatni([].concat((osy && osy.budovy) || [], (ukoly || []).map(u => u && u.budova))
+            .map(x => String(x == null ? "" : x).trim()));
+        const patra = unikatni([].concat((osy && osy.patra) || [], (ukoly || []).map(u => u && u.patro))
+            .map(x => String(x == null ? "" : x).trim()));
+        const klic = JSON.stringify([budovy, patra]);
+        if (rozpoznavace.has(klic)) return rozpoznavace.get(klic);
+
+        /* Hranice slova přes \p{L}\p{N} (u-flag), ne přes \b – to zná jen
+           anglická písmena. Lookbehind schválně ne: starší Safari ho neumí
+           a celý skript by spadl; levá hranice je proto skupina (?:^|…). */
+        const PRED = "(?:^|[^\\p{L}\\p{N}])";
+        const ZA = "(?![\\p{L}\\p{N}])";
+        const r = {
+            /* Budova s hranicí slova, ale NE kód místnosti: „A1-2S15" je
+               místnost 2S15 v budově A1, ne budova A1 a patro 2S. Mezera
+               kolem pomlčky („A1 - 1.NP") je naopak budova a patro. */
+            budovy: budovy.map(b => ({ nazev: b,
+                re: new RegExp(PRED + proRegex(b) + ZA + "(?!-\\d)", "iu") })),
+            /* „3PP" najde „3PP", „3.PP" i „3. PP", ale ne „13PP" ani „3PP1".
+               Jednopísmenné podlaží („1S", „3Z") jen velkými písmeny – malé
+               „1 s" nebo „1 z 3" je v češtině předložka, ne patro.
+               Textová patra (Datový sál, Střechy, Venek) podřetězcem bez
+               ohledu na velikost písmen a diakritiku. */
+            patra: patra.map(p => {
+                const c = /^(\d+)\s*\.?\s*(\p{L}+)$/u.exec(p);
+                if (!c) return { nazev: p, text: bezDiakritiky(p) };
+                const jednoPismeno = c[2].length === 1;
+                return { nazev: p, re: new RegExp(PRED + c[1] + "\\s*\\.?\\s*" +
+                    proRegex(jednoPismeno ? c[2].toUpperCase() : c[2]) + ZA, jednoPismeno ? "u" : "iu") };
+            })
+        };
+        if (rozpoznavace.size > 30) rozpoznavace.clear();
+        rozpoznavace.set(klic, r);
+        return r;
+    }
+
+    /**
+     * Rozbor náplně milníku: segmenty po středníku (a řádku), v každém
+     * budovy a patra z os projektu. Segment bez patra se vynechá – budova
+     * sama nic nespáruje. Segment s patrem a bez budovy platí pro všechny
+     * budovy („Celé 2.PP bez strojoven A1-2S15" → 2PP v obou budovách).
+     * @returns {Array<{budova: string, patra: string[]}>}
+     */
+    V.rozeberNapln = (napln, osy, ukoly) => {
+        const r = rozpoznavac(osy || {}, ukoly || []);
+        const out = [];
+        String(napln == null ? "" : napln).split(/[;\n]/).forEach(seg => {
+            const sloz = bezDiakritiky(seg);
+            const patra = r.patra.filter(p => (p.re ? p.re.test(seg) : (!!p.text && sloz.indexOf(p.text) !== -1)))
+                .map(p => p.nazev);
+            if (!patra.length) return;
+            const budovy = r.budovy.filter(b => b.re.test(seg)).map(b => b.nazev);
+            if (budovy.length) budovy.forEach(b => out.push({ budova: b, patra: patra.slice() }));
+            else out.push({ budova: "", patra: patra });
+        });
+        return out;
+    };
+
+    const stejnaMnozina = (a, b) => {
+        const x = unikatni((a || []).map(String)).sort(), y = unikatni((b || []).map(String)).sort();
+        return x.length === y.length && x.every((v, i) => v === y[i]);
+    };
+
+    /**
+     * Které úkoly patří k milníku. Čistá funkce (žádný DOM ani databáze),
+     * ať jde ověřit v Node (testy\test_parovani_milniku.js).
+     *   m      milník { id, cinnost, napln }
+     *   ukoly  úkoly TOHO projektu { id, technologie, budova, patro, milnikId }
+     *   osy    V.osyProjektu(p) – { budovy, patra }
+     *   volby.potvrzene  uložené potvrzení (private/milniky/parovani/{id}) nebo null
+     * Pořadí, kdo má přednost:
+     *   1. potvrzené manažerem – platí, jak je, návrh se už nepřepočítává
+     *      (jen se hlásí, že by dnes vyšel jinak: `navrhJinak`),
+     *   2. „milnikId" – úkol vznikl z milníku tlačítkem „Udělat úkoly
+     *      z milníků" (VZT), vazba je jistá,
+     *   3. „budova" – v náplni je budova i patro: úkoly se stejnou technologií,
+     *      budovou a patrem,
+     *   4. „patro" – patro bez budovy: úkoly všech budov (úkol tak může sedět
+     *      na dva milníky),
+     *   5. „chybi" – patro v náplni je, takový úkol u projektu není,
+     *   6. „bez" – v náplni není patro, spárovat jde jen ručně.
+     * Úkol s `milnikId` jiného milníku se po patrech nepáruje – patří tam.
+     * @returns {{ zpusob, ukoly, ids, potvrzeno, potvrdil, potvrzenoMs,
+     *   chybejiciIds, navrh: {zpusob, ids}, navrhJinak, segmenty, budovy, patra, tech }}
+     */
+    V.parovaniMilniku = (m, ukoly, osy, volby) => {
+        const v = volby || {};
+        const seznam = (ukoly || []).filter(u => u && u.id);
+        const tech = V.techTokeny(m && m.cinnost);
+        const segmenty = V.rozeberNapln(m && m.napln, osy, seznam);
+
+        let navrhZpusob = "bez", navrhUkoly = [];
+        const primo = seznam.filter(u => !!u.milnikId && !!m && u.milnikId === m.id);
+        if (primo.length) {
+            navrhZpusob = "milnikId";
+            navrhUkoly = primo;
+        } else if (segmenty.length) {
+            segmenty.forEach(s => {
+                const patra = s.patra.map(klicOsy);
+                seznam.forEach(u => {
+                    if (u.milnikId || navrhUkoly.indexOf(u) !== -1) return;
+                    if (!sdiliTech(tech, u.technologie)) return;
+                    if (s.budova && klicOsy(u.budova) !== klicOsy(s.budova)) return;
+                    if (patra.indexOf(klicOsy(u.patro)) === -1) return;
+                    navrhUkoly.push(u);
+                });
+            });
+            navrhZpusob = !navrhUkoly.length ? "chybi"
+                : (segmenty.every(s => s.budova) ? "budova" : "patro");
+        }
+        const navrh = { zpusob: navrhZpusob, ids: navrhUkoly.map(u => u.id) };
+        const zaklad = {
+            navrh: navrh, segmenty: segmenty, tech: tech,
+            budovy: unikatni(segmenty.map(s => s.budova)),
+            patra: unikatni([].concat.apply([], segmenty.map(s => s.patra)))
+        };
+
+        const p = v.potvrzene;
+        if (p && Array.isArray(p.ukoly)) {
+            const podleId = new Map(seznam.map(u => [u.id, u]));
+            const ids = unikatni(p.ukoly.map(String));
+            return Object.assign(zaklad, {
+                zpusob: String(p.zpusob || "rucne"),
+                ukoly: ids.map(id => podleId.get(id)).filter(Boolean),
+                ids: ids,
+                // úkol mezitím smazaný – v potvrzení zůstal, stránka ho ukáže
+                chybejiciIds: ids.filter(id => !podleId.has(id)),
+                potvrzeno: true,
+                potvrdil: String(p.potvrdil || ""),
+                potvrzenoMs: Number(p.potvrzenoMs) || 0,
+                navrhJinak: !stejnaMnozina(navrh.ids, p.navrh)
+            });
+        }
+        return Object.assign(zaklad, {
+            zpusob: navrhZpusob, ukoly: navrhUkoly, ids: navrh.ids, chybejiciIds: [],
+            potvrzeno: false, potvrdil: "", potvrzenoMs: 0, navrhJinak: false
+        });
+    };
+
+    /**
+     * Hodiny, peníze a lidé milníku z výkazů na jeho spárovaných úkolech
+     * (bez absencí) + budget těch úkolů. Peníze jsou uložené částky
+     * zápisů (`castka`), nikdy hodiny × dnešní sazba – stejně jako všude
+     * ve výkazech. Funguje nad jakoukoli skupinou úkolů, takže stránka jím
+     * sčítá i technologii nebo celý projekt (každý úkol jednou).
+     *   m             milník – vyhodnocení stojí jen na úkolech; je tu kvůli
+     *                 stejnému tvaru volání jako V.parovaniMilniku
+     *   data.ukoly    spárované úkoly (objekty)
+     *   data.vykazy   výkazy (stačí ty s ukolId těch úkolů)
+     *   data.budgety  KB.ukolBudgety (id → { budgetKc })
+     */
+    V.vyhodnoceniMilniku = (m, data) => {
+        const d = data || {};
+        const ukoly = (d.ukoly || []).filter(u => u && u.id);
+        const budgety = d.budgety || {};
+        const ids = new Set(ukoly.map(u => u.id));
+        let h = 0, kc = 0, zapisu = 0, od = "", doKdy = "";
+        const lide = new Set();
+        (d.vykazy || []).forEach(z => {
+            if (!z || z.absence === true || !z.ukolId || !ids.has(z.ukolId)) return;
+            h += Number(z.hodiny) || 0;
+            kc += Number(z.castka) || 0;
+            zapisu += 1;
+            const kdo = z.uid || z.osoba || "";
+            if (kdo) lide.add(kdo);
+            const den = String(z.datum || "");
+            if (den && (!od || den < od)) od = den;
+            if (den && (!doKdy || den > doKdy)) doKdy = den;
+        });
+        const budget = ukoly.reduce((s, u) => s + V.budgetUkolu(u, budgety), 0);
+        return {
+            ukolu: ukoly.length,
+            hotovych: ukoly.filter(u => u.stav === "hotovo").length,
+            hotovoPct: V.hotovoUkolu(ukoly, budgety),
+            hodiny: Math.round(h * 100) / 100,
+            kc: Math.round(kc),
+            lide: lide.size,
+            lideUid: Array.from(lide),
+            zapisu: zapisu,
+            od: od,
+            do: doKdy,
+            budget: Math.round(budget),
+            rozdil: Math.round(budget - kc)
         };
     };
 
