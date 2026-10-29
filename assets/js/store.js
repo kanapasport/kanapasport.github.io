@@ -2107,6 +2107,101 @@ KB.importMilniky = async (polozky) => {
     return hotovo;
 };
 
+/* ------------------------------------------ párování milníků s úkoly ----
+   Které úkoly (a tím výkazy) patří k milníku. Stroj to navrhne sám
+   (V.parovaniMilniku ve vykazy.js – technologie, budova a patro z náplně),
+   jenže náplň je volný text ze smlouvy, takže je to jen návrh. Co manažer
+   na stránce Vyhodnocení milníků odsouhlasí, uloží se sem a od té doby
+   platí to, ne návrh (Michal 29. 10. 2026). Dokument má stejné {id} jako
+   milník; smazaný dokument = zase jen návrh.
+
+     private/milniky/parovani/{milnikId} = { projektId, ukoly: [ukolId…],
+       zpusob, navrh: [ukolId…] (co navrhl stroj v době potvrzení),
+       potvrdil, potvrzenoMs, updatedMs, updatedBy }
+
+   Pravidla: spadá pod záchytné `private/{kolekce}/{document=**}` – čte
+   i píše jen správce; vedle výkazů a peněz tu nikdo jiný nemá co dělat.
+   Na `ukol.milnikId` ani na dotažení úkolů po potvrzení milníku
+   (KB.dokonciUkolyMilniku, zatím jen VZT) se tu nesahá. */
+
+const parovaniCol = () => collection(db, "artifacts", APP_ID, "private", "milniky", "parovani");
+const parovaniDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "parovani", id);
+
+KB.parovaniMilniku = {};        // milnikId → potvrzené párování (jen manažer)
+KB.parovaniPrislo = false;      // dorazil už první snímek? (do té doby stránka neví, co je potvrzené)
+let parovaniOdber = null;
+
+/** Živý odběr potvrzených párování – jen manažer. `cb(mapa)` po každé změně (nepovinné). */
+KB.watchParovaniMilniku = async (cb) => {
+    if (typeof cb === "function") {
+        KB.on("milniky-parovani", (e) => cb(e.detail));
+        if (KB.parovaniPrislo) cb(KB.parovaniMilniku);
+    }
+    const spust = async () => {
+        if (parovaniOdber) return;
+        if (authReady) await authReady;
+        if (!db || !auth || !auth.currentUser || parovaniOdber) return;
+        // role se pozná až ze seznamu lidí – kdo se zeptá dřív, počká
+        if (pockejNaRoli(spust)) return;
+        if (!jsemManazer()) return;
+        parovaniOdber = onSnapshot(parovaniCol(), (snap) => {
+            KB.parovaniMilniku = {};
+            snap.forEach(d => { KB.parovaniMilniku[d.id] = d.data(); });
+            KB.parovaniPrislo = true;
+            emit("milniky-parovani", KB.parovaniMilniku);
+        }, (err) => console.error("Chyba čtení párování milníků:", err));
+    };
+    await spust();
+};
+
+/** Krátký popis milníku do historie aktivit. */
+const popisMilniku = (id) => {
+    const m = (KB.milniky || []).find(x => x.id === id);
+    return m ? [m.cinnost, String(m.napln || "").slice(0, 60)].filter(Boolean).join(" – ") : id;
+};
+
+/**
+ * Potvrdí (uloží) párování milníku s úkoly. Pole `ukoly` a `navrh` se
+ * přepisují celé (merge pole neslučuje). `volby.bezAktivity` = hromadné
+ * potvrzení si zapíše jeden souhrnný řádek samo.
+ */
+KB.ulozParovaniMilniku = async (milnikId, data, volby) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!milnikId) return;
+    const d = data || {};
+    const idcka = (pole) => (Array.isArray(pole) ? pole : []).map(String)
+        .filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 300);
+    const ted = Date.now();
+    const kdo = window.KB_USER || "";
+    const ukoly = idcka(d.ukoly);
+    await setDoc(parovaniDoc(milnikId), {
+        projektId: String(d.projektId || "").slice(0, 80),
+        ukoly: ukoly,
+        zpusob: String(d.zpusob || "rucne").slice(0, 20),
+        navrh: idcka(d.navrh),
+        potvrdil: String(d.potvrdil || kdo).slice(0, 80),
+        potvrzenoMs: Number(d.potvrzenoMs) || ted,
+        updatedMs: ted,
+        updatedBy: kdo
+    }, { merge: true });
+    if (!(volby && volby.bezAktivity)) {
+        KB.zapisAktivitu("milnik", "potvrdil párování milníku " + popisMilniku(milnikId) +
+            " (" + ukoly.length + (ukoly.length === 1 ? " úkol)" : (ukoly.length > 1 && ukoly.length < 5 ? " úkoly)" : " úkolů)")));
+    }
+};
+
+/** Zruší potvrzení – milník se zase páruje podle návrhu. */
+KB.smazParovaniMilniku = async (milnikId, volby) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!milnikId) return;
+    await deleteDoc(parovaniDoc(milnikId));
+    if (!(volby && volby.bezAktivity)) {
+        KB.zapisAktivitu("milnik", "zrušil potvrzení párování milníku " + popisMilniku(milnikId));
+    }
+};
+
 /* ------------------------------------------------------------- uživatelé --
    Seznam lidí, kteří mají na web přístup, a jejich role. Spravuje ho hlavní
    správce. Přihlašuje Firebase Auth (e-mail + heslo); hesla v databázi

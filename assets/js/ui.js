@@ -1566,10 +1566,14 @@
        na dvou místech. Zůstala Správa, kde je všechno pohromadě.
        Celkový přehled (peníze a hodiny celé firmy) sem přešel z Výkazů
        27. 10. 2026 – u výkazů zůstal zápis a vytížení týmu. Všechny položky
-       jsou za heslem k citlivým sekcím (UI.zamekCitlive), proto `zamek`. */
+       jsou za heslem k citlivým sekcím (UI.zamekCitlive), proto `zamek`.
+       Vyhodnocení milníků (milník ↔ úkoly ↔ výkazy, potvrzení párování
+       a peníze po technologiích) přibylo 29. 10. 2026 – Excel s párováním
+       Michalovi nebyl přehledný. */
     UI.PODLISTA_PROJEKTY = [
         { title: "SPRÁVA PROJEKTŮ", href: "sprava.html", need: "vykaz.view", zamek: true },
         { title: "PLÁN PROJEKTŮ", href: "gantt.html", need: "vykaz.view", zamek: true },
+        { title: "VYHODNOCENÍ MILNÍKŮ", href: "milniky-vyhodnoceni.html", need: "vykaz.view", zamek: true },
         { title: "SPRÁVA ZAMĚSTNANCŮ", href: "zamestnanci.html", need: "vykaz.view", zamek: true },
         { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view", zamek: true },
         { title: "CELKOVÝ PŘEHLED", href: "vykazy-prehled.html", need: "vykaz.view", zamek: true }
