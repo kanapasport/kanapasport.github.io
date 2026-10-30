@@ -6,8 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=313">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=313">
+    <link rel="stylesheet" href="assets/css/app.css?v=314">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=314">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -457,6 +457,10 @@
                     <div class="mprehled__pozn">Klik na dlaždici skočí na týden ve výpisu, „nezveřejněné" přepne filtr. Zavře se klikem mimo nebo klávesou Esc.</div>
                 </div>
             </div>
+            <!-- Zobrazit / Skrýt termíny (SKRYTÉ TERMÍNY ve skriptu): jen správce;
+                 hidden přepíná render podle práva, ne data-need. -->
+            <button type="button" id="btnTerminy" class="btn btn--ghost btn--sm" hidden aria-pressed="false"
+                    title="Ukáže termíny nezveřejněných milníků a data týdnů – jen na tomhle počítači, po novém načtení jsou zase schované">Zobrazit termíny</button>
             <!-- Tlačítko se neskrývá přes data-need: KBUI podle práva
                  jen přepíná hidden a přebilo by to počet v názvu. -->
             <button type="button" id="btnUkolyZMilniku" class="btn btn--ghost btn--sm" hidden>Udělat úkoly z milníků</button>
@@ -529,7 +533,7 @@
             <span><span class="milpil milpil--novy">nový</span> zveřejněný za posledních 7 dní</span>
             <span><span class="milpil milpil--posun">posunuto</span> termín se změnil</span>
             <span><span class="mproj">BPH</span> projekt – celý název po najetí</span>
-            <span class="mdatum--nic">— = termín uvidíš až po zveřejnění (v okně úpravy)</span>
+            <span class="mdatum--nic">— = nezveřejněný termín (ukáže ho tlačítko Zobrazit termíny nebo okno úpravy)</span>
         </div>
 
         <details id="hintManazer" class="mtip" hidden>
@@ -670,13 +674,13 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=313"></script>
-<script src="assets/js/doc.js?v=313"></script>
-<script src="assets/js/ui.js?v=313"></script>
-<script src="assets/js/nabidka.js?v=313"></script>
+<script src="assets/js/taxonomy.js?v=314"></script>
+<script src="assets/js/doc.js?v=314"></script>
+<script src="assets/js/ui.js?v=314"></script>
+<script src="assets/js/nabidka.js?v=314"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=313"></script>
-<script type="module" src="assets/js/store.js?v=313"></script>
+<script src="assets/js/vykazy.js?v=314"></script>
+<script type="module" src="assets/js/store.js?v=314"></script>
 
 <script>
 (function () {
@@ -733,7 +737,16 @@
        Vidět a měnit jde jen v okně úpravy / Změnit termín / Zveřejnit.
        Zaměstnanec u cizího milníku datum nedostane vůbec (store.js), takže
        tady rozhoduje jen zveřejnění. */
-    const terminVidet = (m) => !!m.datum && m.zverejneno !== false;
+    /* ================================================= SKRYTÉ TERMÍNY ==
+       Po načtení se termíny nezveřejněných milníků nepíšou ani správci a týdny
+       ve výpisu nemají datum – u obrazovky často stojí kolega a nemá vidět,
+       kdy je další termín (Michal 27. a 30. 10. 2026). Správce si obojí ukáže
+       tlačítkem „Zobrazit termíny“ v hlavičce; nepamatuje se to, po novém
+       načtení jsou termíny zase schované. Zaměstnanec tlačítko nemá – datum
+       nezveřejněného milníku mu databáze stejně nevydá. */
+    let terminyVidet = false;
+    const terminVidet = (m) => !!m.datum &&
+        (m.zverejneno !== false || (terminyVidet && window.KBUI.can("milnik.manage")));
 
     const DEN = 86400000;
     const OKNO_DNI = 7;     // jak daleko dozadu se milník ještě bere jako aktuální
@@ -1025,7 +1038,7 @@
         /* Nezveřejněný milník: místo data pomlčka i pro správce, bez „za N dní"
            (Michal 27. 10. 2026) – termín je jen v okně úpravy. */
         if (iso && !terminVidet(item)) {
-            return { text: '<span class="mildash" title="Termín uvidíš v okně úpravy – milník není zveřejněný.">—</span>',
+            return { text: '<span class="mildash" title="Nezveřejněný termín – ukáže ho tlačítko Zobrazit termíny nahoře, nebo ho uvidíš v okně úpravy.">—</span>',
                      trida: item.hotovo ? "milnik--hotovo" : "" };
         }
         if (item.hotovo) {
@@ -1166,6 +1179,10 @@
         $("pohledRow").hidden = !harmonogram;
         $("hint").hidden = muzeMenit || postup;
         $("hintManazer").hidden = !muzeMenit || postup;
+        // Zobrazit / Skrýt termíny jen správci, popisek podle stavu (SKRYTÉ TERMÍNY)
+        $("btnTerminy").hidden = !muzeMenit;
+        $("btnTerminy").textContent = terminyVidet ? "Skrýt termíny" : "Zobrazit termíny";
+        $("btnTerminy").setAttribute("aria-pressed", terminyVidet ? "true" : "false");
         $("hintPostup").hidden = !postup;
         $("legenda").hidden = !(window.KB.milniky || []).length;
         paintZakRow();
@@ -1444,7 +1461,7 @@
             // termín kolegy: pomlčka bez vysvětlování (Michal 8. 10. 2026)
             if (!m.terminSkryty) pozn = "bez termínu";
         } else if (!terminVidet(m)) {
-            title = "Termín uvidíš v okně úpravy – milník ještě není zveřejněný.";
+            title = "Nezveřejněný termín – ukáže ho tlačítko Zobrazit termíny nahoře, nebo ho uvidíš v okně úpravy.";
             stav = " mr--tajny";
         } else {
             datum = sDnem(m.datum);
@@ -1610,7 +1627,9 @@
             bloky.push({ nazev: nazev, radky: tydny.get(po),
                 id: tydnu === 0 ? "tento" : (tydnu === 1 ? "pristi" : "t" + po),
                 trida: tydnu === 0 ? "mblok--tento" : "",
-                popis: kratkeDatum(po) + " – " + kratkeDatum(posunISO(po, 6)) + " · " + popisBloku(tydny.get(po)) });
+                // datum týdne až po „Zobrazit termíny“ (SKRYTÉ TERMÍNY)
+                popis: (terminyVidet ? kratkeDatum(po) + " – " + kratkeDatum(posunISO(po, 6)) + " · " : "") +
+                    popisBloku(tydny.get(po)) });
         });
         if (bezTerminu.length) bloky.push({ id: "bez", klic: "bez", sbaleny: true, radky: bezTerminu,
             nazev: k.muzeMenit ? "Bez termínu" : "Bez termínu nebo s termínem kolegy", popis: popisBloku(bezTerminu) });
@@ -2522,6 +2541,7 @@
         lepkaLista();
         // Přehled: tlačítko otevře/zavře panel; zavře se klikem mimo, Esc, nebo skokem z dlaždice
         $("btnPrehled").addEventListener("click", () => otevriPrehled($("souhrnPanel").hidden));
+        $("btnTerminy").addEventListener("click", () => { terminyVidet = !terminyVidet; render(); });
         document.addEventListener("click", (e) => {
             if (!$("souhrnPanel").hidden && !(e.target.closest && e.target.closest(".mprehled"))) zavriPrehled();
         });
