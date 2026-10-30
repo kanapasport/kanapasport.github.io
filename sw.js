@@ -25,6 +25,8 @@
    • push: VŽDY ukázat upozornění – iPhone odběr zruší, když push nic
      neukáže. Data z FCM: { data: { titulek, text, odkaz, tag } }; pro
      jistotu se bere i notification.title/body a fcmOptions.link.
+     K tomu tečka na ikoně aplikace (setAppBadge, 30. 10. 2026) – číslo
+     dopočítá otevřená stránka (ui.js, nastavOdznakAplikace).
    • notificationclick: zavřít; okno, které už odkaz ukazuje, jen zaměřit,
      jinak nové okno (rozepsaný výkaz v jiném okně se nepřepíše). Odkaz jen pod adresou webu – cizí adresa nebo
      javascript: z podvržené zprávy otevře úvodní stránku.
@@ -197,8 +199,19 @@ function bezSignalu() {
 const IKONA = KOREN + "ikona-192.png";
 
 self.addEventListener("push", (event) => {
-    event.waitUntil(ukazUpozorneni(event.data));
+    event.waitUntil(Promise.all([ukazUpozorneni(event.data), odznakAplikace()]));
 });
+
+/** Tečka na ikoně nainstalované aplikace (Badging API, Michal 30. 10. 2026).
+    Bez čísla – počty zná až otevřená stránka (ui.js), ta tečku přepíše číslem.
+    Nepodporované nebo zakázané API nesmí shodit upozornění, proto vždy vyřízeno. */
+function odznakAplikace() {
+    try {
+        const nav = self.navigator;
+        if (nav && nav.setAppBadge) return Promise.resolve(nav.setAppBadge()).catch(() => {});
+    } catch (err) { /* API chybí */ }
+    return Promise.resolve();
+}
 
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();

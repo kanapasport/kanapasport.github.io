@@ -6,7 +6,8 @@
      b) samostatné malé okno – z pásu („Mini okno"), zkratkou Alt+Shift+M
         (ui.js UI.otevriMiniOkno → window.open popup „kb-mini") a zástupcem
         „Mini okno" na ikoně nainstalované aplikace (manifest shortcuts →
-        mini.html; okno ze zástupce se samo zmenší);
+        mini.html; okno ze zástupce se zkusí zmenšit, a když ho Chrome
+        nechá velké, pruh nahoře nabídne „Otevřít malé okno");
      c) plovoucí okno vždy navrchu – Document Picture-in-Picture (Chrome
         a Edge 116+). Kořen #mini se do něj PŘESUNE i se svými posluchači
         a po zavření se vrátí. Bez API se tlačítko vůbec neukáže.
@@ -655,6 +656,44 @@
         } catch (err) { /* nic */ }
     });
 
+    /* Mini ze zástupce zůstalo velké (Michal 30. 10. 2026: „to velké mini
+       okno oprav" – obrovské okno, uprostřed malá karta). Chrome okno
+       aplikace ze skriptu nezmenší (maximalizované vůbec), resizeTo bere jen
+       u oken z window.open. Proto pruh nahoře s tlačítkem: klik je gesto –
+       ještě jednou zkusí resizeTo, a když okno zůstane velké, otevře malé okno
+       „kb-mini" přes UI.otevriMiniOkno (totéž okno jako z pásu, nezaloží se
+       dvakrát) a tohle velké okno přejde na nástěnku: web + malé mini vedle.
+       Zástupce v manifestu dál míří na mini.html, ne na index.html?mini=1:
+       na telefonu a v malém okně mini naběhne rovnou bez mezikroku, nástěnka
+       by se kvůli tlačítku načítala celá a změna zástupce by se do už
+       nainstalovaných aplikací dostala až s aktualizací manifestu. */
+    const VELKE_OD = 600;            // širší okno aplikace = mini „přes celou obrazovku"
+
+    function velkeOknoAplikace() {
+        try {
+            if (!window.matchMedia("(display-mode: standalone)").matches) return false;
+            if (window.matchMedia("(pointer: coarse)").matches) return false;   // dotyk: malá okna nejsou
+        } catch (err) { return false; }
+        return !s.pip && !window.opener && window.name !== KANAL_OKNO && window.innerWidth > VELKE_OD;
+    }
+
+    function kresliVelkeOkno() {
+        const pruh = document.getElementById("miniVelke");
+        if (pruh) pruh.hidden = !velkeOknoAplikace();
+    }
+
+    function doMalehoOkna() {
+        try { window.resizeTo(400, 720); } catch (err) { /* nedovoleno */ }
+        // resizeTo se projeví se zpožděním; gesto pro window.open vydrží ~5 s
+        setTimeout(() => {
+            if (window.innerWidth <= VELKE_OD) { s.zmenseno = true; return kresliVelkeOkno(); }
+            const okno = UI() && UI().otevriMiniOkno ? UI().otevriMiniOkno() : null;
+            if (okno) return location.replace("index.html");
+            hlaska("Malé okno prohlížeč zablokoval – mini funguje dál tady. " +
+                "Povol vyskakovací okna pro tenhle web a zkus to znovu.", "warn");
+        }, 250);
+    }
+
     /* ---------------------------------------------------- hláška ---- */
 
     /** Hláška do právě viditelné záložky (Zápis i Přehled mají svoji). */
@@ -995,6 +1034,7 @@
         if (pip) pip.hidden = !umiPlovouci() || !prihlasen || !!s.pip;
         if (zpet) zpet.hidden = !s.pip;
         if (sbalit) sbalit.hidden = !lzeSbalit();
+        kresliVelkeOkno();      // pruh „Otevřít malé okno" – v plovoucím okně ne
     }
 
     /** Quick TO-DO bez odložených (na zítra / na pondělí) – ty se do té doby neukazují. */
@@ -1789,6 +1829,12 @@
         s.dnes = V().dnesISO();
         s.zalozka = ctiStav().zalozka === "prehled" ? "prehled" : "zapis";
         zmensiOknoZeZastupce();
+        // pruh pro velké okno: sám po resize (i když ho člověk zmenší rukou), tlačítko = gesto
+        window.addEventListener("resize", kresliVelkeOkno);
+        const pruh = document.getElementById("miniVelke");
+        if (pruh) pruh.addEventListener("click", (event) => {
+            if (event.target.closest("[data-mini-male-okno]")) doMalehoOkna();
+        });
         /* Samostatné okno si pamatuje sbalení: naposledy proužek = zase
            proužek u okraje. Malé okno (Chrome přenesl velikost) taky. */
         if (lzeMenitOkno()) {

@@ -1457,7 +1457,32 @@
             el.hidden = !n;
         });
         srovnejSkupiny();
+        odznakAplikace.pozn = true;
+        nastavOdznakAplikace();
     }
+
+    /* Odznak na ikoně nainstalované aplikace – lišta Windows, plocha iPhonu
+       (Badging API; Michal 30. 10. 2026). Číslo = nepřečtené konverzace
+       Poznámek + Quick TO-DO pro mě (stejný počet jako odznak v pásu).
+       Service worker při pushi nastaví jen tečku (počty nezná), číslo srovná
+       otevřená stránka. Dokud nedorazí OBA počty, nic se nemění – jinak by
+       stránka po načtení na okamžik smazala tečku z pushe. Funguje jen
+       v nainstalované aplikaci (Chrome/Edge na Windows, iPhone 16.4+ z plochy),
+       jinde API chybí nebo nic neudělá – proto všechno v try/catch. */
+    const odznakAplikace = { pozn: false, quick: false, quickPocet: 0 };
+    function nastavOdznakAplikace() {
+        if (!odznakAplikace.pozn || !odznakAplikace.quick) return;
+        const n = pocetPoznamek() + odznakAplikace.quickPocet;
+        try {
+            const p = n > 0
+                ? (navigator.setAppBadge ? navigator.setAppBadge(n) : null)
+                : (navigator.clearAppBadge ? navigator.clearAppBadge() : null);
+            if (p && p.catch) p.catch(() => { /* prohlížeč odznak nedovolil */ });
+        } catch (err) { /* API chybí */ }
+    }
+    // tečka z pushe přepsat skutečným číslem, jakmile se člověk k oknu vrátí
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) nastavOdznakAplikace(); });
+    window.addEventListener("focus", nastavOdznakAplikace);
 
     /**
      * Roletka u NÁVODŮ: svislý seznam kategorií pod sebou. Najetím myší na
@@ -1832,7 +1857,7 @@
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
-            window.KB.on("quicktodo", () => { renderMujDen(); renderQuick();
+            window.KB.on("quicktodo", () => { odznakAplikace.quick = true; renderMujDen(); renderQuick();
                 hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu();
                 hlidkaAkci(); });
             // připomenutí akcí se přepočítá i s příchodem kalendáře
@@ -3750,6 +3775,8 @@
             el.hidden = !kolik;
         });
         srovnejSkupiny();
+        odznakAplikace.quickPocet = kolik;      // odznak na ikoně aplikace (u vypisOdznakPoznamek)
+        nastavOdznakAplikace();
     }
 
     /* ------------------------------------------------------ správa aut ---
@@ -4878,18 +4905,20 @@
        zobrazení pro mobil, proto ne ta. Okno „kb-mini" se nezakládá
        podruhé: další otevření ho jen vytáhne dopředu i s rozepsaným
        zápisem. V samotném mini okně (window.KB_MINI) si zkratku řeší
-       mini.js – vrací na celý web. */
+       mini.js – vrací na celý web. Vrací otevřené okno, nebo null (zablokováno) –
+       podle toho mini z velkého okna aplikace pozná, jestli smí odejít na nástěnku. */
     UI.otevriMiniOkno = () => {
         let okno = null;
         try { okno = window.open("", "kb-mini", "popup,width=380,height=700"); } catch (err) { okno = null; }
         if (!okno) {
             UI.toast("Prohlížeč malé okno zablokoval – povol vyskakovací okna pro tenhle web.", "warn");
-            return;
+            return null;
         }
         try {
             if (!/mini\.html$/.test(okno.location.pathname)) okno.location.href = "mini.html";
         } catch (err) { /* okno s jiným původem – nech být */ }
         try { okno.focus(); } catch (err) { /* nic */ }
+        return okno;
     };
 
     document.addEventListener("click", (event) => {
@@ -5399,21 +5428,86 @@
             : lideKZmince().filter(u => maZnacku(t, "@" + u.jmeno)).map(u => u.id);
     };
 
+    /* Cesty na firemní disk v textu jako odkazy (Michal 30. 10. 2026) – do
+       Poznámek a vzkazů se posílají výpisy s cestami na P: a kolega je chce
+       otevřít kliknutím. Prohlížeč složku na disku otevřít nesmí, proto stejný
+       odkaz jako tlačítko složky ve FOTKY BPH: `pasport-slozka:<cesta>`
+       (encodeURIComponent). Obslouží ho pomocník „Otevřít v Průzkumníku"
+       ve Windows – otevře jen existující složku (soubor vybere) uvnitř
+       povolených složek, výchozí P:\. Kde pomocník není, klik nic neudělá.
+
+       Pravidlo, kde cesta začíná a končí (schválně jednoduché, ať ho jde
+       předvídat i bez čtení kódu):
+       - začíná „P:\" (i „p:\") nebo „\\server" (UNC) a nepředchází jí písmeno,
+         číslice ani „\". Jiné disky (C:\…) se neodkazují – pomocník by je
+         stejně odmítl a na cizím PC by vedly jinam;
+       - holá cesta končí před mezerou, koncem řádku, uvozovkou nebo znakem,
+         který Windows v názvu nedovolí (< > | ? *); interpunkce na konci
+         (. , ; : !) a „)" bez „(" v cestě k ní nepatří – „viz P:\A\B." vede na P:\A\B;
+       - cesta s mezerou se píše CELÁ v uvozovkách: "…", „…“, “…” nebo `…`
+         a končí až uzavírací uvozovkou na stejném řádku. Uvozovky zůstanou
+         v textu, odkazem je jen cesta mezi nimi.
+       Text se ukazuje celý a beze změny, odkaz cestu jen obalí. */
+    const CESTA_ZACATEK = /^(?:[Pp]:\\|\\\\[\p{L}\p{N}])/u;     // 3 znaky: „P:\" nebo „\\s"
+    const CESTA_KONEC = /[\s<>|?*"`„“”]/u;
+    const CESTA_UVOZOVKY = { '"': '"', "`": "`", "„": "“", "“": "”" };
+
+    /** Cesta začínající na pozici i (i s uvozovkou před ní): { od, do } cesty, jinak null. */
+    function cestaNa(t, i) {
+        const pred = t.charAt(i - 1);
+        if (PISMENO.test(pred) || pred === "\\") return null;
+        const zavrit = CESTA_UVOZOVKY[t.charAt(i)];
+        if (zavrit) {
+            if (!CESTA_ZACATEK.test(t.slice(i + 1, i + 4))) return null;
+            const konec = t.indexOf(zavrit, i + 4), radek = t.indexOf("\n", i + 1);
+            // neuzavřená uvozovka: holá cesta se vezme od písmene disku (další znak)
+            return konec !== -1 && (radek === -1 || konec < radek) ? { od: i + 1, do: konec } : null;
+        }
+        if (!CESTA_ZACATEK.test(t.slice(i, i + 3))) return null;
+        let k = i + 3;
+        while (k < t.length && !CESTA_KONEC.test(t.charAt(k))) k++;
+        for (;;) {
+            const c = t.charAt(k - 1), cesta = t.slice(i, k);
+            const zavorka = c === ")" && cesta.split("(").length < cesta.split(")").length;
+            if (k > i + 3 && (".,;:!".indexOf(c) !== -1 || zavorka)) k--;
+            else break;
+        }
+        return { od: i, do: k };
+    }
+
+    /** Odkaz na cestu – stejný tvar jako tlačítko složky ve FOTKY BPH. */
+    function odkazCesty(cesta) {
+        let adresa;
+        // osamocená půlka znaku (podvržená data) by encodeURIComponent shodila celé vykreslení
+        try { adresa = "pasport-slozka:" + encodeURIComponent(cesta); } catch (err) { return esc(cesta); }
+        return '<a class="odkazcesta" href="' + esc(adresa) +
+            '" title="Otevřít v Průzkumníku (potřebuje pomocníka Otevřít v Průzkumníku)">' + esc(cesta) + "</a>";
+    }
+
     /**
-     * Text do innerHTML: všechno přes esc, „#Název" z `odkazy` jako odkaz
-     * a „@Jméno" zvýrazněné. Bez odkazů a zmínek vrací přesně esc(text).
+     * Text do innerHTML: všechno přes esc, „#Název" z `odkazy` jako odkaz,
+     * „@Jméno" zvýrazněné a cesta P:\… / \\server\… jako odkaz pro Průzkumník.
+     * Bez odkazů, zmínek a cest vrací přesně esc(text).
      */
     UI.textSOdkazy = (text, odkazy) => {
         const t = String(text == null ? "" : text);
         const znacky = UI.cisteOdkazy(odkazy).map(o => ({ s: "#" + o.n, o: o }));
         if (t.indexOf("@") !== -1) lideKZmince().forEach(u => znacky.push({ s: "@" + u.jmeno }));
-        if (!znacky.length) return esc(t);
+        const cesty = /[Pp]:\\|\\\\/.test(t);
+        if (!znacky.length && !cesty) return esc(t);
         // delší přednost: „#VZT – G61" se nesmí rozpadnout na „#VZT"
         znacky.sort((a, b) => b.s.length - a.s.length);
         const sedi = (z, i) => t.startsWith(z.s, i) && !PISMENO.test(t.charAt(i + z.s.length));
         let ven = "", od = 0, i = 0;
         while (i < t.length) {
             const c = t.charAt(i);
+            // cesta dřív než # a @ – „#" nebo „@" uvnitř cesty k ní patří
+            const cesta = cesty && 'Pp\\"`„“'.indexOf(c) !== -1 ? cestaNa(t, i) : null;
+            if (cesta) {
+                ven += esc(t.slice(od, cesta.od)) + odkazCesty(t.slice(cesta.od, cesta.do));
+                i = od = cesta.do;
+                continue;
+            }
             if ((c !== "#" && c !== "@") || PISMENO.test(t.charAt(i - 1))) { i++; continue; }
             // dva stejně pojmenované úkoly: každý výskyt dostane svůj odkaz
             const z = znacky.find(x => !x.pouzito && sedi(x, i)) || znacky.find(x => sedi(x, i));
