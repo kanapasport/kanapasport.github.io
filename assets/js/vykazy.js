@@ -2002,8 +2002,10 @@
             if (!z || !z.uid || !jeIso(z.datum) || z.datum > dnes) return;
             const k = z.uid + "|" + z.datum;
             /* Absence na svátek – kdykoliv v načtených datech, jednou za den
-               a člověka (týden dovolené přes 28. 10. je jedno hlášení). */
-            if (V.absenceNaSvatek(z)) {
+               a člověka (týden dovolené přes 28. 10. je jedno hlášení). Jen
+               u zaměstnance: OSVČ a student si volno na svátek píšou schválně,
+               aby bylo vidět, že nepracovali (Michal 30. 10. 2026). */
+            if (V.absenceNaSvatek(z) && V.maFond(V.clovek(z.uid))) {
                 pridej({ klic: k + "|svatek", druh: "svatek", uid: z.uid, datum: z.datum,
                     zapis: z.id || "",
                     duvod: "absence zapsaná na státní svátek (" + V.czDatum(z.datum) + " – " +

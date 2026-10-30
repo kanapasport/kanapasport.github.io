@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=314">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=314">
+    <link rel="stylesheet" href="assets/css/app.css?v=315">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=315">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -631,11 +631,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=314"></script>
-<script src="assets/js/ui.js?v=314"></script>
-<script src="assets/js/nabidka.js?v=314"></script>
-<script src="assets/js/vykazy.js?v=314"></script>
-<script type="module" src="assets/js/store.js?v=314"></script>
+<script src="assets/js/taxonomy.js?v=315"></script>
+<script src="assets/js/ui.js?v=315"></script>
+<script src="assets/js/nabidka.js?v=315"></script>
+<script src="assets/js/vykazy.js?v=315"></script>
+<script type="module" src="assets/js/store.js?v=315"></script>
 
 <script>
 (function () {
@@ -673,7 +673,8 @@
        Volno = náhradní volno; chová se jako dovolená včetně potvrzování
        manažerem, ale ČERPÁ PŘESČAS – k fondu se nepřičítá, den volna je
        −8 h (Michal 26. 10. 2026, `V.hodinyKFondu`). Absence na státní
-       svátek nejde zapsat vůbec (fond je ten den nula). */
+       svátek jde zapsat – OSVČ tak dává vědět, že nepracoval (Michal 30. 10.
+       2026); zaměstnanci se do přesčasu ani dovolené nepočítá. */
     const ABSENCE = V.ABSENCE;              // jeden seznam pro formulář i přehledy
     /* Režie, která se nevykazuje na konkrétní zakázku. Není to absence –
        je to odpracovaný čas, jen bez projektu. Porada stejně (přání
@@ -2343,14 +2344,14 @@
      * Dny od–do včetně, ale jen pracovní: týden dovolené je pět dnů, ne
      * sedm – a týden přes 28. 10. čtyři, státní svátek se přeskočí (Michal
      * 26. 10. 2026; stejný seznam dnů jako fond, `V.pracovniDnyIso`).
-     * Rozsah bez pracovního dne: víkend se nechá (jeden den, jako dřív),
-     * svátek ne – vrátí prázdno a zápis se odmítne v `ulozZapisy`.
+     * Rozsah bez pracovního dne (víkend, nebo jeden den na svátek) se nechá
+     * jako jeden den: absenci na svátek si OSVČ zapisuje, aby bylo vidět,
+     * že měl volno (Michal 30. 10. 2026; do 30. 10. se svátek odmítal).
      */
     function pracovniDny(odIso, doIso) {
         const konec = doIso && doIso > odIso ? doIso : odIso;
         const dny = V.pracovniDnyIso(odIso, konec).slice(0, 200);   // pojistka proti překlepu v roce
-        if (dny.length) return dny;
-        return (window.KBUI.svatek && window.KBUI.svatek(odIso)) ? [] : [odIso];
+        return dny.length ? dny : [odIso];
     }
 
     /* ------------------------------------------------------ uzávěrka ----
@@ -3183,14 +3184,15 @@
                 ": doplň projekt, datum a časy tak, ať vyjde kladný čas.", "warn");
             return 0;
         }
-        /* Absence na státní svátek se nezapisuje: fond je ten den nula a do
-           přesčasu ani dovolené by se nepočítala (Michal 26. 10. 2026).
-           Rozsah přes svátek projde – svátek se jen vynechá. */
-        const naSvatek = polozky.find(p => p.absence && !pracovniDny(p.datum, p.datumDo).length);
-        if (naSvatek) {
+        /* Absence na státní svátek jde zapsat (OSVČ tak dává vědět, že měl
+           volno – Michal 30. 10. 2026). Zaměstnanci se do přesčasu ani
+           dovolené nepočítá (`V.hodinyKFondu`, `V.absenceNaSvatek`) – jen se
+           mu to řekne, zápis projde. Rozsah přes svátek svátek dál vynechá. */
+        const naSvatek = polozky.find(p => p.absence && window.KBUI.svatek && window.KBUI.svatek(p.datum) &&
+            !(p.datumDo && p.datumDo > p.datum));
+        if (naSvatek && V.maFond(V.clovek(uid))) {
             window.KBUI.toast(naSvatek._popis + " (" + V.czDatum(naSvatek.datum) + "): " +
-                "na státní svátek se absence nezapisuje – fond je ten den nula.", "warn");
-            return 0;
+                "na státní svátek se absence do přesčasu ani dovolené nepočítá.", "warn");
         }
         /* Uzavřený měsíc nepustí nic – ani zpětný zápis, ani projekt bez
            lhůty; pravidla databáze drží čáru natvrdo. Kontroluje se každý
