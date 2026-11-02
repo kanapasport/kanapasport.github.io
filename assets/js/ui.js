@@ -3825,8 +3825,9 @@
 
     /* ------------------------------------------------ HOME OFFICE ------
        Stejný panel jako Správa aut: dny na dva týdny dopředu a u každého
-       tři tlačítka – Home office, Volno, Dovolená. Člověk se zaklikne sám;
-       zapisuje se to do kalendáře (typ homeoffice/volno/dovolena), takže
+       tlačítka – Home office, Volno, Neplacené volno, Dovolená, Doktor.
+       Člověk se zaklikne sám; zapisuje se to do kalendáře (typ
+       homeoffice/volno/neplacene/dovolena/doktor), takže
        to manažer vidí na nástěnce a dovolenou potvrzuje jako ostatní.
        Odkliknutí vlastní volby ji zase smaže. */
 
@@ -3834,11 +3835,14 @@
 
     /* Druhy, které se u dne hlásí jako „kdo další chybí". Klíč sedí na
        `typ` v kalendáři. */
-    const POPIS_TYPU = { homeoffice: 1, volno: 1, dovolena: 1, doktor: 1 };
+    const POPIS_TYPU = { homeoffice: 1, volno: 1, neplacene: 1, dovolena: 1, doktor: 1 };
 
     const HO_TYPY = [
         { id: "homeoffice", popis: "HO",       cely: "Home office" },
         { id: "volno",      popis: "Volno",    cely: "Volno" },
+        /* Neplacené volno (Michal 2. 11. 2026): přesčas ani dovolenou
+           nemění. Na tlačítku kratší, celý název je v bublině a ve výkazu. */
+        { id: "neplacene",  popis: "Neplacené", cely: "Neplacené volno" },
         { id: "dovolena",   popis: "Dovolená", cely: "Dovolená" },
         { id: "doktor",     popis: "Doktor",   cely: "Doktor" }
     ];
@@ -3944,8 +3948,9 @@
             '<p class="tiny muted" style="margin:0;line-height:1.6;grid-column:1/-1">' +
                 "Zaklikni si dny dopředu. <b>Dovolená</b> = jedeš pryč," +
                 " <b>Volno</b> = náhradní volno, jsi doma a čerpáš přesčas (−8 h)," +
+                " <b>Neplacené</b> = neplacené volno, přesčas ani dovolenou nemění," +
                 " <b>HO</b> = pracuješ z domu. Uvidí to všichni v kalendáři;" +
-                " dovolená a volno se rovnou zapíšou i do výkazu a potvrzuje je" +
+                " dovolená, volno i neplacené volno se rovnou zapíšou i do výkazu a potvrzuje je" +
                 " manažer. Na státní svátek se absence nezapisuje.</p>" +
             tydnyPracovnichDnu(HO_DNU).map((tyden, i) =>
                 '<section class="hotyden hotyden--' + (i % 2) + '">' +
@@ -4016,7 +4021,8 @@
                        co den proběhne. */
                     const jmeno = window.KB_USER || "";
                     const popis = typ === "dovolena" ? "Dovolená"
-                        : typ === "doktor" ? "Doktor" : "Volno";
+                        : typ === "doktor" ? "Doktor"
+                        : typ === "neplacene" ? "Neplacené volno" : "Volno";
                     const vykazId = "vyk_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
                     await window.KB.saveMujVykaz(vykazId, {
                         datum: iso, zakazka: popis, nazev: popis + " – " + jmeno,

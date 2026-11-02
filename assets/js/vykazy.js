@@ -160,8 +160,10 @@
     V.jeRezie = (nazev) => V.REZIE.indexOf(String(nazev || "").trim()) !== -1;
 
     /* Absence – stejný důvod jako u režie: v zápisu je sice příznak
-       `absence`, ale přehledy pracují i s holými názvy zakázek. */
-    V.ABSENCE = ["Dovolená", "Volno", "Nemoc", "Doktor", "Školení"];
+       `absence`, ale přehledy pracují i s holými názvy zakázek.
+       „Neplacené volno" přibylo 2. 11. 2026 (Michal) – viz „absence proti
+       fondu" níž, čím se liší od Volna. */
+    V.ABSENCE = ["Dovolená", "Volno", "Neplacené volno", "Nemoc", "Doktor", "Školení"];
     V.jeAbsence = (nazev) => V.ABSENCE.indexOf(String(nazev || "").trim()) !== -1;
 
     /* ----------------------------------------------- duplicity firem ----
@@ -348,6 +350,11 @@
          • Volno = NÁHRADNÍ volno. Člověk si vybírá naběhaný přesčas, takže
            se jeho hodiny k fondu nepřičítají – den volna je −8 h (čerpá
            přesčas). Zápis zůstává absence (0 Kč, potvrzuje manažer).
+         • Neplacené volno (Michal 2. 11. 2026) výjimku NEMÁ: nese své hodiny
+           k fondu jako dovolená, den je tedy pro přesčas neutrální (člověk
+           nepracuje, nic se mu neodečítá ani nepřičítá). Od dovolené se liší
+           jen tím, že nečerpá nárok (do nároku jde jen „Dovolená",
+           V.zustatek); neplatí se jako každá absence, potvrzuje manažer.
          • Absence na státní svátek se nepočítá vůbec: fond je ten den nula,
            tak nemá co nahrazovat (0 h, dovolenou nečerpá). Zapsat už nejde
            (formulář svátky přeskočí, Rychlý zápis ji odmítne); staré zápisy
@@ -419,7 +426,8 @@
             v.uid === uid && v.datum && v.datum >= od && v.datum <= dnes);
 
         /* Dovolená se ukládá rozepsaná po pracovních dnech, takže jeden
-           zápis = jeden den. Volno a nemoc se do nároku nepočítají.
+           zápis = jeden den. Volno, neplacené volno a nemoc se do nároku
+           nepočítají.
            Dovolená omylem zapsaná na svátek nárok nečerpá. */
         const dovolenaDnu = moje.filter(v => v.zakazka === "Dovolená" && !V.absenceNaSvatek(v)).length;
         const narok = Number(z.narok) || 0;
@@ -509,11 +517,13 @@
        u milníku jen ten, kdo vidí termín (bez termínu není štítek).
        Částečná absence (lékař na dvě hodiny) termín nepřekazí – nepočítá se. */
     const NEPRITOMNOST_STITEK = {
-        dovolena: "termín v dovolené", volno: "termín ve volnu", nemoc: "v den termínu nepřítomen",
+        dovolena: "termín v dovolené", volno: "termín ve volnu",
+        neplacene: "termín v neplaceném volnu", nemoc: "v den termínu nepřítomen",
         doktor: "v den termínu nepřítomen", skoleni: "v den termínu na školení"
     };
     const NEPRITOMNOST_DRUH = {
-        dovolena: "dovolenou", volno: "volno", nemoc: "nemoc", doktor: "lékaře", skoleni: "školení"
+        dovolena: "dovolenou", volno: "volno", neplacene: "neplacené volno",
+        nemoc: "nemoc", doktor: "lékaře", skoleni: "školení"
     };
 
     /**
@@ -534,7 +544,9 @@
         const jmeno = (kdo ? V.jmeno(kdo) : "") || zaznam.osoba || "Zpracovatel";
         const rozsah = zaznam.do && zaznam.do !== zaznam.od
             ? V.czDatum(zaznam.od) + " – " + V.czDatum(zaznam.do) : V.czDatum(zaznam.od);
-        const nepotvrzena = (zaznam.typ === "dovolena" || zaznam.typ === "volno") && zaznam.potvrzeno !== true;
+        // potvrzuje manažer: dovolená, volno i neplacené volno
+        const nepotvrzena = (zaznam.typ === "dovolena" || zaznam.typ === "volno" ||
+            zaznam.typ === "neplacene") && zaznam.potvrzeno !== true;
         return {
             typ: zaznam.typ,
             uid: uid,

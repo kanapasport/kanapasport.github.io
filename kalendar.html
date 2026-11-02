@@ -74,6 +74,9 @@
         .ud--skoleni, .ud--skoleniAkce { background: #8a2be2; }
         .ud--homeoffice { background: #0e7490; }
         .ud--volno { background: #6b8e23; }
+        /* Neplacené volno (2. 11. 2026) šedomodře – musí se lišit od volna,
+           které čerpá přesčas. */
+        .ud--neplacene { background: #546e7a; }
         .ud--ukol { background: #c26a00; }
         .ud--milnik { background: #b3006b; }
         /* štítek „nový" (app.css) v proužku nesmí proužek zvýšit */
@@ -202,6 +205,7 @@
             <label class="filtr__druh"><input type="checkbox" data-druh="skoleni"><i class="ud--skoleni"></i>Školení</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="homeoffice"><i class="ud--homeoffice"></i>Home office</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="volno"><i class="ud--volno"></i>Volno</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="neplacene"><i class="ud--neplacene"></i>Neplacené volno</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="doktor"><i class="ud--doktor"></i>Doktor</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="ukol"><i class="ud--ukol"></i>Termíny úkolů</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="milnik"><i class="ud--milnik"></i>Milníky</label>
@@ -236,6 +240,7 @@
                         <option value="skoleni">Školení</option>
                         <option value="homeoffice">Home office</option>
                         <option value="volno">Volno</option>
+                        <option value="neplacene">Neplacené volno</option>
                         <option value="doktor">Doktor</option>
                         <option value="udalost">Firemní akce</option>
                         <option value="teams">Teams call</option>
@@ -396,7 +401,7 @@
     /* Popisky druhů s velkým písmenem – v kalendáři stojí druh na začátku
        řádku („Dovolená – Jan Novák"), takže se píše jako začátek věty. */
     const DRUHY = { udalost: "Firemní akce", doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", homeoffice: "Home office", volno: "Volno",
+        skoleni: "Školení", homeoffice: "Home office", volno: "Volno", neplacene: "Neplacené volno",
         teams: "Teams call", schuzka: "Schůzka", skoleniAkce: "Školení" };
     /* Druhy, u kterých je v mřížce vlastní název místo názvu druhu – jsou
        to domluvené věci, ne stavy člověka. „Teams call", „Schůzka"
@@ -446,7 +451,7 @@
 
     const FILTR_KLIC = "kb-kalendar-filtr";
     const VYCHOZI_DRUHY = { udalost: true, doktor: true, dovolena: true, nemoc: true, skoleni: true,
-        homeoffice: true, volno: true, ukol: true, milnik: true,
+        homeoffice: true, volno: true, neplacene: true, ukol: true, milnik: true,
         teams: true, schuzka: true };
     /* Druhy, které ve filtru nemají vlastní zaškrtávátko, ale jedou s jiným.
        Školení-akce a školení-nepřítomnost jsou pro čtenáře kalendáře obojí
@@ -528,6 +533,7 @@
         // dovolená a volno bez manažerova razítka to musí říct rovnou v mřížce
         if (u.typ === "dovolena" && u.potvrzeno !== true) druh = "Nepotvrzená dovolená";
         if (u.typ === "volno" && u.potvrzeno !== true) druh = "Nepotvrzené volno";
+        if (u.typ === "neplacene" && u.potvrzeno !== true) druh = "Nepotvrzené neplacené volno";
 
         return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : ""),
                  vlastni: vlastni && vlastni.toLowerCase() !== nazevDruhu.toLowerCase()

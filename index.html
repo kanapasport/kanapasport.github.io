@@ -1175,12 +1175,15 @@
 
     const TYP_BARVA = { udalost: "#0f62c4", teams: "#4b53bc", schuzka: "#a1541b",
         doktor: "#00695c", dovolena: "#0d7d3f", nemoc: "#c8102e",
-        skoleni: "#8a2be2", skoleniAkce: "#8a2be2", homeoffice: "#0e7490", volno: "#6b8e23" };
+        skoleni: "#8a2be2", skoleniAkce: "#8a2be2", homeoffice: "#0e7490", volno: "#6b8e23",
+        neplacene: "#546e7a" };
     const TYP_NAZEV = { udalost: "Firemní akce", teams: "Teams call", schuzka: "Schůzka",
         doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", skoleniAkce: "Školení", homeoffice: "Home office", volno: "Volno" };
+        skoleni: "Školení", skoleniAkce: "Školení", homeoffice: "Home office", volno: "Volno",
+        neplacene: "Neplacené volno" };
     // absence, které platí až po manažerově razítku
-    const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená", volno: "Nepotvrzené volno" };
+    const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená", volno: "Nepotvrzené volno",
+        neplacene: "Nepotvrzené neplacené volno" };
 
     function renderKalendarDlazdice() {
         const dny = [];
@@ -1310,6 +1313,10 @@
        Dovolená platí, až ji manažer odklepne. Dlaždice ukazuje nepotvrzené
        – budoucí a čerstvé (do 30 dnů zpátky), starší už nikoho nezajímají. */
 
+    /* Druhy, které potvrzuje manažer, a jak se jmenují v řádku dlaždice.
+       Neplacené volno přibylo 2. 11. 2026 (Michal) – potvrzuje se jako volno. */
+    const POTVRZOVANE = { dovolena: "dovolená", volno: "volno", neplacene: "neplacené volno" };
+
     function renderDovolene() {
         const box = document.getElementById("dovoleneSeznam");
         if (!box || !window.KBUI.can("vykaz.view")) return;
@@ -1319,7 +1326,7 @@
             String(hranice.getDate()).padStart(2, "0");
 
         const ceka = (window.KB.kalendar || [])
-            .filter(k => (k.typ === "dovolena" || k.typ === "volno") && k.potvrzeno !== true &&
+            .filter(k => POTVRZOVANE[k.typ] && k.potvrzeno !== true &&
                 (k.do || k.od || "") >= hraniceISO)
             .sort((a, b) => (a.od || "").localeCompare(b.od || ""));
 
@@ -1330,19 +1337,19 @@
                         '<span class="kontrola__datum" style="color:var(--accent)">' +
                             esc(czDatum(k.od)) + (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>" +
                         "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b>" +
-                            " · " + (k.typ === "volno" ? "volno" : "dovolená") + "</span></span>" +
+                            " · " + POTVRZOVANE[k.typ] + "</span></span>" +
                     '<button type="button" class="btn btn--sm btn--primary" data-potvrd-dovolenou="' +
                         esc(k.id) + '">Potvrdit</button>' +
                 "</div>").join("")
             : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
               "Žádná dovolená nečeká na potvrzení.</div>") +
             nedavnoHtml("dovolene", "Nedávno potvrzeno", (window.KB.kalendar || [])
-                .filter(k => (k.typ === "dovolena" || k.typ === "volno") && k.potvrzeno === true &&
+                .filter(k => POTVRZOVANE[k.typ] && k.potvrzeno === true &&
                     Number(k.potvrzenoMs) >= nedavnoOd())
                 .map(k => ({
                     ms: Number(k.potvrzenoMs), kdo: k.potvrdil, href: "kalendar.html",
                     co: "<b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b> · " +
-                        (k.typ === "volno" ? "volno" : "dovolená") + " " + esc(czDatum(k.od)) +
+                        POTVRZOVANE[k.typ] + " " + esc(czDatum(k.od)) +
                         (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "")
                 })));
     }
@@ -1578,7 +1585,7 @@
         const dnes = new Date().toISOString().slice(0, 10);
         const za14 = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
         const POPIS = { homeoffice: "Home office", volno: "Volno",
-            dovolena: "Dovolená", doktor: "Doktor" };
+            neplacene: "Neplacené volno", dovolena: "Dovolená", doktor: "Doktor" };
 
         const radky = (window.KB.kalendar || [])
             .filter(k => k.zdroj === "panel" && (k.do || k.od || "") >= dnes &&
@@ -1588,7 +1595,7 @@
 
         box.innerHTML = radky.length
             ? radky.map(k => {
-                const potvrzovana = k.typ === "dovolena" || k.typ === "volno";
+                const potvrzovana = !!POTVRZOVANE[k.typ];
                 const potvrdil = potvrzovana && k.potvrzeno === true ? celeJmeno(k.potvrdil) : "";
                 const stav = !potvrzovana ? ""
                     : (k.potvrzeno === true

@@ -399,7 +399,7 @@
                 <span class="vt-leg-x vt--malo">méně než 7 h</span>
                 <span class="vt-leg-x vt--akorat">7–8 h</span>
                 <span class="vt-leg-x vt--hodne">víc než 8 h</span>
-                <span class="vt-leg-x vt--abs">A</span> dovolená, nemoc nebo školení
+                <span class="vt-leg-x vt--abs">A</span> absence – dovolená, volno, neplacené volno, nemoc, doktor nebo školení
             </div>
         </div>
 
@@ -672,7 +672,9 @@
        Evidují se, ale do součtů odpracovaných hodin se nepočítají.
        Volno = náhradní volno; chová se jako dovolená včetně potvrzování
        manažerem, ale ČERPÁ PŘESČAS – k fondu se nepřičítá, den volna je
-       −8 h (Michal 26. 10. 2026, `V.hodinyKFondu`). Absence na státní
+       −8 h (Michal 26. 10. 2026, `V.hodinyKFondu`). Neplacené volno
+       (Michal 2. 11. 2026) se potvrzuje taky, ale k fondu nese své hodiny
+       jako dovolená – přesčas nemění a nárok dovolené nečerpá. Absence na státní
        svátek jde zapsat – OSVČ tak dává vědět, že nepracoval (Michal 30. 10.
        2026); zaměstnanci se do přesčasu ani dovolené nepočítá. */
     const ABSENCE = V.ABSENCE;              // jeden seznam pro formulář i přehledy
@@ -711,6 +713,7 @@
        se až klikem (SKRYTÉ PENÍZE níž); po novém načtení jsou zase schované. */
     let penizeVidet = false;
     const TYP_ABSENCE = { "Dovolená": "dovolena", "Volno": "volno",
+        "Neplacené volno": "neplacene",
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
 
     /** Školení je jediná absence, která se po domluvě platí. */
@@ -1008,18 +1011,20 @@
         const pole = box.querySelector('[data-f="ho"]');
         if (pole && nahlaseno && pole.dataset.rucne !== "1") pole.checked = true;
 
-        /* Na den s nahlášenou dovolenou nebo volnem se běžně pracovat
-           nemá – červené upozornění, ať si toho člověk všimne dřív,
-           než den vykáže. */
+        /* Na den s nahlášenou dovolenou nebo volnem (i neplaceným) se
+           běžně pracovat nemá – červené upozornění, ať si toho člověk
+           všimne dřív, než den vykáže. */
         const abs = (window.KB.kalendar || []).find(k =>
-            (k.typ === "dovolena" || k.typ === "volno") && pokryva(k));
+            (k.typ === "dovolena" || k.typ === "volno" || k.typ === "neplacene") && pokryva(k));
         const absHlaska = hobox && hobox.querySelector("[data-abs-hlaska]");
         if (!absHlaska) return;
         absHlaska.hidden = !abs;
         if (abs) {
             absHlaska.textContent = abs.typ === "volno"
                 ? "Pozor: na tento den máš nahlášené volno."
-                : "Pozor: na tento den máš nahlášenou dovolenou.";
+                : abs.typ === "neplacene"
+                    ? "Pozor: na tento den máš nahlášené neplacené volno."
+                    : "Pozor: na tento den máš nahlášenou dovolenou.";
         }
     }
 

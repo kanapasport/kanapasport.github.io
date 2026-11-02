@@ -137,9 +137,9 @@
     const hoNahlaseno = (kalendar, uid, datum) => (kalendar || []).some(k =>
         k.typ === "homeoffice" && k.uid === uid && (k.od || "") <= datum && datum <= (k.do || k.od || ""));
 
-    /** Nahlášená dovolená nebo volno na den – výkazy na to upozorňují červeně. */
+    /** Nahlášená dovolená nebo volno (i neplacené) na den – výkazy na to upozorňují červeně. */
     const volnoNahlaseno = (kalendar, uid, datum) => (kalendar || []).find(k =>
-        (k.typ === "dovolena" || k.typ === "volno") && k.uid === uid &&
+        (k.typ === "dovolena" || k.typ === "volno" || k.typ === "neplacene") && k.uid === uid &&
         (k.od || "") <= datum && datum <= (k.do || k.od || "")) || null;
 
     /**
@@ -1320,7 +1320,9 @@
         box.innerHTML =
             (volno ? '<p class="mini__volno">' + esc(volno.typ === "volno"
                 ? "Pozor: na dnešek máš nahlášené volno."
-                : "Pozor: na dnešek máš nahlášenou dovolenou.") + "</p>" : "") +
+                : volno.typ === "neplacene"
+                    ? "Pozor: na dnešek máš nahlášené neplacené volno."
+                    : "Pozor: na dnešek máš nahlášenou dovolenou.") + "</p>" : "") +
             '<div class="mini__denhlava">' +
                 '<h2 class="mini__nadpis">Dnes <span>' + esc(v.denVTydnu(s.dnes) + " " + v.czDatum(s.dnes)) + "</span></h2>" +
                 '<span class="mini__soucet' + (celkem >= HODIN_ZA_DEN ? " mini__soucet--plno" : "") + '"><b>' +

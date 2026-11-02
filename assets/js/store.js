@@ -4833,7 +4833,8 @@ KB.potvrdDovolenou = async (id) => {
         potvrzenoMs: Date.now()
     }, { merge: true });
     const u = (KB.kalendar || []).find(x => x.id === id);
-    const DRUH = { dovolena: "dovolenou", volno: "volno", nemoc: "nemoc", skoleni: "školení" };
+    const DRUH = { dovolena: "dovolenou", volno: "volno", neplacene: "neplacené volno",
+        nemoc: "nemoc", skoleni: "školení" };
     KB.zapisAktivitu("kalendar", "potvrdil " + (DRUH[(u || {}).typ] || "dovolenou") +
         (u ? " – " + (u.osoba || "?") + " (" + (u.od || "") +
             (u.do && u.do !== u.od ? " až " + u.do : "") + ")" : ""));
@@ -4882,6 +4883,7 @@ KB.saveUdalost = async (id, data) => {
        na první pohled – „uložil událost homeoffice" nikomu nic neřekne
        (přání Michala 1. 9. 2026). */
     const NAZEV_TYPU = { homeoffice: "home office", volno: "volno",
+                         neplacene: "neplacené volno",
                          dovolena: "dovolenou", doktor: "doktora",
                          nemoc: "nemoc", skoleni: "školení" };
     const nazev = NAZEV_TYPU[data.typ] || (data.typ || "událost");
