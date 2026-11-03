@@ -5697,7 +5697,7 @@ KB.ulozNtfy = async (data) => {
    `upozorneni/lide/{uid}` beze změny) a čte ho KB.watchUpozorneni, takže
    nastavení platí na všech zařízeních. Zapisuje se jen pole `nastenka`,
    e-mailové volby ani zařízení se nemění.
-     nastenka: { dlazdice: { <id>: { zap, barva: "#rrggbb" | "", poradi } }, updatedMs }
+     nastenka: { dlazdice: { <id>: { zap, barva: "#rrggbb" | "", poradi } }, sloupce: 2 | 3 | 4, updatedMs }
    Id jen ve tvaru id dlaždice (w + písmena a číslice, nejvýš 40), barva jen
    #rrggbb přes KBUI.barva – které id stránka opravdu použije, hlídá ještě
    nástěnka sama (bere jen dlaždice, které na ní jsou). */
@@ -5719,7 +5719,11 @@ KB.ulozNastenku = async (nastaveni) => {
         }
         dlazdice[id] = zapis;
     });
-    await setDoc(upozDoc(uid), { nastenka: { dlazdice: dlazdice, updatedMs: Date.now() } }, { merge: true });
+    const nastenka = { dlazdice: dlazdice, updatedMs: Date.now() };
+    // počet sloupců Vlastního režimu (3. 11. 2026) – jen 2, 3 nebo 4, cizí hodnota se zahodí
+    const sloupce = nastaveni ? nastaveni.sloupce : null;
+    if (sloupce === 2 || sloupce === 3 || sloupce === 4) nastenka.sloupce = sloupce;
+    await setDoc(upozDoc(uid), { nastenka: nastenka }, { merge: true });
 };
 
 /** Zkušební pípnutí do mobilu PŘES Apps Script (ne z prohlížeče) – vrátí {ok, kod, chyba}.
