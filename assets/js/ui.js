@@ -894,6 +894,58 @@
     /** „Správce" v původním smyslu – hlavní správce i běžný správce. */
     UI.isAdmin = () => UI.MANAZERSKE_ROLE.indexOf(UI.role()) !== -1;
 
+    /* ------------------------------------------- kdo co potvrzuje -----
+       Michal 3. 11. 2026 (model A, „tvrdě"): v Nastavení → Potvrzování se
+       u každého druhu zaškrtnou manažeři, kteří ho potvrzují. Seznam leží
+       v KB.potvrzovani (store.js). Hlavní správce smí vždycky; prázdný
+       seznam = jako dřív, kdokoli s vykaz.view; vyplněný = jen zaškrtnutí.
+       Dokud dokument nedorazí, platí dřívější stav – o skutečném zápisu
+       rozhoduje databáze (firestore.rules, funkce smiPotvrdit) stejně.
+       Ze seznamu platí jen ten, kdo je pořád manažer (jako v pravidlech). */
+    /* POTVRZOVANI-UI-ZACATEK */
+    UI.DRUHY_POTVRZENI = {
+        nepritomnosti: { nazev: "Nepřítomnosti", popis: "dovolená, volno a neplacené volno" },
+        ukoly:         { nazev: "Hotové úkoly",  popis: "úkol, který zpracovatel dokončil" },
+        milniky:       { nazev: "Milníky",       popis: "splnění odškrtnuté zpracovatelem" },
+        zpetne:        { nazev: "Zpětný zápis",  popis: "povolení zápisu do uzavřeného týdne" }
+    };
+
+    /** UID určených k druhu, jak leží v databázi; [] = nikdo určený není. */
+    UI.potvrzovateleUid = (druh) => {
+        const p = window.KB && window.KB.potvrzovani;
+        const d = p && p.druhy ? p.druhy[druh] : null;
+        return d && Array.isArray(d.lide) ? d.lide.filter(uid => typeof uid === "string" && uid) : [];
+    };
+
+    /** Smí přihlášený potvrdit druh (nepritomnosti | ukoly | milniky | zpetne)? */
+    UI.smimPotvrdit = (druh) => {
+        if (!UI.can("vykaz.view")) return false;
+        if (UI.isOwner()) return true;
+        const lide = UI.potvrzovateleUid(druh);
+        if (!lide.length) return true;
+        const uid = (window.KB && window.KB.currentUid) ? window.KB.currentUid() : "";
+        return !!uid && lide.indexOf(uid) !== -1;
+    };
+
+    /** Jména určených k druhu (pro „Potvrzuje: …"); [] = nikdo určený není. */
+    UI.potvrzovatele = (druh) => {
+        const lidi = (window.KB && window.KB.users) || [];
+        return UI.potvrzovateleUid(druh).map(uid => {
+            const u = lidi.find(x => x.id === uid);
+            return u ? (((u.first || "") + " " + (u.last || "")).trim() || u.email || "") : "";
+        }).filter(Boolean);
+    };
+
+    /** Text místo tlačítka pro toho, kdo potvrdit nesmí (už escapovaný). */
+    UI.potvrzujeHtml = (druh) => {
+        const jmena = UI.potvrzovatele(druh);
+        const text = "Potvrzuje: " + (jmena.length ? jmena.join(", ") : "hlavní správce");
+        // title: v úzkém sloupci (Milníky) se text zkrátí trojtečkou – celý je v bublině
+        return '<span class="tiny muted" data-potvrzuje="' + esc(druh) + '" title="' + esc(text) +
+            '" style="font-weight:700">' + esc(text) + "</span>";
+    };
+    /* POTVRZOVANI-UI-KONEC */
+
     UI.setUser = (name) => {
         window.KB_USER = name;
         localStorage.setItem(USER_KEY, name);
@@ -5958,6 +6010,22 @@
             UI.syncRole();
             UI.paintUser();
             UI.paintGate();
+            document.dispatchEvent(new CustomEvent("kb-role"));
+        });
+
+        /* Kdo co potvrzuje je právo jako role: když se tím přihlášenému změní
+           tlačítka Potvrdit (nebo jména v „Potvrzuje: …"), stránky se
+           překreslí přes kb-role – posluchače mají všechny. Výchozí otisk =
+           stav bez dokumentu (manažer smí všechno), takže prázdné nastavení
+           nic nepřekresluje. Zaměstnance se tlačítka netýkají. */
+        const otiskPotvrzovani = () => Object.keys(UI.DRUHY_POTVRZENI).map(druh =>
+            UI.smimPotvrdit(druh) ? "1" : "0:" + UI.potvrzovatele(druh).join(",")).join("|");
+        let posledniOtisk = Object.keys(UI.DRUHY_POTVRZENI).map(() => "1").join("|");
+        window.KB.on("potvrzovani", () => {
+            if (!UI.can("vykaz.view")) return;
+            const otisk = otiskPotvrzovani();
+            if (otisk === posledniOtisk) return;
+            posledniOtisk = otisk;
             document.dispatchEvent(new CustomEvent("kb-role"));
         });
     });

@@ -513,13 +513,15 @@
             </p>
             <!-- uzavřený měsíc zpětný zápis neodemkne – ať to manažer ví předem -->
             <p id="zpUzaverka" class="small" style="margin:0;line-height:1.6;color:var(--warn)" hidden></p>
+            <!-- kdo povoluje, když to není přihlášený (Nastavení → Potvrzování) -->
+            <p id="zpKdo" class="small" style="margin:0;line-height:1.6;font-weight:700" hidden></p>
 
             <div class="col" style="gap:8px">
                 <b class="zp-nadpis">Žádosti</b>
                 <div id="zpZadosti" class="col" style="gap:8px"></div>
             </div>
 
-            <div class="col" style="gap:8px">
+            <div class="col" id="zpBezZadosti" style="gap:8px">
                 <b class="zp-nadpis">Povolit bez žádosti</b>
                 <div class="row row--wrap" style="gap:8px;align-items:flex-end">
                     <div style="flex:1 1 180px"><label class="label" for="zpKomu">Komu</label>
@@ -2562,9 +2564,13 @@
      */
     async function posliZadostOZpetny(datum, duvod) {
         const uid = mojeUid();
-        const manazeri = V.lide()
+        const vsichni = V.lide()
             .filter(u => window.KBUI.MANAZERSKE_ROLE.indexOf(u.role) !== -1 && u.id !== uid)
             .map(u => u.id);
+        /* Když zpětný zápis povolují jen určení (Nastavení → Potvrzování),
+           jde žádost jen jim – ostatní manažeři by ji vyřídit nemohli. */
+        const urceni = window.KBUI.potvrzovateleUid("zpetne").filter(id => vsichni.indexOf(id) !== -1);
+        const manazeri = urceni.length ? urceni : vsichni;
         if (!manazeri.length) {
             window.KBUI.toast("Nenašel se žádný manažer.", "error");
             return false;
@@ -2678,6 +2684,7 @@
     /** Žádosti v okně manažera – každá se vyřídí jedním kliknutím. */
     function vykresliZadosti() {
         const zadosti = zadostiZpetne(true).sort((a, b) => (a.ms || 0) - (b.ms || 0));
+        const smim = window.KBUI.smimPotvrdit("zpetne");
         $("zpZadosti").innerHTML = zadosti.length
             ? zadosti.map(q => {
                 const d = q.zadostZpetne.datum;
@@ -2690,6 +2697,9 @@
                             ? '<br><span class="tiny muted">' + esc(q.zadostZpetne.duvod) + "</span>" : "") +
                     "</div>" +
                     '<div class="zp-zadost__akce">' +
+                        /* Kdo zpětný zápis nepovoluje (Nastavení → Potvrzování),
+                           vidí místo tlačítek jen, kdo to vyřídí. */
+                        (!smim ? window.KBUI.potvrzujeHtml("zpetne") :
                         /* Den v uzavřeném měsíci povolení neodemkne – místo
                            tlačítek jen poznámka, odmítnout jde dál. */
                         (podCarou(d)
@@ -2700,7 +2710,7 @@
                               '<button type="button" class="btn btn--sm btn--ghost" data-zp-vyrid="od" data-id="' +
                                   id + '">Povolit od ' + den + "</button>") +
                         '<button type="button" class="linkbtn" data-zp-vyrid="ne" data-id="' +
-                            id + '" style="color:var(--danger)">odmítnout</button>' +
+                            id + '" style="color:var(--danger)">odmítnout</button>') +
                     "</div></div>";
             }).join("")
             : '<p class="tiny muted" style="margin:0">Žádná žádost nečeká.</p>';
@@ -2715,6 +2725,14 @@
               " Výkaz za ně zapiš sám, nebo měsíc otevři v Uzávěrce."
             : "";
         $("zpDatum").min = cara;
+        /* Kdo zpětný zápis nepovoluje (Nastavení → Potvrzování), okno jen
+           vidí: věta, kdo povoluje, a žádné povolování ani rušení. */
+        const smim = window.KBUI.smimPotvrdit("zpetne");
+        const kdo = window.KBUI.potvrzovatele("zpetne");
+        $("zpKdo").hidden = smim;
+        $("zpKdo").textContent = smim ? "" : "Zpětný zápis povoluje: " +
+            (kdo.length ? kdo.join(", ") : "hlavní správce") + ". Žádosti tu jen vidíš.";
+        $("zpBezZadosti").hidden = !smim;
         const vybrany = $("zpKomu").value;
         $("zpKomu").innerHTML = '<option value="">— vyber —</option>' + osobyOptions(V.lide(), vybrany);
         vykresliZadosti();
@@ -2730,8 +2748,8 @@
                     '<div class="zp-zadost__text"><b>' + esc(r.jmeno) + "</b> · " +
                         esc(zpetnePopis(r.z)) + '<br><span class="tiny muted">' +
                         esc(zpetnePlatnost(r.z)) + "</span></div>" +
-                    '<div class="zp-zadost__akce"><button type="button" class="linkbtn" data-zp-zrus="' +
-                        esc(r.uid) + '" style="color:var(--danger)">zrušit</button></div>' +
+                    (smim ? '<div class="zp-zadost__akce"><button type="button" class="linkbtn" data-zp-zrus="' +
+                        esc(r.uid) + '" style="color:var(--danger)">zrušit</button></div>' : "") +
                 "</div>").join("")
             : '<p class="tiny muted" style="margin:0">Dnes nemá povolení nikdo.</p>';
     }
@@ -4876,7 +4894,10 @@
                         createdMs: k ? k.createdMs : 0,
                         potvrzeno: !!potvrzena,
                         potvrdil: potvrzena ? (potvrzena.potvrdil || "") : "",
-                        potvrzenoMs: potvrzena ? (potvrzena.potvrzenoMs || 0) : 0
+                        potvrzenoMs: potvrzena ? (potvrzena.potvrzenoMs || 0) : 0,
+                        /* odkud se potvrzení bere – bez toho by převzaté potvrzení
+                           databáze nepustila, když nepřítomnosti potvrzují jen určení */
+                        potvrzenoZ: potvrzena ? potvrzena.id : ""
                     })));
             });
             // stará událost, na kterou už žádná řada nezbyla, jde pryč
@@ -5345,7 +5366,15 @@
         $("zpetneOverlay").addEventListener("click", (event) => {
             if (event.target === $("zpetneOverlay")) $("zpetneOverlay").hidden = true;
         });
+        // povolit a rušit smí jen ten, kdo zpětný zápis povoluje (Nastavení → Potvrzování)
+        const nesmimZpetne = () => {
+            if (window.KBUI.smimPotvrdit("zpetne")) return false;
+            window.KBUI.toast("Zpětný zápis povoluje " +
+                (window.KBUI.potvrzovatele("zpetne").join(", ") || "hlavní správce") + ".", "warn");
+            return true;
+        };
         $("zpPovol").addEventListener("click", async () => {
+            if (nesmimZpetne()) return;
             const uid = $("zpKomu").value, datum = $("zpDatum").value, rezim = $("zpRezim").value;
             if (!uid || !datum) return window.KBUI.toast("Vyber komu a který den.", "warn");
             if (datum > V.dnesISO()) {
@@ -5368,7 +5397,7 @@
         });
         $("zpZadosti").addEventListener("click", async (event) => {
             const btn = event.target.closest("[data-zp-vyrid]");
-            if (!btn || btn.disabled) return;
+            if (!btn || btn.disabled || nesmimZpetne()) return;
             const q = (window.KB.quicktodo || []).find(x => x.id === btn.dataset.id);
             if (!q || !q.zadostZpetne) return;
             const akce = btn.dataset.zpVyrid;
@@ -5395,7 +5424,7 @@
         });
         $("zpSeznam").addEventListener("click", async (event) => {
             const zrus = event.target.closest("[data-zp-zrus]");
-            if (!zrus) return;
+            if (!zrus || nesmimZpetne()) return;
             const uid = zrus.dataset.zpZrus;
             try {
                 // prázdný řetězec – hluboký merge klíče nemaže
@@ -5408,6 +5437,10 @@
             if (!$("zpetneOverlay").hidden) vykresliZpetne();
             if (!$("zadostOverlay").hidden) vykresliZadostStav();
             obnovZpetneHlavicku();
+        });
+        // kdo povoluje (Nastavení → Potvrzování) – otevřené okno se překreslí
+        window.KB.on("potvrzovani", () => {
+            if (!$("zpetneOverlay").hidden) vykresliZpetne();
         });
         // žádosti chodí jako Quick TO-DO – s ním se mění číslo i okno
         window.KB.on("quicktodo", () => {

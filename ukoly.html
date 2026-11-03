@@ -695,8 +695,11 @@
                            jinak Označit hotové. Upravit, Smazat a ostatní
                            jsou v nabídce „⋯" v hlavičce. */
                         (window.KBUI.isAdmin() && u.stav === "hotovo" && u.potvrzeno !== true
-                            ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
-                                esc(u.id) + '">Potvrdit hotové</button>'
+                            /* potvrzuje jen určený (Nastavení → Potvrzování), ostatním kdo */
+                            ? (window.KBUI.smimPotvrdit("ukoly")
+                                ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
+                                    esc(u.id) + '">Potvrdit hotové</button>'
+                                : window.KBUI.potvrzujeHtml("ukoly"))
                             : (smiPsat && u.stav !== "hotovo"
                                 ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "")) +
                         "</span>" +
@@ -813,6 +816,7 @@
         (u.todo || []).map(t => Object.assign({}, t, { pct: 100 })), "hotovo");
 
     function potvrdHotove(id, btn) {
+        if (!window.KBUI.smimPotvrdit("ukoly")) return;
         if (btn) btn.disabled = true;
         window.KB.potvrdUkol(id)
             .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
@@ -863,7 +867,7 @@
                         odkaz: odkazNaUkol(u), komu: u.prirazeni || [], projekt: u.projekt || "" }) },
                 smiPsatNa(u) && !hotovy && {
                     text: "Označit hotové", ikona: "hotovo", fn: () => oznacHotove(u) },
-                window.KBUI.isAdmin() && hotovy && u.potvrzeno !== true && {
+                window.KBUI.isAdmin() && hotovy && u.potvrzeno !== true && window.KBUI.smimPotvrdit("ukoly") && {
                     text: "Potvrdit hotové", ikona: "potvrdit", fn: () => potvrdHotove(u.id) },
                 window.KBUI.can("vykaz.view") && {
                     text: historieOtevrena.has(u.id) ? "Skrýt historii posunů" : "Historie posunů", ikona: "historie",
@@ -889,7 +893,7 @@
         akce: (ids) => {
             const vybrane = ids.map(najdiUkol).filter(Boolean);
             const nehotove = vybrane.filter(u => u.stav !== "hotovo" && smiPsatNa(u));
-            const cekaji = window.KBUI.isAdmin()
+            const cekaji = window.KBUI.isAdmin() && window.KBUI.smimPotvrdit("ukoly")
                 ? vybrane.filter(u => u.stav === "hotovo" && u.potvrzeno !== true) : [];
             const N = window.KBNabidka;
             const kusy = (n) => V.pocet(n, ["úkol", "úkoly", "úkolů"]);
@@ -1508,6 +1512,7 @@
 
             const potvrd = event.target.closest("[data-potvrd]");
             if (potvrd) {
+                if (!window.KBUI.smimPotvrdit("ukoly")) return;
                 potvrd.disabled = true;
                 window.KB.potvrdUkol(potvrd.dataset.potvrd)
                     .then(() => window.KBUI.toast("Úkol potvrzen jako hotový."))
