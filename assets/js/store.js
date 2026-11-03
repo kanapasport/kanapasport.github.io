@@ -563,6 +563,9 @@ try {
 
         KB.watchMilniky();
 
+        // kdo co potvrzuje (Nastavení → Potvrzování) – tlačítka Potvrdit na stránkách
+        odbery.push(sledujPotvrzovani());
+
         /* Jmenný seznam zakázek – holý výtah (číslo + název) pro všechny.
            Projekty samotné leží v `private` a zaměstnanec přečte jen ty
            svoje; tohle je to, co v Evidenci zakázek hledají očima. */
@@ -4840,6 +4843,78 @@ KB.potvrdDovolenou = async (id) => {
             (u.do && u.do !== u.od ? " až " + u.do : "") + ")" : ""));
 };
 
+/* ---------------------------------------------- kdo co potvrzuje ----
+   Michal 3. 11. 2026 (model A, „tvrdě"): v Nastavení → Potvrzování se
+   u každého druhu zaškrtne, kteří manažeři ho potvrzují – stejně pro
+   všechny lidi, žádný „nadřízený u člověka". Prázdný seznam (nebo
+   chybějící dokument) = platí dřívější stav, potvrdí kdokoli s právem
+   vykaz.view. Vyplněný = jen zaškrtnutí a hlavní správce – a hlídá to
+   i databáze (firestore.rules, funkce smiPotvrdit).
+
+     private/potvrzovani/nastaveni/hlavni
+       { druhy: { nepritomnosti: { lide: [uid…] }, ukoly: { lide },
+                  milniky: { lide }, zpetne: { lide } }, updatedMs, updatedBy }
+
+   Čte každý člen (stránky podle toho ukazují tlačítko, nebo „Potvrzuje:
+   …"), zapisuje jen hlavní správce. Klíče druhů jsou PEVNÉ – čte je
+   i dlaždice „Čeká na tvé rozhodnutí" na nástěnce. Odběr se zakládá
+   s ostatními společnými odběry po přihlášení (sledujPotvrzovani). */
+/* POTVRZOVANI-STORE-ZACATEK */
+KB.DRUHY_POTVRZENI = ["nepritomnosti", "ukoly", "milniky", "zpetne"];
+/** null = dokument ještě nedorazil (platí dřívější stav). */
+KB.potvrzovani = null;
+
+/** Dokument v jednotném tvaru: každý druh má pole `lide` (jen neprázdná uid, bez opakování). */
+function cistePotvrzovani(data) {
+    const druhy = {};
+    KB.DRUHY_POTVRZENI.forEach(klic => {
+        const d = data && data.druhy && typeof data.druhy === "object" ? data.druhy[klic] : null;
+        const lide = d && Array.isArray(d.lide) ? d.lide : [];
+        druhy[klic] = { lide: lide.filter((uid, i) => typeof uid === "string" && uid && lide.indexOf(uid) === i) };
+    });
+    return {
+        druhy: druhy,
+        updatedMs: Number(data && data.updatedMs) || 0,
+        updatedBy: String((data && data.updatedBy) || "")
+    };
+}
+/* POTVRZOVANI-STORE-KONEC */
+
+const potvrzovaniDoc = () => doc(db, "artifacts", APP_ID, "private", "potvrzovani", "nastaveni", "hlavni");
+
+/** Odběr nastavení potvrzování – vrací funkci, která ho zruší (patří do `odbery`). */
+function sledujPotvrzovani() {
+    return onSnapshot(potvrzovaniDoc(), (snap) => {
+        KB.potvrzovani = cistePotvrzovani(snap.exists() ? snap.data() : null);
+        emit("potvrzovani", KB.potvrzovani);
+    }, (err) => {
+        /* Dokud nejsou nasazená pravidla, čte ho jen manažer – ostatním
+           tiše platí dřívější stav (KB.potvrzovani zůstává null). */
+        console.warn("Nastavení potvrzování se nenačetlo:", err && err.code ? err.code : err);
+    });
+}
+
+/** Posluchač změn; když už data jsou, zavolá se hned. */
+KB.watchPotvrzovani = (cb) => {
+    if (typeof cb !== "function") return;
+    KB.on("potvrzovani", (event) => cb(event.detail));
+    if (KB.potvrzovani) cb(KB.potvrzovani);
+};
+
+/** Uložení z Nastavení (jen hlavní správce). `druhy` = { klíč: { lide: [uid] } }; chybějící druh = nikdo. */
+KB.ulozPotvrzovani = async (druhy) => {
+    if (authReady) await authReady;
+    requireDb();
+    const cista = cistePotvrzovani({ druhy: druhy || {} }).druhy;
+    await setDoc(potvrzovaniDoc(), {
+        druhy: cista,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
+    KB.zapisAktivitu("nastaveni", "změnil, kdo co potvrzuje (" +
+        KB.DRUHY_POTVRZENI.map(k => k + " " + cista[k].lide.length).join(", ") + ")");
+};
+
 KB.saveUdalost = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
@@ -4875,6 +4950,10 @@ KB.saveUdalost = async (id, data) => {
            (rozdělená dovolená) i s tím, kdo ji potvrdil (22. 9. 2026). */
         ...(data.potvrzeno === true && data.potvrdil
             ? { potvrdil: data.potvrdil, potvrzenoMs: data.potvrzenoMs || Date.now() } : {}),
+        /* Odkud se potvrzení převzalo (id potvrzené události téhož člověka).
+           Když nepřítomnosti potvrzují jen určení, pustí databáze převzaté
+           potvrzení jen s tímhle odkazem (firestore.rules, kalendarPrevzato). */
+        ...(data.potvrzeno === true && data.potvrzenoZ ? { potvrzenoZ: String(data.potvrzenoZ) } : {}),
         createdMs: data.createdMs || Date.now(),
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""

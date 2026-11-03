@@ -36,6 +36,26 @@
         /* Přepínač „počítat přesčas" – ať je v řadě stejně vysoký jako pole. */
         .zustrad__prepinac { display: flex; align-items: center; gap: 6px;
             height: 38px; font-size: var(--fs-2); white-space: nowrap; }
+
+        /* Potvrzování: jeden řádek na druh – název vlevo, zaškrtávátka manažerů
+           vedle sebe (zalomí se). Na telefonu název nad zaškrtávátky. */
+        .potvrz { display: flex; flex-direction: column; gap: 8px; }
+        .potvrz__druh { display: grid; grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
+            gap: 8px 14px; align-items: center; padding: 10px 12px;
+            border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--bg-soft); }
+        .potvrz__nazev { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .potvrz__nazev b { font-size: var(--fs-3); }
+        .potvrz__lide { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; min-width: 0; }
+        .potvrz__clovek { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+            border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface);
+            font-size: var(--fs-2); cursor: pointer; max-width: 100%; }
+        .potvrz__clovek input { margin: 0; }
+        .potvrz__clovek--zap { border-color: var(--accent); background: var(--accent-tint); font-weight: 700; }
+        .potvrz__clovek--pryc { border-style: dashed; color: var(--muted); }
+        .potvrz__stav { font-size: var(--fs-1); color: var(--muted); }
+        @media (max-width: 640px) {
+            .potvrz__druh { grid-template-columns: minmax(0, 1fr); }
+        }
     </style>
     <link rel="stylesheet" href="assets/css/app.css?v=318">
     <link rel="apple-touch-icon" href="ikona-180.png">
@@ -140,6 +160,33 @@
             <div class="row row--wrap" style="gap:12px">
                 <button type="button" id="btnUloz" class="btn btn--primary">Uložit sazby</button>
                 <span id="stav" class="small muted"></span>
+            </div>
+        </section>
+
+        <!-- ================================================ POTVRZOVÁNÍ -->
+        <!-- Kdo co potvrzuje (Michal 3. 11. 2026): za stejným zámkem jako
+             sazby, mění jen hlavní správce. Data: KB.potvrzovani (store.js). -->
+        <section class="card col nastaveni" id="sekce-potvrzovani" hidden>
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Potvrzování</b>
+                    <span class="small muted">kdo co potvrzuje · platí stejně pro všechny lidi</span>
+                </div>
+                <span class="tag" id="pocetPotvrzovani"></span>
+            </div>
+            <div id="potvrzovani" class="potvrz"></div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                <b>Nikdo nezaškrtnutý</b> = potvrdí kdokoli z manažerů, jako dosud.
+                <b>Někdo zaškrtnutý</b> = potvrdí jen zaškrtnutí a hlavní správce – ostatním
+                manažerům se místo tlačítka Potvrdit ukáže „Potvrzuje: …“ a databáze jim potvrzení
+                nepustí. Hlavní správce smí potvrdit vždycky.
+            </p>
+            <p class="tiny" id="potvrzJenHlavni" style="margin:0;line-height:1.6;color:var(--warn)" hidden>
+                Mění jen hlavní správce – tady to jen vidíš.
+            </p>
+            <div class="row row--wrap" style="gap:12px" id="potvrzAkce">
+                <button type="button" id="btnPotvrzovaniUloz" class="btn btn--primary">Uložit potvrzování</button>
+                <span id="stavPotvrzovani" class="small muted"></span>
             </div>
         </section>
 
@@ -479,6 +526,112 @@
         }
     }
 
+    /* ------------------------------------------------------- potvrzování ---
+       Kdo co potvrzuje (Michal 3. 11. 2026, model A „tvrdě"): u každého
+       druhu zaškrtávátka manažerů (lidé s právem vykaz.view). Prázdné =
+       potvrdí kdokoli z manažerů jako dřív; vyplněné = jen zaškrtnutí
+       a hlavní správce. Mění jen hlavní správce – jiným zápis odmítne
+       i databáze (firestore.rules). Kdo v seznamu zůstal, ale manažer už
+       není, se ukáže čárkovaně, ať ho jde odškrtnout. */
+    let potvrzUpravovano = false;
+    let potvrzUlozeno = false;
+
+    const manazeriKPotvrzovani = () =>
+        V.lide().filter(u => window.KBUI.canAs(u.role, "vykaz.view"));
+
+    function stavDruhu(zaskrtnuto) {
+        return zaskrtnuto ? "potvrzují jen zaškrtnutí a hlavní správce" : "potvrdí kdokoli z manažerů";
+    }
+
+    function naplnPotvrzovani() {
+        if (potvrzUpravovano) return;
+        const hlavni = window.KBUI.isOwner();
+        const p = window.KB.potvrzovani;          // null = ještě nedorazilo
+        const druhy = window.KBUI.DRUHY_POTVRZENI;
+        const manazeri = manazeriKPotvrzovani();
+        let urceno = 0;
+
+        $("potvrzovani").innerHTML = Object.keys(druhy).map(klic => {
+            const zaskrtnuti = window.KBUI.potvrzovateleUid(klic);
+            if (zaskrtnuti.length) urceno++;
+            const navic = zaskrtnuti.filter(uid => !manazeri.some(u => u.id === uid));
+            const chip = (uid, jmeno, pryc) => {
+                const zap = zaskrtnuti.indexOf(uid) !== -1;
+                return '<label class="potvrz__clovek' + (zap ? " potvrz__clovek--zap" : "") +
+                        (pryc ? " potvrz__clovek--pryc" : "") + '"' +
+                        (pryc ? ' title="Už není manažer – zaškrtnutí nic nedělá, odškrtni ho"' : "") + ">" +
+                    '<input type="checkbox" data-potvrz-druh="' + esc(klic) + '" data-potvrz-uid="' + esc(uid) + '"' +
+                        (zap ? " checked" : "") + (hlavni ? "" : " disabled") + ">" +
+                    "<span>" + esc(jmeno) + "</span></label>";
+            };
+            return '<div class="potvrz__druh" data-potvrz-radek="' + esc(klic) + '">' +
+                '<div class="potvrz__nazev"><b>' + esc(druhy[klic].nazev) + "</b>" +
+                    '<span class="tiny muted">' + esc(druhy[klic].popis) + "</span>" +
+                    '<span class="potvrz__stav" data-potvrz-stav>' + esc(stavDruhu(zaskrtnuti.length > 0)) + "</span>" +
+                "</div>" +
+                '<div class="potvrz__lide">' +
+                    manazeri.map(u => chip(u.id, V.jmeno(u), false)).join("") +
+                    navic.map(uid => {
+                        const u = V.clovek(uid);
+                        return chip(uid, u ? V.jmeno(u) : "neznámý účet", true);
+                    }).join("") +
+                    (manazeri.length || navic.length ? "" :
+                        '<span class="tiny muted">V seznamu lidí zatím není žádný manažer.</span>') +
+                "</div></div>";
+        }).join("");
+
+        $("pocetPotvrzovani").textContent = p ? "určeno u " + urceno + " ze " + Object.keys(druhy).length : "";
+        $("potvrzJenHlavni").hidden = hlavni;
+        $("potvrzAkce").hidden = !hlavni;
+        if (!potvrzUlozeno) {
+            $("stavPotvrzovani").textContent = p && p.updatedMs
+                ? "Naposledy změnil(a) " + (p.updatedBy || "?") + " " +
+                  new Date(p.updatedMs).toLocaleString("cs-CZ", { day: "numeric", month: "numeric",
+                      year: "numeric", hour: "2-digit", minute: "2-digit" }) + "."
+                : "";
+        }
+    }
+
+    /** Zaškrtnutí se hned propíše do vzhledu řádku – uloží se až tlačítkem. */
+    function zmenaPotvrzovani(event) {
+        const box = event.target.closest("[data-potvrz-druh]");
+        if (!box) return;
+        potvrzUpravovano = true;
+        potvrzUlozeno = false;
+        $("stavPotvrzovani").textContent = "Neuloženo.";
+        box.closest(".potvrz__clovek").classList.toggle("potvrz__clovek--zap", box.checked);
+        const radek = box.closest("[data-potvrz-radek]");
+        const zaskrtnuto = !!radek.querySelector("[data-potvrz-druh]:checked");
+        radek.querySelector("[data-potvrz-stav]").textContent = stavDruhu(zaskrtnuto);
+    }
+
+    async function ulozPotvrzovani() {
+        if (!window.KBUI.isOwner()) {
+            return void window.KBUI.toast("Potvrzování mění jen hlavní správce.", "warn");
+        }
+        const druhy = {};
+        Object.keys(window.KBUI.DRUHY_POTVRZENI).forEach(klic => { druhy[klic] = { lide: [] }; });
+        $("potvrzovani").querySelectorAll("[data-potvrz-druh]:checked").forEach(el => {
+            if (druhy[el.dataset.potvrzDruh]) druhy[el.dataset.potvrzDruh].lide.push(el.dataset.potvrzUid);
+        });
+
+        $("btnPotvrzovaniUloz").disabled = true;
+        $("stavPotvrzovani").textContent = "Ukládám…";
+        try {
+            await window.KB.ulozPotvrzovani(druhy);
+            potvrzUpravovano = false;
+            potvrzUlozeno = true;
+            $("stavPotvrzovani").textContent = "Uloženo – platí hned.";
+            window.KBUI.toast("Potvrzování uloženo.");
+        } catch (err) {
+            console.error(err);
+            $("stavPotvrzovani").textContent = "";
+            window.KBUI.toast("Uložení selhalo – potvrzování mění jen hlavní správce.", "error");
+        } finally {
+            $("btnPotvrzovaniUloz").disabled = false;
+        }
+    }
+
     /* -------------------------------------------------------------- start */
 
     function render() {
@@ -489,10 +642,12 @@
         }
         $("stop").hidden = true;
         $("obsah").hidden = false;
-        // sekci sazeb odkrývá a schovává opona (data-zamceno), ne `hidden`
+        // sekci sazeb a potvrzování odkrývá a schovává opona (data-zamceno), ne `hidden`
         $("sekce-sazby").hidden = false;
+        $("sekce-potvrzovani").hidden = false;
         paintZamek();
         naplnSazby();
+        naplnPotvrzovani();
         naplnZustatky();
         $("sekce-zustatky").hidden = false;
     }
@@ -505,13 +660,16 @@
            platnost a obnovování prací se stránkou jsou v ní). Zámek se dočte sám
            po přihlášení (kb-role). */
         zamek = window.KBUI.zamekCitlive({
-            obsah: ["sekce-sazby"], slot: "zamekSlot",
-            nadpis: "Hodinové sazby jsou zamčené",
-            bezHeslaSpravce: "Zvol ho níže – do té doby sazby vidíš jen ty.",
+            obsah: ["sekce-sazby", "sekce-potvrzovani"], slot: "zamekSlot",
+            nadpis: "Hodinové sazby a potvrzování jsou zamčené",
+            bezHeslaSpravce: "Zvol ho níže – do té doby sazby a potvrzování vidíš jen ty.",
             onZmena: poZmeneZamku
         });
 
         $("btnUloz").addEventListener("click", uloz);
+        $("btnPotvrzovaniUloz").addEventListener("click", ulozPotvrzovani);
+        $("potvrzovani").addEventListener("change", zmenaPotvrzovani);
+        window.KB.on("potvrzovani", naplnPotvrzovani);
         $("btnZustatkyUloz").addEventListener("click", ulozZustatky);
         $("zustatky").addEventListener("input", () => { upravovano = true; });
         window.KB.on("zustatky", naplnZustatky);

@@ -1364,7 +1364,10 @@
                     (sloupecAkci
                         ? '<td class="milniky__akce kt-akce">' +
                             (muzeMenit && item.hotovo && item.potvrzeno === false
-                                ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(item.id) + '">Potvrdit</button>'
+                                /* potvrzuje jen určený (Nastavení → Potvrzování), ostatním kdo */
+                                ? (window.KBUI.smimPotvrdit("milniky")
+                                    ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(item.id) + '">Potvrdit</button>'
+                                    : window.KBUI.potvrzujeHtml("milniky"))
                                 : (muzeMenit || muj
                                     ? '<button type="button" class="btn btn--sm ' +
                                         (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
@@ -1535,7 +1538,9 @@
                Zveřejnit, Upravit a další jsou v nabídce „⋯" a na pravém tlačítku. */
             case "akce": return '<td class="mt__akce kt-akce">' +
                 (k.muzeMenit && m.hotovo && m.potvrzeno === false
-                    ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(m.id) + '">Potvrdit</button>'
+                    ? (window.KBUI.smimPotvrdit("milniky")
+                        ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(m.id) + '">Potvrdit</button>'
+                        : window.KBUI.potvrzujeHtml("milniky"))
                     : "") +
                 window.KBNabidka.tlacitko("Další akce: " + popisM(m)) + "</td>";
             default: return "";
@@ -2137,9 +2142,10 @@
 
     /** Co se zapíše při odškrtnutí / vrácení – jedna položka i hromadně. */
     function zmenaSplneni(byl) {
-        /* Manažerovo odškrtnutí platí rovnou; od přiřazeného člověka
-           milník čeká na potvrzení (dlaždice Upozornění pro kontrolu). */
-        const rovnou = window.KBUI.can("milnik.manage");
+        /* Odškrtnutí od toho, kdo milníky potvrzuje (Nastavení → Potvrzování;
+           bez určených každý manažer), platí rovnou; od přiřazeného člověka
+           i od ostatních manažerů milník čeká na potvrzení. */
+        const rovnou = window.KBUI.smimPotvrdit("milniky");
         return byl.hotovo
             ? { hotovo: false, hotovoKdo: "", hotovoMs: 0,
                 potvrzeno: false, potvrdil: "", potvrzenoMs: 0 }
@@ -2158,20 +2164,21 @@
         const zmena = zmenaSplneni(byl);
         /* Splněný milník ve výchozím pohledu z výpisu zmizí – řekneme to rovnou,
            ať to nevypadá, že se místo uložení něco smazalo. */
-        // manažerovo odškrtnutí platí rovnou – odškrtne i úkol z milníku
-        const ukol = window.KBUI.can("milnik.manage") && !byl.hotovo ? ukolMilniku(byl) : null;
+        // odškrtnutí od toho, kdo potvrzuje, platí rovnou – odškrtne i úkol z milníku
+        const rovnou = window.KBUI.smimPotvrdit("milniky");
+        const ukol = rovnou && !byl.hotovo ? ukolMilniku(byl) : null;
         const hlaska = byl && byl.hotovo
             ? "Milník vrácen mezi rozdělané."
-            : (window.KBUI.can("milnik.manage")
+            : (rovnou
                 ? "Milník označen jako splněný." +
                   (ukol && ukol.milnikId === byl.id && ukol.stav !== "hotovo" ? " Navázaný úkol je hotový." : "") +
                   // zůstává vidět se zapnutým přepínačem i v pohledech, které splněné ukazují
                   (ukazatSplnene || (zalozka === "harmonogram" && pohled !== "nadchazejici")
                       ? "" : " Uvidíš ho přes „Zobrazit splněné“.")
                 : "Milník označen jako splněný – v seznamu zůstává, dokud ho manažer nepotvrdí.");
-        /* Zpět vrátí přesně to, co bylo (i kdo a kdy). Potvrzení si nechává
-           manažer – kolegovi by ho pravidla databáze nevrátila. */
-        const manazer = window.KBUI.can("milnik.manage");
+        /* Zpět vrátí přesně to, co bylo (i kdo a kdy). Potvrzení vrátí jen
+           ten, kdo potvrzuje – ostatním by ho pravidla databáze nevrátila. */
+        const manazer = rovnou;
         const predtim = {
             hotovo: !!byl.hotovo, hotovoKdo: byl.hotovoKdo || "", hotovoMs: byl.hotovoMs || 0,
             potvrzeno: manazer && (byl.potvrzeno !== undefined ? !!byl.potvrzeno : !!byl.hotovo),
@@ -2354,7 +2361,7 @@
     }
 
     function potvrdJeden(id, btn) {
-        if (!window.KBUI.can("milnik.manage")) return;
+        if (!window.KBUI.can("milnik.manage") || !window.KBUI.smimPotvrdit("milniky")) return;
         if (btn) btn.disabled = true;
         // potvrzený milník odškrtne i svůj úkol (KB.ulozSplneniMilniku)
         const m = najdiMilnik(id);
@@ -2407,7 +2414,7 @@
                 (manazer || muj) && {
                     text: m.hotovo ? "Vrátit mezi rozdělané" : "Splněno", ikona: m.hotovo ? "vratit" : "hotovo",
                     fn: () => { if (smimOdskrtnout(m)) prepniHotovo(m.id); } },
-                manazer && m.hotovo && m.potvrzeno === false && {
+                manazer && m.hotovo && m.potvrzeno === false && window.KBUI.smimPotvrdit("milniky") && {
                     text: "Potvrdit splnění", ikona: "potvrdit", fn: () => potvrdJeden(m.id) },
                 manazer && {
                     text: skryty ? "Zveřejnit" : "Skrýt zaměstnancům", ikona: skryty ? "oko" : "skryt",
@@ -2444,7 +2451,8 @@
             const kolik = (f) => vybrane.filter(f).length;
             const nesplnene = kolik(m => !m.hotovo);
             const splnene = kolik(m => m.hotovo);
-            const cekaji = kolik(m => m.hotovo && m.potvrzeno === false);
+            // potvrzovat smí jen určený (Nastavení → Potvrzování)
+            const cekaji = window.KBUI.smimPotvrdit("milniky") ? kolik(m => m.hotovo && m.potvrzeno === false) : 0;
             const skryte = kolik(m => m.zverejneno === false);
             const zverejnene = kolik(m => m.zverejneno !== false);
             const bezUkolu = kolik(m => !m.hotovo && !ukolMilniku(m));
@@ -2489,7 +2497,7 @@
 
     document.addEventListener("click", async (event) => {
         const potvrd = event.target.closest("[data-potvrd-milnik]");
-        if (potvrd && window.KBUI.can("milnik.manage")) {
+        if (potvrd && window.KBUI.can("milnik.manage") && window.KBUI.smimPotvrdit("milniky")) {
             potvrdJeden(potvrd.dataset.potvrdMilnik, potvrd);
             return;
         }

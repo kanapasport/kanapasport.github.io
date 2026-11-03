@@ -68,6 +68,45 @@ service cloud.firestore {
       return clen() && typSpoluprace() == 'servis';
     }
 
+    /* --- KDO CO POTVRZUJE (Michal 3. 11. 2026, model A „tvrdě") ----------
+       V Nastavení → Potvrzování hlavní správce u každého druhu zaškrtne, kteří
+       manažeři ho potvrzují – stejně pro všechny lidi:
+
+         private/potvrzovani/nastaveni/hlavni
+           { druhy: { nepritomnosti: { lide: [uid…] }, ukoly: { lide },
+                      milniky: { lide }, zpetne: { lide } }, updatedMs, updatedBy }
+
+       Prázdný seznam druhu (nebo chybějící dokument) = platí dřívější stav –
+       potvrdí každý, komu pravidlo dokumentu dovolí ho měnit. Vyplněný =
+       potvrdí jen hlavní správce a manažer ze seznamu (kdo už manažer není,
+       tomu zaškrtnutí nepomůže). „Potvrdit" tady znamená změnit záznam
+       z nepotvrzeného na potvrzený; zrušení potvrzení a úpravy, které
+       potvrzení jen nesou dál beze změny, hlídané nejsou.
+       Čte se jeden dokument navíc. Opakované get() téhož dokumentu v jednom
+       požadavku se znovu nepočítá (stejně jako get(zaznam()) v clen/role),
+       takže na jeden zápis jsou nejvýš 3 různé dokumenty (člověk, nastavení,
+       zdrojová událost / milník) – limit přístupů (10, v dávce 20) je daleko. */
+    function potvrzovaniCesta() {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/private/potvrzovani/nastaveni/hlavni;
+    }
+    // určení lidé k druhu, jak leží v dokumentu; [] = nikdo určený není
+    function urceni(druh) {
+      return exists(potvrzovaniCesta())
+        ? get(potvrzovaniCesta()).data.get('druhy', {}).get(druh, {}).get('lide', [])
+        : [];
+    }
+    function smiPotvrdit(druh) {
+      return hlavniSpravce()
+        || !(urceni(druh) is list)
+        || urceni(druh).size() == 0
+        || (spravce() && request.auth.uid in urceni(druh));
+    }
+    /* Splněný a potvrzený milník. Starý splněný bez pole `potvrzeno` platí
+       za potvrzený – stejně jako na webu (`potvrzeno !== false`). */
+    function milnikPotvrzeny(d) {
+      return d.get('hotovo', false) == true && d.get('potvrzeno', true) != false;
+    }
+
     match /artifacts/firemni-kb-app/public/data/{document=**} {
       // číst smí každý, kdo je v seznamu lidí
       allow read: if clen();
@@ -192,12 +231,41 @@ service cloud.firestore {
     // zadání ani přiřazení mu pravidlo změnit nedovolí. Zakládání a mazání
     // je manažerská práce (spodní pravidlo).
 
+    /* Potvrzení hotového úkolu (`potvrzeno` z ne na ano) – druh `ukoly`
+       (KB.potvrdUkol). Úkol z milníku (`milnikId`) potvrdí s milníkem i ten,
+       kdo smí potvrzovat milníky (KB.dokonciUkolyMilniku), ale jen když je
+       milník v databázi opravdu splněný a potvrzený. Zakládání a mazání
+       úkolů je dál jen manažerské; zachytávací pravidlo pro `private` sem
+       od 3. 11. 2026 zakládání a změny nepouští, proto `create` tady. */
+    function ukolPotvrzuje() {
+      return request.resource.data.get('potvrzeno', false) == true
+        && resource.data.get('potvrzeno', false) != true;
+    }
+    function milnikCesta(mid) {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/private/milniky/seznam/$(mid);
+    }
+    function ukolZPotvrzenehoMilniku() {
+      return resource.data.get('milnikId', '') is string
+        && resource.data.get('milnikId', '') != ''
+        && smiPotvrdit('milniky')
+        && exists(milnikCesta(resource.data.milnikId))
+        && milnikPotvrzeny(get(milnikCesta(resource.data.milnikId)).data);
+    }
+
     match /artifacts/firemni-kb-app/private/ukoly/seznam/{id} {
       allow read: if clen();
-      allow update: if spravce() || (clen()
+      allow create: if spravce()
+                       && (request.resource.data.get('potvrzeno', false) != true || smiPotvrdit('ukoly'));
+      allow update: if (spravce()
+                        && (!ukolPotvrzuje() || smiPotvrdit('ukoly') || ukolZPotvrzenehoMilniku()))
+                    || (clen()
                        && request.auth.uid in resource.data.prirazeni
                        && request.resource.data.diff(resource.data).affectedKeys()
                             .hasOnly(['todo', 'stav', 'historie', 'updatedMs', 'updatedBy']));
+    }
+    // ostatní pod `private/ukoly` (budgety…) zakládá a mění manažer jako dřív
+    match /artifacts/firemni-kb-app/private/ukoly/{cast}/{document=**} {
+      allow create, update: if spravce() && cast != 'seznam';
     }
 
     // --- faktury ---------------------------------------------------------
@@ -294,9 +362,26 @@ service cloud.firestore {
     // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
     // projektů, zakládání úkolů…) jen správce – kromě faktur a pokladny,
     // které mají vlastní přísnější pravidlo výš (pravidla se sčítají, proto
-    // se tu musí vynechat výslovně)
+    // se tu musí vynechat výslovně). Od 3. 11. 2026 navíc: nastavení
+    // potvrzování mění jen hlavní správce a úkoly a milníky (`seznam`)
+    // zakládá a mění manažer přes vlastní pravidla s hlídáním potvrzení –
+    // jinak by je tohle pravidlo pustilo každému manažerovi.
     match /artifacts/firemni-kb-app/private/{kolekce}/{document=**} {
-      allow read, write: if spravce() && kolekce != 'faktury' && kolekce != 'pokladna';
+      allow read, delete: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani']);
+      allow create, update: if spravce()
+                       && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky']);
+    }
+
+    /* Kdo co potvrzuje (výklad nahoře u smiPotvrdit). Číst musí každý člen –
+       stránky podle toho ukazují tlačítko Potvrdit, nebo „Potvrzuje: …";
+       čte ho i rozesílací účet Apps Scriptu (je to člen). Zapisuje a maže
+       jen hlavní správce, a jen v předepsaném tvaru. */
+    match /artifacts/firemni-kb-app/private/potvrzovani/{document=**} {
+      allow read: if clen();
+      allow delete: if hlavniSpravce();
+      allow create, update: if hlavniSpravce()
+                       && request.resource.data.keys().hasOnly(['druhy', 'updatedMs', 'updatedBy'])
+                       && request.resource.data.get('druhy', {}) is map;
     }
 
     // --- návody: tvořit a upravovat může každý, mazat jen správce ---
@@ -324,7 +409,9 @@ service cloud.firestore {
       // Zapisuje jen správce. Výjimka pro starý dokument `meta/milniky`
       // (kam smel psát každý člen) je pryč od 20. 10. 2026 – milníky žijí
       // v private/milniky a starý dokument už nic nečte ani nepíše.
-      allow write: if spravce();
+      // `meta/zpetne` (povolení zpětného zápisu, i jeho zrušení) od 3. 11.
+      // 2026 jen ten, kdo smí potvrzovat druh `zpetne`.
+      allow write: if spravce() && (docId != 'zpetne' || smiPotvrdit('zpetne'));
     }
 
     /* --- milníky (harmonogram odevzdání) ---------------------------------
@@ -347,18 +434,33 @@ service cloud.firestore {
       allow read: if spravce()
                      || (clen() && resource.data.get('zverejneno', false) == true)
                      || (clen() && request.auth.uid in resource.data.get('kdoVidiPostup', []));
-      allow create, delete: if spravce();
+      /* Potvrdit milník (druh `milniky`) = dostat ho do stavu splněný
+         a potvrzený – potvrzením odškrtnutí od kolegy i manažerovým
+         odškrtnutím, které platí rovnou. Úpravy už potvrzeného milníku
+         a vrácení mezi rozdělané hlídané nejsou. Mazání jako dřív. */
+      allow create: if spravce()
+                       && (!milnikPotvrzeny(request.resource.data) || smiPotvrdit('milniky'));
+      allow delete: if spravce();
       /* Svůj zveřejněný milník si člen odškrtne sám – ale opravdu jen
          odškrtne. Text, termín ani přiřazení mu pravidla nepustí a
-         potvrzení si nechá manažer. */
-      allow update: if spravce() || (clen()
+         potvrzení si nechá manažer. `potvrzeno` musí výslovně zůstat
+         false (od 3. 11. 2026): splněný milník BEZ pole web bere jako
+         starý potvrzený, takže smazáním pole by se člen potvrdil sám. */
+      allow update: if (spravce()
+                        && (!milnikPotvrzeny(request.resource.data) || milnikPotvrzeny(resource.data)
+                            || smiPotvrdit('milniky')))
+                    || (clen()
                        && resource.data.get('zverejneno', false) == true
                        && request.auth.uid in resource.data.get('zpracovatele', [])
                        && request.resource.data.diff(resource.data).affectedKeys()
                             .hasOnly(['hotovo', 'hotovoKdo', 'hotovoMs',
                                       'potvrzeno', 'potvrdil', 'potvrzenoMs',
                                       'updatedMs', 'updatedBy'])
-                       && request.resource.data.get('potvrzeno', false) == false);
+                       && request.resource.data.get('potvrzeno', true) == false);
+    }
+    // ostatní pod `private/milniky` (termíny, párování…) zakládá a mění manažer jako dřív
+    match /artifacts/firemni-kb-app/private/milniky/{cast}/{document=**} {
+      allow create, update: if spravce() && cast != 'seznam';
     }
 
     match /artifacts/firemni-kb-app/private/milniky/terminy/{id} {
@@ -478,11 +580,43 @@ service cloud.firestore {
     // --- kalendář: události, dovolené, nemoci a školení -----------------
     // Vidí je všichni členové (blanket `read` výš), tak jsou schválně
     // v `public/data`. Každý zapisuje svoje; cizí smí měnit jen správce.
+    /* Potvrzení nepřítomnosti (dovolená, volno, neplacené volno) – druh
+       `nepritomnosti`: `potvrzeno` z ne na ano (KB.potvrdDovolenou), nebo
+       nová událost rovnou potvrzená. Když je seznam určených prázdný, smí
+       to každý, kdo smí událost zapsat (jako dřív, i vlastník). */
+    function kalendarPotvrzuje() {
+      return request.resource.data.get('potvrzeno', false) == true
+        && (resource == null || resource.data.get('potvrzeno', false) != true);
+    }
+    function kalendarCesta(kid) {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/public/data/kalendar/$(kid);
+    }
+    /* Potvrzení převzaté z jiné potvrzené nepřítomnosti TÉHOŽ člověka:
+       rozdělená dovolená ve výkazu dostane potvrzení z původní události
+       (vykazy.html, planKalendareAbsenci). `potvrzenoZ` = id té události;
+       musí existovat, patřit stejnému člověku, být potvrzená a nést stejné
+       jméno toho, kdo potvrdil. Tím se dál nerozbije oprava výkazu
+       zaměstnanci ani manažerovi, který nepřítomnosti nepotvrzuje. */
+    function kalendarPrevzato() {
+      return request.resource.data.get('potvrzenoZ', '') is string
+        && request.resource.data.get('potvrzenoZ', '').matches('[A-Za-z0-9_-]{1,80}')
+        && exists(kalendarCesta(request.resource.data.potvrzenoZ))
+        && get(kalendarCesta(request.resource.data.potvrzenoZ)).data.get('uid', '') == request.resource.data.uid
+        && get(kalendarCesta(request.resource.data.potvrzenoZ)).data.get('potvrzeno', false) == true
+        && get(kalendarCesta(request.resource.data.potvrzenoZ)).data.get('potvrdil', '')
+             == request.resource.data.get('potvrdil', '');
+    }
+    function kalendarPotvrzeniOk() {
+      return !kalendarPotvrzuje() || smiPotvrdit('nepritomnosti') || kalendarPrevzato();
+    }
+
     match /artifacts/firemni-kb-app/public/data/kalendar/{id} {
-      allow create: if spravce() || (clen() && request.resource.data.uid == request.auth.uid);
-      allow update: if spravce() || (clen()
+      allow create: if (spravce() || (clen() && request.resource.data.uid == request.auth.uid))
+                       && kalendarPotvrzeniOk();
+      allow update: if (spravce() || (clen()
                        && resource.data.uid == request.auth.uid
-                       && request.resource.data.uid == request.auth.uid);
+                       && request.resource.data.uid == request.auth.uid))
+                       && kalendarPotvrzeniOk();
       allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
     }
 
