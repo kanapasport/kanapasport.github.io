@@ -343,6 +343,16 @@
         .milniky__cinnost .mtyp, .milniky__cinnost .milpil { margin: 2px 4px 0 0; }
         .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
         .milniky tr.milnik--muj > td { background: var(--accent-tint); }
+        /* milník z odkazu (?id=, upozornění / nástěnka) – zvýrazněný řádek */
+        tr.m-cil > td { background: var(--warn-tint) !important; }
+        tr.m-cil > td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+        /* karta nad výpisem: co se otevřelo z odkazu, s Potvrdit / Odmítnout… */
+        .mcil { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px;
+            border: 1px solid var(--warn); border-radius: var(--r-lg); background: var(--warn-tint);
+            font-size: var(--fs-2); }
+        .mcil[hidden] { display: none; }
+        .mcil__text { flex: 1 1 260px; min-width: 0; }
+        .mcil__akce { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .milniky tr.milnik--skryty > td { background: var(--bg-soft); }
         .milniky tbody tr.milnik--po, .milniky tbody tr.milnik--dnes, .milniky tbody tr.milnik--hotovo { background: none; }
         .milnik--hotovo .milniky__napln { opacity: 1; color: var(--text-soft); }
@@ -562,6 +572,9 @@
 
     <!-- Obal obou pohledů – v něm hledá hromadný výběr zaškrtávátka
          a nabídka řádku svůj milník. Vykreslený je vždy jen jeden pohled. -->
+    <!-- Milník otevřený odkazem milniky.html?id=… (upozornění, nástěnka) -->
+    <div id="milCil" class="mcil" hidden role="status"></div>
+
     <div id="obsahMilniku">
         <div id="vypis" class="mvyp" hidden></div>
         <div id="tableWrap" style="overflow-x:auto">
@@ -691,6 +704,12 @@
 
     let editingId = null;
     let activeZak = new URLSearchParams(location.search).get("zak") || "";   // slug zakázky
+    /* ?id=<milník> – odkaz z upozornění a z nástěnky (3. 11. 2026): předvybere
+       zakázku milníku, zruší filtry, ukáže ho ve výpisu (i ve sbaleném bloku),
+       posune se na něj a zvýrazní ho; nad výpisem karta s Potvrdit /
+       Odmítnout…, když na potvrzení čeká a přihlášený smí. */
+    const CIL_MID = new URLSearchParams(location.search).get("id") || "";
+    let cilStav = CIL_MID ? "ceka" : "hotovo";     // "ceka" | "najet" | "hotovo" | "zavreno"
 
     /* Vždycky je aktivní právě jeden pohled. Dřív tu byla dvě nezávislá
        přepínací tlačítka a z jejich kombinací nešlo poznat, co výpis zrovna
@@ -1162,6 +1181,8 @@
     }
 
     function render() {
+        pripravCil();
+        if (cilStav === "hotovo" && CIL_MID) kresliCil();
         const muzeMenit = window.KBUI.can("milnik.manage");
         /* Svůj milník si odškrtne i řadový člověk – vidí u něj zelené
            Splněno a řádek má podbarvený, ať své najde na první pohled. */
@@ -1233,7 +1254,10 @@
         if (!harmonogram) {
             $("table").innerHTML = "";
             $("tableWrap").hidden = true;
-            renderVypis(vsechny, { muzeMenit: muzeMenit, jeMuj: jeMuj, ja: ja });
+            renderVypis(vsechny, { muzeMenit: muzeMenit, jeMuj: jeMuj, ja: ja,
+                sirsiAkce: muzeMenit && window.KBUI.smimPotvrdit("milniky") &&
+                    vsechny.some(m => m.hotovo && m.potvrzeno === false) });
+            najedNaCil();
             return;
         }
         $("vypis").innerHTML = "";
@@ -1323,6 +1347,7 @@
                 return mezera + hlavicka + radky.map((m, i) => radek(m, i === radky.length - 1)).join("");
             }).join("") +
             "</tbody>";
+        najedNaCil();
 
         function radek(item, posledni) {
                 const t = stavTerminu(item);
@@ -1333,7 +1358,7 @@
                         (skryty ? " milnik--skryty" : "") + (sloupecVyberu ? " kt-vybiratelny" : "") +
                         // splněný mezi nadcházejícími (přepínač) – ztlumený
                         (pohled === "nadchazejici" && jeSplneny(item) ? " milnik--ztlumeny" : "") +
-                        (posledni ? " mtr--posledni" : "") +
+                        (posledni ? " mtr--posledni" : "") + (item.id === CIL_MID ? " m-cil" : "") +
                         '" data-mid="' + esc(item.id) + '">' +
                     (sloupecVyberu
                         ? '<td class="kt-vyber">' + vyber.box(item.id, (item.cinnost || "") + " – " + (item.napln || "")) + "</td>"
@@ -1350,6 +1375,7 @@
                                     (item.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>")
                             : "") +
                         (skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "") +
+                        (!item.hotovo && item.vraceno ? window.KBUI.vracenoStitek(item.vraceno) : "") +
                         (muzeMenit && ukolMilniku(item)
                             ? '<span class="milpil milpil--ukol">úkol</span>' : "") +
                         stitekNepritomnosti(item) + "</td>" +
@@ -1366,9 +1392,11 @@
                             (muzeMenit && item.hotovo && item.potvrzeno === false
                                 /* potvrzuje jen určený (Nastavení → Potvrzování), ostatním kdo */
                                 ? (window.KBUI.smimPotvrdit("milniky")
-                                    ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(item.id) + '">Potvrdit</button>'
+                                    ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(item.id) + '">Potvrdit</button>' +
+                                      window.KBUI.odmitnoutHtml("milniky", item.id)
                                     : window.KBUI.potvrzujeHtml("milniky"))
-                                : (muzeMenit || muj
+                                // vrátit cizí splněný jen ten, kdo milníky potvrzuje (pravidla databáze)
+                                : ((muzeMenit || muj) && (!item.hotovo || smimVratit(item))
                                     ? '<button type="button" class="btn btn--sm ' +
                                         (item.hotovo ? "btn--ghost" : "btn--ok") + '" data-done="' + esc(item.id) + '">' +
                                         (item.hotovo ? "Vrátit" : "Splněno") + "</button>"
@@ -1451,6 +1479,8 @@
             splneno ? '<span class="milpil">' + (m.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>" : "",
             k.muzeMenit && skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "",
             k.muzeMenit && ukolMilniku(m) ? '<span class="milpil milpil--ukol">úkol</span>' : "",
+            // vrácený mezi rozdělané (Odmítnout…) – kdo a proč v bublině
+            !m.hotovo && m.vraceno ? window.KBUI.vracenoStitek(m.vraceno) : "",
             stitekNepritomnosti(m)
         ].join("");
     }
@@ -1489,6 +1519,7 @@
             (k.jeMuj(m) && !m.hotovo ? " mr--muj" : "") +
             (m.zverejneno === false ? " mr--skryty" : "") +
             (m.hotovo ? " mr--hotovo" : "") + (ceka ? " mr--ceka" : "") +
+            (m.id === CIL_MID ? " m-cil" : "") +
             // splněný ukázaný přepínačem mezi rozdělanými – ztlumený
             (splneno && ukazatSplnene ? " mr--ztlumeny" : "") +
             (k.muzeMenit ? " kt-vybiratelny" : "");
@@ -1513,7 +1544,10 @@
         { k: "zver", sirka: 92, nazev: "Zveřejněno", jen: true },
         { k: "akce", sirka: 112, nazev: "" }
     ];
-    const sloupcePro = (k) => SLOUPCE.filter(s => !s.jen || k.muzeMenit);
+    /* Potvrdit + Odmítnout… se do 112 px nevejdou – sloupec akcí se rozšíří,
+       jen když ve výpisu nějaký milník na potvrzení přihlášeného čeká. */
+    const sloupcePro = (k) => SLOUPCE.filter(s => !s.jen || k.muzeMenit)
+        .map(s => s.k === "akce" && k.sirsiAkce ? Object.assign({}, s, { sirka: 206 }) : s);
     const colgroupHtml = (sl) => "<colgroup>" + sl.map(s =>
         '<col class="mt__col-' + s.k + '"' + (s.sirka ? ' style="width:' + s.sirka + 'px"' : "") + ">").join("") + "</colgroup>";
 
@@ -1539,7 +1573,8 @@
             case "akce": return '<td class="mt__akce kt-akce">' +
                 (k.muzeMenit && m.hotovo && m.potvrzeno === false
                     ? (window.KBUI.smimPotvrdit("milniky")
-                        ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(m.id) + '">Potvrdit</button>'
+                        ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(m.id) + '">Potvrdit</button>' +
+                          window.KBUI.odmitnoutHtml("milniky", m.id)
                         : window.KBUI.potvrzujeHtml("milniky"))
                     : "") +
                 window.KBNabidka.tlacitko("Další akce: " + popisM(m)) + "</td>";
@@ -2355,9 +2390,64 @@
 
     /** Svůj milník si odškrtne (i vrátí) každý, cizí jen správce. */
     function smimOdskrtnout(m) {
+        if (m && m.hotovo) return smimVratit(m);
         const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
         return window.KBUI.can("milnik.manage") ||
             !!(m && uid && (m.owners || []).indexOf(uid) !== -1);
+    }
+
+    /* Zrušit splnění (Vrátit mezi rozdělané) svého milníku smí zpracovatel,
+       cizího jen správce, který milníky potvrzuje – hlídají to i pravidla
+       databáze (milnikRusi, 3. 11. 2026). */
+    function smimVratit(m) {
+        const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
+        if (m && uid && (m.owners || []).indexOf(uid) !== -1) return true;
+        return window.KBUI.can("milnik.manage") && window.KBUI.smimPotvrdit("milniky");
+    }
+
+    /* ----------------------------------------- cíl z adresy (?id=) ---- */
+    /** Před vykreslením: zakázka, filtry pryč, záložka výpisu, otevřený blok. */
+    function pripravCil() {
+        if (cilStav !== "ceka") return;
+        const m = najdiMilnik(CIL_MID);
+        if (!m) return;
+        cilStav = "najet";
+        activeZak = slug(zakName(m));
+        hledat = ""; filCin = ""; filKdo = ""; jenMoje = false; jenSkryte = false; filTyp = "";
+        zalozka = "vypis";                         // jen teď, uložená volba se nemění
+        // splněný (bez zapnutých splněných) a bez termínu leží ve sbaleném bloku
+        if (jeSplneny(m) && !ukazatSplnene) otevreneBloky.add("hotove");
+        else if (!m.datum) otevreneBloky.add("bez");
+    }
+    /** Po vykreslení: posun na řádek a karta s akcemi (jednou). */
+    function najedNaCil() {
+        if (cilStav !== "najet") return;
+        const radek = document.querySelector('[data-mid="' + CSS.escape(CIL_MID) + '"]');
+        if (!radek) return;
+        cilStav = "hotovo";
+        radek.scrollIntoView({ block: "center" });
+        kresliCil();
+    }
+    /** Karta nad výpisem – stav milníku a Potvrdit / Odmítnout…, když smí. */
+    function kresliCil() {
+        const box = $("milCil");
+        const m = CIL_MID && cilStav === "hotovo" ? najdiMilnik(CIL_MID) : null;
+        if (!m) { box.hidden = true; box.innerHTML = ""; return; }
+        const ceka = m.hotovo && m.potvrzeno === false;
+        const smi = ceka && window.KBUI.can("milnik.manage") && window.KBUI.smimPotvrdit("milniky");
+        const stav = ceka ? "splněno (" + (m.hotovoKdo || "?") + "), čeká na potvrzení"
+            : m.hotovo ? (m.potvrzeno === true ? "splněno a potvrzeno" : "splněno")
+            : m.vraceno ? "vráceno mezi rozdělané" + (m.vraceno.duvod ? ": " + m.vraceno.duvod : "")
+            : "rozpracované";
+        box.innerHTML = '<span class="mcil__text"><b>' + esc([m.cinnost, m.napln].filter(Boolean).join(" – ") || "Milník") +
+                "</b> · " + esc(stav) + "</span>" +
+            '<span class="mcil__akce">' +
+                (smi ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' + esc(m.id) + '">Potvrdit</button>' +
+                        window.KBUI.odmitnoutHtml("milniky", m.id)
+                     : (ceka && window.KBUI.can("milnik.manage") ? window.KBUI.potvrzujeHtml("milniky") : "")) +
+                '<button type="button" class="btn btn--sm btn--ghost" data-cil-zavri>Zavřít</button>' +
+            "</span>";
+        box.hidden = false;
     }
 
     function potvrdJeden(id, btn) {
@@ -2411,11 +2501,14 @@
             nadpis: [m.cinnost, m.napln].filter(Boolean).join(" – ") || "Milník",
             radek: tr,
             polozky: [
-                (manazer || muj) && {
+                (manazer || muj) && (!m.hotovo || smimVratit(m)) && {
                     text: m.hotovo ? "Vrátit mezi rozdělané" : "Splněno", ikona: m.hotovo ? "vratit" : "hotovo",
                     fn: () => { if (smimOdskrtnout(m)) prepniHotovo(m.id); } },
                 manazer && m.hotovo && m.potvrzeno === false && window.KBUI.smimPotvrdit("milniky") && {
                     text: "Potvrdit splnění", ikona: "potvrdit", fn: () => potvrdJeden(m.id) },
+                manazer && m.hotovo && m.potvrzeno === false && window.KBUI.smimPotvrdit("milniky") && {
+                    text: "Odmítnout – vrátit mezi rozdělané…", ikona: "vratit",
+                    fn: () => window.KBUI.odmitni("milniky", m.id) },
                 manazer && {
                     text: skryty ? "Zveřejnit" : "Skrýt zaměstnancům", ikona: skryty ? "oko" : "skryt",
                     fn: () => prepniZverejneni(m.id) },
@@ -2450,7 +2543,7 @@
             const vybrane = ids.map(najdiMilnik).filter(Boolean);
             const kolik = (f) => vybrane.filter(f).length;
             const nesplnene = kolik(m => !m.hotovo);
-            const splnene = kolik(m => m.hotovo);
+            const splnene = kolik(m => m.hotovo && smimVratit(m));
             // potvrzovat smí jen určený (Nastavení → Potvrzování)
             const cekaji = window.KBUI.smimPotvrdit("milniky") ? kolik(m => m.hotovo && m.potvrzeno === false) : 0;
             const skryte = kolik(m => m.zverejneno === false);
@@ -2470,7 +2563,7 @@
                         "Potvrdit splnění " + pocet(cekaji, MILNIK) + "?",
                         (id) => window.KB.potvrdMilnik(id), "Potvrzeno") },
                 splnene && { text: "Vrátit mezi rozdělané (" + splnene + ")", ikona: "vratit",
-                    fn: () => smycka(m => m.hotovo,
+                    fn: () => smycka(m => m.hotovo && smimVratit(m),
                         "Vrátit " + pocet(splnene, MILNIK) + " mezi rozdělané?",
                         (id) => { const m = najdiMilnik(id);
                             return m && m.hotovo ? window.KB.ulozSplneniMilniku(id, zmenaSplneni(m)) : false; },
@@ -2659,6 +2752,22 @@
         $("btnCancel").addEventListener("click", () => { $("milnikOverlay").hidden = true; });
         $("btnSave").addEventListener("click", save);
         $("btnDelete").addEventListener("click", remove);
+
+        $("milCil").addEventListener("click", (event) => {
+            if (!event.target.closest("[data-cil-zavri]")) return;
+            cilStav = "zavreno";
+            $("milCil").hidden = true;
+            try { history.replaceState(null, "", location.pathname + (activeZak ? "?zak=" + encodeURIComponent(activeZak) : "")); }
+            catch (err) { /* nevadí */ }
+        });
+        if (CIL_MID) {
+            // milník nedorazil (smazaný, nebo ho přihlášený nevidí) – říct to, ne mlčet
+            setTimeout(() => {
+                if (cilStav !== "ceka") return;
+                cilStav = "hotovo";
+                window.KBUI.toast("Tenhle milník už neexistuje, nebo ho nevidíš.", "warn");
+            }, 8000);
+        }
 
         document.addEventListener("kb-role", render);
         document.addEventListener("kb-role", zapniSledovani);

@@ -946,6 +946,109 @@
     };
     /* POTVRZOVANI-UI-KONEC */
 
+    /* ------------------------------------------------------ odmítnutí -----
+       Michal 3. 11. 2026 (Iris): vedle Potvrdit je „Odmítnout…" – malé okno
+       s povinným důvodem. Nepřítomnost se zamítne (v kalendáři zůstane
+       přeškrtnutá, záznamy ve výkazech zmizí), úkol se vrátí do práce, milník
+       mezi rozdělané; žadatel dostane oznámení (Quick TO-DO) a push. Stránky
+       tlačítko kreslí přes UI.odmitnoutHtml jen tomu, kdo smí potvrzovat
+       (UI.smimPotvrdit), obsluha je jedna pro celý web (klik na [data-odmitni]).
+       O skutečném zápisu rozhoduje databáze (firestore.rules). */
+    /* ODMITNUTI-UI-ZACATEK */
+    const ODMITNUTI = {
+        nepritomnosti: { fn: "zamitniDovolenou", nadpis: "Zamítnout nepřítomnost?", ano: "Zamítnout",
+            text: "V kalendáři zůstane přeškrtnutá, záznamy ve výkazech se smažou a žadatel dostane oznámení s důvodem.",
+            hotovo: "Nepřítomnost zamítnuta – žadatel dostane oznámení." },
+        ukoly: { fn: "vratUkol", nadpis: "Vrátit úkol do práce?", ano: "Vrátit do práce",
+            text: "Úkol přestane být hotový a zpracovatel dostane oznámení s důvodem. Hotový ho označí znovu po opravě.",
+            hotovo: "Úkol vrácen do práce – zpracovatel dostane oznámení." },
+        milniky: { fn: "vratMilnik", nadpis: "Vrátit milník mezi rozdělané?", ano: "Vrátit",
+            text: "Splnění se zruší (navázané úkoly zůstanou) a kdo milník odškrtl, dostane oznámení s důvodem.",
+            hotovo: "Milník vrácen mezi rozdělané – zpracovatel dostane oznámení." }
+    };
+    const NAZEV_NEPRITOMNOSTI = { dovolena: "Dovolená", volno: "Volno", neplacene: "Neplacené volno" };
+    const denMesic = (iso) => {
+        const c = String(iso || "").split("-");
+        return c.length === 3 ? Number(c[2]) + ". " + Number(c[1]) + "." : "";
+    };
+
+    /** Co se odmítá – první řádek okna (prostý text, okno ho escapuje samo). */
+    function popisOdmitnuti(druh, id) {
+        const KB = window.KB || {};
+        if (druh === "nepritomnosti") {
+            const k = (KB.kalendar || []).find(x => x.id === id);
+            return k ? (NAZEV_NEPRITOMNOSTI[k.typ] || "Nepřítomnost") + " – " + (k.osoba || "") + ", " +
+                denMesic(k.od) + (k.do && k.do !== k.od ? " – " + denMesic(k.do) : "") : "";
+        }
+        if (druh === "ukoly") {
+            const u = (KB.ukoly || []).find(x => x.id === id);
+            return u ? "Úkol „" + (u.nazev || "bez názvu") + "“" + (u.projekt ? " (" + u.projekt + ")" : "") : "";
+        }
+        const m = (KB.milniky || []).find(x => x.id === id);
+        return m ? "Milník „" + ([m.cinnost, m.napln].filter(Boolean).join(" – ") || "bez názvu") + "“" +
+            (m.hotovoKdo ? " – splnil(a) " + m.hotovoKdo : "") : "";
+    }
+
+    /** Tlačítko Odmítnout… (vedle Potvrdit). `trida` = třídy navíc (už bezpečné). */
+    UI.odmitnoutHtml = (druh, id, trida) =>
+        '<button type="button" class="btn btn--sm btn--ghost' + (trida ? " " + trida : "") +
+            '" data-odmitni="' + esc(druh) + '" data-odmitni-id="' + esc(id) +
+            '" title="Odmítnout s důvodem – žadatel dostane oznámení">Odmítnout…</button>';
+
+    /** Okno s důvodem a zápis. → true = odmítnuto, false = zrušeno / nesmí / chyba. */
+    UI.odmitni = async (druh, id) => {
+        const d = ODMITNUTI[druh];
+        if (!d || !id) return false;
+        if (!UI.smimPotvrdit(druh)) {
+            UI.toast("Tohle potvrzuje někdo jiný.", "warn");
+            return false;
+        }
+        const popis = popisOdmitnuti(druh, id);
+        const duvod = await UI.zeptej({
+            nadpis: d.nadpis,
+            text: (popis ? popis + "\n\n" : "") + d.text,
+            viceradku: true,
+            placeholder: "Důvod – žadatel ho uvidí",
+            ano: d.ano,
+            overeni: (v) => String(v || "").trim() ? "" : "Napiš důvod – bez něj to nejde."
+        });
+        if (duvod === null) return false;
+        try {
+            await window.KB[d.fn](id, duvod);
+            UI.toast(d.hotovo);
+            return true;
+        } catch (err) {
+            console.error(err);
+            UI.toast(err && err.code === "permission-denied"
+                ? "Databáze odmítnutí nepustila – potvrzuje to někdo jiný." : "Odmítnutí selhalo.", "error");
+            return false;
+        }
+    };
+
+    /** Štítek „zamítnuto" u nepřítomnosti – kdo a proč v bublině. */
+    UI.zamitnutoStitek = (k) => {
+        const bublina = "Zamítnuto" + (k && k.zamitl ? " – " + k.zamitl : "") +
+            (k && k.duvod ? ": " + k.duvod : "");
+        return '<span class="milpil milpil--zamitnuto" data-zamitnuto title="' + esc(bublina) + '">zamítnuto</span>';
+    };
+
+    /** Štítek „vráceno" u úkolu / milníku vráceného do práce – kdo a proč v bublině. */
+    UI.vracenoStitek = (v) => {
+        if (!v || typeof v !== "object") return "";
+        const bublina = "Vráceno do práce" + (v.kdo ? " – " + v.kdo : "") + (v.duvod ? ": " + v.duvod : "");
+        return '<span class="milpil milpil--zamitnuto" data-vraceno title="' + esc(bublina) + '">vráceno</span>';
+    };
+
+    document.addEventListener("click", (event) => {
+        const b = event.target && event.target.closest ? event.target.closest("[data-odmitni]") : null;
+        if (!b || b.disabled) return;
+        event.preventDefault();
+        b.disabled = true;
+        UI.odmitni(b.getAttribute("data-odmitni"), b.getAttribute("data-odmitni-id"))
+            .finally(() => { b.disabled = false; });
+    });
+    /* ODMITNUTI-UI-KONEC */
+
     UI.setUser = (name) => {
         window.KB_USER = name;
         localStorage.setItem(USER_KEY, name);
@@ -3923,8 +4026,9 @@
     /** Vlastní záznam z panelu pro den+typ – jen ty jdou odkliknout. */
     function mujHoZaznam(iso, typ) {
         const uid = window.KB.currentUid ? window.KB.currentUid() : "";
+        // zamítnutá žádost (přeškrtnutá v kalendáři) už neplatí – den jde zakliknout znovu
         return (window.KB.kalendar || []).find(k =>
-            k.uid === uid && k.typ === typ && k.zdroj !== "vykaz" &&
+            k.uid === uid && k.typ === typ && k.zdroj !== "vykaz" && k.zamitnuto !== true &&
             (k.od || "") <= iso && iso <= (k.do || k.od || ""));
     }
 
@@ -3974,7 +4078,7 @@
                Řadí se podle druhu, jména jen křestní, ať se to vejde. */
             const kdoJinde = {};
             (window.KB.kalendar || []).forEach(k => {
-                if (k.uid === uid || !POPIS_TYPU[k.typ]) return;
+                if (k.uid === uid || !POPIS_TYPU[k.typ] || k.zamitnuto === true) return;
                 if ((k.od || "") > den.iso || den.iso > (k.do || k.od || "")) return;
                 const jmeno = (k.osoba || "").split(" ")[0];
                 if (!jmeno) return;

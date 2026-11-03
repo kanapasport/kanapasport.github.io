@@ -1016,8 +1016,10 @@
         /* Na den s nahlášenou dovolenou nebo volnem (i neplaceným) se
            běžně pracovat nemá – červené upozornění, ať si toho člověk
            všimne dřív, než den vykáže. */
+        // zamítnutá žádost (přeškrtnutá v kalendáři) se nepočítá
         const abs = (window.KB.kalendar || []).find(k =>
-            (k.typ === "dovolena" || k.typ === "volno" || k.typ === "neplacene") && pokryva(k));
+            (k.typ === "dovolena" || k.typ === "volno" || k.typ === "neplacene") &&
+            k.zamitnuto !== true && pokryva(k));
         const absHlaska = hobox && hobox.querySelector("[data-abs-hlaska]");
         if (!absHlaska) return;
         absHlaska.hidden = !abs;
@@ -4775,7 +4777,8 @@
      * viset stará i nová.
      */
     function udalostZapisu(vykazId, puvodni) {
-        const vse = window.KB.kalendar || [];
+        // zamítnutá žádost je uzavřená – zůstává v kalendáři přeškrtnutá jen pro přehled
+        const vse = (window.KB.kalendar || []).filter(x => x.zamitnuto !== true);
         const podleId = vse.find(x => x.vykazId === vykazId);
         if (podleId) return podleId;
 
@@ -4845,8 +4848,11 @@
         const kroky = [];
         for (const zakazka of zakazky.filter((x, i, a) => TYP_ABSENCE[x] && a.indexOf(x) === i)) {
             const typ = TYP_ABSENCE[zakazka];
+            /* Zamítnutá žádost (KB.zamitniDovolenou) se nesrovnává: její záznamy
+               jsou smazané a v kalendáři zůstává přeškrtnutá jen pro přehled –
+               nová dovolená na tytéž dny dostane vlastní událost. */
             const udalosti = (window.KB.kalendar || []).filter(k =>
-                k.uid === uid && k.zdroj === "vykaz" && k.typ === typ && k.od);
+                k.uid === uid && k.zdroj === "vykaz" && k.typ === typ && k.od && k.zamitnuto !== true);
             const konec = (k) => k.do || k.od;
 
             // okno = dotčené dny + celé události, které do něj zasahují

@@ -2036,6 +2036,14 @@ KB.ulozSplneniMilniku = async (id, patch) => {
         await KB.dokonciUkolyMilniku(id)
             .catch(err => console.warn("Úkol z milníku se neodškrtl:", err));
     }
+    /* Odškrtnutí, které čeká na potvrzení (zpracovatel, neurčený manažer),
+       ohlásí hned push těm, kdo milníky potvrzují (Michal 3. 11. 2026).
+       Odškrtnutí od potvrzovatele platí rovnou (potvrzeno: true) – to ne;
+       stejně tak milník, který už na potvrzení čekal. */
+    if (patch && patch.hotovo === true && patch.potvrzeno === false &&
+        !(m && m.hotovo === true && m.potvrzeno === false)) {
+        KB.ohlasPotvrzeni({ udalost: "ceka", druh: "milniky", id: id, uid: KB.currentUid() });
+    }
 };
 
 /**
@@ -2079,6 +2087,61 @@ KB.potvrdMilnik = async (id) => {
         potvrzenoMs: Date.now()
     });
     KB.zapisAktivitu("milnik", "potvrdil splněný milník" + (m && m.cinnost ? " " + m.cinnost : ""));
+    // push tomu, kdo milník odškrtl (Michal 3. 11. 2026)
+    KB.ohlasPotvrzeni({ udalost: "potvrzeno", druh: "milniky", id: id, uid: zadatelMilniku(m) });
+};
+
+/** Kdo milník odškrtl (žadatel potvrzení): `hotovoKdo` je jméno, uid se dohledá
+    v seznamu lidí; jinak jediný zpracovatel. "" = nevíme. */
+function zadatelMilniku(m) {
+    if (!m) return "";
+    const uid = uidPodleJmena(m.hotovoKdo);
+    if (uid) return uid;
+    const lide = (Array.isArray(m.owners) ? m.owners : (Array.isArray(m.zpracovatele) ? m.zpracovatele : []))
+        .filter(Boolean);
+    return lide.length === 1 ? lide[0] : "";
+}
+
+/**
+ * Odmítnutí splněného milníku (Michal 3. 11. 2026): vrátí ho mezi rozdělané
+ * (splnění i potvrzení pryč, stejně jako „Vrátit" na stránce Milníky)
+ * a zapíše `vraceno { kdo, ms, duvod }`. Navázané úkoly zůstanou, jak jsou.
+ * Kdo milník odškrtl, a zpracovatelé dostanou oznámení (Quick TO-DO) s důvodem,
+ * žadatel navíc push. Zrušit splnění cizího milníku smí jen ten, kdo milníky
+ * potvrzuje (firestore.rules, milnikRusi).
+ */
+KB.vratMilnik = async (id, duvod) => {
+    if (authReady) await authReady;
+    requireDb();
+    const text = cistyDuvod(duvod);
+    if (!id || !text) throw new Error("Chybí důvod vrácení.");
+    let m = (KB.milniky || []).find(x => x.id === id) || null;
+    if (!m) {
+        const snap = await getDoc(milnikSeznamDoc(id));
+        m = snap.exists() ? Object.assign({ id: id }, snap.data()) : null;
+    }
+    if (!m) throw new Error("Milník už neexistuje.");
+    const zadatel = zadatelMilniku(m);
+    const kdo = window.KB_USER || "";
+    const ted = Date.now();
+    await KB.ulozSplneniMilniku(id, {
+        hotovo: false, hotovoKdo: "", hotovoMs: 0,
+        potvrzeno: false, potvrdil: "", potvrzenoMs: 0,
+        vraceno: { kdo: kdo, ms: ted, duvod: text }
+    });
+    const nazev = [m.cinnost, m.napln].filter(Boolean).join(" – ") || "bez názvu";
+    KB.zapisAktivitu("milnik", "vrátil milník " + nazev + " mezi rozdělané – " + text);
+    const ja = KB.currentUid();
+    const komu = [zadatel].concat(Array.isArray(m.owners) ? m.owners : (m.zpracovatele || []))
+        .filter((u, i, a) => u && u !== ja && a.indexOf(u) === i);
+    if (komu.length) {
+        await KB.saveQuickTodo(KB.newQuickId(), {
+            text: "Milník „" + nazev + "“ nebyl potvrzen – vrácen mezi rozdělané: " + text,
+            proUids: komu, projekt: m.zakazka || m.projekt || "",
+            druh: "info", rezim: "kazdy"          // oznámení – bere se na vědomí
+        }).catch(err => console.warn("Oznámení o vrácení milníku neodešlo:", err));
+    }
+    KB.ohlasPotvrzeni({ udalost: "zamitnuto", druh: "milniky", id: id, uid: zadatel });
 };
 
 /**
@@ -4732,6 +4795,13 @@ KB.saveUkol = async (id, data) => {
     if ("milnikId" in data) jenKdyzJsou.milnikId = data.milnikId || "";
     if ("opakovani" in data) jenKdyzJsou.opakovani = jeOpakovani(data.opakovani) ? data.opakovani : "";
     if ("opakovaniDen" in data) jenKdyzJsou.opakovaniDen = Number(data.opakovaniDen) || 0;
+    /* Úkol vrácený do práce (KB.vratUkol) má TO-DO pořád na 100 % – úprava
+       zadání ho nesmí sama přepnout zpátky na hotový. Hotovým se stane, až
+       ho zpracovatel znovu označí (nebo až se TO-DO změní). */
+    const pred = (KB.ukoly || []).find(u => u.id === id) || null;
+    const vracenyBezZmeny = !!pred && pred.stav !== "hotovo" && !!pred.vraceno &&
+        todoVseHotovo(Array.isArray(pred.todo) ? pred.todo : []);
+    const stav = todoVseHotovo(todo) && !vracenyBezZmeny ? "hotovo" : (data.stav || "otevreny");
     await setDoc(ukolDoc(id), Object.assign({
         importId:  data.importId || "",     // odkud byl převzat ze starého postupu práce
         projektId: data.projektId || "",
@@ -4750,7 +4820,7 @@ KB.saveUkol = async (id, data) => {
            Stejný trik jako výkazy (zaznamy × castky). */
         /* Všechna TO-DO na 100 % = úkol je hotový a čeká na potvrzení
            manažerem (pravidlo „sám se přepne", rešerše 19. 10. 2026). */
-        stav:      todoVseHotovo(todo) ? "hotovo" : (data.stav || "otevreny"),
+        stav:      stav,
         todo:      todo,
         poznamka:  data.poznamka || "",
         createdMs: data.createdMs || Date.now(),
@@ -4760,6 +4830,10 @@ KB.saveUkol = async (id, data) => {
     }, jenKdyzJsou), { merge: true });
     KB.zapisAktivitu("ukol", "uložil úkol " + (data.nazev || "") +
         (data.projekt ? " (" + data.projekt + ")" : ""));
+    // úkol se právě stal hotovým (a nepotvrzeným) → push potvrzovatelům
+    if (stav === "hotovo" && pred && pred.stav !== "hotovo" && pred.potvrzeno !== true) {
+        KB.ohlasPotvrzeni({ udalost: "ceka", druh: "ukoly", id: id, uid: KB.currentUid() });
+    }
     return id;
 };
 
@@ -4801,6 +4875,8 @@ KB.hromadnePrirazeni = async (ids, uid, pridat, popis) => {
 KB.potvrdUkol = async (id) => {
     if (authReady) await authReady;
     requireDb();
+    // žadatel podle stavu PŘED zápisem – potvrzení přepíše updatedBy
+    const zadatel = zadatelUkolu(KB.ukoly.find(u => u.id === id));
     await setDoc(ukolDoc(id), {
         potvrzeno: true,
         potvrdil: window.KB_USER || "",
@@ -4810,6 +4886,73 @@ KB.potvrdUkol = async (id) => {
     }, { merge: true });
     const ukol = KB.ukoly.find(u => u.id === id);
     KB.zapisAktivitu("ukol", "potvrdil hotový úkol" + (ukol ? " " + ukol.nazev : ""));
+    // push tomu, kdo úkol dokončil (Michal 3. 11. 2026)
+    KB.ohlasPotvrzeni({ udalost: "potvrzeno", druh: "ukoly", id: id, uid: zadatel });
+};
+
+/**
+ * Kdo úkol označil hotový (žadatel potvrzení). Zaměstnanec smí do úkolu psát
+ * jen todo/stav/historii, takže uid dokončení v úkolu neleží – bere se
+ * poslední, kdo úkol měnil (`updatedBy`), nebo poslední zápis historie,
+ * pokud je to přiřazený člověk; jinak první přiřazený. "" = nevíme.
+ */
+function zadatelUkolu(u) {
+    if (!u) return "";
+    const lide = (Array.isArray(u.prirazeni) ? u.prirazeni : []).filter(Boolean);
+    const h = Array.isArray(u.historie) && u.historie.length ? u.historie[u.historie.length - 1] : null;
+    for (const jmeno of [u.updatedBy, h && h.kdo]) {
+        const uid = uidPodleJmena(jmeno);
+        if (uid && (!lide.length || lide.indexOf(uid) !== -1)) return uid;
+    }
+    return lide[0] || "";
+}
+
+/**
+ * Odmítnutí hotového úkolu = vrácení do práce (Michal 3. 11. 2026): stav zpět
+ * na rozpracovaný, `vraceno { kdo, ms, duvod }` a řádek v historii úkolu.
+ * TO-DO zůstávají, jak jsou – zpracovatel úkol po opravě znovu označí hotový
+ * (Označit hotové / TO-DO) a jde to na potvrzení znovu. Přiřazení dostanou
+ * oznámení (Quick TO-DO) s důvodem, žadatel navíc push. Vrátit cizí hotový
+ * úkol smí jen ten, kdo úkoly potvrzuje (firestore.rules, ukolVraci).
+ */
+KB.vratUkol = async (id, duvod) => {
+    if (authReady) await authReady;
+    requireDb();
+    const text = cistyDuvod(duvod);
+    if (!id || !text) throw new Error("Chybí důvod vrácení.");
+    let u = (KB.ukoly || []).find(x => x.id === id) || null;
+    if (!u) {
+        const snap = await getDoc(ukolDoc(id));
+        u = snap.exists() ? Object.assign({ id: id }, snap.data()) : null;
+    }
+    if (!u) throw new Error("Úkol už neexistuje.");
+    const zadatel = zadatelUkolu(u);
+    const kdo = window.KB_USER || "";
+    const ted = Date.now();
+    const pct = window.KBVYK && window.KBVYK.pctUkolu ? (Number(window.KBVYK.pctUkolu(u)) || 0) : 100;
+    const stara = Array.isArray(u.historie) ? u.historie : [];
+    await setDoc(ukolDoc(id), Object.assign({
+        stav: "otevreny",
+        vraceno: { kdo: kdo, ms: ted, duvod: text },
+        historie: stara.concat([{ ms: ted, kdo: kdo, text: ("vráceno do práce – " + text).slice(0, 120),
+            z: pct, na: pct }]).slice(-80),
+        updatedMs: ted,
+        updatedBy: kdo
+    }, u.potvrzeno === true ? { potvrzeno: false } : {}), { merge: true });
+    KB.zapisAktivitu("ukol", "vrátil do práce úkol " + (u.nazev || id) + " – " + text);
+    const ja = KB.currentUid();
+    const komu = [zadatel].concat(Array.isArray(u.prirazeni) ? u.prirazeni : [])
+        .filter((x, i, a) => x && x !== ja && a.indexOf(x) === i);
+    if (komu.length) {
+        const n = String(u.nazev || "úkol").replace(/\s+/g, " ").trim().slice(0, 120);
+        await KB.saveQuickTodo(KB.newQuickId(), {
+            text: "Úkol #" + n + " vrácen do práce: " + text,
+            proUids: komu, projekt: u.projekt || "",
+            odkazy: [{ t: "u", id: id, n: n }],
+            druh: "info", rezim: "kazdy"          // oznámení – bere se na vědomí
+        }).catch(err => console.warn("Oznámení o vrácení úkolu neodešlo:", err));
+    }
+    KB.ohlasPotvrzeni({ udalost: "zamitnuto", druh: "ukoly", id: id, uid: zadatel });
 };
 
 KB.ulozUkolPostup = async (id, todo, stav, zmena, popis) => {
@@ -4839,6 +4982,11 @@ KB.ulozUkolPostup = async (id, todo, stav, zmena, popis) => {
         }]).slice(-80);
     }
     await setDoc(ukolDoc(id), payload, { merge: true });
+    /* Úkol se právě stal hotovým a čeká na potvrzení → push těm, kdo úkoly
+       potvrzují (Michal 3. 11. 2026). Už hotový nebo potvrzený ne. */
+    if (payload.stav === "hotovo" && !(ukol && (ukol.stav === "hotovo" || ukol.potvrzeno === true))) {
+        KB.ohlasPotvrzeni({ udalost: "ceka", druh: "ukoly", id: id, uid: KB.currentUid() });
+    }
     /* `popis` posílá stránka úkolů u oprav a mazání položek – v reportu
        pak stojí „opravil TO-DO …", ne matoucí „zapsal postup". */
     KB.zapisAktivitu("postup", (popis || "zapsal postup") +
@@ -4880,6 +5028,157 @@ KB.potvrdDovolenou = async (id) => {
     KB.zapisAktivitu("kalendar", "potvrdil " + (DRUH[(u || {}).typ] || "dovolenou") +
         (u ? " – " + (u.osoba || "?") + " (" + (u.od || "") +
             (u.do && u.do !== u.od ? " až " + u.do : "") + ")" : ""));
+    // push žadateli (Michal 3. 11. 2026)
+    KB.ohlasPotvrzeni({ udalost: "potvrzeno", druh: "nepritomnosti", id: id, uid: (u && u.uid) || "" });
+};
+
+/* ------------------------------------- upozornění na potvrzování ----
+   Michal 3. 11. 2026 (Iris): „Čeká na tvé potvrzení" chodí HNED – po uložení
+   žádosti o nepřítomnost (KB.saveUdalost), po označení úkolu hotovým
+   (KB.ulozUkolPostup, KB.saveUkol) a po odškrtnutí milníku, které čeká na
+   potvrzení (KB.ulozSplneniMilniku). Po potvrzení (KB.potvrdDovolenou,
+   KB.potvrdUkol, KB.potvrdMilnik) a zamítnutí (KB.zamitniDovolenou,
+   KB.vratUkol, KB.vratMilnik) se ohlásí žadateli. Rozesílá Apps Script
+   (`meta/gsync`, akce "potvrzeni") stejnou cestou jako KB.ohlasZpravu:
+
+     { akce: "potvrzeni", token, udalost: "ceka" | "potvrzeno" | "zamitnuto",
+       druh: "nepritomnosti" | "ukoly" | "milniky", id, uid }
+
+   `id` = dokument (kalendář / private/ukoly/seznam / private/milniky/seznam),
+   `uid` = žadatel. Skript z těla nic nevěří: text si přečte z databáze sám,
+   příjemce „čeká" určí z private/potvrzovani (+ hlavní správce, bez
+   volajícího), u potvrzeno / zamítnuto pošle žadateli. Odkazy v upozornění:
+   kalendar.html?udalost=, ukoly.html?otevri=, milniky.html?id=.
+   Bez čekání na odpověď – uložení nikdy neblokuje, chyby jen do konzole. */
+const UDALOSTI_POTVRZENI = ["ceka", "potvrzeno", "zamitnuto"];
+const DRUHY_OHLASU = ["nepritomnosti", "ukoly", "milniky"];
+KB.ohlasPotvrzeni = async (volby) => {
+    try {
+        const o = volby || {};
+        if (!KB.gsyncUrl || UDALOSTI_POTVRZENI.indexOf(o.udalost) === -1 ||
+            DRUHY_OHLASU.indexOf(o.druh) === -1 || !o.id) return;
+        await poOdeslani();
+        let token = "";
+        try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript nic nepošle */ }
+        fetch(KB.gsyncUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ akce: "potvrzeni", token: token, udalost: o.udalost, druh: o.druh,
+                id: String(o.id), uid: String(o.uid || "") })
+        }).catch(err => console.warn("Upozornění na potvrzení se neozvalo:", err));
+    } catch (err) { console.warn("Upozornění na potvrzení se neodeslalo:", err); }
+};
+
+/** uid člověka podle celého jména (tak ho píše KB_USER do hotovoKdo, updatedBy…) nebo e-mailu. */
+function uidPodleJmena(jmeno) {
+    const t = String(jmeno || "").trim().toLowerCase();
+    if (!t) return "";
+    const u = (KB.users || []).find(x =>
+        ((x.first || "") + " " + (x.last || "")).trim().toLowerCase() === t ||
+        String(x.email || "").toLowerCase() === t);
+    return u ? u.id : "";
+}
+
+/** Důvod odmítnutí: jeden řádek, nejvýš 300 znaků (vejde se do oznámení). */
+const cistyDuvod = (duvod) => String(duvod || "").replace(/\s+/g, " ").trim().slice(0, 300);
+
+/** „10. 11." / „10.–12. 11." / „28. 10.–3. 11." – rozsah do oznámení. */
+function rozsahKratce(od, doKdy) {
+    const c = (iso) => String(iso || "").split("-").map(Number);
+    const [r1, m1, d1] = c(od);
+    if (!d1) return "";
+    if (!doKdy || doKdy === od) return d1 + ". " + m1 + ".";
+    const [r2, m2, d2] = c(doKdy);
+    if (!d2) return d1 + ". " + m1 + ".";
+    return r1 === r2 && m1 === m2
+        ? d1 + ".–" + d2 + ". " + m2 + "."
+        : d1 + ". " + m1 + ".–" + d2 + ". " + m2 + ".";
+}
+
+/* Nepřítomnosti, které se potvrzují, a jak se jmenuje jejich zakázka ve výkazu
+   (vykazy.html, TYP_ABSENCE). Jinde (index.html POTVRZOVANE) stejné tři druhy. */
+const NEPRITOMNOST_ZAKAZKA = { dovolena: "Dovolená", volno: "Volno", neplacene: "Neplacené volno" };
+const NEPRITOMNOST_NEBYLA = { dovolena: "nebyla potvrzena", volno: "nebylo potvrzeno",
+    neplacene: "nebylo potvrzeno" };
+
+/**
+ * Zamítnutí nepřítomnosti (Michal 3. 11. 2026). Událost v kalendáři zůstane –
+ * přeškrtnutá, se štítkem „zamítnuto" a důvodem (`zamitnuto, zamitl,
+ * zamitnutoMs, duvod`) – a v přehledech nepřítomností se nepočítá. Záznamy
+ * výkazu té absence se smažou (i s částkou), nic jiného. Žadatel dostane
+ * oznámení (Quick TO-DO) a push. Smí jen ten, kdo nepřítomnosti potvrzuje
+ * (firestore.rules: `zamitnuto` z ne na ano jen smiPotvrdit).
+ *
+ * Vazba události na výkaz (vykazy.html, planKalendareAbsenci): Rychlý zápis
+ * (`zdroj: "panel"`) = jeden záznam `vykazId`; z výkazu (`zdroj: "vykaz"`) =
+ * záznamy téhož člověka se zakázkou té absence ve dnech od–do, mimo záznamy
+ * Rychlého zápisu (ty mají vlastní události). Dny se hledají dotazem jen
+ * na `datum` (jednopolový index, žádný složený) a člověk se filtruje tady.
+ * @returns {Promise<number>} kolik záznamů výkazu se smazalo
+ */
+KB.zamitniDovolenou = async (id, duvod) => {
+    if (authReady) await authReady;
+    requireDb();
+    const text = cistyDuvod(duvod);
+    if (!id || !text) throw new Error("Chybí důvod zamítnutí.");
+    let u = (KB.kalendar || []).find(x => x.id === id) || null;
+    if (!u) {
+        const snap = await getDoc(kalendarDoc(id));
+        u = snap.exists() ? Object.assign({ id: id }, snap.data()) : null;
+    }
+    if (!u) throw new Error("Událost už v kalendáři není.");
+    const kdo = window.KB_USER || "";
+    const ted = Date.now();
+    await setDoc(kalendarDoc(id), {
+        zamitnuto: true, zamitl: kdo, zamitnutoMs: ted, duvod: text,
+        potvrzeno: false, updatedMs: ted, updatedBy: kdo
+    }, { merge: true });
+
+    // záznamy výkazu té absence
+    const zakazka = NEPRITOMNOST_ZAKAZKA[u.typ] || "";
+    const patri = (z) => !!z && z.uid === u.uid && String(z.zakazka || "").trim() === zakazka;
+    const smazat = new Set();
+    if (zakazka && u.uid) {
+        if (u.vykazId) {
+            const snap = await getDoc(vykazDoc(u.vykazId)).catch(() => null);
+            if (snap && snap.exists() && patri(snap.data())) smazat.add(u.vykazId);
+        }
+        if (u.zdroj === "vykaz" && u.od) {
+            const snap = await getDocs(query(vykazyCol(),
+                where("datum", ">=", u.od), where("datum", "<=", u.do || u.od)));
+            snap.forEach(d => {
+                const z = d.data() || {};
+                if (patri(z) && z.zdroj !== "panel") smazat.add(d.id);
+            });
+        }
+    }
+    const idcka = Array.from(smazat);
+    for (let i = 0; i < idcka.length; i += 200) {          // záznam = dva zápisy, dávka unese 500
+        const davka = writeBatch(db);
+        idcka.slice(i, i + 200).forEach(zid => {
+            davka.delete(vykazDoc(zid));
+            davka.delete(castkaDoc(zid));
+        });
+        await davka.commit();
+    }
+
+    const nazev = zakazka || "Nepřítomnost";
+    const kdy = rozsahKratce(u.od, u.do);
+    const KOHO = { dovolena: "dovolenou", volno: "volno", neplacene: "neplacené volno" };
+    KB.zapisAktivitu("kalendar", "zamítl " + (KOHO[u.typ] || "nepřítomnost") + " – " + (u.osoba || "?") +
+        (kdy ? " (" + kdy + ")" : "") + (idcka.length ? ", smazáno záznamů výkazu: " + idcka.length : "") +
+        " – " + text);
+    if (u.uid && u.uid !== KB.currentUid()) {
+        await KB.saveQuickTodo(KB.newQuickId(), {
+            text: nazev + (kdy ? " " + kdy : "") + " " + (NEPRITOMNOST_NEBYLA[u.typ] || "nebyla potvrzena") +
+                ": " + text,
+            proUids: [u.uid],
+            druh: "info", rezim: "kazdy"          // oznámení – bere se na vědomí
+        }).catch(err => console.warn("Oznámení o zamítnutí neodešlo:", err));
+    }
+    KB.ohlasPotvrzeni({ udalost: "zamitnuto", druh: "nepritomnosti", id: id, uid: u.uid || "" });
+    return idcka.length;
 };
 
 /* ---------------------------------------------- kdo co potvrzuje ----
@@ -4958,6 +5257,8 @@ KB.saveUdalost = async (id, data) => {
     if (authReady) await authReady;
     requireDb();
     const uid = data.uid || KB.currentUid();
+    // jak událost vypadala před uložením (upozornění „čeká na potvrzení", zamítnutí)
+    const pred = (KB.kalendar || []).find(x => x.id === id) || null;
     await setDoc(kalendarDoc(id), {
         typ:     data.typ || "udalost",
         uid:     uid,
@@ -4993,6 +5294,11 @@ KB.saveUdalost = async (id, data) => {
            Když nepřítomnosti potvrzují jen určení, pustí databáze převzaté
            potvrzení jen s tímhle odkazem (firestore.rules, kalendarPrevzato). */
         ...(data.potvrzeno === true && data.potvrzenoZ ? { potvrzenoZ: String(data.potvrzenoZ) } : {}),
+        /* Přeuložení zamítnuté žádosti (oprava v kalendáři) = žádost znovu:
+           zamítnutí se zruší a jde to na potvrzení od začátku. */
+        ...(pred && pred.zamitnuto === true
+            ? { zamitnuto: deleteField(), zamitl: deleteField(), zamitnutoMs: deleteField(), duvod: deleteField() }
+            : {}),
         createdMs: data.createdMs || Date.now(),
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
@@ -5010,6 +5316,17 @@ KB.saveUdalost = async (id, data) => {
             ? "nahlásil v Rychlém zápisu " + nazev
             : "uložil do kalendáře " + nazev) +
         (rozsah ? " na " + rozsah : "") + (data.osoba ? " – " + data.osoba : ""));
+    /* Nová (nebo změněná) žádost o nepřítomnost, která čeká na potvrzení →
+       push těm, kdo nepřítomnosti potvrzují. Jednou za událost – vícedenní
+       dovolená z výkazu je jedna událost přes celý rozsah. Přeuložení beze
+       změny dnů a druhu (oprava textu, převzaté potvrzení) nic neposílá. */
+    const typ = data.typ || "udalost";
+    const od = data.od || "", doKdy = data.do || data.od || "";
+    if (data.potvrzeno !== true && NEPRITOMNOST_ZAKAZKA[typ] &&
+        (!pred || pred.potvrzeno === true || pred.zamitnuto === true || pred.typ !== typ ||
+         (pred.od || "") !== od || (pred.do || pred.od || "") !== doKdy)) {
+        KB.ohlasPotvrzeni({ udalost: "ceka", druh: "nepritomnosti", id: id, uid: uid });
+    }
     return id;
 };
 

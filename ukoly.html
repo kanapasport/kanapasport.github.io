@@ -641,6 +641,8 @@
                             ? '<span class="osoba osoba--ceka" title="Všechna TO-DO jsou hotová – čeká na potvrzení manažerem">' +
                                 "čeká na potvrzení</span>"
                             : "") +
+                        // vrácený do práce (Odmítnout…) – kdo a proč v bublině
+                        (u.stav !== "hotovo" && u.vraceno ? window.KBUI.vracenoStitek(u.vraceno) : "") +
                         (nepritomen
                             ? '<span class="osoba osoba--dovolena" title="' + esc(nepritomen.popis) + '">' +
                                 esc(nepritomen.stitek) + "</span>"
@@ -698,7 +700,9 @@
                             /* potvrzuje jen určený (Nastavení → Potvrzování), ostatním kdo */
                             ? (window.KBUI.smimPotvrdit("ukoly")
                                 ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd="' +
-                                    esc(u.id) + '">Potvrdit hotové</button>'
+                                    esc(u.id) + '">Potvrdit hotové</button>' +
+                                  // vrátit do práce s důvodem (obsluha v ui.js)
+                                  window.KBUI.odmitnoutHtml("ukoly", u.id)
                                 : window.KBUI.potvrzujeHtml("ukoly"))
                             : (smiPsat && u.stav !== "hotovo"
                                 ? '<button type="button" class="btn btn--sm btn--ghost" data-hotovo="' + esc(u.id) + '">Označit hotové</button>' : "")) +
@@ -869,6 +873,9 @@
                     text: "Označit hotové", ikona: "hotovo", fn: () => oznacHotove(u) },
                 window.KBUI.isAdmin() && hotovy && u.potvrzeno !== true && window.KBUI.smimPotvrdit("ukoly") && {
                     text: "Potvrdit hotové", ikona: "potvrdit", fn: () => potvrdHotove(u.id) },
+                window.KBUI.isAdmin() && hotovy && u.potvrzeno !== true && window.KBUI.smimPotvrdit("ukoly") && {
+                    text: "Odmítnout – vrátit do práce…", ikona: "vratit",
+                    fn: () => window.KBUI.odmitni("ukoly", u.id) },
                 window.KBUI.can("vykaz.view") && {
                     text: historieOtevrena.has(u.id) ? "Skrýt historii posunů" : "Historie posunů", ikona: "historie",
                     fn: () => {

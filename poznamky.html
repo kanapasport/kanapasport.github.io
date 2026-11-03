@@ -1044,9 +1044,32 @@
             zvyraznenaUkazana = false;
             otevri(k.id, "adresa");
         } else if (konv) {
-            if (najdiKonv(konv)) otevri(konv, "adresa");
+            if (najdiKonv(konv)) {
+                otevri(konv, "adresa");
+                // „Odpovědět" z upozornění (&odpovedet=1): kurzor do pole odpovědi i na telefonu
+                if (q.get("odpovedet") === "1") pripravOdpoved(konv);
+            }
             else { toast("Konverzace už neexistuje, nebo v ní nejsi.", "warn"); zrusAdresu(); }
         }
+    }
+
+    /* Klepnutí na upozornění o zprávě vede na poznamky.html?konv=<id>&odpovedet=1
+       (Michal 3. 11. 2026): konverzace dole u poslední zprávy a kurzor na konci
+       pole pro odpověď (i rozepsaný koncept zůstane). Na dotyku se pole zaměří
+       taky – člověk přišel odpovědět; iOS bez dotyku klávesnici sám nevysune. */
+    function pripravOdpoved(id) {
+        const k = najdiKonv(id);
+        if (!k || k.jenCteni) return;
+        setTimeout(() => {
+            if (otevrena !== id) return;
+            const pole = $("psaniText");
+            try {
+                pole.focus({ preventScroll: true });
+                const konec = pole.value.length;
+                pole.setSelectionRange(konec, konec);
+            } catch (e) { /* nic */ }
+            sjedDolu($("chatZpravy"));
+        }, 60);
     }
 
     const zrusAdresu = () => { try { history.replaceState(null, "", location.pathname); } catch (e) { /* nic */ } };

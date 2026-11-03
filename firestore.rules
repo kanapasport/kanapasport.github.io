@@ -82,6 +82,9 @@ service cloud.firestore {
        tomu zaškrtnutí nepomůže). „Potvrdit" tady znamená změnit záznam
        z nepotvrzeného na potvrzený; zrušení potvrzení a úpravy, které
        potvrzení jen nesou dál beze změny, hlídané nejsou.
+       Od 3. 11. 2026 (Iris) stejně i ODMÍTNUTÍ: zamítnutí nepřítomnosti
+       (`zamitnuto` z ne na ano), vrácení cizího hotového úkolu do práce
+       a zrušení splnění cizího milníku (kdo není přiřazený / zpracovatel).
        Čte se jeden dokument navíc. Opakované get() téhož dokumentu v jednom
        požadavku se znovu nepočítá (stejně jako get(zaznam()) v clen/role),
        takže na jeden zápis jsou nejvýš 3 různé dokumenty (člověk, nastavení,
@@ -105,6 +108,13 @@ service cloud.firestore {
        za potvrzený – stejně jako na webu (`potvrzeno !== false`). */
     function milnikPotvrzeny(d) {
       return d.get('hotovo', false) == true && d.get('potvrzeno', true) != false;
+    }
+    /* Zrušení splnění milníku (`hotovo` z ano na ne) – odmítnutí
+       (KB.vratMilnik) i „Vrátit mezi rozdělané". Zpracovatel svůj smí,
+       manažer cizí jen s právem potvrzovat milníky (3. 11. 2026). */
+    function milnikRusi() {
+      return resource.data.get('hotovo', false) == true
+        && request.resource.data.get('hotovo', false) != true;
     }
 
     match /artifacts/firemni-kb-app/public/data/{document=**} {
@@ -241,6 +251,13 @@ service cloud.firestore {
       return request.resource.data.get('potvrzeno', false) == true
         && resource.data.get('potvrzeno', false) != true;
     }
+    /* Vrácení hotového úkolu do práce (`stav` z hotovo na cokoli jiného) –
+       odmítnutí (KB.vratUkol). Přiřazený si svůj úkol vrátit smí (sníží
+       TO-DO), manažer cizí jen s právem potvrzovat úkoly (3. 11. 2026). */
+    function ukolVraci() {
+      return resource.data.get('stav', '') == 'hotovo'
+        && request.resource.data.get('stav', '') != 'hotovo';
+    }
     function milnikCesta(mid) {
       return /databases/$(database)/documents/artifacts/firemni-kb-app/private/milniky/seznam/$(mid);
     }
@@ -257,7 +274,9 @@ service cloud.firestore {
       allow create: if spravce()
                        && (request.resource.data.get('potvrzeno', false) != true || smiPotvrdit('ukoly'));
       allow update: if (spravce()
-                        && (!ukolPotvrzuje() || smiPotvrdit('ukoly') || ukolZPotvrzenehoMilniku()))
+                        && (!ukolPotvrzuje() || smiPotvrdit('ukoly') || ukolZPotvrzenehoMilniku())
+                        && (!ukolVraci() || request.auth.uid in resource.data.get('prirazeni', [])
+                            || smiPotvrdit('ukoly')))
                     || (clen()
                        && request.auth.uid in resource.data.prirazeni
                        && request.resource.data.diff(resource.data).affectedKeys()
@@ -448,6 +467,8 @@ service cloud.firestore {
          starý potvrzený, takže smazáním pole by se člen potvrdil sám. */
       allow update: if (spravce()
                         && (!milnikPotvrzeny(request.resource.data) || milnikPotvrzeny(resource.data)
+                            || smiPotvrdit('milniky'))
+                        && (!milnikRusi() || request.auth.uid in resource.data.get('zpracovatele', [])
                             || smiPotvrdit('milniky')))
                     || (clen()
                        && resource.data.get('zverejneno', false) == true
@@ -609,14 +630,25 @@ service cloud.firestore {
     function kalendarPotvrzeniOk() {
       return !kalendarPotvrzuje() || smiPotvrdit('nepritomnosti') || kalendarPrevzato();
     }
+    /* Zamítnutí nepřítomnosti (KB.zamitniDovolenou): `zamitnuto` z ne na ano,
+       nebo nová událost rovnou zamítnutá – jen kdo nepřítomnosti potvrzuje
+       (3. 11. 2026). Zrušení zamítnutí (přeuložení žádosti) se nehlídá,
+       stejně jako zrušení potvrzení. */
+    function kalendarZamita() {
+      return request.resource.data.get('zamitnuto', false) == true
+        && (resource == null || resource.data.get('zamitnuto', false) != true);
+    }
+    function kalendarZamitnutiOk() {
+      return !kalendarZamita() || smiPotvrdit('nepritomnosti');
+    }
 
     match /artifacts/firemni-kb-app/public/data/kalendar/{id} {
       allow create: if (spravce() || (clen() && request.resource.data.uid == request.auth.uid))
-                       && kalendarPotvrzeniOk();
+                       && kalendarPotvrzeniOk() && kalendarZamitnutiOk();
       allow update: if (spravce() || (clen()
                        && resource.data.uid == request.auth.uid
                        && request.resource.data.uid == request.auth.uid))
-                       && kalendarPotvrzeniOk();
+                       && kalendarPotvrzeniOk() && kalendarZamitnutiOk();
       allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
     }
 

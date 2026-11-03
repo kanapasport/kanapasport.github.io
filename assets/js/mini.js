@@ -137,9 +137,11 @@
     const hoNahlaseno = (kalendar, uid, datum) => (kalendar || []).some(k =>
         k.typ === "homeoffice" && k.uid === uid && (k.od || "") <= datum && datum <= (k.do || k.od || ""));
 
-    /** Nahlášená dovolená nebo volno (i neplacené) na den – výkazy na to upozorňují červeně. */
+    /** Nahlášená dovolená nebo volno (i neplacené) na den – výkazy na to upozorňují červeně.
+        Zamítnutá žádost (přeškrtnutá v kalendáři) se nepočítá. */
     const volnoNahlaseno = (kalendar, uid, datum) => (kalendar || []).find(k =>
         (k.typ === "dovolena" || k.typ === "volno" || k.typ === "neplacene") && k.uid === uid &&
+        k.zamitnuto !== true &&
         (k.od || "") <= datum && datum <= (k.do || k.od || "")) || null;
 
     /**

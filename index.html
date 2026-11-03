@@ -132,6 +132,11 @@
         /* odbavený nález: zůstává vidět, ale už nekřičí */
         .kontrola__radek--ok { background: var(--bg-soft); border-color: var(--line); opacity: .75; }
         .kontrola__radek--ok .kontrola__datum { color: var(--muted); }
+        /* Potvrdit + Odmítnout… (3. 11. 2026): když se vedle textu nevejdou,
+           jdou tlačítka pod něj doprava – text se nemačká do sloupečku. */
+        .kontrola__radek:has(> [data-odmitni]) { flex-wrap: wrap; justify-content: flex-end; }
+        .kontrola__radek:has(> [data-odmitni]) > .kontrola__odkaz { flex: 1 1 220px; }
+        .kontrola__radek > .btn { flex: none; }
         /* Podezřelý zápis nese dvě tlačítka (Odložit, V pořádku) – na telefonu
            by text zmáčkla do úzkého sloupce, proto jdou pod něj. */
         @media (max-width: 600px) {
@@ -431,6 +436,10 @@
         /* „Čeká na kolegy" – sbalený oddíl (vzhled jako Nedávno potvrzeno) */
         .ndl__kolegove { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
         .ndl__kolegove .ndl__radek { opacity: .8; }
+        /* Potvrdit + Odmítnout… v Čeká na tvé rozhodnutí – stejné zalomení */
+        .ndl__tlacitka { display: inline-flex; flex: none; gap: 6px; }
+        .ndl__radek:has(.ndl__tlacitka) { flex-wrap: wrap; justify-content: flex-end; }
+        .ndl__radek:has(.ndl__tlacitka) > .ndl__odkaz { flex: 1 1 220px; }
         /* Dnes v kalendáři: tečka podle druhu, barvy jen z tokenů webu */
         .kdnes__tecka { flex: none; width: 9px; height: 9px; border-radius: var(--r-sm); background: var(--dim); }
         .kdnes__tecka--akce { background: var(--accent); }
@@ -1054,7 +1063,7 @@
                     (p.href ? ' href="' + esc(p.href) + '"' : "") + ' title="' + esc(bublina) + '">' +
                 (p.href ? INFO_HTML : "") +
                 '<span class="nedavno__co">' + p.co + "</span>" +
-                '<span class="nedavno__kdo dl-vedl' + (jmeno ? "" : " nedavno__kdo--bez") + '">✓ ' +
+                '<span class="nedavno__kdo dl-vedl' + (jmeno ? "" : " nedavno__kdo--bez") + '">' + (p.znak || "✓") + " " +
                     esc(kdo) + " · " + esc(kdyPotvrzeno(p.ms)) + "</span>" +
             "</" + znacka + ">";
         }).join("");
@@ -1075,7 +1084,8 @@
     }
 
     // sbalení / rozbalení – překreslí jen tu dlaždici, ke které oddíl patří
-    const NEDAVNO_DLAZDICE = { dovolene: () => renderDovolene(), kontrola: () => renderKontrola(),
+    const NEDAVNO_DLAZDICE = { dovolene: () => renderDovolene(), dovoleneZam: () => renderDovolene(),
+        kontrola: () => renderKontrola(),
         uhrady: () => renderFakturyPlatby() };
     document.addEventListener("click", (event) => {
         const tlacitko = event.target.closest("[data-nedavno]");
@@ -2091,7 +2101,8 @@
                 if (!proMneJe(k)) return;
                 if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
                     let druh = TYP_NAZEV[k.typ] || "událost";
-                    if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true) druh = NEPOTVRZENE[k.typ];
+                    const zamitnuto = NEPOTVRZENE[k.typ] && k.zamitnuto === true;
+                    if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true && !zamitnuto) druh = NEPOTVRZENE[k.typ];
                     /* u potvrzené dovolené / volna řekne bublina, kdo a kdy
                        ji potvrdil – celým jménem (Michal 20. 10. 2026) */
                     const potvrdil = NEPOTVRZENE[k.typ] && k.potvrzeno === true
@@ -2100,8 +2111,11 @@
                         text: TEXTOVE_TYPY.indexOf(k.typ || "udalost") !== -1
                             ? (k.text || druh) + (k.osoba ? " – " + k.osoba : "")
                             : druh + " – " + (k.osoba || ""),
-                        bublina: potvrdil ? "Potvrdil(a) " + potvrdil +
-                            (k.potvrzenoMs ? " · " + casRazitko(k.potvrzenoMs) : "") : "" });
+                        bublina: zamitnuto
+                            ? "Zamítnuto" + (k.zamitl ? " – " + celeJmeno(k.zamitl) : "") + (k.duvod ? ": " + k.duvod : "")
+                            : potvrdil ? "Potvrdil(a) " + potvrdil +
+                                (k.potvrzenoMs ? " · " + casRazitko(k.potvrzenoMs) : "") : "",
+                        zamitnuto: zamitnuto ? k : null });
                 }
             });
             const jedou = (window.KB.auta || [])
@@ -2149,7 +2163,9 @@
                     den.radky.map(r =>
                         '<span class="row" style="gap:8px;padding:3px 0;font-size:var(--fs-3)">' +
                             '<i style="flex:none;width:9px;height:9px;border-radius:var(--r-sm);background:' + r.barva + '"></i>' +
-                            '<span class="truncate"' + (r.bublina ? ' title="' + esc(r.bublina) + '"' : "") + ">" +
+                            (r.zamitnuto ? window.KBUI.zamitnutoStitek(r.zamitnuto) : "") +
+                            '<span class="truncate' + (r.zamitnuto ? " je-zamitnuto" : "") + '"' +
+                                (r.bublina ? ' title="' + esc(r.bublina) + '"' : "") + ">" +
                                 esc(r.text) + "</span></span>").join("") +
                     "</div>" +
                 "</div>").join("")
@@ -2223,8 +2239,9 @@
             String(hranice.getMonth() + 1).padStart(2, "0") + "-" +
             String(hranice.getDate()).padStart(2, "0");
 
+        // zamítnutá žádost na potvrzení nečeká (je dole v „Nedávno zamítnuto")
         const ceka = (window.KB.kalendar || [])
-            .filter(k => POTVRZOVANE[k.typ] && k.potvrzeno !== true &&
+            .filter(k => POTVRZOVANE[k.typ] && k.potvrzeno !== true && k.zamitnuto !== true &&
                 (k.do || k.od || "") >= hraniceISO)
             .sort((a, b) => (a.od || "").localeCompare(b.od || ""));
 
@@ -2233,13 +2250,16 @@
             ? ceka.map(k =>
                 '<div class="kontrola__radek' + (smimDovolene ? "" : " dl-radek") +
                     '" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
-                    '<span class="kontrola__odkaz">' +
+                    '<a class="kontrola__odkaz" href="kalendar.html?udalost=' + esc(encodeURIComponent(k.id)) + '"' +
+                        ' title="Otevřít v kalendáři">' +
                         '<span class="kontrola__datum" style="color:var(--accent)">' +
                             esc(czDatum(k.od)) + (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>" +
                         "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b>" +
-                            " · " + POTVRZOVANE[k.typ] + "</span></span>" +
+                            " · " + POTVRZOVANE[k.typ] + "</span></a>" +
+                    /* Potvrdit a Odmítnout… jen tomu, kdo nepřítomnosti potvrzuje */
                     (smimDovolene ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-dovolenou="' +
-                        esc(k.id) + '">Potvrdit</button>' : vedl(window.KBUI.potvrzujeHtml("nepritomnosti"))) +
+                        esc(k.id) + '">Potvrdit</button>' + window.KBUI.odmitnoutHtml("nepritomnosti", k.id)
+                        : INFO_HTML + vedl(window.KBUI.potvrzujeHtml("nepritomnosti"))) +
                 "</div>").join("")
             : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
               "Žádná dovolená nečeká na potvrzení.</div>") +
@@ -2251,6 +2271,18 @@
                     co: "<b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b> · " +
                         POTVRZOVANE[k.typ] + " " + esc(czDatum(k.od)) +
                         (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "")
+                }))) +
+            /* Zamítnuté (3. 11. 2026): přeškrtnuté, štítek „zamítnuto", důvod v bublině. */
+            nedavnoHtml("dovoleneZam", "Nedávno zamítnuto", (window.KB.kalendar || [])
+                .filter(k => POTVRZOVANE[k.typ] && k.zamitnuto === true &&
+                    Number(k.zamitnutoMs) >= nedavnoOd())
+                .map(k => ({
+                    ms: Number(k.zamitnutoMs), kdo: k.zamitl, sloveso: "zamítl(a)", znak: "✕",
+                    href: "kalendar.html?udalost=" + encodeURIComponent(k.id),
+                    co: window.KBUI.zamitnutoStitek(k) + ' <span class="je-zamitnuto"><b>' +
+                        esc(k.osoba || jmenoUid(k.uid) || "?") + "</b> · " +
+                        POTVRZOVANE[k.typ] + " " + esc(czDatum(k.od)) +
+                        (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>"
                 })));
     }
 
@@ -2499,6 +2531,7 @@
                 const potvrzovana = !!POTVRZOVANE[k.typ];
                 const potvrdil = potvrzovana && k.potvrzeno === true ? celeJmeno(k.potvrdil) : "";
                 const stav = !potvrzovana ? ""
+                    : k.zamitnuto === true ? " " + window.KBUI.zamitnutoStitek(k)
                     : (k.potvrzeno === true
                         ? ' <span class="truncate dl-vedl" style="flex:0 1 auto;min-width:0;color:var(--ok)"' +
                             (k.potvrzenoMs ? ' title="' + esc((potvrdil ? "Potvrdil(a) " + potvrdil
@@ -2831,20 +2864,20 @@
                         (smimUkoly ? "tvé " : "") + "potvrzení</span></a>" +
                 (smimUkoly
                     ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-ukol="' +
-                        esc(u.id) + '">Potvrdit</button>'
+                        esc(u.id) + '">Potvrdit</button>' + odmitnoutHtml("ukoly", u.id)
                     : INFO_HTML + vedl(potvrzujeHtml("ukoly"))) +
             "</div>").join("");
 
         const milPotvrzeniHtml = milKPotvrzeni.map(m =>
             '<div class="kontrola__radek' + (smimMilniky ? "" : " dl-radek") +
                 '" style="background:var(--accent-tint);border-color:var(--accent-lt)">' +
-                '<a class="kontrola__odkaz" href="milniky.html">' +
+                '<a class="kontrola__odkaz" href="milniky.html?id=' + esc(encodeURIComponent(m.id)) + '">' +
                     '<span class="kontrola__datum" style="color:var(--accent)">MILNÍK?</span>' +
                     "<span><b>" + esc(m.cinnost || "?") + "</b> – splněno (" +
                         esc(m.hotovoKdo || "?") + "), čeká na " + (smimMilniky ? "tvé " : "") + "potvrzení</span></a>" +
                 (smimMilniky
                     ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-milnik="' +
-                        esc(m.id) + '">Potvrdit</button>'
+                        esc(m.id) + '">Potvrdit</button>' + odmitnoutHtml("milniky", m.id)
                     : INFO_HTML + vedl(potvrzujeHtml("milniky"))) +
             "</div>").join("");
 
@@ -2988,9 +3021,11 @@
                 '<button type="submit" class="btn btn--primary btn--sm">Uložit</button>' +
             "</form>" +
             '<hr class="nabidka__oddel" role="separator">' +
-            '<button type="button" role="menuitem" class="nabidka__polozka" data-milnab="hotovo">' +
-                ikona(m.hotovo ? "vratit" : "hotovo") +
-                "<span>" + (m.hotovo ? "Vrátit do rozpracovaných" : "Označit splněno") + "</span></button>" +
+            (!m.hotovo || milnikSmiVratit(m)
+                ? '<button type="button" role="menuitem" class="nabidka__polozka" data-milnab="hotovo">' +
+                    ikona(m.hotovo ? "vratit" : "hotovo") +
+                    "<span>" + (m.hotovo ? "Vrátit do rozpracovaných" : "Označit splněno") + "</span></button>"
+                : "") +
             '<button type="button" role="menuitem" class="nabidka__polozka" data-milnab="zverejnit">' +
                 ikona(skryty ? "oko" : "skryt") +
                 "<span>" + (skryty ? "Zveřejnit termín" : "Skrýt termín") + "</span></button>" +
@@ -3153,12 +3188,23 @@
         } catch (err) { chybaMilniku(err); }
     }
 
+    /* Zrušit splnění cizího milníku smí jen ten, kdo milníky potvrzuje
+       (firestore.rules, milnikRusi) – svůj milník zpracovatel vždycky. */
+    function milnikSmiVratit(m) {
+        const uid = mojeUid();
+        return smimPotvrdit("milniky") || (!!uid && (m.owners || []).indexOf(uid) !== -1);
+    }
+
     async function milnikPrepniHotovo(m) {
+        if (m.hotovo && !milnikSmiVratit(m)) return;
         const ted = Date.now(), kdo = window.KB_USER || "";
-        // manažerovo odškrtnutí platí rovnou (milniky.html, zmenaSplneni)
+        /* Odškrtnutí od toho, kdo milníky potvrzuje, platí rovnou; od ostatních
+           manažerů čeká na potvrzení (milniky.html, zmenaSplneni). */
+        const rovnou = smimPotvrdit("milniky");
         const zmena = m.hotovo
             ? { hotovo: false, hotovoKdo: "", hotovoMs: 0, potvrzeno: false, potvrdil: "", potvrzenoMs: 0 }
-            : { hotovo: true, hotovoKdo: kdo, hotovoMs: ted, potvrzeno: true, potvrdil: kdo, potvrzenoMs: ted };
+            : { hotovo: true, hotovoKdo: kdo, hotovoMs: ted, potvrzeno: rovnou,
+                potvrdil: rovnou ? kdo : "", potvrzenoMs: rovnou ? ted : 0 };
         const predtim = { hotovo: !!m.hotovo, hotovoKdo: m.hotovoKdo || "", hotovoMs: m.hotovoMs || 0,
             potvrzeno: m.potvrzeno !== undefined ? !!m.potvrzeno : !!m.hotovo,
             potvrdil: m.potvrdil || "", potvrzenoMs: m.potvrzenoMs || 0 };
@@ -3258,6 +3304,10 @@
             return false;
         }
     }
+    /** Odmítnout… vedle Potvrdit (KBUI.odmitnoutHtml; starší ui.js ho nemá – pak nic). */
+    function odmitnoutHtml(druh, id) {
+        return window.KBUI.odmitnoutHtml ? window.KBUI.odmitnoutHtml(druh, id) : "";
+    }
     /** „Potvrzuje: …" místo tlačítka (hotové HTML) – KBUI.potvrzujeHtml, když ho web má. */
     function potvrzujeHtml(druh) {
         if (window.KBUI.potvrzujeHtml) return window.KBUI.potvrzujeHtml(druh);
@@ -3271,17 +3321,20 @@
     function polozkyRozhodnuti() {
         const uid = mojeUid();
         const hranice = V.posunIso(V.dnesISO(), -30);      // jako Potvrzení dovolených
-        const tlacitko = (atribut, id) => '<button type="button" class="btn btn--sm btn--primary" ' +
-            atribut + '="' + esc(id) + '">Potvrdit</button>';
+        // Potvrdit + Odmítnout… (s důvodem); řádky kolegů jsou bez tlačítek
+        const tlacitko = (atribut, id, druh) => '<span class="ndl__tlacitka">' +
+            '<button type="button" class="btn btn--sm btn--primary" ' +
+            atribut + '="' + esc(id) + '">Potvrdit</button>' + odmitnoutHtml(druh, id) + "</span>";
         return {
             nepritomnosti: (window.KB.kalendar || [])
-                .filter(k => POTVRZOVANE[k.typ] && k.potvrzeno !== true && (k.do || k.od || "") >= hranice)
+                .filter(k => POTVRZOVANE[k.typ] && k.potvrzeno !== true && k.zamitnuto !== true &&
+                    (k.do || k.od || "") >= hranice)
                 .sort((a, b) => (a.od || "").localeCompare(b.od || ""))
                 .map(k => ({
                     datum: kratkeDatum(k.od) + (k.do && k.do !== k.od ? " – " + kratkeDatum(k.do) : ""),
                     nazev: (k.osoba || jmenoUid(k.uid) || "?") + " · " + POTVRZOVANE[k.typ],
-                    meta: k.text || "", href: "kalendar.html",
-                    tlacitko: tlacitko("data-potvrd-dovolenou", k.id)
+                    meta: k.text || "", href: "kalendar.html?udalost=" + encodeURIComponent(k.id),
+                    tlacitko: tlacitko("data-potvrd-dovolenou", k.id, "nepritomnosti")
                 })),
             ukoly: (window.KB.ukoly || [])
                 .filter(u => u.stav === "hotovo" && u.potvrzeno !== true)
@@ -3291,7 +3344,7 @@
                     meta: [u.projekt, (u.prirazeni || []).map(jmenoUid).filter(Boolean).join(", ")]
                         .filter(Boolean).join(" · "),
                     href: "ukoly.html?vse=1&otevri=" + encodeURIComponent(u.id),
-                    tlacitko: tlacitko("data-potvrd-ukol", u.id)
+                    tlacitko: tlacitko("data-potvrd-ukol", u.id, "ukoly")
                 })),
             milniky: (window.KB.milniky || [])
                 .filter(m => m.hotovo && m.potvrzeno === false)
@@ -3300,8 +3353,8 @@
                     datum: milnikTerminVidet(m) ? kratkeDatum(m.datum) : "—",
                     nazev: [m.cinnost, m.napln].filter(Boolean).join(" – ") || "?",
                     meta: "splnil(a) " + (celeJmeno(m.hotovoKdo) || "?") + (m.zakazka ? " · " + m.zakazka : ""),
-                    href: "milniky.html",
-                    tlacitko: tlacitko("data-potvrd-milnik", m.id)
+                    href: "milniky.html?id=" + encodeURIComponent(m.id),
+                    tlacitko: tlacitko("data-potvrd-milnik", m.id, "milniky")
                 })),
             zpetne: (window.KB.quicktodo || [])
                 .filter(q => q.zadostZpetne && q.zadostZpetne.datum && !q.hotovo && q.odKoho !== uid &&

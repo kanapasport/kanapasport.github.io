@@ -702,7 +702,7 @@
         if (lide.length !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(den)) return null;
         const uid = lide[0];
         const zaznam = (kalendar || (window.KB && window.KB.kalendar) || []).find(k =>
-            k && k.uid === uid && NEPRITOMNOST_STITEK[k.typ] && k.celyDen !== false &&
+            k && k.uid === uid && NEPRITOMNOST_STITEK[k.typ] && k.celyDen !== false && k.zamitnuto !== true &&
             String(k.od || "") <= den && den <= String(k.do || k.od || ""));
         if (!zaznam) return null;
         const kdo = V.clovek(uid);

@@ -81,6 +81,21 @@
         .ud--milnik { background: #b3006b; }
         /* štítek „nový" (app.css) v proužku nesmí proužek zvýšit */
         .ud .milpil { flex: none; padding: 0 6px; line-height: 1.15; }
+        /* Zamítnutá nepřítomnost (3. 11. 2026): zůstává vidět, ale přeškrtnutá
+           a vybledlá, se štítkem „zamítnuto" (důvod v bublině). */
+        .ud--zamitnuto { opacity: .62; }
+        .ud--zamitnuto .je-zamitnuto, .ud--zamitnuto .udcely__druh { text-decoration: line-through;
+            text-decoration-thickness: 2px; }
+        /* Štítek stojí na konci; v úzkém dni (týden na PC) se schová a stav nese
+           text „Zamítnutá dovolená" s přeškrtnutím – druh a jméno mají přednost. */
+        .udcely .milpil--zamitnuto { flex: none; }
+        .udcely.ud--zamitnuto { container-type: inline-size; }
+        @container (max-width: 190px) { .udcely .milpil--zamitnuto { display: none; } }
+        /* událost z odkazu upozornění (?udalost=) */
+        .ud--cil { outline: 3px solid var(--warn); outline-offset: 1px; }
+        .detail__akce { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+            padding: 0 18px 14px; }
+        .detail__akce:empty { display: none; }
         /* Online hovor a osobní schůzka – dvě běžné věci, které se do
            „firemní akce" schovávaly a nešlo je odlišit (Michal 3. 9. 2026). */
         .ud--teams { background: #4b53bc; }
@@ -143,7 +158,7 @@
             font-size: var(--fs-3); font-weight: 900; letter-spacing: .04em; }
         .detail__telo { display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; }
         .detail__radek { display: flex; align-items: baseline; gap: 12px; font-size: var(--fs-2); }
-        .detail__radek span { flex: none; width: 66px; color: var(--muted);
+        .detail__radek > span { flex: none; width: 66px; color: var(--muted);
             font-size: var(--fs-1); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
         .detail__radek b { font-weight: 800; }
         /* popisky v úpravě – stejné jako ve Správě projektů */
@@ -531,9 +546,15 @@
             ? (vlastni || nazevDruhu)
             : nazevDruhu;
         // dovolená a volno bez manažerova razítka to musí říct rovnou v mřížce
-        if (u.typ === "dovolena" && u.potvrzeno !== true) druh = "Nepotvrzená dovolená";
-        if (u.typ === "volno" && u.potvrzeno !== true) druh = "Nepotvrzené volno";
-        if (u.typ === "neplacene" && u.potvrzeno !== true) druh = "Nepotvrzené neplacené volno";
+        // (zamítnutá navíc přeškrtnutá a se štítkem „zamítnuto")
+        const zamitnuta = u.zamitnuto === true;
+        const ceka = u.potvrzeno !== true && !zamitnuta;
+        if (u.typ === "dovolena" && ceka) druh = "Nepotvrzená dovolená";
+        if (u.typ === "volno" && ceka) druh = "Nepotvrzené volno";
+        if (u.typ === "neplacene" && ceka) druh = "Nepotvrzené neplacené volno";
+        if (u.typ === "dovolena" && zamitnuta) druh = "Zamítnutá dovolená";
+        if (u.typ === "volno" && zamitnuta) druh = "Zamítnuté volno";
+        if (u.typ === "neplacene" && zamitnuta) druh = "Zamítnuté neplacené volno";
 
         return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : ""),
                  vlastni: vlastni && vlastni.toLowerCase() !== nazevDruhu.toLowerCase()
@@ -638,7 +659,8 @@
                 out.push({ typ: typ, id: u.id, muj: u.uid === window.KB.currentUid(),
                     odCas: u.celyDen ? "" : (u.odCas || ""), doCas: u.celyDen ? "" : (u.doCas || ""),
                     vykazId: u.vykazId || "", od: u.od || "", do: u.do || u.od || "",
-                    kdo: p.kdo, co: p.druh, text: cas + p.popis });
+                    kdo: p.kdo, co: p.druh, text: cas + p.popis,
+                    zamitnuto: u.zamitnuto === true ? u : null });
             }
         });
 
@@ -673,11 +695,19 @@
 
     const novyStitek = (u) => u.novy
         ? '<span class="milpil milpil--novy" title="Zveřejněný za posledních 7 dní">nový</span> ' : "";
+    /* zamítnutá: přeškrtnutý text, štítek za ním, důvod v bublině */
+    const zamitnutoStitek = (u) => u.zamitnuto ? window.KBUI.zamitnutoStitek(u.zamitnuto) : "";
+    const tridyUd = (u) => " ud--" + esc(u.typ) + (u.zamitnuto ? " ud--zamitnuto" : "") +
+        (u.id && u.id === cilUdalost ? " ud--cil" : "");
+    const bublinaUd = (u) => (u.novy ? "nový " : "") + u.text +
+        (u.zamitnuto ? " · zamítnuto" + (u.zamitnuto.duvod ? ": " + u.zamitnuto.duvod : "") : "");
 
     function udalostHtml(u) {
-        return '<button type="button" class="ud ud--' + esc(u.typ) + '"' +
+        return '<button type="button" class="ud' + tridyUd(u) + '"' +
             (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
-            ' title="' + esc((u.novy ? "nový " : "") + u.text) + '">' + novyStitek(u) + esc(u.text) + "</button>";
+            ' title="' + esc(bublinaUd(u)) + '">' + novyStitek(u) +
+            (u.zamitnuto ? '<span class="je-zamitnuto">' + esc(u.text) + "</span> " + zamitnutoStitek(u) : esc(u.text)) +
+            "</button>";
     }
 
     /** Celodenní pruh v týdnu a 3 dnech: druh a za ním jméno, přes celou šířku dne. */
@@ -687,10 +717,10 @@
               '<span class="udcely__kdo">' + esc(u.kdo) + "</span>"
             : "";
         // v pruhu jsou jen celodenní věci, takže tu není žádný čas k vypsání
-        return '<button type="button" class="ud udcely ud--' + esc(u.typ) + '"' +
+        return '<button type="button" class="ud udcely' + tridyUd(u) + '"' +
             (u.id ? ' data-udalost="' + esc(u.id) + '"' : "") +
-            ' title="' + esc((u.novy ? "nový " : "") + u.text) + '">' + novyStitek(u) +
-            '<b class="udcely__druh">' + esc(u.co || u.text) + "</b>" + kdo + "</button>";
+            ' title="' + esc(bublinaUd(u)) + '">' + novyStitek(u) +
+            '<b class="udcely__druh">' + esc(u.co || u.text) + "</b>" + kdo + zamitnutoStitek(u) + "</button>";
     }
 
     /* Bez času nevíme, kam do mřížky s tím sednout – patří to nahoru. */
@@ -901,7 +931,44 @@
                 // vlastní popis patří sem, v mřížce by jen rozbil jednotný pruh
                 radek("Popis", p.vlastni) +
                 radek("Zdroj", u.zdroj === "vykaz" ? "zapsáno z výkazu" : "") +
-            "</div>";
+                stavHtml(u) +
+            "</div>" +
+            '<div class="detail__akce" id="detailPotvrzeni">' + potvrzeniHtml(u) + "</div>";
+    }
+
+    /* --------------------------------------- potvrzení nepřítomnosti ---
+       Dovolená, volno a neplacené volno čekají na potvrzení (Nastavení →
+       Potvrzování). V detailu je stav, a kdo potvrzuje, má tu Potvrdit
+       a Odmítnout… (Michal 3. 11. 2026 – na detail vede i odkaz z upozornění
+       kalendar.html?udalost=<id>). Zamítnutá zůstává přeškrtnutá s důvodem. */
+    const POTVRZOVANE = { dovolena: true, volno: true, neplacene: true };
+    const casRazitko = (ms) => {
+        const d = new Date(Number(ms) || 0);
+        return Number(ms) ? d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() : "";
+    };
+
+    function stavHtml(u) {
+        if (!POTVRZOVANE[u.typ]) return "";
+        const radek = (popisek, html) => '<div class="detail__radek"><span>' + esc(popisek) + "</span><b>" +
+            html + "</b></div>";
+        if (u.zamitnuto === true) {
+            return radek("Stav", window.KBUI.zamitnutoStitek(u) + " " +
+                    esc([u.zamitl, casRazitko(u.zamitnutoMs)].filter(Boolean).join(", "))) +
+                (u.duvod ? radek("Důvod", esc(u.duvod)) : "");
+        }
+        if (u.potvrzeno === true) {
+            return radek("Stav", "potvrzeno" + esc(u.potvrdil ? " – " + u.potvrdil : ""));
+        }
+        return radek("Stav", '<span style="color:var(--warn)">čeká na potvrzení</span>');
+    }
+
+    function potvrzeniHtml(u) {
+        if (!POTVRZOVANE[u.typ] || u.potvrzeno === true || u.zamitnuto === true) return "";
+        if (!window.KBUI.can("vykaz.view")) return "";
+        return window.KBUI.smimPotvrdit("nepritomnosti")
+            ? '<button type="button" class="btn btn--sm btn--primary" data-kal-potvrd="' + esc(u.id) + '">Potvrdit</button>' +
+              window.KBUI.odmitnoutHtml("nepritomnosti", u.id)
+            : window.KBUI.potvrzujeHtml("nepritomnosti");
     }
 
     function otevriDetail(id) {
@@ -919,7 +986,8 @@
         const moje = u.uid === window.KB.currentUid();
         const spravce = window.KBUI.can("vykaz.view");
         const naVykaz = $("btnNaVykaz");
-        naVykaz.hidden = !(u.vykazId && (spravce || moje));
+        // zamítnutá žádost už ve výkazu není (záznamy se smazaly)
+        naVykaz.hidden = !(u.vykazId && (spravce || moje)) || u.zamitnuto === true;
         naVykaz.dataset.vykaz = u.vykazId || "";
 
         /* Bez `vykazId` není kam skočit – takový záznam se opravuje i maže
@@ -930,10 +998,50 @@
         const vykazZije = u.vykazId &&
             (window.KB.vykazy || []).some(z => z.id === u.vykazId);
         const osirely = !vykazZije && (spravce || moje);
-        $("btnUprav").hidden = !osirely;
+        /* Zamítnutá žádost se neopravuje (oprava by ji poslala na potvrzení
+           znovu bez výkazu) – nová se zapíše ve Výkazech; smazat ji jde. */
+        $("btnUprav").hidden = !osirely || u.zamitnuto === true;
         $("btnUpravSmaz").hidden = !osirely;
 
         $("detailOverlay").hidden = false;
+    }
+
+    /** Otevřený detail po změně v databázi (potvrzení, zamítnutí, dorazily výkazy) – obsah
+        i tlačítka znovu; rozepsanou úpravu nechá být. */
+    function obnovDetail() {
+        if ($("detailOverlay").hidden || !upravovanaId || !$("detailUprava").hidden) return;
+        if (!(window.KB.kalendar || []).some(x => x.id === upravovanaId)) { $("detailOverlay").hidden = true; return; }
+        otevriDetail(upravovanaId);
+    }
+
+    /* ?udalost=<id> – odkaz z upozornění: kalendář skočí na den události,
+       zvýrazní ji a otevře detail (s Potvrdit / Odmítnout pro toho, kdo smí).
+       Jednou, až kalendář dorazí; když událost není, řekne to. */
+    const cilUdalost = new URLSearchParams(location.search).get("udalost") || "";
+    let cilHotovo = !cilUdalost;
+    let cilCasovac = null;
+    function otevriCil() {
+        if (cilHotovo) return;
+        const u = (window.KB.kalendar || []).find(x => x.id === cilUdalost);
+        if (!u) {
+            // první snímek kalendáře může přijít dřív, než je přihlášení hotové – chvíli počkat
+            if (!cilCasovac) cilCasovac = setTimeout(() => {
+                if (cilHotovo) return;
+                cilHotovo = true;
+                window.KBUI.toast("Tahle událost už v kalendáři není.", "warn");
+            }, 6000);
+            return;
+        }
+        cilHotovo = true;
+        clearTimeout(cilCasovac);
+        if (u.od) {
+            const [r, m, d] = u.od.split("-").map(Number);
+            if (r && m && d) kotva = new Date(r, m - 1, d);
+        }
+        vykresli();
+        otevriDetail(cilUdalost);
+        const prvek = document.querySelector('[data-udalost="' + CSS.escape(cilUdalost) + '"]');
+        if (prvek) prvek.scrollIntoView({ block: "center" });
     }
 
     let upravovanaId = "";
@@ -1078,10 +1186,21 @@
             if (!ud) return;
             clearTimeout(cekaDetail);
             const u = (window.KB.kalendar || []).find(x => x.id === ud.dataset.udalost);
+            // zamítnutá žádost výkaz nemá – dvojklik ukáže jen detail
+            if (u && u.zamitnuto === true) return void otevriDetail(u.id);
             naVykaz(u && u.vykazId);
         });
 
         $("btnDetailZavri").addEventListener("click", () => { $("detailOverlay").hidden = true; });
+        // Potvrdit v detailu (Odmítnout… obsluhuje ui.js – [data-odmitni])
+        $("detailOverlay").addEventListener("click", (event) => {
+            const b = event.target.closest("[data-kal-potvrd]");
+            if (!b || !window.KBUI.smimPotvrdit("nepritomnosti")) return;
+            b.disabled = true;
+            window.KB.potvrdDovolenou(b.dataset.kalPotvrd)
+                .then(() => window.KBUI.toast("Nepřítomnost potvrzena."))
+                .catch(() => { b.disabled = false; window.KBUI.toast("Potvrzení selhalo.", "error"); });
+        });
         $("btnUprav").addEventListener("click", otevriUpravu);
         $("btnUpravUloz").addEventListener("click", ulozUpravu);
         $("btnUpravSmaz").addEventListener("click", smazUdalost);
@@ -1236,10 +1355,13 @@
         const obnov = () => { zapniSledovani(); naplnKdo(); vykresli(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
-        window.KB.on("kalendar", vykresli);
+        window.KB.on("kalendar", () => { vykresli(); obnovDetail(); otevriCil(); });
         window.KB.on("ukoly", vykresli);
         window.KB.on("milniky", vykresli);
+        // změna práv (kdo co potvrzuje) překreslí i tlačítka v otevřeném detailu
+        document.addEventListener("kb-role", obnovDetail);
         obnov();
+        otevriCil();
     });
 })();
 </script>
