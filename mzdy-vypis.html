@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Výpis pro mzdovou – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=320">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Výpis pro mzdovou účetní (Michal 3. 11. 2026, Iris): jeden list
+           „k tisku“ – na obrazovce vypadá stejně, jak vyjde z tiskárny nebo
+           do PDF. Nahoře ovládání (měsíc, Tisk), pod ním samotný list.
+           Styly jsou schválně až ZA app.css. */
+
+        .mz { display: flex; flex-direction: column; gap: 18px; max-width: 900px; }
+        .mz-ovladani { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 22px; }
+        .mz-ovladani__text { flex: 1 1 360px; min-width: 0; }
+        .mz-ovladani__text p { margin-top: 4px; line-height: 1.6; max-width: 640px; }
+        .mz-volby { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+        .mz-volby label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .mz-volby .field { width: auto; min-width: 180px; }
+
+        .mz-list { padding: 26px 28px 22px; line-height: 1.5; color: var(--text); }
+        .mz-hlava { border-bottom: 2px solid var(--text); padding-bottom: 10px; margin-bottom: 16px; }
+        .mz-firma { font-size: var(--fs-2); font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+        .mz-nadpis { font-size: var(--fs-5); font-weight: 900; line-height: 1.25; margin: 4px 0 2px; }
+        .mz-meta { font-size: var(--fs-1); color: var(--text-soft); }
+
+        .mz-osoby { display: flex; flex-direction: column; gap: 14px; }
+        .mz-osoba { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px 12px;
+            break-inside: avoid; page-break-inside: avoid; }
+        .mz-osoba__hlava { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+            border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; margin-bottom: 6px; }
+        .mz-osoba__jmeno { font-size: var(--fs-3); font-weight: 900; min-width: 0; overflow-wrap: anywhere; }
+        .mz-osoba__celkem { margin-left: auto; font-size: var(--fs-2); font-weight: 800; white-space: nowrap; }
+
+        /* řádek = druh vlevo, dny vpravo; na telefonu pod sebou */
+        .mz-radky { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+        .mz-radek { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 2px 12px; }
+        .mz-radek dt { font-weight: 800; }
+        .mz-radek dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+        /* nepotvrzené: text „(nepotvrzeno)“ to říká sám, kurzíva je jen navíc –
+           černobílý tisk barvu neukáže */
+        .mz-radek--nepotvrzeno dt, .mz-radek--nepotvrzeno dd { font-style: italic; }
+        .mz-radek--nepotvrzeno dt { color: var(--warn); }
+        @media (max-width: 520px) {
+            .mz-list { padding: 18px 14px 16px; }
+            .mz-radek { grid-template-columns: minmax(0, 1fr); gap: 0; }
+            .mz-radek + .mz-radek { margin-top: 4px; }
+        }
+
+        .mz-bez { margin-top: 16px; overflow-wrap: anywhere; }
+        .mz-prazdno { padding: 6px 0 2px; }
+        .mz-pozn { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--line);
+            font-size: var(--fs-1); color: var(--text-soft); line-height: 1.6; }
+        .mz-stav { padding: 26px 4px; text-align: center; }
+
+        /* ------------------------------------------------------- TISK ----
+           Jen list: bez pásu, hlavičky webu, ovládání, zámku a hlášek.
+           Černé písmo na bílém, rámečky šedé – čitelné i na černobílé
+           tiskárně. A4 na výšku s okrajem (app.css má pro faktury okraj 0). */
+        @media print {
+            @page { size: A4 portrait; margin: 14mm 14mm 16mm; }
+            html, body { background: #fff !important; }
+            body { padding: 0 !important; margin: 0 !important; }
+            body > *:not(main) { display: none !important; }
+            main.wrap { padding: 0 !important; max-width: none !important; display: block !important; }
+            main > *:not(#obsah), .mz > *:not(#vypis) { display: none !important; }
+            .mz { max-width: none; display: block; }
+            #vypis, #vypis * { color: #000 !important; background: transparent !important; box-shadow: none !important; }
+            #vypis { border: 0 !important; padding: 0 !important; border-radius: 0; font-size: 11pt; }
+            .mz-hlava { border-bottom-color: #000; }
+            .mz-osoba { border-color: #777; }
+            .mz-osoba__hlava { border-bottom-color: #bbb; }
+            .mz-pozn { border-top-color: #777; }
+            .mz-radek { grid-template-columns: 15em minmax(0, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:var(--fs-4)">Výpis pro mzdovou účetní vidí jen majitelé, hlavní správce a asistentka.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Jsou v něm nepřítomnosti lidí za celý měsíc. Když si myslíš, že sem patříš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" class="mz" hidden>
+        <div class="mz-ovladani">
+            <div class="mz-ovladani__text">
+                <h2 class="nadpis-stranky">Výpis pro mzdovou účetní</h2>
+                <p class="small muted">
+                    Kdo ze zaměstnanců (HPP) byl v měsíci pryč – dovolená, náhradní volno,
+                    neplacené volno, nemoc, doktor a školení, podle výkazů. Odsud se nic nikam
+                    neposílá: list vytiskni, nebo v okně tisku vyber <b>Uložit jako PDF</b>.
+                </p>
+            </div>
+            <div class="mz-volby">
+                <label>
+                    <span class="label">Měsíc</span>
+                    <select id="fMesic" class="field" aria-label="Měsíc výpisu"></select>
+                </label>
+                <button type="button" id="btnTisk" class="btn btn--primary"
+                    title="Vytisknout, nebo uložit jako PDF">Tisk</button>
+            </div>
+        </div>
+
+        <article id="vypis" class="card mz-list" aria-live="polite"></article>
+    </div>
+</main>
+
+<script src="assets/js/taxonomy.js?v=320"></script>
+<script src="assets/js/ui.js?v=320"></script>
+<script src="assets/js/vykazy.js?v=320"></script>
+<script type="module" src="assets/js/store.js?v=320"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+
+    /* Kolik měsíců zpátky nabízet. Výkazy jsou na webu od září 2026;
+       starší měsíc prostě vyjde prázdný. */
+    const MESICU_ZPET = 24;
+    /* Bez „Naše údaje“ ve fakturách (nebo bez práv na ně) stačí značka webu. */
+    const FIRMA_ZALOHA = "Pasport Kaňa";
+
+    let mesic = "";               // vybraný „RRRR-MM“
+    let firma = "";               // název z Naše údaje (faktury)
+    let firmaNactena = false;
+    let sledovaniZapnuto = false;
+    /* Starší měsíce, než drží živé okno výkazů (4 měsíce, store.js), se
+       dotahují jednorázově: mesic → "nacitam" | "hotovo" | "chyba". */
+    const stavMesice = {};
+
+    const smi = () => window.KBUI.can("finance.view");
+
+    const mesicIso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    function konecMesice(m) {
+        const d = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0);
+        return m + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    function naplnMesice() {
+        const d = new Date();
+        d.setDate(1);
+        const volby = [];
+        for (let i = 0; i <= MESICU_ZPET; i++) {
+            volby.push(mesicIso(d));
+            d.setMonth(d.getMonth() - 1);
+        }
+        // výchozí je MINULÝ měsíc – výpis se dělá po skončení měsíce
+        const minuly = volby[1];
+        mesic = minuly;
+        $("fMesic").innerHTML = volby.map(m => '<option value="' + esc(m) + '"' +
+            (m === minuly ? " selected" : "") + ">" + esc(V.mesicText(m)) + "</option>").join("");
+    }
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !smi()) return;
+        sledovaniZapnuto = true;
+        window.KB.watchVykazy();
+    }
+
+    async function nactiFirmu() {
+        if (firmaNactena || !smi() || !window.KB.loadFakturaNastaveni) return;
+        firmaNactena = true;
+        try {
+            const n = await window.KB.loadFakturaNastaveni();
+            firma = String((n && n.nazev) || "").trim();
+        } catch (err) {
+            firma = "";
+        }
+        render();
+    }
+
+    /** Měsíc mimo živé okno výkazů se dotáhne jednou; okno se zná až po zapnutí odběru. */
+    async function zajistiMesic(m) {
+        const okno = window.KB.vykazyOknoOd || "";
+        if (!okno || stavMesice[m] || m + "-01" >= okno) return;
+        stavMesice[m] = "nacitam";
+        try {
+            await window.KB.nactiVykazyRozsah(m + "-01", konecMesice(m));
+            stavMesice[m] = "hotovo";
+        } catch (err) {
+            console.warn("Starší výkazy se nenačetly:", err);
+            stavMesice[m] = "chyba";
+            window.KBUI.toast("Výkazy za " + V.mesicText(m) + " se nepodařilo načíst.", "warn");
+        }
+        render();
+    }
+
+    function cas(d) {
+        return d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() + " " +
+            d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    function stavHtml(text) {
+        return '<p class="mz-stav small muted">' + esc(text) + "</p>";
+    }
+
+    function osobaHtml(o) {
+        return '<section class="mz-osoba">' +
+            '<div class="mz-osoba__hlava">' +
+                '<span class="mz-osoba__jmeno">' + esc(o.jmeno) + "</span>" +
+                '<span class="mz-osoba__celkem">' + esc(o.celkemText) + "</span>" +
+            "</div>" +
+            '<dl class="mz-radky">' +
+                o.radky.map(r => '<div class="mz-radek' +
+                        (r.varianta === "nepotvrzeno" ? " mz-radek--nepotvrzeno" : "") + '">' +
+                    "<dt>" + esc(r.popisek) + "</dt><dd>" + esc(r.zbytek) + "</dd></div>").join("") +
+            "</dl>" +
+        "</section>";
+    }
+
+    function render() {
+        if (!smi()) {
+            $("stop").hidden = false;
+            $("obsah").hidden = true;
+            return;
+        }
+        $("stop").hidden = true;
+        $("obsah").hidden = false;
+        zapniSledovani();
+        nactiFirmu();
+        zajistiMesic(mesic);
+
+        const nazev = V.mesicText(mesic);
+        const lide = window.KB.users || [];
+        const hlava = '<header class="mz-hlava">' +
+            '<div class="mz-firma">' + esc(firma || FIRMA_ZALOHA) + "</div>" +
+            '<h1 class="mz-nadpis">Nepřítomnosti zaměstnanců – ' + esc(nazev) + "</h1>" +
+            '<div class="mz-meta">Vytvořeno ' + esc(cas(new Date())) +
+                (window.KB_USER ? " · " + esc(window.KB_USER) : "") + "</div>" +
+        "</header>";
+
+        if (!window.KB.vykazyPrisly || !lide.length || stavMesice[mesic] === "nacitam") {
+            $("vypis").innerHTML = hlava + stavHtml("Načítám výkazy…");
+            return;
+        }
+        if (stavMesice[mesic] === "chyba") {
+            $("vypis").innerHTML = hlava + stavHtml("Výkazy za tenhle měsíc se nepodařilo načíst. Zkus stránku načíst znovu.");
+            return;
+        }
+
+        const v = V.vypisNepritomnosti(window.KB.vykazy || [],
+            { mesic: mesic, lide: lide, kalendar: window.KB.kalendar || [] });
+        const nikdo = !v.lide.length && !v.bez.length;
+
+        $("vypis").innerHTML = hlava +
+            (nikdo
+                ? '<p class="mz-prazdno">V seznamu lidí není žádný zaměstnanec (HPP).</p>'
+                : (v.lide.length
+                    ? '<div class="mz-osoby">' + v.lide.map(osobaHtml).join("") + "</div>"
+                    : '<p class="mz-prazdno">Nikdo ze zaměstnanců nebyl v tomhle měsíci nepřítomen.</p>') +
+                  (v.bez.length
+                    ? '<p class="mz-bez"><b>Bez nepřítomnosti:</b> ' +
+                        esc(v.bez.map(b => b.jmeno).join(", ")) + "</p>"
+                    : "")) +
+            '<p class="mz-pozn">Vypsané jsou jen pracovní dny podle výkazů; svátky, víkendy, ' +
+                "home office a dny bez zápisu se nevypisují. Souvislé pracovní dny jsou sloučené " +
+                "do rozsahu (i přes víkend). „Nepotvrzeno“ = dovolenou, náhradní nebo neplacené " +
+                "volno ještě nepotvrdil manažer. Doktor na část dne je uvedený v hodinách.</p>";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "mzdy-vypis.html" });
+        // opona: nepřítomnosti celé firmy až po hesle k citlivým sekcím
+        window.KBUI.zamekCitlive({ obsah: ["obsah"], need: "finance.view",
+            popis: "Jsou tu nepřítomnosti lidí za celý měsíc. Odemčení platí tři minuty od " +
+                "poslední práce a přenese se i na stránky pod Projekty a do Nastavení." });
+        naplnMesice();
+
+        $("fMesic").addEventListener("change", () => {
+            mesic = $("fMesic").value;
+            render();
+        });
+        $("btnTisk").addEventListener("click", () => {
+            render();                       // čas „Vytvořeno“ = chvíle tisku
+            window.print();
+        });
+
+        /* Název PDF při „Uložit jako PDF“ se bere z titulku stránky. Tisk
+           z nabídky prohlížeče (Ctrl+P) jde tudy taky. */
+        const titulek = document.title;
+        window.addEventListener("beforeprint", () => {
+            if (!smi()) return;
+            render();
+            document.title = "Nepřítomnosti zaměstnanců – " + V.mesicText(mesic);
+        });
+        window.addEventListener("afterprint", () => { document.title = titulek; });
+
+        document.addEventListener("kb-role", render);
+        window.KB.on("vykazy", render);
+        window.KB.on("users", render);
+        window.KB.on("kalendar", render);
+
+        render();
+    });
+})();
+</script>
+</body>
+</html>

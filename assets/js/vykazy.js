@@ -166,6 +166,171 @@
     V.ABSENCE = ["Dovolená", "Volno", "Neplacené volno", "Nemoc", "Doktor", "Školení"];
     V.jeAbsence = (nazev) => V.ABSENCE.indexOf(String(nazev || "").trim()) !== -1;
 
+    /* --------------------------------- výpis pro mzdovou účetní ----
+       Michal 3. 11. 2026 (Iris): majitelé jednou měsíčně posílají mzdové
+       účetní, kdo ze ZAMĚSTNANCŮ (HPP) byl kdy pryč – přehled člověk × druh
+       s výčtem dnů k tisku / PDF (stránka mzdy-vypis.html), žádné CSV.
+         • jen typ „zamestnanec“ (chybějící typ = zaměstnanec, pokud role
+           není student) – OSVČ, studenti, DPP/DPČ a služební účty ne,
+         • jen pracovní dny (V.pracovniDnyIso) – absence na svátek nebo
+           víkend nic nečerpá; home office ani dny bez zápisu se nevypisují,
+         • souvislé pracovní dny (i přes víkend nebo svátek) se slučují:
+           tři a víc do rozsahu „10.–12. 11.“, dva zůstanou „3., 4. 11.“,
+         • částečný den (doktor na dvě hodiny) jde zvlášť a s hodinami,
+         • dovolená, náhradní volno a neplacené volno bez potvrzení manažera
+           (událost kalendáře `potvrzeno`, jako nástěnka) jdou do řádku
+           „(nepotvrzeno)“; placené školení (`absencePlacena`) do řádku
+           „Školení (placené)“.
+       Bez peněz, sazeb a hodin práce. Čistá funkce bez KB a DOM – hlídá ji
+       NASTROJE\web\testy\test_vypis_nepritomnosti.js. */
+
+    /* Druh výkazu → typ události v kalendáři (stejné jako TYP_ABSENCE ve vykazy.html). */
+    const MZDY_TYP_KALENDARE = { "Dovolená": "dovolena", "Volno": "volno", "Neplacené volno": "neplacene",
+        "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
+    /* Které druhy potvrzuje manažer – stejně jako nástěnka (POTVRZOVANE v index.html). */
+    const MZDY_POTVRZUJE = { dovolena: true, volno: true, neplacene: true };
+    /* Pro mzdovou účetní: „Volno“ je na webu náhradní volno (čerpá přesčas). */
+    const MZDY_POPISEK = { "Volno": "Náhradní volno" };
+    const MZDY_VARIANTY = ["", "placene", "nepotvrzeno"];
+    const MZDY_VARIANTA_TEXT = { placene: " (placené)", nepotvrzeno: " (nepotvrzeno)" };
+    const MESICE_NAZEV = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
+        "srpen", "září", "říjen", "listopad", "prosinec"];
+
+    /** „2026-11“ → „listopad 2026“; nesmysl = "". */
+    V.mesicText = (mesic) => {
+        const m = /^(\d{4})-(\d{2})$/.exec(String(mesic || ""));
+        const i = m ? Number(m[2]) - 1 : -1;
+        return i >= 0 && i < 12 ? MESICE_NAZEV[i] + " " + m[1] : "";
+    };
+
+    /** Zaměstnanec na HPP? Chybějící typ = zaměstnanec, pokud role není student (jako UI.typUvazku). */
+    V.jeZamestnanecHpp = (u) => !!u && (u.typ ? u.typ === "zamestnanec" : u.role !== "student");
+
+    /**
+     * Nepřítomnosti zaměstnanců za měsíc pro mzdovou účetní.
+     * @param {Object[]} zaznamy  výkazy (KB.vykazy) – stačí uid, datum, zakazka, od, do,
+     *                            hodiny / hodinyPevne, celyden, absencePlacena
+     * @param {{mesic: string, lide: Object[], kalendar: Object[]}} volby
+     *        mesic „RRRR-MM“, lide = KB.users, kalendar = KB.kalendar (potvrzení)
+     * @returns {{mesic, nazev, od, do, lide: {uid, jmeno, radky, celkemDni, celkemHodin, celkemText}[],
+     *            bez: {uid, jmeno}[]}}
+     *          řádek: { druh, varianta (""|placene|nepotvrzeno), popisek, castecny, dny, pocetDni,
+     *                   hodiny, zbytek, text: "Dovolená: 3., 4., 7. 11. (3 dny)" }
+     */
+    V.vypisNepritomnosti = (zaznamy, volby) => {
+        const o = volby || {};
+        const mesic = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(o.mesic || "")) ? String(o.mesic) : "";
+        const vysledek = { mesic: mesic, nazev: V.mesicText(mesic), od: "", do: "", lide: [], bez: [] };
+        if (!mesic) return vysledek;
+        const posledni = new Date(Number(mesic.slice(0, 4)), Number(mesic.slice(5, 7)), 0).getDate();
+        vysledek.od = mesic + "-01";
+        vysledek.do = mesic + "-" + String(posledni).padStart(2, "0");
+
+        // pořadí pracovního dne v měsíci – sousední pracovní dny jdou do jedné řady i přes víkend
+        const poradi = {};
+        V.pracovniDnyIso(vysledek.od, vysledek.do).forEach((d, i) => { poradi[d] = i; });
+
+        const zamestnanci = new Map();
+        (o.lide || []).forEach(u => { if (u && u.id && V.jeZamestnanecHpp(u)) zamestnanci.set(u.id, u); });
+        const kalendar = (o.kalendar || []).filter(k => k && zamestnanci.has(k.uid));
+        /* Potvrzený je den, který leží v potvrzené události téhož člověka a druhu.
+           Zamítnutá žádost (stav, který se chystá) nepotvrzuje nic. */
+        const potvrzeny = (uid, typ, datum) => kalendar.some(k => k.uid === uid && k.typ === typ &&
+            k.potvrzeno === true && k.stav !== "zamitnuto" && k.zamitnuto !== true &&
+            String(k.od || "") <= datum && datum <= String(k.do || k.od || ""));
+
+        // uid → (druh|varianta) → { druh, varianta, cele: Set(iso), castecne: { iso: hodiny } }
+        const sber = new Map();
+        (zaznamy || []).forEach(z => {
+            if (!z || !zamestnanci.has(z.uid)) return;
+            const datum = String(z.datum || "");
+            if (!(datum in poradi)) return;                    // mimo měsíc, víkend, svátek
+            const druh = String(z.zakazka || "").trim();
+            const typ = MZDY_TYP_KALENDARE[druh];
+            if (!typ) return;                                  // práce, home office, režie
+            const varianta = druh === "Školení" ? (z.absencePlacena === true ? "placene" : "")
+                : (MZDY_POTVRZUJE[typ] && !potvrzeny(z.uid, typ, datum) ? "nepotvrzeno" : "");
+            const h = Number(z.hodiny) || Number(z.hodinyPevne) || 0;
+            const cely = z.celyden === true || (z.od === "00:00" && z.do === "23:59") || !(h > 0) || h >= 8;
+            if (!sber.has(z.uid)) sber.set(z.uid, new Map());
+            const radky = sber.get(z.uid);
+            const klic = druh + "|" + varianta;
+            if (!radky.has(klic)) radky.set(klic, { druh: druh, varianta: varianta, cele: new Set(), castecne: {} });
+            const r = radky.get(klic);
+            if (cely) r.cele.add(datum);
+            else r.castecne[datum] = (r.castecne[datum] || 0) + h;
+        });
+
+        const cisloDne = (iso) => Number(iso.slice(8, 10)) + ".";
+        const denMesic = (iso) => cisloDne(iso) + " " + Number(iso.slice(5, 7)) + ".";
+        /* „3., 4., 7. 11.“ – měsíc jednou na konci; tři a víc sousedních
+           pracovních dnů jako rozsah „10.–12. 11.“. */
+        const dnyText = (dny) => {
+            const rady = [];
+            dny.forEach(d => {
+                const r = rady[rady.length - 1];
+                if (r && poradi[d] === poradi[r[r.length - 1]] + 1) r.push(d);
+                else rady.push([d]);
+            });
+            const kusy = [];
+            rady.forEach(r => {
+                if (r.length >= 3) kusy.push(cisloDne(r[0]) + "–" + cisloDne(r[r.length - 1]));
+                else r.forEach(d => kusy.push(cisloDne(d)));
+            });
+            return kusy.join(", ") + " " + Number(dny[0].slice(5, 7)) + ".";
+        };
+        const tvaryDne = ["den", "dny", "dní"];
+
+        zamestnanci.forEach((u, uid) => {
+            const jmeno = V.jmeno(u);
+            const skupiny = Array.from((sber.get(uid) || new Map()).values()).sort((a, b) =>
+                V.ABSENCE.indexOf(a.druh) - V.ABSENCE.indexOf(b.druh) ||
+                MZDY_VARIANTY.indexOf(a.varianta) - MZDY_VARIANTY.indexOf(b.varianta));
+            if (!skupiny.length) {
+                // kdo v seznamu už není nebo momentálně nepracuje, do věty „bez nepřítomnosti“ nepatří
+                if (u.active !== false && u.nepracuje !== true) vysledek.bez.push({ uid: uid, jmeno: jmeno });
+                return;
+            }
+            const radky = [];
+            const celeDny = new Set();
+            let celkemHodin = 0;
+            skupiny.forEach(s => {
+                const popisek = (MZDY_POPISEK[s.druh] || s.druh) + (MZDY_VARIANTA_TEXT[s.varianta] || "");
+                const cele = Array.from(s.cele).sort();
+                if (cele.length) {
+                    cele.forEach(d => celeDny.add(d));
+                    const zbytek = dnyText(cele) + " (" + V.pocet(cele.length, tvaryDne) + ")";
+                    radky.push({ druh: s.druh, varianta: s.varianta, popisek: popisek, castecny: false,
+                        dny: cele, pocetDni: cele.length, hodiny: 0, zbytek: zbytek, text: popisek + ": " + zbytek });
+                }
+                // částečný den, který má tentýž druh i celý, se nepočítá dvakrát
+                const castecne = Object.keys(s.castecne).filter(d => !s.cele.has(d)).sort();
+                if (castecne.length) {
+                    const hodiny = castecne.reduce((sum, d) => sum + s.castecne[d], 0);
+                    celkemHodin += hodiny;
+                    const zbytek = castecne.map(d => denMesic(d) + " (" + V.hod(s.castecne[d]) + ")").join(", ") +
+                        (castecne.length > 1 ? ", celkem " + V.hod(hodiny) : "");
+                    radky.push({ druh: s.druh, varianta: s.varianta, popisek: popisek, castecny: true,
+                        dny: castecne, pocetDni: 0, hodiny: hodiny, zbytek: zbytek, text: popisek + ": " + zbytek });
+                }
+            });
+            const casti = [];
+            if (celeDny.size) casti.push(V.pocet(celeDny.size, tvaryDne));
+            if (celkemHodin) casti.push(V.hod(celkemHodin));
+            vysledek.lide.push({ uid: uid, jmeno: jmeno, radky: radky, celkemDni: celeDny.size,
+                celkemHodin: celkemHodin, celkemText: "Celkem " + casti.join(" + ") });
+        });
+
+        const podleJmena = (a, b) => {
+            const ua = zamestnanci.get(a.uid), ub = zamestnanci.get(b.uid);
+            return (ua.last || "").localeCompare(ub.last || "", "cs") ||
+                (ua.first || "").localeCompare(ub.first || "", "cs") || a.jmeno.localeCompare(b.jmeno, "cs");
+        };
+        vysledek.lide.sort(podleJmena);
+        vysledek.bez.sort(podleJmena);
+        return vysledek;
+    };
+
     /* ----------------------------------------------- duplicity firem ----
        Po importu adresáře z Pohody (19. 10. 2026) se ukázalo, jak snadno
        je jedna firma v číselníku dvakrát: jednou „X, s.r.o.", podruhé
