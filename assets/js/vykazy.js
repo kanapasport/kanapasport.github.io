@@ -830,6 +830,60 @@
     V.PRAH_PRES = 100;        // % čerpání – červeně
     V.PRAH_PREDBIHA = 20;     // procentní body, o které čerpání předbíhá hotovost
     V.TEMPO_DNI = 28;         // okno tempa čerpání (4 týdny)
+    V.PRAH_ZNOVU = 10;        // procentní body nad schváleným čerpáním, kdy se hlásí znovu
+
+    /* ------------------------------------- schválené čerpání rozpočtu ----
+       Čerpání od 80 % se hlásí na nástěnce, v Celkovém přehledu i v týdenním
+       souhrnu vedení (Apps Script). Manažer ho může „vzít na vědomí“ – u
+       rozpočtu pak leží
+         rozpocty[název zakázky].schvaleno = { pct, kc, ms, kdo }
+       (pct = čerpání v %, kc = čerpáno Kč v tu chvíli, kdo = jméno).
+       Schválení hlášení zklidní, dokud čerpání nevyroste o dalších
+       V.PRAH_ZNOVU bodů nebo nepřekročí 100 % („když to jednou schválím, ať
+       se to nepíše každý týden znovu“, Michal 3. 11. 2026). Stejné pravidlo
+       má Apps Script (Upozorneni.gs, rozpocetHlasit_) – když se mění tady,
+       musí se změnit i tam. Procento musí být spočítané stejně jako tam
+       (V.ekonomikaZakazky: práce + ruční externí náklady), jinak by
+       schválení z webu e-mail nezklidnilo.
+       Test: NASTROJE\web\testy\test_rozpocet_schvaleni.js */
+
+    /** Schválené procento z rozpočtu; null = neschváleno (nebo nesmysl v datech). */
+    const schvalenoPct = (rozpocet) => {
+        const s = rozpocet && rozpocet.schvaleno;
+        if (!s || typeof s !== "object" || s.pct === null || s.pct === "" || typeof s.pct === "boolean") return null;
+        const n = Number(s.pct);
+        return isFinite(n) ? n : null;
+    };
+
+    /**
+     * Hlásit čerpání rozpočtu? true, když pct >= 80 a zároveň: neschváleno,
+     * nebo pct >= schválené + 10, nebo (pct >= 100 a schválené < 100).
+     * `pct` je čerpání v % (V.ekonomikaZakazky().cerpaniPct), nezaokrouhlené.
+     */
+    V.rozpocetHlasit = (rozpocet, pct) => {
+        if (pct === null || pct === undefined || pct === "") return false;
+        const p = Number(pct);
+        if (!isFinite(p) || p < V.PRAH_POZOR) return false;
+        const s = schvalenoPct(rozpocet);
+        if (s === null) return true;
+        return p >= s + V.PRAH_ZNOVU || (p >= V.PRAH_PRES && s < V.PRAH_PRES);
+    };
+
+    /** Text štítku „Schváleno 85 % · 3. 11. · Jméno“; "" = neschváleno.
+        Holý text – do HTML jen přes esc(). Peníze (kc) v něm schválně nejsou. */
+    V.rozpocetSchvaleno = (rozpocet) => {
+        const s = schvalenoPct(rozpocet);
+        if (s === null) return "";
+        const kusy = ["Schváleno " + Math.round(s) + " %"];
+        const ms = Number(rozpocet.schvaleno.ms);
+        if (ms > 0) {
+            const d = new Date(ms);
+            if (!isNaN(d.getTime())) kusy.push(d.getDate() + ". " + (d.getMonth() + 1) + ".");
+        }
+        const kdo = String(rozpocet.schvaleno.kdo || "").trim();
+        if (kdo) kusy.push(kdo);
+        return kusy.join(" · ");
+    };
 
     /** Posun data ISO o celé dny (bez starostí o letní čas – počítá se v poledne). */
     V.posunIso = (iso, dni) => {

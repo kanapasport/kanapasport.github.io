@@ -89,6 +89,34 @@
             text-align: left; white-space: normal; min-width: 180px;
         }
         .vsezak__tab tbody tr:hover td { background: var(--bg-soft); }
+        /* Čerpání rozpočtů. Řádek, který se hlásí (od 80 % a neschválený,
+           V.rozpocetHlasit), je podbarvený a má tlačítko „Schválit čerpání“;
+           schválený dostane zelený štítek a podbarvení ztratí, dokud čerpání
+           nevyroste o dalších 10 bodů nebo nepřekročí 100 % (Michal 3. 11. 2026).
+           Akce leží pod celým řádkem, ať se na telefonu vejdou. */
+        .rozp { align-items: flex-start; padding: 7px 0; }
+        .rozp--hlasit {
+            padding: 7px 8px; border-radius: var(--r);
+            background: var(--warn-tint); box-shadow: inset 3px 0 0 var(--warn);
+        }
+        .rozp--hlasit.rozp--pres { background: var(--danger-tint); box-shadow: inset 3px 0 0 var(--danger); }
+        .rozp__akce {
+            grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center;
+            gap: 6px 10px; min-width: 0;
+        }
+        .rozp__stitek {
+            display: inline-block; max-width: 100%; padding: 2px 8px; border-radius: var(--r-pill);
+            background: var(--ok-tint); border: 1px solid var(--ok); color: var(--ok);
+            font-size: var(--fs-1); font-weight: 800; overflow-wrap: anywhere;
+        }
+        .rozp__schvalit { min-height: 32px; padding: 0 12px; font-size: var(--fs-1); }
+        .rozp__zrusit {
+            border: none; background: none; padding: 4px 0; font: inherit; font-size: var(--fs-1);
+            color: var(--muted); text-decoration: underline; cursor: pointer;
+        }
+        .rozp__zrusit:hover { color: var(--accent); }
+        @media (max-width: 600px) { .rozp__akce { grid-column: 1 / -1; } }
+
         /* Režie a absence nejsou zakázka – štítek to říká hned. */
         .vsezak__druh {
             display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--r-pill);
@@ -412,6 +440,77 @@
             "</div>" + obsah +
         "</section>";
 
+    /* ------------------------------------------- hlášení a schválení ----
+       Kdy se čerpání hlásí, se počítá STEJNĚ jako týdenní souhrn z Apps
+       Scriptu (cerpaniZakazek_) a dlaždice Rozpočty na nástěnce:
+       V.ekonomikaZakazky = práce ze zápisů (zakázka NEBO její část = název)
+       + ruční externí náklady projektu, bez faktur (ty Apps Script nepočítá).
+       Kdyby se schvalovalo z čísla karty (jen výkazy), e-mail by zakázku
+       s externími náklady hlásil dál. Kde se to od karty liší, řekne to
+       poznámka u řádku. Náklady se dotahují po projektech, jednou za načtení. */
+    const nakladyProjektu = new Map();      // id projektu → null (čte se) | [{ castka }]
+    let prekresliCasovac = null;
+    function nactiNaklady(id) {
+        if (nakladyProjektu.has(id)) return;
+        nakladyProjektu.set(id, null);
+        window.KB.loadProjektFinance(id)
+            .then(f => nakladyProjektu.set(id, Array.isArray(f && f.naklady) ? f.naklady : []))
+            .catch(err => {
+                console.warn("Externí náklady zakázky se nenačetly:", err);
+                nakladyProjektu.set(id, []);
+            })
+            .then(() => { clearTimeout(prekresliCasovac); prekresliCasovac = setTimeout(render, 80); });
+    }
+    const projektZakazky = (zak) => (window.KB.projektyDocs || []).find(p => p.nazev === zak) || null;
+
+    function cerpaniHlaseni(zak) {
+        const p = projektZakazky(zak);
+        if (p) nactiNaklady(p.id);
+        const e = V.ekonomikaZakazky(zak, { projektId: p ? p.id : "",
+            naklady: (p && nakladyProjektu.get(p.id)) || [], faktury: null });
+        return { pct: e.cerpaniPct, kc: e.cerpano, externi: e.externi };
+    }
+
+    /* Schválení čerpání („vzal jsem na vědomí“, Michal 3. 11. 2026). Procento
+       se počítá znovu z dat, ne z tlačítka – v atributu je jen název zakázky. */
+    async function schvalCerpani(zak, tlacitko) {
+        if (!window.KBUI.can("vykaz.view") || !zak || !(window.KB.rozpocty || {})[zak]) return;
+        tlacitko.disabled = true;
+        // externí náklady musí být načtené, jinak by se schválilo nižší číslo
+        const p = projektZakazky(zak);
+        if (p && !Array.isArray(nakladyProjektu.get(p.id))) {
+            const f = await window.KB.loadProjektFinance(p.id).catch(() => null);
+            nakladyProjektu.set(p.id, Array.isArray(f && f.naklady) ? f.naklady : []);
+        }
+        const stav = cerpaniHlaseni(zak);
+        if (stav.pct === null) { tlacitko.disabled = false; return; }
+        try {
+            const s = await window.KB.schvalRozpocet(zak, { pct: stav.pct, kc: stav.kc });
+            window.KBUI.toast("Čerpání schváleno (" + Math.round(s.pct) + "\u00a0%). " +
+                "Znovu se ohlásí, až vyroste o dalších " + V.PRAH_ZNOVU + " bodů" +
+                (s.pct < V.PRAH_PRES ? " nebo přesáhne 100 %." : "."));
+        } catch (err) {
+            console.warn("Schválení čerpání se neuložilo:", err);
+            window.KBUI.toast("Schválení se nepodařilo uložit.", "warn");
+            tlacitko.disabled = false;
+        }
+        render();
+    }
+
+    async function zrusSchvaleni(zak, tlacitko) {
+        if (!window.KBUI.can("vykaz.view") || !zak) return;
+        tlacitko.disabled = true;
+        try {
+            await window.KB.zrusSchvaleniRozpoctu(zak);
+            window.KBUI.toast("Schválení zrušeno – čerpání se zase hlásí.");
+        } catch (err) {
+            console.warn("Schválení čerpání se nezrušilo:", err);
+            window.KBUI.toast("Schválení se nepodařilo zrušit.", "warn");
+            tlacitko.disabled = false;
+        }
+        render();
+    }
+
     /**
      * Čerpání rozpočtů. Schválně počítá ze VŠECH zápisů, ne z vybraného
      * období – rozpočet se čerpá po celou dobu zakázky a „spotřebováno
@@ -438,6 +537,7 @@
         });
         if (!sRozpoctem.length) return "";
 
+        const smiSchvalit = window.KBUI.can("vykaz.view");
         const radky = sRozpoctem.map(zak => {
             const soucty = V.soucty(vsechno.filter(z => z.zakazka === zak));
             const rozpocet = metrika === "hod" ? V.rozpocet(zak).hodiny : V.rozpocet(zak).kc;
@@ -449,22 +549,49 @@
         .sort((a, b) => b.c.pct - a.c.pct)
         .map(({ zak, rozpocet, spotreba, c }) => {
             const format = metrika === "hod" ? V.hod : V.kc;
+            /* Hlásí se a schvaluje vždycky čerpání PENĚZ spočítané jako na
+               nástěnce a v e-mailu (cerpaniHlaseni), i když je stránka
+               přepnutá na hodiny. */
+            const r = (window.KB.rozpocty || {})[zak] || {};
+            const h = cerpaniHlaseni(zak);
+            const hlasit = V.rozpocetHlasit(r, h.pct);
+            const schvaleno = V.rozpocetSchvaleno(r);
+            /* Číslo karty (jen výkazy zakázky) se od hlášeného může lišit
+               o externí náklady a zápisy na části zakázky – pak se řekne. */
+            const kartaKc = V.cerpani(V.soucty(vsechno.filter(z => z.zakazka === zak)).castka, V.rozpocet(zak).kc);
+            const jineCislo = h.pct !== null && (hlasit || schvaleno) &&
+                (metrika === "hod" || !kartaKc || Math.round(kartaKc.pct) !== Math.round(h.pct));
+            const akce =
+                (jineCislo ? '<span class="tiny muted">' + esc((metrika === "hod" ? "v penězích "
+                    : h.externi ? "s externími náklady " : "se zápisy na části zakázky ") +
+                    Math.round(h.pct) + " %") + "</span>" : "") +
+                (schvaleno ? '<span class="rozp__stitek">' + esc(schvaleno) + "</span>" : "") +
+                (smiSchvalit && hlasit
+                    ? '<button type="button" class="btn btn--ghost btn--sm rozp__schvalit" ' +
+                        'data-rozp-schvalit="' + esc(zak) + '" ' +
+                        'title="Vzít čerpání na vědomí – znovu se ohlásí o 10 bodů výš nebo po překročení 100 %">' +
+                        "Schválit čerpání</button>" : "") +
+                (smiSchvalit && schvaleno
+                    ? '<button type="button" class="rozp__zrusit" data-rozp-zrusit="' + esc(zak) + '">' +
+                        "Zrušit schválení</button>" : "");
 
-            return '<div class="vykbar" style="align-items:flex-start;padding:7px 0">' +
+            return '<div class="vykbar rozp' + (hlasit ? " rozp--hlasit" : "") +
+                    (hlasit && h.pct >= V.PRAH_PRES ? " rozp--pres" : "") + '" data-rozp="' + esc(zak) + '">' +
                 '<div class="vykbar__name" title="' + esc(zak) + '">' + esc(zak) + "</div>" +
                 "<div>" +
                     '<div class="vykbar__track">' +
-                        '<div class="vykbar__fill" style="width:' + c.sirka +
-                            "%;background:" + c.barva + '"></div>' +
+                        '<div class="vykbar__fill" style="width:' + esc(c.sirka) +
+                            "%;background:" + esc(c.barva) + '"></div>' +
                     "</div>" +
                     '<div class="tiny muted" style="margin-top:3px">' +
-                        format(spotreba) + " z " + format(rozpocet) + "</div>" +
+                        esc(format(spotreba) + " z " + format(rozpocet)) + "</div>" +
                 "</div>" +
-                '<div class="vykbar__val" style="color:' + c.barva + '">' +
-                    Math.round(c.pct) + " %<br><span>" +
-                    (c.zbyva >= 0 ? "zbývá " + format(c.zbyva)
-                                  : "přečerpáno o " + format(-c.zbyva)) + "</span>" +
+                '<div class="vykbar__val" style="color:' + esc(c.barva) + '">' +
+                    esc(Math.round(c.pct) + " %") + "<br><span>" +
+                    esc(c.zbyva >= 0 ? "zbývá " + format(c.zbyva)
+                                     : "přečerpáno o " + format(-c.zbyva)) + "</span>" +
                 "</div>" +
+                (akce ? '<div class="rozp__akce">' + akce + "</div>" : "") +
             "</div>";
         }).join("");
 
@@ -677,6 +804,8 @@
         if (sledovaniZapnuto || !window.KBUI.can("vykaz.view")) return;
         sledovaniZapnuto = true;
         window.KB.watchVykazy();
+        // id projektu k názvu zakázky – pro externí náklady v hlášení čerpání
+        window.KB.watchProjekty();
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -748,6 +877,10 @@
            posluchač musel po každém render() věšet znovu. */
         document.addEventListener("click", (event) => {
             if (!event.target.closest) return;
+            const schvalit = event.target.closest("[data-rozp-schvalit]");
+            if (schvalit) return void schvalCerpani(schvalit.dataset.rozpSchvalit, schvalit);
+            const zrusit = event.target.closest("[data-rozp-zrusit]");
+            if (zrusit) return void zrusSchvaleni(zrusit.dataset.rozpZrusit, zrusit);
             const vse = event.target.closest("[data-osoba-vse]");
             if (vse) {
                 plneSeznamy.add(vse.dataset.osobaVse);
@@ -776,6 +909,7 @@
         document.addEventListener("kb-role", render);
         window.KB.on("vykazy", render);
         window.KB.on("vykazy-meta", render);
+        window.KB.on("projekty-docs", render);
         window.KB.on("users", render);
         window.KB.on("zakazky", naplnFiltry);
 
