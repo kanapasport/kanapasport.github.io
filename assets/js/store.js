@@ -14,6 +14,7 @@
      artifacts/{APP_ID}/private/vykazy/zaznamy/{id}               ← odpracovaný čas
      artifacts/{APP_ID}/private/vykazy/castky/{id}                ← sazba a částka
      artifacts/{APP_ID}/private/vykazy/ciselniky/nastaveni        ← sazby, rozpočty
+     artifacts/{APP_ID}/private/vyplaty/mesice/{uid}_{RRRR-MM}    ← výplata měsíce (DPP, OSVČ…)
 
    Větev `private` je oddělená schválně: do `public/data` smí podle pravidel
    číst každý přihlášený člověk, a to se níž nedá odebrat.
@@ -2269,6 +2270,11 @@ KB.saveUser = async (data) => {
     if (data.nepracuje !== undefined) payload.nepracuje = data.nepracuje === true;
     // komu se nemá připomínat nezapsaný výkaz (majitelé, brigádníci…)
     if (data.bezHlidky !== undefined) payload.bezHlidky = data.bezHlidky === true;
+    /* Doba dohody u DPP a DPČ (Michal 3. 11. 2026) – nepovinné ISO datum,
+       prázdné = neuvedeno. Jen když ho volající předá. */
+    ["dohodaOd", "dohodaDo"].forEach(k => {
+        if (data[k] !== undefined) payload[k] = /^\d{4}-\d{2}-\d{2}$/.test(String(data[k] || "")) ? String(data[k]) : "";
+    });
     /* HESLA SE NEUKLÁDAJÍ. Otisk (`hash`+`salt`) i šifrovaná podoba (`enc`)
        tu dřív ležely v `public/data/users`, kam vidí každý člen – kdokoliv
        si je mohl stáhnout a doma lámat. Heslo ověřuje Firebase Auth,
@@ -3087,7 +3093,11 @@ KB.doplnCastky = async () => {
 
     for (const z of syroveZaznamy) {
         const c = syroveCastky[z.id];
-        const jeAbsence = z.absence === true;
+        /* Placené školení (absencePlacena) je absence, za kterou se platí:
+           sazbu dostane jako práce – stejně jako prepocti() ve výkazech
+           a sazbaZapisu_ v Apps Scriptu. Bez toho ho dopočet zapsal za nulu
+           a ve Výplatách chybělo (3. 11. 2026). */
+        const jeAbsence = z.absence === true && z.absencePlacena !== true;
 
         if (!c) {
             /* Platí sazba člověka z Nastavení; když má projekt nastavenou
@@ -3216,7 +3226,7 @@ KB.mujTyp = () => {
 };
 
 /** Fakturuje si člověk práci sám? Pak u svého výkazu vidí i peníze. */
-KB.fakturujeSi = () => ["osvc", "student"].indexOf(KB.mujTyp()) !== -1;
+KB.fakturujeSi = () => ["osvc", "dpp", "dpc", "student"].indexOf(KB.mujTyp()) !== -1;
 
 function sledujMojeCastky() {
     if (mojeCastkyOdber || vykazyRezim !== "moje") return;
@@ -3269,6 +3279,8 @@ function sledujVykazy(jenSve) {
         query(castkyCol(), where("datum", ">=", KB.vykazyOknoOd)), (snapshot) => {
         syroveCastky = {};
         snapshot.forEach(d => { syroveCastky[d.id] = d.data(); });
+        // částky dorazily (Výplaty bez nich nepočítají – vyšly by nuly)
+        KB.castkyPrisly = true;
         spojVykazy();
     }, (err) => console.error("Chyba čtení částek:", err)));
 
@@ -3281,6 +3293,8 @@ function sledujVykazy(jenSve) {
             ? data.technologie : KB.DEFAULT_TECHNOLOGIE.slice();
         KB.sazby = (data.sazby && typeof data.sazby === "object") ? data.sazby : {};
         KB.rozpocty = (data.rozpocty && typeof data.rozpocty === "object") ? data.rozpocty : {};
+        // limit DPP pro stránku Výplaty: { limitHodinRok, hraniceKcMesic } (V.limitDpp)
+        KB.dppNastaveni = (data.dpp && typeof data.dpp === "object") ? data.dpp : {};
         /* Bez tohohle příznaku by dopočet částek běžel s prázdným
            číselníkem a všem by zapsal nulovou sazbu. */
         KB.sazbyPrisly = true;
@@ -3622,7 +3636,7 @@ KB.zrcadliSazby = async (sazby, rozpocty) => {
         const u = (KB.users || []).find(x => x.id === uid);
         if (!u) return false;
         const typ = u.typ || (u.role === "student" ? "student" : "zamestnanec");
-        return ["osvc", "student"].indexOf(typ) !== -1;
+        return ["osvc", "dpp", "dpc", "student"].indexOf(typ) !== -1;
     };
     const lide = {};
     Object.keys(sazby || {}).forEach(uid => {
@@ -3667,6 +3681,19 @@ KB.saveVykazNastaveni = async (patch) => {
     ["cinnosti", "technologie", "sazby", "rozpocty"].forEach(klic => {
         if (patch[klic] !== undefined) payload[klic] = patch[klic];
     });
+    /* Limit DPP (stránka Výplaty, mění finance): hodin za rok (výchozí 300)
+       a měsíční hranice příjmu pro odvody v Kč – null = zatím nenastavená,
+       hlídají se jen hodiny. */
+    if (patch.dpp !== undefined) {
+        const d = patch.dpp || {};
+        const limit = Number(d.limitHodinRok);
+        const hranice = (d.hraniceKcMesic === null || d.hraniceKcMesic === "" || d.hraniceKcMesic === undefined)
+            ? 0 : Number(d.hraniceKcMesic);
+        payload.dpp = {
+            limitHodinRok: limit > 0 ? Math.round(limit) : 300,
+            hraniceKcMesic: hranice > 0 ? Math.round(hranice) : null
+        };
+    }
     await setDoc(vykazyMeta(), payload, { merge: true });
     /* Změna sazeb a rozpočtů jsou peníze – v historii nesmí chybět,
        i když se z logu nepozná konkrétní číslo (na to je záloha). */
@@ -6066,6 +6093,117 @@ KB.ulozZustatek = async (uid, data) => {
         updatedMs: Date.now(),
         updatedBy: window.KB_USER || ""
     }, { merge: true });
+};
+
+/* ------------------------------------------------------------ VÝPLATY ----
+   DPP, DPČ, OSVČ a student (Michal 3. 11. 2026, Iris): kolik komu za měsíc
+   vychází, kolik se mu proplatilo a kolik zbývá. Jeden dokument na člověka
+   a měsíc – stejné rozhraní čte Apps Script (sešit, sloupce U a V):
+
+     private/vyplaty/mesice/{uid}_{RRRR-MM}
+       { uid, mesic: "2026-10", typ: "dpp"|"dpc"|"osvc"|"student",
+         hodiny, prace, obedy, km, skoleniPlacene,     // z výkazů (Kč, hodiny)
+         bonusy: [{ kc, poznamka, kdo, ms }], bonusCelkem,
+         narok,              // prace + obedy + km + skoleniPlacene + bonusCelkem
+         prenos,             // zbyva předchozího měsíce (0 bez dokumentu)
+         kVyplate,           // narok + prenos
+         proplaceno: [{ kc, datum, kdo, poznamka, ms }], proplacenoCelkem,
+         zbyva,              // kVyplate − proplacenoCelkem
+         uzavreno: { ms, kdo } | null, odemknul: { ms, kdo } | null,
+         spocitanoMs, spocitalKdo }
+
+   Počítá stránka vyplaty.html (V.vyplataMesice ve vykazy.js). Čte finance
+   (hlavní správce, majitel, asistentka), vlastník svoje (dotaz uid == já)
+   a rozesílací účet; píše jen finance. Uzavřený měsíc (`uzavreno`) smí
+   měnit a odemknout jen hlavní správce – a dokud je uzavřený, nikdo jiný
+   nezmění ani zápisy a částky toho člověka v tom měsíci (firestore.rules,
+   mesicOtevreny). */
+
+const vyplatyCol = () => collection(db, "artifacts", APP_ID, "private", "vyplaty", "mesice");
+const vyplataDoc = (id) => doc(db, "artifacts", APP_ID, "private", "vyplaty", "mesice", id);
+const FINANCE_ROLE = ["hlavni-spravce", "majitel", "asistentka"];
+
+KB.vyplaty = [];                // dokumenty měsíců (id = uid_RRRR-MM), nejnovější měsíc první
+KB.vyplatyPrisly = false;
+let vyplatyOdber = null;
+
+/** Finance poslouchá všechny měsíce všech, ostatní jen svoje (pravidla nejsou filtr). */
+KB.watchVyplaty = async () => {
+    if (vyplatyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || vyplatyOdber) return;
+    if (pockejNaRoli(KB.watchVyplaty)) return;
+    if (vyplatyOdber) return;
+    const ja = (KB.users || []).find(u => u.id === auth.currentUser.uid);
+    const finance = !!ja && ja.active !== false && FINANCE_ROLE.indexOf(ja.role) !== -1;
+    const dotaz = finance ? vyplatyCol() : query(vyplatyCol(), where("uid", "==", auth.currentUser.uid));
+    vyplatyOdber = onSnapshot(dotaz, (snap) => {
+        KB.vyplaty = [];
+        snap.forEach(d => KB.vyplaty.push(Object.assign({ id: d.id }, d.data())));
+        KB.vyplaty.sort((a, b) => String(b.mesic || "").localeCompare(String(a.mesic || "")) ||
+            String(a.uid || "").localeCompare(String(b.uid || "")));
+        KB.vyplatyPrisly = true;
+        emit("vyplaty", KB.vyplaty);
+    }, (err) => {
+        console.error("Chyba čtení výplat:", err);
+        emit("vyplaty-chyba", err);
+    });
+};
+
+/**
+ * Uloží dokument měsíce (slučováním). `data` je buď objekt polí, nebo
+ * funkce (starý dokument | null) → nová pole: ta běží v transakci, ať se
+ * dvě proplacení nebo dva bonusy zapsané naráz nepřepíšou. Funkce může
+ * vrátit null = nic neukládat. Po uložení se ohlásí Apps Scriptu
+ * (KB.ohlasVyplatu – sešit). Vrací uložená pole (nebo null).
+ */
+KB.ulozVyplatu = async (uid, mesic, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    uid = String(uid || "");
+    mesic = String(mesic || "");
+    if (!uid || uid.indexOf("/") !== -1 || !/^\d{4}-\d{2}$/.test(mesic)) throw new Error("Neplatný měsíc výplaty.");
+    const ref = vyplataDoc(uid + "_" + mesic);
+    let ulozeno = null;
+    if (typeof data === "function") {
+        ulozeno = await runTransaction(db, async (tx) => {
+            const snap = await tx.get(ref);
+            const nove = data(snap.exists() ? snap.data() : null);
+            if (!nove) return null;
+            const pole = Object.assign({}, nove, { uid: uid, mesic: mesic });
+            tx.set(ref, pole, { merge: true });
+            return pole;
+        });
+    } else if (data && typeof data === "object") {
+        ulozeno = Object.assign({}, data, { uid: uid, mesic: mesic });
+        await setDoc(ref, ulozeno, { merge: true });
+    }
+    if (ulozeno) KB.ohlasVyplatu({ uid: uid, mesic: mesic });
+    return ulozeno;
+};
+
+/**
+ * Ohlášení změny výplaty Apps Scriptu – zapíše do osobního sešitu člověka
+ * do měsíčního řádku sloupce U „Proplaceno“ a V „Zbývá“. Stejná cesta jako
+ * KB.ohlasZpravu (`meta/gsync`): tělo { akce: "vyplata", token, uid, mesic },
+ * skript z tokenu pozná, kdo volá, a čísla si přečte z dokumentu sám.
+ * Bez čekání a bez čtení odpovědi – nikdy neblokuje ani neshodí uložení.
+ */
+KB.ohlasVyplatu = async (zprava) => {
+    try {
+        const uid = String((zprava && zprava.uid) || "");
+        const mesic = String((zprava && zprava.mesic) || "");
+        if (!KB.gsyncUrl || !uid || !/^\d{4}-\d{2}$/.test(mesic)) return;
+        await poOdeslani();
+        let token = "";
+        try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript nic nezapíše */ }
+        fetch(KB.gsyncUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ akce: "vyplata", token: token, uid: uid, mesic: mesic })
+        }).catch(err => console.warn("Ohlášení výplaty se neozvalo:", err));
+    } catch (err) { console.warn("Ohlášení výplaty se neodeslalo:", err); }
 };
 
 /* ------------------------------------------- kontrola týdne (manažer) ----

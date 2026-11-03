@@ -488,6 +488,158 @@
         };
     };
 
+    /* ================================================== VÝPLATY ========
+       DPP, DPČ, OSVČ a student (Michal 3. 11. 2026, Iris): kolik komu za
+       měsíc vychází, kolik se mu proplatilo a kolik zbývá – s přenosem do
+       dalšího měsíce (i přes Nový rok). Zaměstnanec sem nepatří, má
+       domluvenou měsíční výplatu. Stránka vyplaty.html, dokument měsíce
+       private/vyplaty/mesice/{uid}_{RRRR-MM} (tvar u KB.ulozVyplatu ve
+       store.js) nese ULOŽENÝ výpočet: po proplacení se měsíc zamkne a čísla
+       se pak nesmí hýbat s tím, jak se mění výkazy.
+
+         nárok     = práce (hodiny × sazba dne = castkaPrace) + obědy (obedKc)
+                     + cestovné (dopravaKc) + placené školení + bonusy
+         k výplatě = nárok + z minula (zbývá předchozího měsíce)
+         zbývá     = k výplatě − proplaceno
+
+       Placené školení je absence s `absencePlacena` a jejím castkaPrace.
+       V.soucty schválně vynechává VŠECHNY absence, i tuhle – proto tu je
+       vlastní součet. Neplacené absence (dovolená, nemoc, volno…) nenesou nic.
+       Hodiny = práce + placené školení (obojí se platí od hodiny; z nich
+       se počítá i limit DPP). Čisté funkce bez DOM a databáze – hlídá je
+       NASTROJE\web\testy\test_vyplaty.js. */
+
+    const na2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
+    const jeMesic = (m) => /^\d{4}-\d{2}$/.test(String(m || ""));
+
+    /** Komu se výplata počítá (dohoda, OSVČ, student) – seznam je v ui.js. */
+    V.jeVyplatnyTyp = (u) => !!u && !!window.KBUI &&
+        (window.KBUI.VYPLATNE_TYPY || []).indexOf(window.KBUI.typUvazku(u)) !== -1;
+
+    /** "RRRR-MM" posunutý o n měsíců (i přes rok); "" pro nesmysl. */
+    V.posunMesic = (mesic, n) => {
+        if (!jeMesic(mesic)) return "";
+        const d = new Date(Number(mesic.slice(0, 4)), Number(mesic.slice(5, 7)) - 1 + (Number(n) || 0), 1);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    };
+
+    /** První a poslední den měsíce: "2026-02" → { od: "2026-02-01", do: "2026-02-28" }. */
+    V.mesicRozsah = (mesic) => {
+        if (!jeMesic(mesic)) return { od: "", do: "" };
+        const posledni = new Date(Number(mesic.slice(0, 4)), Number(mesic.slice(5, 7)), 0).getDate();
+        return { od: mesic + "-01", do: mesic + "-" + String(posledni).padStart(2, "0") };
+    };
+
+    /** Nese zápis peníze do výplaty? Práce ano, placené školení ano, ostatní absence ne. */
+    const doVyplaty = (z) => !!z && (!zapisAbsence(z) || z.absencePlacena === true);
+
+    /**
+     * Co měsíc nese z výkazů (zápisy jednoho člověka v jednom měsíci, už
+     * spárované s částkami – KB.vykazy). Den po dni z uložených částek,
+     * nikdy průměrem. `bezSazby` = zápisy s hodinami, ale bez sazby
+     * (částku ještě nikdo nedopočítal) – stránka na ně upozorní.
+     */
+    V.vyplataZVykazu = (zaznamy, uid, mesic) => {
+        const o = { hodiny: 0, prace: 0, obedy: 0, km: 0, skoleniPlacene: 0, zapisu: 0, bezSazby: 0 };
+        (zaznamy || []).forEach(z => {
+            if (!z || z.uid !== uid || String(z.datum || "").slice(0, 7) !== mesic || !doVyplaty(z)) return;
+            const obed = Number(z.obedKc) || 0;
+            const doprava = Number(z.dopravaKc) || 0;
+            // starší zápis bez castkaPrace: celá částka bez paušálů (jako V.soucty)
+            const prace = z.castkaPrace === undefined
+                ? (Number(z.castka) || 0) - obed - doprava : (Number(z.castkaPrace) || 0);
+            const h = Number(z.hodiny) || 0;
+            o.zapisu++;
+            if (h > 0 && !(Number(z.sazba) > 0)) o.bezSazby++;
+            o.hodiny += h;
+            if (zapisAbsence(z)) o.skoleniPlacene += prace; else o.prace += prace;
+            o.obedy += obed;
+            o.km += doprava;
+        });
+        ["hodiny", "prace", "obedy", "km", "skoleniPlacene"].forEach(k => { o[k] = na2(o[k]); });
+        return o;
+    };
+
+    /** Hodiny do výplaty za kalendářní rok (limit DPP): práce + placené školení. */
+    V.hodinyRoku = (zaznamy, uid, rok) => na2((zaznamy || []).reduce((s, z) =>
+        s + ((z && z.uid === uid && String(z.datum || "").slice(0, 4) === String(rok) && doVyplaty(z))
+            ? (Number(z.hodiny) || 0) : 0), 0));
+
+    /** Dokument měsíce z pole dokumentů (id = uid_RRRR-MM), nebo null. */
+    V.vyplataDokument = (dokumenty, uid, mesic) => (dokumenty || []).find(d => d &&
+        (d.id === uid + "_" + mesic || (d.uid === uid && d.mesic === mesic))) || null;
+
+    /** Z minula = `zbyva` dokumentu předchozího měsíce; bez dokumentu 0 („bez přenosu“). */
+    V.vyplataPrenos = (dokumenty, uid, mesic) => {
+        const d = V.vyplataDokument(dokumenty, uid, V.posunMesic(mesic, -1));
+        return d ? { prenos: na2(d.zbyva), zDokumentu: true } : { prenos: 0, zDokumentu: false };
+    };
+
+    /** Bonusy a proplacení – jen položky s číslem, Kč na haléře. */
+    const polozkyKc = (pole) => (Array.isArray(pole) ? pole : [])
+        .filter(x => x && typeof x === "object" && isFinite(Number(x.kc)) && Number(x.kc) !== 0);
+
+    /** Součty dokumentu ze základu z výkazů, přenosu, bonusů a proplacení. */
+    V.vyplataSoucty = (zaklad, prenos, bonusy, proplaceno) => {
+        const z = zaklad || {};
+        const bonusCelkem = na2(polozkyKc(bonusy).reduce((s, x) => s + Number(x.kc), 0));
+        const narok = na2((Number(z.prace) || 0) + (Number(z.obedy) || 0) + (Number(z.km) || 0) +
+            (Number(z.skoleniPlacene) || 0) + bonusCelkem);
+        const kVyplate = na2(narok + na2(prenos));
+        const proplacenoCelkem = na2(polozkyKc(proplaceno).reduce((s, x) => s + Number(x.kc), 0));
+        return { bonusCelkem: bonusCelkem, narok: narok, prenos: na2(prenos), kVyplate: kVyplate,
+            proplacenoCelkem: proplacenoCelkem, zbyva: na2(kVyplate - proplacenoCelkem) };
+    };
+
+    /**
+     * Číselný obsah dokumentu měsíce (bez razítek výpočtu a uzavření).
+     * volby: { uid, mesic, typ, zaklad | zaznamy, prenos | dokumenty, bonusy, proplaceno }
+     *   zaklad   – hotový základ (uzavřený měsíc se nepřepočítává z výkazů)
+     *   prenos   – číslo; jinak se vezme z `dokumenty` (V.vyplataPrenos)
+     */
+    V.vyplataMesice = (volby) => {
+        const v = volby || {};
+        const zaklad = v.zaklad || V.vyplataZVykazu(v.zaznamy, v.uid, v.mesic);
+        const prenos = v.prenos !== undefined ? na2(v.prenos) : V.vyplataPrenos(v.dokumenty, v.uid, v.mesic).prenos;
+        const bonusy = polozkyKc(v.bonusy);
+        const proplaceno = polozkyKc(v.proplaceno);
+        const s = V.vyplataSoucty(zaklad, prenos, bonusy, proplaceno);
+        return {
+            uid: v.uid || "", mesic: v.mesic || "", typ: v.typ || "",
+            hodiny: na2(zaklad.hodiny), prace: na2(zaklad.prace), obedy: na2(zaklad.obedy),
+            km: na2(zaklad.km), skoleniPlacene: na2(zaklad.skoleniPlacene),
+            bonusy: bonusy, bonusCelkem: s.bonusCelkem,
+            narok: s.narok, prenos: s.prenos, kVyplate: s.kVyplate,
+            proplaceno: proplaceno, proplacenoCelkem: s.proplacenoCelkem, zbyva: s.zbyva
+        };
+    };
+
+    /* Limit DPP: 300 h za kalendářní rok (zákon) a měsíční hranice příjmu,
+       od které se platí odvody – částku nastaví finance na stránce Výplaty
+       (`ciselniky/nastaveni.dpp`), dokud není, hlídají se jen hodiny.
+       Do hranice se počítá odměna (práce, placené školení, bonusy), ne
+       náhrady – obědy a cestovné příjmem nejsou. */
+    V.DPP_LIMIT_HODIN = 300;
+    V.dppKcMesice = (d) => na2((Number(d && d.prace) || 0) + (Number(d && d.skoleniPlacene) || 0) +
+        (Number(d && d.bonusCelkem) || 0));
+    const urovenPct = (pct) => pct === null ? "" : pct >= 100 ? "danger" : pct >= 80 ? "warn" : "";
+    /** { limitHodin, hodiny, pctHodin, hranice|null, kc, pctKc|null, uroven: "" | "warn" (≥ 80 %) | "danger" (≥ 100 %) } */
+    V.limitDpp = (hodinyRok, kcMesic, nastaveni) => {
+        const n = nastaveni || {};
+        const limit = Number(n.limitHodinRok) > 0 ? Number(n.limitHodinRok) : V.DPP_LIMIT_HODIN;
+        const hranice = Number(n.hraniceKcMesic) > 0 ? Number(n.hraniceKcMesic) : null;
+        // úroveň z nezaokrouhleného procenta – 299,9 h nesmí vyjít jako 100 %
+        const hod = (Number(hodinyRok) || 0) / limit * 100;
+        const kc = hranice ? (Number(kcMesic) || 0) / hranice * 100 : null;
+        // zobrazení dolů na desetiny – 79,99 % se neukáže jako 80 %
+        const na1 = (x) => x === null ? null : Math.floor(x * 10 + 1e-9) / 10;
+        return {
+            limitHodin: limit, hodiny: na2(hodinyRok), pctHodin: na1(hod), hodinyUroven: urovenPct(hod),
+            hranice: hranice, kc: na2(kcMesic), pctKc: na1(kc), kcUroven: urovenPct(kc),
+            uroven: urovenPct(Math.max(hod, kc || 0))
+        };
+    };
+
     /** Projekty uvnitř zakázky. Bez zakázky nemá smysl nabízet nic. */
     V.projekty = (zakazka) => {
         const mapa = window.KB.projekty || {};

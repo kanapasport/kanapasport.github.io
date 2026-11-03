@@ -54,9 +54,10 @@ service cloud.firestore {
     /* Kdo si práci fakturuje sám. Zaměstnanec má domluvenou měsíční
        výplatu a hodinovka mu nic neříká; OSVČ a student na dohodu si
        podle odpracovaných hodin píšou fakturu, takže musí vidět, kolik
-       jim za ně vychází (Michal 2. 9. 2026). */
+       jim za ně vychází (Michal 2. 9. 2026). Dohody DPP a DPČ jsou na tom
+       stejně jako student na dohodu (Michal 3. 11. 2026). */
     function fakturujeSi() {
-      return clen() && typSpoluprace() in ['osvc', 'student'];
+      return clen() && typSpoluprace() in ['osvc', 'dpp', 'dpc', 'student'];
     }
 
     /* Účet, pod kterým běží Apps Script – v seznamu lidí má typ
@@ -142,29 +143,53 @@ service cloud.firestore {
         : '0000-00-00';
     }
 
+    /* ZÁMEK PROPLACENÉHO MĚSÍCE (Michal 3. 11. 2026). Výplata dohodáře,
+       OSVČ a studenta má dokument na měsíc – private/vyplaty/mesice/
+       {uid}_{RRRR-MM} (výklad u pravidla výplat níž). Jakmile je měsíc
+       proplacený nebo ručně uzavřený (`uzavreno` != null), nesmí se zápisy
+       ani částky toho člověka v tom měsíci založit, změnit ani smazat –
+       ani manažerovi, jinak by přestalo sedět, co se proplatilo. Smí to
+       jen hlavní správce (ten smí měsíc i odemknout). Měsíc se bere z data
+       zápisu („2026-10-15“[0:7] = „2026-10“). Zápis bez uid nebo data se
+       zámkem neřídí; bez dokumentu (zaměstnanec, nespočítaný měsíc) je
+       měsíc otevřený. Stojí to jeden dokument navíc, u přesunu zápisu do
+       jiného měsíce nebo na jiného člověka dva (starý a nový měsíc). */
+    function vyplataCesta(uid, mesic) {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/private/vyplaty/mesice/$(uid + '_' + mesic);
+    }
+    function mesicOtevreny(d) {
+      return !(d.get('uid', '') is string) || d.get('uid', '') == ''
+        || !(d.get('datum', '') is string) || d.get('datum', '').size() < 7
+        || !exists(vyplataCesta(d.uid, d.datum[0:7]))
+        || get(vyplataCesta(d.uid, d.datum[0:7])).data.get('uzavreno', null) == null;
+    }
+
     match /artifacts/firemni-kb-app/private/vykazy/zaznamy/{id} {
       // svoje vidí každý, cizí jen správce
       allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
-      allow create: if spravce() || (clen()
+      // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš
+      allow create: if hlavniSpravce() || (mesicOtevreny(request.resource.data) && (spravce() || (clen()
                        && request.resource.data.uid == request.auth.uid
-                       && request.resource.data.datum >= uzaverkaOd());
+                       && request.resource.data.datum >= uzaverkaOd())));
       /* Vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho
          jiného, přesunout do uzavřeného období ani si dodatečně dopsat
-         `zdroj: "panel"`, kterým se odemyká mazání. */
-      allow update: if spravce() || (clen()
+         `zdroj: "panel"`, kterým se odemyká mazání. Z uzavřeného měsíce
+         ani do něj nic nepřesune ani manažer. */
+      allow update: if hlavniSpravce() || (mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data)
+                    && (spravce() || (clen()
                        && resource.data.uid == request.auth.uid
                        && request.resource.data.uid == request.auth.uid
                        && resource.data.datum >= uzaverkaOd()
                        && request.resource.data.datum >= uzaverkaOd()
-                       && request.resource.data.get('zdroj', '') == resource.data.get('zdroj', ''));
+                       && request.resource.data.get('zdroj', '') == resource.data.get('zdroj', ''))));
       /* Vlastní záznam si člověk smí smazat stejně, jako si ho smí opravit.
          Web mu to pouští jen do půlnoci dne, kdy zápis vznikl (přání Michala
          4. 9. 2026); tvrdou hranicí v databázi je uzávěrka – co je jednou
          uzavřené, nesmaže ani vlastník. Dřív to šlo jen u záznamů
          z Rychlého zápisu (`zdroj: "panel"`). */
-      allow delete: if spravce() || (clen()
+      allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && (spravce() || (clen()
                        && resource.data.uid == request.auth.uid
-                       && resource.data.datum >= uzaverkaOd());
+                       && resource.data.datum >= uzaverkaOd())));
     }
 
     /* Částky vidí manažer u všech. OSVČ a student navíc SVOJE – bez toho
@@ -174,13 +199,16 @@ service cloud.firestore {
     match /artifacts/firemni-kb-app/private/vykazy/castky/{id} {
       allow read:  if spravce() || (fakturujeSi()
                       && resource.data.uid == request.auth.uid);
-      allow create, update: if spravce();
+      // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš
+      allow create: if hlavniSpravce() || (spravce() && mesicOtevreny(request.resource.data));
+      allow update: if hlavniSpravce() || (spravce()
+                       && mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data));
       /* Když si člověk smaže svůj zápis, musí s ním zmizet i jeho částka –
          jinak by v databázi zůstala peněžní věta bez zápisu. Zapisovat
          částky pořád smí jen manažer (4. 9. 2026). */
-      allow delete: if spravce() || (clen()
+      allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && (spravce() || (clen()
                        && resource.data.get('uid', '') == request.auth.uid
-                       && resource.data.get('datum', '') >= uzaverkaOd());
+                       && resource.data.get('datum', '') >= uzaverkaOd())));
     }
 
     /* Vlastní sazba. Kdo si fakturuje sám, potřebuje svou sazbu vidět UŽ PŘI
@@ -298,6 +326,36 @@ service cloud.firestore {
       allow read, write: if finance();
     }
 
+    /* --- výplaty (DPP, DPČ, OSVČ, student) – Michal 3. 11. 2026 ----------
+       private/vyplaty/mesice/{uid}_{RRRR-MM}: kolik člověku za měsíc
+       vychází, bonusy, proplacení, přenos do dalšího měsíce (tvar ve
+       store.js u KB.ulozVyplatu). Jsou to peníze lidí – čte je jen finance
+       (hlavní správce, majitel, asistentka), rozesílací účet Apps Scriptu
+       (zápis do sešitu) a vlastník SVOJE měsíce. Vlastník se pozná podle
+       pole `uid` (web se ptá dotazem uid == já – pravidla nejsou filtr);
+       že `uid` a `mesic` sedí s id dokumentu, hlídá zápis, takže id
+       dokumentu vždycky začíná uid vlastníka + „_“. Píše jen finance.
+       Uzavřený měsíc (`uzavreno` != null) smí měnit – a tím odemknout –
+       jen hlavní správce; mazat taky jen on. Zachytávací pravidlo pro
+       `private` sem manažera nepouští. Žádné get() navíc (jen záznam
+       přihlášeného v users). */
+    function vyplataTvar(id) {
+      return request.resource.data.get('uid', '') is string
+        && request.resource.data.get('mesic', '') is string
+        && request.resource.data.mesic.matches('[0-9]{4}-[0-9]{2}')
+        && id == request.resource.data.uid + '_' + request.resource.data.mesic;
+    }
+    match /artifacts/firemni-kb-app/private/vyplaty/mesice/{id} {
+      allow read: if finance() || rozesilac()
+                     || (clen() && resource.data.uid == request.auth.uid);
+      allow create: if finance() && vyplataTvar(id);
+      allow update: if finance() && vyplataTvar(id)
+                       && request.resource.data.uid == resource.data.uid
+                       && request.resource.data.mesic == resource.data.mesic
+                       && (resource.data.get('uzavreno', null) == null || hlavniSpravce());
+      allow delete: if hlavniSpravce();
+    }
+
     /* Zůstatky dovolené a přesčasů. SVŮJ vidí každý – je to jeho nárok
        a má si ho hlídat; cizí a zápis jen manažer (spodní pravidlo pro
        `private`). Michal 3. 9. 2026. */
@@ -360,16 +418,24 @@ service cloud.firestore {
     }
 
     // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
-    // projektů, zakládání úkolů…) jen správce – kromě faktur a pokladny,
-    // které mají vlastní přísnější pravidlo výš (pravidla se sčítají, proto
-    // se tu musí vynechat výslovně). Od 3. 11. 2026 navíc: nastavení
-    // potvrzování mění jen hlavní správce a úkoly a milníky (`seznam`)
-    // zakládá a mění manažer přes vlastní pravidla s hlídáním potvrzení –
-    // jinak by je tohle pravidlo pustilo každému manažerovi.
+    // projektů, zakládání úkolů…) jen správce – kromě faktur, pokladny
+    // a výplat, které mají vlastní přísnější pravidlo výš (pravidla se
+    // sčítají, proto se tu musí vynechat výslovně). Od 3. 11. 2026 navíc:
+    // nastavení potvrzování mění jen hlavní správce a úkoly a milníky
+    // (`seznam`) zakládá a mění manažer přes vlastní pravidla s hlídáním
+    // potvrzení – jinak by je tohle pravidlo pustilo každému manažerovi.
+    // Totéž výkazy: zápisy a částky hlídají zámek proplaceného měsíce
+    // (mesicOtevreny), zbytek `private/vykazy` má pravidlo hned pod tímhle.
     match /artifacts/firemni-kb-app/private/{kolekce}/{document=**} {
-      allow read, delete: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani']);
+      allow read: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty']);
+      allow delete: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'vykazy']);
       allow create, update: if spravce()
-                       && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky']);
+                       && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky', 'vyplaty', 'vykazy']);
+    }
+    // ostatní pod `private/vykazy` (číselníky, zůstatky, kontrola týdnů, stavy
+    // zápisu do Tabulek, přehledy…) zakládá, mění a maže manažer jako dřív
+    match /artifacts/firemni-kb-app/private/vykazy/{cast}/{document=**} {
+      allow create, update, delete: if spravce() && !(cast in ['zaznamy', 'castky']);
     }
 
     /* Kdo co potvrzuje (výklad nahoře u smiPotvrdit). Číst musí každý člen –
