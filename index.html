@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=318">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=318">
+    <link rel="stylesheet" href="assets/css/app.css?v=319">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=319">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -690,12 +690,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=318"></script>
-<script src="assets/js/doc.js?v=318"></script>
-<script src="assets/js/ui.js?v=318"></script>
-<script src="assets/js/nabidka.js?v=318"></script>
-<script src="assets/js/vykazy.js?v=318"></script>
-<script type="module" src="assets/js/store.js?v=318"></script>
+<script src="assets/js/taxonomy.js?v=319"></script>
+<script src="assets/js/doc.js?v=319"></script>
+<script src="assets/js/ui.js?v=319"></script>
+<script src="assets/js/nabidka.js?v=319"></script>
+<script src="assets/js/vykazy.js?v=319"></script>
+<script type="module" src="assets/js/store.js?v=319"></script>
 
 <script>
 (function () {
@@ -2389,13 +2389,17 @@
             nactiNakladyZakazky(p.id);
             const e = V.ekonomikaZakazky(nazev, { projektId: p.id, vykazy: zapisy, faktury: faktury,
                 naklady: nakladyZakazek.get(p.id) || [], konec: p.konec || "" });
-            if (e.uroven !== "pres" && e.uroven !== "pozor" && !e.predbihaVarovani) return;
+            /* Schválené čerpání (vykazy-prehled → „Schválit čerpání“) se tu neopakuje,
+               dokud nevyroste o V.PRAH_ZNOVU bodů nebo přes 100 % – stejné pravidlo jako
+               e-mail. Procento bez faktur, stejně jako schválení a e-mail. */
+            const hlasit = V.rozpocetHlasit(rozpocty[nazev], (e.prace + e.nakladyRucne) / e.rozpocet * 100);
+            if (!hlasit && !e.predbihaVarovani) return;
             const g = e.prognoza || {};
             nalezy.push({
                 poradi: e.uroven === "pres" ? 0 : e.uroven === "pozor" ? 1 : 2,
                 cislo: e.cerpaniPct || 0,
                 uroven: e.uroven === "pres" ? "pres" : "pozor",
-                stitek: e.uroven === "ok" ? "PŘEDBÍHÁ" : "ROZPOČET",
+                stitek: hlasit ? "ROZPOČET" : "PŘEDBÍHÁ",
                 projekt: p,          // tečka týdenního stavu před názvem
                 text: nazev + ": čerpáno " + pct(e.cerpaniPct) +
                     (e.hotovoPct !== null ? ", hotovo " + e.hotovoPct + " %" : "") +
