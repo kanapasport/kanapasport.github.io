@@ -3297,7 +3297,12 @@
             return kZapisu.length;
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Uložení selhalo – zkus to prosím znovu.", "error");
+            /* Odmítnutí od databáze bývá zámek: uzávěrka, nebo proplacený
+               (uzavřený) měsíc výplaty dohodáře / OSVČ – ten odemyká jen
+               hlavní správce na stránce Výplaty (3. 11. 2026). */
+            window.KBUI.toast(err && err.code === "permission-denied"
+                ? "Databáze zápis odmítla – den je uzavřený (uzávěrka nebo proplacený měsíc). Odemknout ho může hlavní správce."
+                : "Uložení selhalo – zkus to prosím znovu.", "error");
             return 0;
         }
     }

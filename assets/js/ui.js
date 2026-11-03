@@ -792,6 +792,13 @@
     UI.TYPY = [
         { id: "zamestnanec", title: "Zaměstnanec", mnozne: "Zaměstnanci" },
         { id: "osvc",        title: "OSVČ",        mnozne: "OSVČ" },
+        /* Dohody (Michal 3. 11. 2026): chovají se jako „student na dohodu“ –
+           bez fondu hodin (V.maFond jen zaměstnanec), vlastní zápis, svoje
+           částky a sazbu vidí (fakturujeSi), hodiny jdou do sešitu. Navíc
+           u člověka `dohodaOd` / `dohodaDo` (Uživatelé) a stránka Výplaty
+           hlídá u DPP limit hodin za rok. */
+        { id: "dpp",         title: "DPP (dohoda o provedení práce)", mnozne: "DPP" },
+        { id: "dpc",         title: "DPČ (dohoda o pracovní činnosti)", mnozne: "DPČ" },
         { id: "student",     title: "Student",     mnozne: "Studenti" },
         /* Účet, za kterým není člověk (zápis výkazů do Tabulek Google).
            Spravuje se v Uživatelích, ale nikam, kde se rozděluje práce,
@@ -803,7 +810,15 @@
 
     /* V jakém pořadí se lidé nabízejí: zaměstnanci a OSVČ napřed,
        studenti až za nimi (přání Michala 24. 8.). */
-    UI.PORADI_TYPU = { zamestnanec: 0, osvc: 1, student: 2, servis: 3 };
+    UI.PORADI_TYPU = { zamestnanec: 0, osvc: 1, dpp: 2, dpc: 3, student: 4, servis: 5 };
+
+    /* Komu se na stránce Výplaty počítá, kolik mu vychází a kolik se mu
+       proplatilo: dohody, OSVČ a student (Michal 3. 11. 2026). Zaměstnanec
+       má domluvenou měsíční výplatu. Stejný seznam bere vykazy.js. */
+    UI.VYPLATNE_TYPY = ["dpp", "dpc", "osvc", "student"];
+    /** Vidí přihlášený jen SVŮJ přehled výplat (dohodář / OSVČ bez financí)? */
+    UI.mojeVyplaty = () => !!window.KB_USER && !UI.can("finance.view") &&
+        UI.VYPLATNE_TYPY.indexOf(UI.typUvazku(UI.me())) !== -1;
 
     const MANAZER_PRAVA = [
         "ukol.create", "ukol.edit", "ukol.delete",
@@ -1114,6 +1129,11 @@
         const prihlasen = !!window.KB_USER;
         document.querySelectorAll("[data-jen-prihlaseny]").forEach(el => {
             el.hidden = !prihlasen;
+        });
+        /* „Moje výplaty“ – výjimka z data-need: právo tu nedává role, ale typ
+           spolupráce (dohoda, OSVČ, student) a finance ho nemají (mají Výplaty). */
+        document.querySelectorAll("[data-jen-vyplaty]").forEach(el => {
+            el.hidden = !UI.mojeVyplaty();
         });
 
         // skupina pásu bez jediné viditelné položky se schová celá
@@ -2086,7 +2106,10 @@
         sipka: cesta("M19 9l-7 7-7-7"),
         pozn: cesta("M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"),
         // přístroj na stativu (Vybavení)
-        stativ: cesta("M9 6a3 3 0 106 0 3 3 0 00-6 0zM12 9v4m0 0l-6 8m6-8l6 8m-6-8v8")
+        stativ: cesta("M9 6a3 3 0 106 0 3 3 0 00-6 0zM12 9v4m0 0l-6 8m6-8l6 8m-6-8v8"),
+        // bankovka (Výplaty) a list s grafem (Výpis pro mzdovou)
+        vyplata: cesta("M3 7h18v10H3V7zm9 7a2 2 0 100-4 2 2 0 000 4zM3 10a3 3 0 003-3m12 0a3 3 0 003 3M3 14a3 3 0 013 3m12 0a3 3 0 013-3"),
+        vypis: cesta("M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z")
     };
     const ikonaPasu = (nazev, trida) => '<svg' + (trida ? ' class="' + trida + '"' : "") +
         ' fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
@@ -2117,10 +2140,16 @@
             // zakládání projektů je manažerská práce
             { nazev: "Nový projekt", ikona: "plus", href: "sprava.html#novy", need: "zakazky.manage" }
         ] },
-        /* jen hlavní správce, majitel a asistentka (finance.view) */
+        /* jen hlavní správce, majitel a asistentka (finance.view); „Moje
+           výplaty“ vidí dohodář / OSVČ / student bez financí – svůj přehled */
         { id: "penize", nazev: "Peníze", ikona: "penize", polozky: [
             { nazev: "Faktury", ikona: "receipt", href: "faktury.html", need: "finance.view" },
-            { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" }
+            { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" },
+            { nazev: "Výplaty", ikona: "vyplata", href: "vyplaty.html", need: "finance.view",
+              popis: "DPP, DPČ, OSVČ a studenti – kolik komu vychází, proplaceno, zbývá" },
+            { nazev: "Výpis pro mzdovou", ikona: "vypis", href: "mzdy-vypis.html", need: "finance.view" },
+            { nazev: "Moje výplaty", ikona: "vyplata", href: "vyplaty.html", gate: "data-jen-vyplaty",
+              popis: "Kolik ti za měsíc vychází, kolik se proplatilo a kolik zbývá" }
         ] },
         { id: "nastaveni", nazev: "Nastavení a nápověda", ikona: "cog", polozky: [
             { nazev: "Nastavení", ikona: "cog", href: "nastaveni.html", need: "vykaz.view" },
@@ -2168,7 +2197,9 @@
     }
 
     function polozkaPasu(p) {
-        const gate = p.need ? ' data-need="' + esc(p.need) + '" hidden'
+        // p.gate = vlastní atribut místo práva (Moje výplaty: data-jen-vyplaty, paintUser)
+        const gate = p.gate ? " " + p.gate + " hidden"
+            : p.need ? ' data-need="' + esc(p.need) + '" hidden'
             : (p.verejne ? "" : " data-jen-prihlaseny hidden");
         const popis = p.popis ? ' title="' + esc(p.popis) + '"' : "";
         const vnitrek = ikonaPasu(p.ikona) + '<span class="passkup__text">' + esc(p.nazev) + "</span>" +

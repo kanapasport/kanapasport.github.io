@@ -201,6 +201,17 @@
             <select id="fTyp" class="field"></select>
             <div class="tiny muted" style="margin-top:4px">Podle typu se dělí hodinové sazby i seznam lidí.</div>
         </div>
+        <!-- doba dohody – jen u DPP a DPČ, obě data nepovinná (Michal 3. 11. 2026) -->
+        <div id="dohodaBlok" class="row" style="gap:12px" hidden>
+            <div class="grow">
+                <label class="label" for="fDohodaOd">Dohoda od</label>
+                <input type="date" id="fDohodaOd" class="field">
+            </div>
+            <div class="grow">
+                <label class="label" for="fDohodaDo">Dohoda do</label>
+                <input type="date" id="fDohodaDo" class="field">
+            </div>
+        </div>
         <label class="row" style="gap:8px;cursor:pointer;align-items:flex-start">
             <input type="checkbox" id="fNepracuje" style="width:18px;height:18px;margin-top:2px">
             <span class="small">Momentálně nepracuje
@@ -452,6 +463,9 @@
 
     /* ------------------------------------------------------------ seznam */
 
+    const datumCz = (iso) => /^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))
+        ? Number(iso.slice(8, 10)) + ". " + Number(iso.slice(5, 7)) + ". " + iso.slice(0, 4) : "";
+
     function rowHtml(user) {
         const role = window.KBUI.ROLES.find(r => r.id === user.role) ||
             window.KBUI.ROLES.find(r => r.id === "student");
@@ -463,6 +477,8 @@
                 (me ? ' <span class="tiny" style="color:var(--accent);font-weight:800">(to jsi ty)</span>' : "") +
                 '<div class="tiny muted">' + esc(user.email) + " · " + esc(role.title) +
                 (typ ? " · " + esc(typ.title) : "") +
+                ((user.dohodaOd || user.dohodaDo) && ["dpp", "dpc"].indexOf(window.KBUI.typUvazku(user)) !== -1
+                    ? " · dohoda " + esc(datumCz(user.dohodaOd) || "…") + " – " + esc(datumCz(user.dohodaDo) || "…") : "") +
                 (user.active === false ? " · pozastavený" : "") +
                 (user.nepracuje === true ? " · momentálně nepracuje" : "") +
                 "</div>" +
@@ -652,14 +668,26 @@
         $("fTyp").innerHTML = window.KBUI.TYPY.map(t =>
             '<option value="' + t.id + '"' + (typ === t.id ? " selected" : "") + ">" +
             esc(t.title) + "</option>").join("");
+        $("fDohodaOd").value = (user && user.dohodaOd) || "";
+        $("fDohodaDo").value = (user && user.dohodaDo) || "";
+        ukazDohodu();
 
         $("userOverlay").hidden = false;
         $(user ? "fRole" : "fFirst").focus();
     }
 
+    /** Doba dohody má smysl jen u DPP a DPČ. */
+    const jeDohoda = () => ["dpp", "dpc"].indexOf($("fTyp").value) !== -1;
+    function ukazDohodu() { $("dohodaBlok").hidden = !jeDohoda(); }
+
     async function saveForm() {
         const email = $("fEmail").value.trim().toLowerCase();
         if (!email || email.indexOf("@") === -1) return window.KBUI.toast("Doplň platný e-mail.", "warn");
+        const dohodaOd = jeDohoda() ? $("fDohodaOd").value : "";
+        const dohodaDo = jeDohoda() ? $("fDohodaDo").value : "";
+        if (dohodaOd && dohodaDo && dohodaDo < dohodaOd) {
+            return window.KBUI.toast("Konec dohody je dřív než začátek.", "warn");
+        }
 
         const data = {
             id: editingId || "",
@@ -668,6 +696,8 @@
             last:  $("fLast").value.trim(),
             role:  $("fRole").value,
             typ:   $("fTyp").value,
+            dohodaOd: dohodaOd,
+            dohodaDo: dohodaDo,
             vykazPulhodiny: $("fPulhodiny").checked,
             nepracuje: $("fNepracuje").checked,
             bezHlidky: $("fBezHlidky").checked,
@@ -785,6 +815,7 @@
         $("btnLogin").addEventListener("click", () => window.KBUI.openLogin());
         $("btnFormCancel").addEventListener("click", () => { $("userOverlay").hidden = true; });
         $("btnFormSave").addEventListener("click", saveForm);
+        $("fTyp").addEventListener("change", ukazDohodu);
         $("btnGen").addEventListener("click", () => {
             $("fPass").value = generatePassword($("fEmail").value);
         });
