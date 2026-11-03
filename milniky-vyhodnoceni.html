@@ -109,6 +109,14 @@
         .uchip--smazany { background: var(--danger-tint); color: var(--danger); }
         .mvduvod { color: var(--warn); font-size: var(--fs-1); font-weight: 700; }
         .mvduvod--bez { color: var(--muted); }
+        /* jen část úkolu (položky TO-DO) a úkol sdílený s jinými milníky (3. 11. 2026) */
+        .uchip__c { flex: none; padding: 0 4px; border-radius: var(--r-pill); background: rgba(0, 0, 0, .08);
+            font-weight: 900; font-variant-numeric: tabular-nums; }
+        .mvpozn { display: block; margin-top: 2px; font-size: var(--fs-1); color: var(--text-soft); line-height: 1.45;
+            overflow-wrap: anywhere; }
+        .mvpozn--navrh { color: var(--accent); }
+        .mvsdil { display: inline-block; padding: 0 6px; border-radius: var(--r-pill); background: var(--warn-tint);
+            color: var(--warn); font-weight: 800; white-space: nowrap; }
 
         /* způsob párování – slovo + barva, popis v bublině */
         .jchip { display: inline-block; max-width: 100%; padding: 0 7px; border-radius: var(--r-pill);
@@ -216,6 +224,28 @@
         .mvukol__n { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
         .mvukol__m { flex: none; color: var(--muted); font-size: var(--fs-1); white-space: nowrap; }
         .mvokno__nic { padding: 8px; color: var(--muted); font-size: var(--fs-2); }
+        /* položky TO-DO spárovaného úkolu – rozbalí se pod ním */
+        .mvukol-radek { display: flex; align-items: center; gap: 6px; }
+        .mvukol-radek > .mvukol { flex: 1 1 auto; min-width: 0; }
+        .mvpol__rozbal { flex: none; margin-right: 4px; padding: 1px 9px; border: 1px solid var(--line); border-radius: var(--r-pill);
+            background: var(--surface); color: var(--accent); font-size: var(--fs-1); font-weight: 800; white-space: nowrap; cursor: pointer; }
+        .mvpol__rozbal--cast { background: var(--accent-tint); border-color: var(--accent-lt); }
+        .mvpol__rozbal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .mvpol { display: flex; flex-direction: column; gap: 4px; margin: 2px 4px 6px 35px; padding: 8px 10px;
+            border-left: 3px solid var(--accent-lt); border-radius: 0 var(--r-sm) var(--r-sm) 0; background: var(--bg-soft); }
+        .mvpol__rezim { display: flex; flex-wrap: wrap; gap: 6px; }
+        .mvpol__rezim .chip { padding: 3px 10px; font-size: var(--fs-1); }
+        .mvpol__pozn { margin: 0; font-size: var(--fs-1); font-weight: 700; color: var(--accent); }
+        .mvpol__p { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: var(--r-sm);
+            font-size: var(--fs-2); cursor: pointer; }
+        .mvpol__p input { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+        .mvpol__p--navrh { background: var(--accent-tint); }
+        .mvpol__p--cely { cursor: default; color: var(--text-soft); }
+        .mvpol__t { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+        .mvpol__pct { flex: none; color: var(--muted); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+        .mvpol__stitek { flex: none; padding: 0 6px; border: 1px dashed var(--accent-lt); border-radius: var(--r-pill);
+            color: var(--accent); font-size: var(--fs-1); font-weight: 800; white-space: nowrap; }
+        .mvokno__varovani { color: var(--danger); font-weight: 700; }
 
         /* ================================================== telefon */
         @media (max-width: 599.98px) {
@@ -235,6 +265,8 @@
             .mvt td:first-child, .mvt tr > td:first-child { box-shadow: none !important; }
             .mvt td.mvt__napln { flex-basis: 100%; order: -1; }
             .mvt td.mvt__ukoly { flex-basis: 100%; }
+            /* návrh položek je jen nápověda – na telefonu by kartu zbytečně natáhl (část a sdílení zůstávají) */
+            .mvpozn--navrh { display: none; }
             .mvt td.mvt__z { display: none; }
             .mvt__zin { display: block; }
             table.kt.mvt td[data-l]::before { margin-right: 4px; }
@@ -245,6 +277,10 @@
             .mvokno__deska { padding: 14px; max-height: 94vh; }
             .mvukol { flex-wrap: wrap; }
             .mvukol__m { white-space: normal; }
+            .mvukol-radek { flex-wrap: wrap; }
+            .mvukol-radek > .mvpol__rozbal { margin-left: 35px; }
+            .mvpol { margin-left: 8px; }
+            .mvpol__p { flex-wrap: wrap; }
         }
     </style>
 </head>
@@ -277,6 +313,9 @@
                 <!-- živě se drží jen okno posledních měsíců výkazů (store.js) – starší si stránka
                      dotáhne až na požádání, je to dotaz na celou firmu -->
                 <button type="button" id="btnStarsi" class="btn btn--ghost btn--sm" hidden>Načíst výkazy od začátku projektu</button>
+                <!-- hotový milník má mít hotové úkoly: Quick TO-DO zpracovatelům (náhled, pak potvrdit) -->
+                <button type="button" id="btnPripomenout" class="btn btn--ghost btn--sm"
+                        title="Zpracovatelům hotových milníků s nehotovými úkoly pošle Quick TO-DO „aktualizuj TO-DO“ – nejdřív ukáže náhled">Připomenout TO-DO u hotových milníků</button>
             </div>
         </div>
 
@@ -300,6 +339,11 @@
                     Vykřičník vedle znamená, že by návrh dnes vyšel jinak (třeba přibyl úkol).</dd>
                 <dt><span class="mvpotv__navrh">návrh</span></dt>
                 <dd>Spárovalo se to samo a ještě to nikdo nepotvrdil.</dd>
+                <dt><span class="uchip uchip--p50"><span class="uchip__n">úkol</span><span class="uchip__c">1/17</span></span></dt>
+                <dd>K milníku patří jen část úkolu – vybrané položky TO-DO (⋯ → Upravit párování → Položky). Hodiny, Kč
+                    i budget úkolu se berou poměrem vybraných položek ke všem (vypnuté se nepočítají).</dd>
+                <dt><span class="mvsdil">sdíleno s 2 milníky</span></dt>
+                <dd>Stejný úkol (nebo stejnou položku) bere i jiný milník – zatím se počítá v každém celý.</dd>
             </dl>
             <p>Technologie se porovnávají po zkratkách: „MaR“ = „MAR“, „SHZ“ sedí na „HAS/SHZ“, „STAVBA + SLN“ na obě.
                 Budovy a podlaží bere stránka z nastavení projektu (Správa projektů → Údaje). Hodiny a Kč jsou
@@ -404,6 +448,10 @@
         { klic: "nesparovane", nazev: "Nespárované" },
         { klic: "nepotvrzene", nazev: "Nepotvrzené" }
     ];
+
+    /* Úkol (položku) na víc milnících zatím počítá každý milník celou – o dělení
+       Michal teprve rozhodne; V.vyhodnoceniMilniku umí i "rovnym-dilem" a "hlavni". */
+    const REZIM_SDILENI = "cely";
 
     const MILNIK = ["milník", "milníky", "milníků"];
     const UKOL = ["úkol", "úkoly", "úkolů"];
@@ -514,22 +562,32 @@
         const milniky = (window.KB.milniky || [])
             .filter(m => !m.jenPostup && normNazev(m.zakazka) === projekt)
             .sort((a, b) => (Number(a.poradi) || 0) - (Number(b.poradi) || 0));
-        const radky = milniky.map(m => {
-            const par = V.parovaniMilniku(m, ukoly, osy, { potvrzene: potvrzene[m.id] || null });
-            const vh = V.vyhodnoceniMilniku(m, { ukoly: par.ukoly, vykazy: zapisy(par.ukoly), budgety: budgety });
-            return { m: m, par: par, vh: vh, stav: stavMilniku(m, dnes), tech: klicTech(m) };
+        const radky = milniky.map(m => ({
+            m: m, par: V.parovaniMilniku(m, ukoly, osy, { potvrzene: potvrzene[m.id] || null }),
+            stav: stavMilniku(m, dnes), tech: klicTech(m)
+        }));
+        /* Kdo bere kterou položku úkolu – ×2 a „sdíleno s N milníky“ jen tam,
+           kde se milníky opravdu překrývají (EPS a EZS z jednoho úkolu ne). */
+        const sdileni = V.sdileniParovani(radky.map(r => ({ id: r.m.id, ukoly: r.par.ukoly, polozky: r.par.polozky })));
+        radky.forEach(r => {
+            r.vh = V.vyhodnoceniMilniku(r.m, { ukoly: r.par.ukoly, vykazy: zapisy(r.par.ukoly), budgety: budgety,
+                polozky: r.par.polozky, sdileni: sdileni, rezimSdileni: REZIM_SDILENI });
+            r.rozpis = new Map(r.vh.rozpis.map(x => [x.id, x]));
         });
-        // na kolika milnících úkol sedí – ×2 u úkolu a součty bez dvojího počítání
-        const naMilnicich = new Map();
-        radky.forEach(r => r.par.ids.forEach(id => naMilnicich.set(id, (naMilnicich.get(id) || 0) + 1)));
-        /** Souhrn skupiny řádků – každý úkol jednou. */
+        /** Souhrn skupiny řádků – každý úkol (každá jeho položka) jednou. */
         const souhrnRadku = (vyber) => {
-            const unik = new Map();
-            vyber.forEach(r => r.par.ukoly.forEach(u => unik.set(u.id, u)));
+            const unik = new Map(), cast = {}, cele = new Set();
+            vyber.forEach(r => r.par.ukoly.forEach(u => {
+                unik.set(u.id, u);
+                const p = r.par.polozky[u.id];
+                if (!Array.isArray(p)) cele.add(u.id);
+                else cast[u.id] = Array.from(new Set((cast[u.id] || []).concat(p)));
+            }));
+            cele.forEach(id => { delete cast[id]; });
             const seznam = Array.from(unik.values());
-            return V.vyhodnoceniMilniku(null, { ukoly: seznam, vykazy: zapisy(seznam), budgety: budgety });
+            return V.vyhodnoceniMilniku(null, { ukoly: seznam, vykazy: zapisy(seznam), budgety: budgety, polozky: cast });
         };
-        return { p: p, osy: osy, ukoly: ukoly, radky: radky, naMilnicich: naMilnicich,
+        return { p: p, osy: osy, ukoly: ukoly, radky: radky, sdileni: sdileni,
                  vykazyUkolu: vykazyUkolu, souhrnRadku: souhrnRadku, dnes: dnes };
     }
 
@@ -702,26 +760,83 @@
             ? n.slice(tech.length).replace(/^\s*[–—-]\s*/, "") || n : n;
     }
 
+    /** „EPS“, „EPS, EZS“, „EPS, EZS, CCTV a další 2“ – názvy položek do věty. */
+    function vycetPolozek(nazvy) {
+        const n = (nazvy || []).map(x => String(x || "").trim()).filter(Boolean);
+        return n.length <= 3 ? n.join(", ") : n.slice(0, 3).join(", ") + " a další " + (n.length - 3);
+    }
+    /** „sdíleno s 1 milníkem“ / „sdíleno s 3 milníky“. */
+    const sdilenoText = (n) => "sdíleno s " + n + (Number(n) === 1 ? " milníkem" : " milníky");
+
     function ukolChip(u, r, d) {
+        const rp = r.rozpis.get(u.id) || { cely: true, sdilenoS: 0 };
+        const cast = rp.cely === false;
         const hotovo = u.stav === "hotovo";
         const maTodo = V.todoAktivni(u).length > 0;
-        const pct = V.pctUkolu(u);
-        const odhad = (u.todo || []).some(t => t && t.celkem === true);
+        // u části úkolu postup jen z vybraných položek
+        const pct = cast ? rp.pct : V.pctUkolu(u);
+        const odhad = !cast && (u.todo || []).some(t => t && t.celkem === true);
         const stupen = hotovo || pct >= 100 ? "p100" : !maTodo ? "p0"
             : pct >= 95 ? "p95" : pct >= 75 ? "p75" : pct >= 25 ? "p50" : "p0";
         const stav = hotovo ? "✓" : !maTodo ? "" : (odhad ? "≈ " : "") + pct + " %";
-        const naKolika = d.naMilnicich.get(u.id) || 1;
+        const naKolika = 1 + (rp.sdilenoS || 0);
         const h = (d.vykazyUkolu.get(u.id) || []).filter(z => z.absence !== true)
             .reduce((s, z) => s + (Number(z.hodiny) || 0), 0);
         const title = [u.nazev || u.id,
+            cast ? "jen " + vycetPolozek(rp.polozky) + " (" + rp.vybrano + "/" + rp.aktivnich + " položek)" : "",
             hotovo ? "hotovo" : (maTodo ? (odhad ? "odhad Celkem " : "TO-DO ") + pct + " %" : "bez TO-DO"),
-            h ? hodiny(h) + " h z výkazů" : "",
-            naKolika > 1 ? "úkol je spárovaný i s jiným milníkem (" + naKolika + "×) – v součtech se počítá jednou" : ""]
+            h ? hodiny(h) + " h z výkazů" + (cast ? " celého úkolu" : "") : "",
+            naKolika > 1 ? sdilenoText(naKolika - 1) + " – v součtech projektu se počítá jednou" : ""]
             .filter(Boolean).join(" · ");
         return '<span class="uchip uchip--' + stupen + '" title="' + esc(title) + '">' +
             '<span class="uchip__n">' + esc(kratkyNazev(u, r.par.tech.length > 1)) + "</span>" +
+            (cast ? '<span class="uchip__c">' + esc(rp.vybrano + "/" + rp.aktivnich) + "</span>" : "") +
             (stav ? '<span class="uchip__s">' + esc(stav) + "</span>" : "") +
             (naKolika > 1 ? '<span class="uchip__x">×' + esc(naKolika) + "</span>" : "") + "</span>";
+    }
+
+    /**
+     * Řádky pod chipy – nejvýš pár, ať se řádek milníku nenafoukne (milník
+     * „EPS – všechna patra“ má třeba deset úkolů): část úkolu („z úkolu …
+     * jen EPS (1/17 položek)“, víc úkolů se stejnými položkami jedním řádkem)
+     * a nápověda návrhu položek podle náplně u úkolů, které milník bere celé.
+     */
+    function poznamkyUkolu(r) {
+        const skupiny = new Map();          // názvy položek → úkoly, které z nich milník bere
+        const navrhNazvy = [], navrhUkoly = [];
+        r.par.ukoly.forEach(u => {
+            const rp = r.rozpis.get(u.id);
+            if (!rp) return;
+            if (!rp.cely) {
+                const klic = rp.polozky.join("\n");
+                if (!skupiny.has(klic)) skupiny.set(klic, []);
+                skupiny.get(klic).push(rp);
+                return;
+            }
+            const navrh = Array.isArray(r.par.polozky[u.id]) ? null : (r.par.navrhPolozky || {})[u.id];
+            if (!navrh) return;
+            navrhUkoly.push(u);
+            V.polozkyUkolu(u).filter(t => navrh.indexOf(String(t.id)) !== -1)
+                .forEach(t => { if (navrhNazvy.indexOf(t.text) === -1) navrhNazvy.push(t.text); });
+        });
+        const casti = Array.from(skupiny.values()).map(sk => {
+            const p = sk[0];
+            const jen = p.polozky.length ? " jen " + vycetPolozek(p.polozky) : ": vybrané položky už u úkolu nejsou";
+            const pomer = sk.every(x => x.vybrano === p.vybrano && x.aktivnich === p.aktivnich)
+                ? p.vybrano + "/" + p.aktivnich + " položek" : "různý počet položek";
+            const text = sk.length === 1 ? "z úkolu " + p.nazev + jen + " (" + pomer + ")"
+                : "z " + sk.length + " úkolů" + jen + " (" + pomer + ")";
+            return '<span class="mvpozn" title="' + esc(sk.map(x => x.nazev + ": " + x.vybrano + "/" + x.aktivnich).join("\n")) + '">' +
+                esc(text) + "</span>";
+        });
+        if (navrhUkoly.length) {
+            casti.push('<span class="mvpozn mvpozn--navrh" title="' + esc("Podle náplně milníku by k němu patřily jen tyto " +
+                "položky – použij ⋯ → Upravit párování → Položky, nebo hromadně „Jen položky podle náplně“.") + '">' +
+                esc("návrh podle náplně: " + (navrhUkoly.length === 1 ? kratkyNazev(navrhUkoly[0], r.par.tech.length > 1) + " " : "") +
+                    "jen " + vycetPolozek(navrhNazvy) + (navrhUkoly.length > 1 ? " (" + V.pocet(navrhUkoly.length, UKOL) + ")" : "")) +
+                "</span>");
+        }
+        return casti.join("");
     }
 
     function ukolyHtml(r, d) {
@@ -729,7 +844,8 @@
         if (par.ids.length) {
             return par.ukoly.map(u => ukolChip(u, r, d)).join("") +
                 par.chybejiciIds.map(id => '<span class="uchip uchip--smazany" title="' +
-                    esc("Úkol " + id + " už neexistuje – uprav párování") + '">smazaný úkol</span>').join("");
+                    esc("Úkol " + id + " už neexistuje – uprav párování") + '">smazaný úkol</span>').join("") +
+                poznamkyUkolu(r) + sdileniHtml(r, d);
         }
         if (par.potvrzeno) return '<span class="mvduvod mvduvod--bez">potvrzeno bez úkolu</span>';
         if (par.zpusob === "chybi") {
@@ -757,10 +873,31 @@
 
     function jakHtml(r, d) {
         const info = zpusobInfo(r.par.zpusob);
-        const sdileny = r.par.ids.some(id => (d.naMilnicich.get(id) || 0) > 1);
+        const sdileny = r.vh.rozpis.some(x => x.sdilenoS > 0);
         const title = info.popis + (sdileny ? " Některý úkol sedí i na jiném milníku." : "");
         return '<span class="jchip jchip--' + esc(ZPUSOBY[r.par.zpusob] ? r.par.zpusob : "rucne") +
             '" title="' + esc(title) + '">' + esc(info.nazev) + "</span>";
+    }
+
+    /* „sdíleno s N milníky“ – kolik JINÝCH milníků bere některý z úkolů (položek)
+       tohohle; u úkolu samotného to říká ×N v chipu. Jeden řádek na milník, ať se
+       nenafoukne. Jen informace: o dělení hodin Michal teprve rozhodne
+       (V.vyhodnoceniMilniku, rezimSdileni). */
+    function sdileniHtml(r, d) {
+        const jine = new Set();
+        r.vh.rozpis.forEach(x => (x.sdilenoS ? sdileniRadku(r, x.id, d) : []).forEach(mid => jine.add(mid)));
+        return jine.size ? '<span class="mvpozn"><span class="mvsdil" title="' + esc("Stejný úkol (nebo stejnou položku) bere " +
+            "i jiný milník – zatím se počítá v každém celý.") + '">' + esc(sdilenoText(jine.size)) + "</span></span>" : "";
+    }
+
+    /** Jiné milníky, které berou některou položku úkolu, kterou bere i tento řádek. */
+    function sdileniRadku(r, ukolId, d) {
+        const mapa = (d.sdileni && d.sdileni[ukolId]) || {};
+        const u = r.par.ukoly.find(x => x.id === ukolId);
+        const ven = new Set();
+        if (!u) return [];
+        V.castUkolu(u, r.par.polozky[ukolId]).klice.forEach(k => (mapa[k] || []).forEach(mid => { if (mid !== r.m.id) ven.add(mid); }));
+        return Array.from(ven);
     }
 
     function potvrzeniHtml(par) {
@@ -887,21 +1024,33 @@
 
     /* ----------------------------------------------- potvrzení párování */
 
-    /** Uloží potvrzení jednoho milníku – z návrhu, nebo z okna (vlastní výběr). */
-    function ulozPotvrzeni(r, ids, volby) {
+    /**
+     * Uloží potvrzení jednoho milníku – z návrhu, nebo z okna (vlastní výběr).
+     * `polozky` = { ukolId: [todoId] } jen u úkolů, kde milník bere část;
+     * úkol bez klíče = celý úkol.
+     */
+    function ulozPotvrzeni(r, ids, polozky, volby) {
         const zpusob = stejnaMnozina(ids, r.par.navrh.ids) ? r.par.navrh.zpusob : "rucne";
+        const vyber = {};
+        ids.forEach(id => {
+            if (polozky && Array.isArray(polozky[id]) && polozky[id].length) vyber[id] = polozky[id].slice();
+        });
         return window.KB.ulozParovaniMilniku(r.m.id, {
             projektId: (posledni && posledni.p && posledni.p.id) || ((r.par.ukoly[0] || {}).projektId) || "",
-            ukoly: ids, zpusob: zpusob, navrh: r.par.navrh.ids
+            ukoly: ids, zpusob: zpusob, navrh: r.par.navrh.ids, polozky: vyber
         }, volby);
     }
 
     async function potvrdJeden(mid) {
         const r = podleId.get(mid);
         if (!r) return;
-        await ulozPotvrzeni(r, r.par.ids);
+        await ulozPotvrzeni(r, r.par.ids, r.par.polozky);
         window.KBUI.toast("Párování potvrzeno.");
     }
+
+    /** Návrh položek podle náplně, který se od uloženého výběru liší (hromadná akce). */
+    const jinyNavrhPolozek = (r) => Object.keys(r.par.navrhPolozky || {})
+        .some(id => !stejnaMnozina(r.par.navrhPolozky[id], r.par.polozky[id] || []));
 
     async function zrusJeden(mid) {
         const r = podleId.get(mid);
@@ -928,6 +1077,22 @@
             const radky = ids.map(id => podleId.get(id)).filter(Boolean);
             const kPotvrzeni = radky.filter(r => !r.par.potvrzeno);
             const potvrzene = radky.filter(r => r.par.potvrzeno);
+            // položky TO-DO hromadně: návrh podle náplně, nebo zase celé úkoly (uloží = potvrdí)
+            const sNavrhem = radky.filter(jinyNavrhPolozek);
+            const sCasti = radky.filter(r => Object.keys(r.par.polozky || {}).length);
+            const polozkyHromadne = (seznam, hotovo, popis, vyber) => window.KBNabidka.hromadne(seznam.map(r => r.m.id), {
+                krok: async (id) => {
+                    const r = podleId.get(id);
+                    if (!r) return false;
+                    await ulozPotvrzeni(r, r.par.ids, vyber(r), { bezAktivity: true });
+                    return true;
+                },
+                hotovo: hotovo, proc: "beze změny"
+            }).then(v => {
+                if (v && v.ok) window.KB.zapisAktivitu("milnik", popis + " " +
+                    V.pocet(v.ok, ["milníku", "milníků", "milníků"]) + " – " + projekt);
+                return v;
+            });
             return [
                 kPotvrzeni.length && { text: "Potvrdit párování (" + kPotvrzeni.length + ")", ikona: "potvrdit",
                     fn: async () => {
@@ -935,7 +1100,7 @@
                             krok: async (id) => {
                                 const r = podleId.get(id);
                                 if (!r || r.par.potvrzeno) return false;
-                                await ulozPotvrzeni(r, r.par.ids, { bezAktivity: true });
+                                await ulozPotvrzeni(r, r.par.ids, r.par.polozky, { bezAktivity: true });
                                 return true;
                             },
                             hotovo: "Potvrzeno", proc: "už potvrzené" });
@@ -962,7 +1127,12 @@
                                 V.pocet(v.ok, ["milníku", "milníků", "milníků"]) + " – " + projekt);
                         }
                         return v;
-                    } }
+                    } },
+                sNavrhem.length && { text: "Jen položky podle náplně (" + sNavrhem.length + ")", ikona: "seznam",
+                    fn: () => polozkyHromadne(sNavrhem, "Položky podle náplně", "spároval podle náplně jen části úkolů u",
+                        (r) => Object.assign({}, r.par.polozky, r.par.navrhPolozky)) },
+                sCasti.length && { text: "Celý úkol (" + sCasti.length + ")", ikona: "rozbalit",
+                    fn: () => polozkyHromadne(sCasti, "Celé úkoly", "vrátil celé úkoly u", () => ({})) }
             ];
         }
     });
@@ -994,13 +1164,17 @@
     /* ---------------------------------------- okno Upravit párování ----
        Zaškrtávací seznam všech úkolů projektu: nahoře stejná technologie,
        pod čarou ostatní (milník „STAVBA + SLN“ nebo nezvyklá zkratka).
-       Uložení rovnou potvrzuje – vybral to člověk. */
-    let okno = null;     // { mid, vybrane: Set }
+       Uložení rovnou potvrzuje – vybral to člověk.
+       Položky TO-DO (3. 11. 2026): u zaškrtnutého úkolu se dvěma a víc
+       položkami jde rozbalit „Položky“ – Celý úkol, nebo Jen vybrané
+       položky (zaškrtávátka; návrh podle náplně je zvýrazněný). */
+    let okno = null;     // { mid, vybrane: Set, polozky: Map(ukolId → Set todoId), rozbalene: Set }
 
     function otevriOkno(mid) {
         const r = podleId.get(mid);
         if (!r) return;
-        okno = { mid: mid, vybrane: new Set(r.par.ids) };
+        okno = { mid: mid, vybrane: new Set(r.par.ids), rozbalene: new Set(),
+                 polozky: new Map(Object.keys(r.par.polozky || {}).map(id => [id, new Set(r.par.polozky[id])])) };
         $("parMilnik").textContent = [r.m.poradi ? "#" + r.m.poradi : "", r.m.cinnost, r.m.napln].filter(Boolean).join(" · ");
         $("parHledat").value = "";
         kresliOkno();
@@ -1027,12 +1201,14 @@
             String(a.nazev || "").localeCompare(String(b.nazev || ""), "cs"));
         const stejna = ukoly.filter(u => V.techTokeny(u.technologie).some(t => r.par.tech.indexOf(t) !== -1));
         const ostatni = ukoly.filter(u => stejna.indexOf(u) === -1);
-        const polozka = (u) => '<label class="mvukol"><input type="checkbox" data-ukol="' + esc(u.id) + '"' +
+        const polozka = (u) => '<div class="mvukol-obal"><div class="mvukol-radek">' +
+            '<label class="mvukol"><input type="checkbox" data-ukol="' + esc(u.id) + '"' +
             (okno.vybrane.has(u.id) ? " checked" : "") + ">" +
             '<span class="mvukol__n">' + esc(u.nazev || u.id) + "</span>" +
             '<span class="mvukol__m">' + esc([u.technologie, [u.budova, u.patro].filter(Boolean).join(" "),
                 u.stav === "hotovo" ? "hotovo" : (V.todoAktivni(u).length ? V.pctUkolu(u) + " %" : "")]
-                .filter(Boolean).join(" · ")) + "</span></label>";
+                .filter(Boolean).join(" · ")) + "</span></label>" + polozkyTlacitko(u) + "</div>" +
+            polozkyPanel(u, r) + "</div>";
         const oddil = (nadpis, seznam, vse) => '<div class="mvokno__oddil">' + esc(nadpis + " (" + vse + ")") + "</div>" +
             (seznam.length ? seznam.map(polozka).join("")
                 : '<div class="mvokno__nic">' + (slova.length ? "Nic neodpovídá hledání." : "Žádné.") + "</div>");
@@ -1048,27 +1224,164 @@
         kresliSouhrnOkna();
     }
 
+    /* ----- položky TO-DO v okně ----- */
+
+    const ukolOkna = (id) => posledni && posledni.ukoly.find(u => u.id === id);
+    /** Jde u úkolu vybírat položky? Jen zaškrtnutý úkol s aspoň dvěma aktivními položkami. */
+    const lzeCast = (u) => !!u && okno.vybrane.has(u.id) && V.todoAktivni(u).length >= 2 && V.polozkyUkolu(u).length > 0;
+
+    function polozkyTlacitko(u) {
+        if (!lzeCast(u)) return "";
+        const cast = okno.polozky.get(u.id);
+        const n = V.todoAktivni(u).length;
+        const otevreno = okno.rozbalene.has(u.id);
+        return '<button type="button" class="mvpol__rozbal' + (cast ? " mvpol__rozbal--cast" : "") + '" data-rozbal="' + esc(u.id) + '"' +
+            ' aria-expanded="' + (otevreno ? "true" : "false") + '" title="Položky TO-DO úkolu – celý úkol, nebo jen některé">' +
+            esc(cast ? "Položky " + cast.size + "/" + n : "Položky (" + n + ")") + (otevreno ? " ▴" : " ▾") + "</button>";
+    }
+
+    function polozkyPanel(u, r) {
+        if (!lzeCast(u) || !okno.rozbalene.has(u.id)) return "";
+        const cast = okno.polozky.get(u.id);
+        const navrh = V.navrhPolozek(r.m, u) || [];
+        const pol = V.polozkyUkolu(u);
+        const navrhNazvy = pol.filter(t => navrh.indexOf(String(t.id)) !== -1).map(t => t.text);
+        const volba = (rezim, text, aktivni) => '<button type="button" class="chip' + (aktivni ? " chip--active" : "") + '"' +
+            ' data-rezim="' + rezim + '" data-pro="' + esc(u.id) + '" aria-pressed="' + (aktivni ? "true" : "false") + '">' +
+            esc(text) + "</button>";
+        return '<div class="mvpol" data-pol-ukol="' + esc(u.id) + '">' +
+            '<div class="mvpol__rezim" role="group" aria-label="Co z úkolu patří k milníku">' +
+                volba("cely", "Celý úkol", !cast) + volba("vybrane", "Jen vybrané položky", !!cast) + "</div>" +
+            (navrhNazvy.length ? '<p class="mvpol__pozn">' + esc("Návrh podle náplně: " + vycetPolozek(navrhNazvy)) + "</p>" : "") +
+            pol.map(t => {
+                const id = String(t.id);
+                const jeNavrh = navrh.indexOf(id) !== -1;
+                return '<label class="mvpol__p' + (jeNavrh ? " mvpol__p--navrh" : "") + (cast ? "" : " mvpol__p--cely") + '">' +
+                    '<input type="checkbox" data-todo="' + esc(id) + '" data-pro="' + esc(u.id) + '"' +
+                    (!cast || cast.has(id) ? " checked" : "") + (cast ? "" : " disabled") + ">" +
+                    '<span class="mvpol__t">' + esc(t.text || "—") + "</span>" +
+                    '<span class="mvpol__pct">' + esc((Number(t.pct) || 0) + " %") + "</span>" +
+                    (jeNavrh ? '<span class="mvpol__stitek">návrh podle náplně</span>' : "") + "</label>";
+            }).join("") + "</div>";
+    }
+
+    /** Výběr položek k uložení: jen zaškrtnuté úkoly a jen opravdu část (všechny = celý úkol). */
+    function polozkyKUlozeni() {
+        const out = {};
+        okno.vybrane.forEach(id => {
+            const cast = okno.polozky.get(id);
+            const u = ukolOkna(id);
+            if (!cast || !u || !lzeCast(u)) return;
+            if (!V.castUkolu(u, Array.from(cast)).cely) out[id] = Array.from(cast);
+        });
+        return out;
+    }
+    /** Zaškrtnuté úkoly v režimu „Jen vybrané položky“ bez jediné položky. */
+    const bezPolozek = () => Array.from(okno.vybrane).map(ukolOkna)
+        .filter(u => u && lzeCast(u) && okno.polozky.has(u.id) && okno.polozky.get(u.id).size === 0);
+
     function kresliSouhrnOkna() {
         const r = okno && podleId.get(okno.mid);
         if (!r) return;
         const ids = Array.from(okno.vybrane);
-        $("parSouhrn").textContent = "Vybráno " + V.pocet(ids.length, UKOL) +
+        const cast = Object.keys(polozkyKUlozeni()).length;
+        const prazdne = bezPolozek();
+        $("parSouhrn").innerHTML = esc("Vybráno " + V.pocet(ids.length, UKOL) +
             (stejnaMnozina(ids, r.par.navrh.ids) ? " – stejné jako návrh (" + zpusobInfo(r.par.navrh.zpusob).nazev + ")."
-                : " – uloží se jako ruční párování.");
+                : " – uloží se jako ruční párování.") +
+            (cast ? " U " + V.pocet(cast, ["úkolu", "úkolů", "úkolů"]) + " jen vybrané položky TO-DO." : "")) +
+            (prazdne.length ? ' <span class="mvokno__varovani">' + esc("U úkolu " + (prazdne[0].nazev || prazdne[0].id) +
+                " není vybraná žádná položka – zaškrtni aspoň jednu, nebo dej Celý úkol.") + "</span>" : "");
+        $("parUlozit").disabled = prazdne.length > 0;
     }
 
     async function ulozOkno() {
         const r = okno && podleId.get(okno.mid);
-        if (!r) return;
+        if (!r || bezPolozek().length) return;
         const btn = $("parUlozit");
         btn.disabled = true;
         try {
-            await ulozPotvrzeni(r, Array.from(okno.vybrane));
+            await ulozPotvrzeni(r, Array.from(okno.vybrane), polozkyKUlozeni());
             window.KBUI.toast("Párování uloženo a potvrzené.");
             zavriOkno();
         } catch (err) {
             console.error(err);
             window.KBUI.toast("Párování se neuložilo – zkus to znovu.", "error");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    /* --------------------------- Připomenout TO-DO u hotových milníků ----
+       Hotový milník má mít hotové úkoly (Michal, Iris 3. 11. 2026). Odevzdání
+       milníku to od teď dělá samo (KB.ulozSplneniMilniku); tlačítko to udělá
+       jednorázově pro milníky odevzdané dřív – ve všech projektech. Nejdřív
+       náhled (kolik Quick TO-DO komu), pak potvrzení. Kdo už k milníku
+       nesplněné Quick TO-DO má, nedostane druhé (KB.zalozTodoMilniku). */
+    const jmenoCloveka = (uid) => {
+        const u = (window.KB.users || []).find(x => x.id === uid);
+        return u ? ([u.first, u.last].filter(Boolean).join(" ") || u.email || uid) : uid;
+    };
+
+    function planPripominek() {
+        const potvrzene = window.KB.parovaniMilniku || {};
+        const naWebu = (uid) => !(window.KB.users || []).length ||
+            (window.KB.users || []).some(u => u.id === uid && u.active !== false);
+        const vzkazy = [], milniky = new Set(), projekty = new Set();
+        let uzMa = 0;
+        projektySMilniky().forEach(({ nazev }) => {
+            const p = (window.KB.projektyDocs || []).find(x => normNazev(x.nazev) === nazev) || { id: "", nazev: nazev };
+            const osy = V.osyProjektu(p);
+            const ukoly = V.ukolyZakazky(p.nazev || nazev, p.id, window.KB.ukoly || []);
+            (window.KB.milniky || []).filter(m => !m.jenPostup && m.hotovo === true && normNazev(m.zakazka) === nazev)
+                .forEach(m => {
+                    const par = V.parovaniMilniku(m, ukoly, osy, { potvrzene: potvrzene[m.id] || null });
+                    V.milnikTodoPlan(m, par.ukoly, par.polozky).vzkazy.forEach(v => {
+                        if (!naWebu(v.uid)) return;
+                        if (window.KB.maMilnikTodo(m.id, v.uid)) { uzMa++; return; }
+                        vzkazy.push(Object.assign({ milnikId: m.id, projekt: nazev }, v));
+                        milniky.add(m.id);
+                        projekty.add(nazev);
+                    });
+                });
+        });
+        return { vzkazy: vzkazy, milniku: milniky.size, projektu: projekty.size, uzMa: uzMa };
+    }
+
+    async function pripomenTodo() {
+        const btn = $("btnPripomenout");
+        if (btn.disabled) return;
+        const plan = planPripominek();
+        if (!plan.vzkazy.length) {
+            window.KBUI.toast(plan.uzMa
+                ? "Všichni už k hotovým milníkům Quick TO-DO mají (" + plan.uzMa + ") – není co připomínat."
+                : "Žádný hotový milník nemá nehotové úkoly – není co připomínat.");
+            return;
+        }
+        const komu = new Map();
+        plan.vzkazy.forEach(v => komu.set(v.uid, (komu.get(v.uid) || 0) + 1));
+        const QT = ["Quick TO-DO", "Quick TO-DO", "Quick TO-DO"];
+        const ano = await window.KBUI.potvrd({
+            nadpis: "Připomenout TO-DO u hotových milníků?",
+            text: "Hotové milníky s nehotovými úkoly: " + plan.milniku +
+                (plan.projektu > 1 ? " (v " + plan.projektu + " projektech)" : "") + ".\n" +
+                "Založí se " + V.pocet(plan.vzkazy.length, QT) + " „aktualizuj TO-DO u úkolů…“:\n" +
+                Array.from(komu).sort((a, b) => b[1] - a[1])
+                    .map(([uid, n]) => "• " + jmenoCloveka(uid) + " – " + n).join("\n") +
+                (plan.uzMa ? "\nUž mají nesplněné (přeskočí se): " + plan.uzMa + "." : ""),
+            ano: "Založit " + V.pocet(plan.vzkazy.length, QT)
+        });
+        if (!ano) return;
+        btn.disabled = true;
+        try {
+            const v = await window.KB.zalozTodoMilniku(plan.vzkazy);
+            const n = v.zalozeno.length + v.obnoveno.length;
+            window.KBUI.toast("Založeno " + V.pocet(n, QT) +
+                (v.preskoceno ? " · přeskočeno " + v.preskoceno + " (už ho mají)" : "") +
+                (v.chyb ? " · selhalo " + v.chyb : "") + ".", v.chyb ? "error" : undefined);
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Quick TO-DO se nezaložily – zkus to znovu.", "error");
         } finally {
             btn.disabled = false;
         }
@@ -1133,6 +1446,7 @@
             prepniTech(tr);
         });
         $("btnStarsi").addEventListener("click", nactiStarsi);
+        $("btnPripomenout").addEventListener("click", pripomenTodo);
 
         // odkrytí peněz platí pro celou stránku – tečky i tlačítko v dlaždici
         document.addEventListener("click", (event) => {
@@ -1144,10 +1458,50 @@
         // okno párování
         $("parHledat").addEventListener("input", kresliOkno);
         $("parSeznam").addEventListener("change", (event) => {
+            if (!okno) return;
+            // seznam se překreslí celý – fokus zpátky na zaškrtávátko, na kterém byl
+            const fokus = (sel) => { const el = $("parSeznam").querySelector(sel); if (el) el.focus(); };
+            const polozka = event.target.closest("[data-todo]");
+            if (polozka) {
+                const cast = okno.polozky.get(polozka.dataset.pro);
+                if (!cast) return;
+                if (polozka.checked) cast.add(polozka.dataset.todo); else cast.delete(polozka.dataset.todo);
+                kresliOkno();
+                fokus('[data-todo="' + CSS.escape(polozka.dataset.todo) + '"][data-pro="' + CSS.escape(polozka.dataset.pro) + '"]');
+                return;
+            }
             const box = event.target.closest("[data-ukol]");
-            if (!box || !okno) return;
+            if (!box) return;
             if (box.checked) okno.vybrane.add(box.dataset.ukol); else okno.vybrane.delete(box.dataset.ukol);
-            kresliSouhrnOkna();
+            // tlačítko Položky se ukáže / schová s úkolem
+            kresliOkno();
+            fokus('[data-ukol="' + CSS.escape(box.dataset.ukol) + '"]');
+        });
+        $("parSeznam").addEventListener("click", (event) => {
+            if (!okno) return;
+            const rozbal = event.target.closest("[data-rozbal]");
+            if (rozbal) {
+                const id = rozbal.dataset.rozbal;
+                if (okno.rozbalene.has(id)) okno.rozbalene.delete(id); else okno.rozbalene.add(id);
+                kresliOkno();
+                const znovu = $("parSeznam").querySelector('[data-rozbal="' + CSS.escape(id) + '"]');
+                if (znovu) znovu.focus();
+                return;
+            }
+            const rezim = event.target.closest("[data-rezim]");
+            if (!rezim) return;
+            const id = rezim.dataset.pro;
+            const r = podleId.get(okno.mid), u = ukolOkna(id);
+            if (!r || !u) return;
+            if (rezim.dataset.rezim === "cely") okno.polozky.delete(id);
+            else if (!okno.polozky.has(id)) {
+                // přepnutí na část: předvybere se návrh podle náplně, jinak všechno (odškrtává se)
+                const navrh = V.navrhPolozek(r.m, u);
+                okno.polozky.set(id, new Set(navrh || V.polozkyUkolu(u).map(t => String(t.id))));
+            }
+            kresliOkno();
+            const znovu = $("parSeznam").querySelector('[data-rezim="' + rezim.dataset.rezim + '"][data-pro="' + CSS.escape(id) + '"]');
+            if (znovu) znovu.focus();
         });
         $("parZrusit").addEventListener("click", zavriOkno);
         $("parUlozit").addEventListener("click", ulozOkno);

@@ -1717,6 +1717,204 @@
         return x.length === y.length && x.every((v, i) => v === y[i]);
     };
 
+    /* ------------------------------ párování až na položky TO-DO ----
+
+       Úkol BPH je „technologie – budova – patro“ a v něm položky TO-DO
+       (SLB – G61 – 3PP: EPS, EZS, CCTV…), milník bývá jen jeden prvek
+       („EPS tlačítka – všechna patra“). Výkazy nesou jen úkol, ne položku –
+       k milníku se proto bere poměrná část úkolu: vybrané aktivní položky /
+       všechny aktivní (Michal, Iris 3. 11. 2026). Uložené v párování jako
+       `polozky: { ukolId: [todoId…] }`; úkol bez klíče = celý úkol. */
+
+    /** Klíč položky: její id; položka bez id (starší data) jde vybrat jen s celým úkolem. */
+    const klicPolozky = (t, i) => (t && t.id != null && String(t.id) !== "") ? String(t.id) : "#" + i;
+
+    /** Aktivní položky úkolu s klíčem. Úkol bez položek = jedna „celá“ položka "*". */
+    function aktivniPolozky(u) {
+        return ((u && u.todo) || []).map((t, i) => ({ t: t, k: klicPolozky(t, i) }))
+            .filter(x => x.t && x.t.vypnuto !== true);
+    }
+
+    /** Aktivní položky TO-DO, které jde k milníku vybrat (mají id). */
+    V.polozkyUkolu = (u) => aktivniPolozky(u).filter(x => x.k.charAt(0) !== "#").map(x => x.t);
+
+    /**
+     * Jakou část úkolu milník bere.
+     *   vybrane  pole todoId z párování, nebo null / chybí = celý úkol
+     * @returns {{ cely, vybrano, aktivnich, podil, klice, polozky, pct, chybi }}
+     *   podil = vybrané aktivní / aktivní (vypnuté se nepočítají), klice =
+     *   vybrané položky (u úkolu bez položek "*"), pct = průměr vybraných
+     *   položek, chybi = vybrané položky už u úkolu nejsou (smazané, vypnuté)
+     */
+    V.castUkolu = (u, vybrane) => {
+        const aktivni = aktivniPolozky(u);
+        const hotovo = !!u && u.stav === "hotovo";
+        const prumer = (seznam) => seznam.length
+            ? Math.round(seznam.reduce((s, x) => s + (Number(x.t.pct) || 0), 0) / seznam.length)
+            : (hotovo ? 100 : 0);
+        if (!aktivni.length) {
+            return { cely: true, vybrano: 0, aktivnich: 0, podil: 1, klice: ["*"], polozky: [], pct: hotovo ? 100 : 0, chybi: false };
+        }
+        if (!Array.isArray(vybrane)) {
+            return { cely: true, vybrano: aktivni.length, aktivnich: aktivni.length, podil: 1,
+                     klice: aktivni.map(x => x.k), polozky: aktivni.map(x => x.t), pct: prumer(aktivni), chybi: false };
+        }
+        const chci = new Set(vybrane.map(String));
+        const sel = aktivni.filter(x => x.k.charAt(0) !== "#" && chci.has(x.k));
+        return {
+            cely: sel.length === aktivni.length,
+            vybrano: sel.length,
+            aktivnich: aktivni.length,
+            podil: sel.length / aktivni.length,
+            klice: sel.map(x => x.k),
+            polozky: sel.map(x => x.t),
+            pct: prumer(sel),
+            chybi: !sel.length
+        };
+    };
+
+    /* Slova, která říkají „kde“ nebo „jak moc“, ne „co“ – podle nich se
+       položka nepozná (bez diakritiky, malými písmeny). */
+    const SLOVA_BEZ_VYZNAMU = new Set(("vsechna vsechny vsech vse vsechno cele cely cela celkem patra patro pater " +
+        "podlazi podlazich budova budovy budov objekt objektu bez pro nad pod pri koordinace dokonceni odevzdani " +
+        "pasport pasportu pasportizace milnik milniku cast casti dalsi ostatni vcetne zbytek zbyvajici").split(" "));
+
+    /** Slova textu pro porovnání: bez diakritiky, aspoň 3 písmena, bez čísel (kódy budov a pater). */
+    const vyznamovaSlova = (text) => bezDiakritiky(text).split(/[^\p{L}\p{N}]+/u)
+        .filter(w => w.length >= 3 && !/\d/.test(w) && !SLOVA_BEZ_VYZNAMU.has(w));
+
+    /* Stejné slovo v jiném tvaru: „hydrant“ × „hydranty“, „spalinové“ ×
+       „spalinová“, „EPS“ × „EPS“. Krátké slovo se musí shodovat celé (jako
+       začátek delšího), u delšího stačí společný začátek bez koncovky –
+       „hydrant“ ale nesedí na „hydraulika“. */
+    function podobnaSlova(a, b) {
+        const min = Math.min(a.length, b.length);
+        let spolecne = 0;
+        while (spolecne < min && a.charAt(spolecne) === b.charAt(spolecne)) spolecne++;
+        const treba = min <= 4 ? min : (min <= 7 ? min - 1 : min - 2);
+        return spolecne >= Math.max(3, treba);
+    }
+
+    /**
+     * Návrh položek TO-DO úkolu k milníku podle náplně: slova náplně
+     * a zkratky technologie milníku (V.techTokeny – „EPS“, „hydrant“,
+     * „spalinové“) proti textu položek. Čistá funkce (testy\test_parovani_milniku.js).
+     *   m     milník { cinnost, napln }
+     *   ukol  úkol s `todo`
+     * @returns {string[]|null} id navržených položek; null = celý úkol
+     *   (nic nesedí, sedí všechno, nebo úkol nemá aspoň dvě položky)
+     */
+    V.navrhPolozek = (m, ukol) => {
+        const aktivni = aktivniPolozky(ukol);
+        if (aktivni.length < 2) return null;
+        // zkratka technologie úkolu (SLB u úkolu SLB) by seděla na všechno nebo na nic
+        const vlastni = V.techTokeny(ukol && ukol.technologie).map(bezDiakritiky);
+        const slova = unikatni([].concat(
+            V.techTokeny(m && m.cinnost).map(bezDiakritiky).filter(t => t.length >= 3 && !SLOVA_BEZ_VYZNAMU.has(t)),
+            vyznamovaSlova(m && m.napln)))
+            .filter(t => vlastni.indexOf(t) === -1);
+        if (!slova.length) return null;
+        const sedi = aktivni.filter(x => x.k.charAt(0) !== "#" && x.t.celkem !== true &&
+            vyznamovaSlova(x.t.text).some(w => slova.some(s => podobnaSlova(w, s))));
+        if (!sedi.length || sedi.length === aktivni.length) return null;
+        return sedi.map(x => x.k);
+    };
+
+    /** Výběr položek z databáze jen v povoleném tvaru a jen u úkolů párování. */
+    function cistePolozky(polozky, ids) {
+        const out = {};
+        if (!polozky || typeof polozky !== "object") return out;
+        (ids || []).forEach(id => {
+            const p = polozky[id];
+            if (Array.isArray(p)) out[id] = unikatni(p.map(x => String(x == null ? "" : x)));
+        });
+        return out;
+    }
+
+    /**
+     * Které milníky berou kterou položku úkolu – z toho se pozná sdílení
+     * (úkol na dvou milnících, ale každý s jinou položkou, sdílený není)
+     * a dělí hodiny v režimech `rovnym-dilem` a `hlavni`.
+     *   seznam  [{ id: milnikId, ukoly: [úkol], polozky }] v pořadí milníků
+     * @returns {Object<string, Object<string, string[]>>} ukolId → klíč položky → [milnikId…]
+     */
+    V.sdileniParovani = (seznam) => {
+        const out = {};
+        (seznam || []).forEach(r => {
+            if (!r || !r.id) return;
+            (r.ukoly || []).forEach(u => {
+                if (!u || !u.id) return;
+                const cast = V.castUkolu(u, (r.polozky || {})[u.id]);
+                const mapa = out[u.id] || (out[u.id] = {});
+                cast.klice.forEach(k => {
+                    const kdo = mapa[k] || (mapa[k] = []);
+                    if (kdo.indexOf(r.id) === -1) kdo.push(r.id);
+                });
+            });
+        });
+        return out;
+    };
+
+    /**
+     * Quick TO-DO k odevzdanému milníku (Michal, Iris 3. 11. 2026: hotový
+     * milník má mít hotové úkoly). Nehotové jsou spárované úkoly, které
+     * nemají stav hotovo (celý úkol), nebo mají vybrané položky pod 100 %
+     * (část úkolu). Adresáti: zpracovatelé milníku (všechny nehotové úkoly)
+     * a přiřazení lidé těch úkolů (jen jejich úkoly), každý jednou.
+     *   m        milník { id, cinnost, napln, owners | zpracovatele }
+     *   ukoly    spárované úkoly
+     *   polozky  výběr položek z párování (ukolId → [todoId])
+     * @returns {{ nehotove: [{u, cast}], vzkazy: [{ uid, text, odkazy, ukoly }] }}
+     */
+    V.milnikTodoPlan = (m, ukoly, polozky) => {
+        const vyber = polozky || {};
+        const nehotove = (ukoly || []).filter(u => u && u.id).map(u => {
+            const castecne = Array.isArray(vyber[u.id]);
+            return { u: u, cast: V.castUkolu(u, castecne ? vyber[u.id] : null), castecne: castecne };
+        }).filter(x => x.castecne && !x.cast.cely ? x.cast.pct < 100 : x.u.stav !== "hotovo");
+        const komu = new Map();
+        const pridej = (uid, x) => {
+            if (!uid) return;
+            if (!komu.has(uid)) komu.set(uid, []);
+            if (x && komu.get(uid).indexOf(x) === -1) komu.get(uid).push(x);
+        };
+        if (nehotove.length) {
+            const zprac = (m && (Array.isArray(m.owners) ? m.owners : m.zpracovatele)) || [];
+            zprac.map(String).forEach(uid => nehotove.forEach(x => pridej(uid, x)));
+            nehotove.forEach(x => (Array.isArray(x.u.prirazeni) ? x.u.prirazeni : []).map(String).forEach(uid => pridej(uid, x)));
+        }
+        const napln = String((m && m.napln) || "").replace(/\s+/g, " ").trim();
+        const popis = [String((m && m.cinnost) || "").trim(), napln.length > 60 ? napln.slice(0, 59).trim() + "…" : napln]
+            .filter(Boolean).join(" – ") || "bez názvu";
+        const vzkazy = Array.from(komu, ([uid, seznam]) => {
+            const zacatek = "Milník " + popis + " je odevzdaný: aktualizuj TO-DO u " + (seznam.length === 1 ? "úkolu " : "úkolů ");
+            const kusy = seznam.map(x => {
+                const n = String(x.u.nazev || x.u.id).replace(/\s+/g, " ").trim().slice(0, 120);
+                const jen = x.castecne && !x.cast.cely && x.cast.polozky.length
+                    ? "jen " + x.cast.polozky.map(t => String(t.text || "").trim()).filter(Boolean).slice(0, 3).join(", ") +
+                      (x.cast.vybrano > 3 ? " a další" : "") + ", " : "";
+                return { n: n, id: x.u.id, text: "#" + n + " (" + jen + "postup " + x.cast.pct + " %)" };
+            });
+            // text vzkazu unese 300 znaků – co se nevejde, je „a další N“
+            let text = zacatek, vzato = 0;
+            for (let i = 0; i < kusy.length; i++) {
+                const kus = (i ? ", " : "") + kusy[i].text;
+                const zbude = kusy.length - i - 1;
+                if (i && (text + kus).length > 300 - (zbude ? 16 : 0)) break;
+                text += kus;
+                vzato++;
+            }
+            if (vzato < kusy.length) text += " a další " + (kusy.length - vzato);
+            return {
+                uid: uid,
+                text: text.slice(0, 300),
+                odkazy: kusy.slice(0, Math.min(vzato, 20)).map(k => ({ t: "u", id: String(k.id), n: k.n })),
+                ukoly: seznam.map(x => x.u.id)
+            };
+        });
+        return { nehotove: nehotove, vzkazy: vzkazy };
+    };
+
     /**
      * Které úkoly patří k milníku. Čistá funkce (žádný DOM ani databáze),
      * ať jde ověřit v Node (testy\test_parovani_milniku.js).
@@ -1724,6 +1922,10 @@
      *   ukoly  úkoly TOHO projektu { id, technologie, budova, patro, milnikId }
      *   osy    V.osyProjektu(p) – { budovy, patra }
      *   volby.potvrzene  uložené potvrzení (private/milniky/parovani/{id}) nebo null
+     * Položky TO-DO (3. 11. 2026): `polozky` = výběr položek z potvrzení
+     * (ukolId → [todoId]; úkol bez klíče = celý úkol), návrh je vždy celý
+     * úkol. `navrhPolozky` = co by šlo podle náplně vybrat (V.navrhPolozek)
+     * – stránka to jen nabídne, samo se to nepoužije.
      * Pořadí, kdo má přednost:
      *   1. potvrzené manažerem – platí, jak je, návrh se už nepřepočítává
      *      (jen se hlásí, že by dnes vyšel jinak: `navrhJinak`),
@@ -1737,7 +1939,8 @@
      *   6. „bez" – v náplni není patro, spárovat jde jen ručně.
      * Úkol s `milnikId` jiného milníku se po patrech nepáruje – patří tam.
      * @returns {{ zpusob, ukoly, ids, potvrzeno, potvrdil, potvrzenoMs,
-     *   chybejiciIds, navrh: {zpusob, ids}, navrhJinak, segmenty, budovy, patra, tech }}
+     *   chybejiciIds, navrh: {zpusob, ids}, navrhJinak, segmenty, budovy, patra, tech,
+     *   polozky, navrhPolozky }}
      */
     V.parovaniMilniku = (m, ukoly, osy, volby) => {
         const v = volby || {};
@@ -1771,13 +1974,22 @@
             patra: unikatni([].concat.apply([], segmenty.map(s => s.patra)))
         };
 
+        const navrhPolozkyPro = (vybrane) => {
+            const out = {};
+            vybrane.forEach(u => { const n = V.navrhPolozek(m, u); if (n) out[u.id] = n; });
+            return out;
+        };
+
         const p = v.potvrzene;
         if (p && Array.isArray(p.ukoly)) {
             const podleId = new Map(seznam.map(u => [u.id, u]));
             const ids = unikatni(p.ukoly.map(String));
+            const ukolyP = ids.map(id => podleId.get(id)).filter(Boolean);
             return Object.assign(zaklad, {
                 zpusob: String(p.zpusob || "rucne"),
-                ukoly: ids.map(id => podleId.get(id)).filter(Boolean),
+                ukoly: ukolyP,
+                polozky: cistePolozky(p.polozky, ids),
+                navrhPolozky: navrhPolozkyPro(ukolyP),
                 ids: ids,
                 // úkol mezitím smazaný – v potvrzení zůstal, stránka ho ukáže
                 chybejiciIds: ids.filter(id => !podleId.has(id)),
@@ -1789,7 +2001,8 @@
         }
         return Object.assign(zaklad, {
             zpusob: navrhZpusob, ukoly: navrhUkoly, ids: navrh.ids, chybejiciIds: [],
-            potvrzeno: false, potvrdil: "", potvrzenoMs: 0, navrhJinak: false
+            potvrzeno: false, potvrdil: "", potvrzenoMs: 0, navrhJinak: false,
+            polozky: {}, navrhPolozky: navrhPolozkyPro(navrhUkoly)
         });
     };
 
@@ -1799,23 +2012,62 @@
      * zápisů (`castka`), nikdy hodiny × dnešní sazba – stejně jako všude
      * ve výkazech. Funguje nad jakoukoli skupinou úkolů, takže stránka jím
      * sčítá i technologii nebo celý projekt (každý úkol jednou).
-     *   m             milník – vyhodnocení stojí jen na úkolech; je tu kvůli
-     *                 stejnému tvaru volání jako V.parovaniMilniku
+     *   m             milník (jeho `id` potřebují jen režimy sdílení);
+     *                 null = souhrn skupiny, každá položka jednou
      *   data.ukoly    spárované úkoly (objekty)
      *   data.vykazy   výkazy (stačí ty s ukolId těch úkolů)
      *   data.budgety  KB.ukolBudgety (id → { budgetKc })
+     *   data.polozky  výběr položek TO-DO (ukolId → [todoId]); úkol bez
+     *                 klíče = celý. Hodiny, Kč i budget úkolu se násobí
+     *                 podílem vybraných aktivních položek (3. 11. 2026).
+     *   data.sdileni  V.sdileniParovani(…) – který milník bere kterou položku
+     *   data.rezimSdileni  co s položkou, kterou bere víc milníků:
+     *                 "cely" (výchozí – každý milník ji počítá celou),
+     *                 "rovnym-dilem" (dělí se počtem těch milníků),
+     *                 "hlavni" (celá jen prvnímu milníku v pořadí, ostatním 0).
+     *                 O dělení Michal teprve rozhodne – stránka zatím „cely“.
+     * @returns {{ ukolu, hotovych, hotovoPct, hodiny, kc, lide, lideUid, zapisu,
+     *   od, do, budget, rozdil, rozpis: [{ id, nazev, cely, vybrano, aktivnich,
+     *   podil, polozky, pct, chybi, sdilenoS, hodiny, kc }] }}
      */
     V.vyhodnoceniMilniku = (m, data) => {
         const d = data || {};
         const ukoly = (d.ukoly || []).filter(u => u && u.id);
         const budgety = d.budgety || {};
-        const ids = new Set(ukoly.map(u => u.id));
+        const vyber = d.polozky || {};
+        const sdileni = d.sdileni || {};
+        const rezim = d.rezimSdileni === "rovnym-dilem" || d.rezimSdileni === "hlavni" ? d.rezimSdileni : "cely";
+        const mid = (m && m.id) || "";
+
+        const rozpis = ukoly.map(u => {
+            const cast = V.castUkolu(u, vyber[u.id]);
+            const mapa = sdileni[u.id] || {};
+            const jine = new Set();
+            let vaha = 0;
+            cast.klice.forEach(k => {
+                const kdo = mid ? (mapa[k] || [mid]) : [];
+                kdo.forEach(x => { if (x !== mid) jine.add(x); });
+                // souhrn skupiny (bez milníku) bere každou položku jednou celou
+                vaha += !mid || rezim === "cely" ? 1
+                    : rezim === "rovnym-dilem" ? 1 / Math.max(1, kdo.length)
+                    : ((kdo[0] || mid) === mid ? 1 : 0);
+            });
+            return {
+                id: u.id, nazev: u.nazev || u.id, u: u, cely: cast.cely, vybrano: cast.vybrano,
+                aktivnich: cast.aktivnich, polozky: cast.polozky.map(t => String(t.text || "")),
+                pct: cast.pct, chybi: cast.chybi, sdilenoS: jine.size,
+                podil: vaha / Math.max(1, cast.aktivnich), hodiny: 0, kc: 0
+            };
+        });
+        const podleId = new Map(rozpis.map(r => [r.id, r]));
+
         let h = 0, kc = 0, zapisu = 0, od = "", doKdy = "";
         const lide = new Set();
         (d.vykazy || []).forEach(z => {
-            if (!z || z.absence === true || !z.ukolId || !ids.has(z.ukolId)) return;
-            h += Number(z.hodiny) || 0;
-            kc += Number(z.castka) || 0;
+            const r = z && z.ukolId ? podleId.get(z.ukolId) : null;
+            if (!r || z.absence === true || !r.podil) return;
+            const hz = (Number(z.hodiny) || 0) * r.podil, kz = (Number(z.castka) || 0) * r.podil;
+            h += hz; kc += kz; r.hodiny += hz; r.kc += kz;
             zapisu += 1;
             const kdo = z.uid || z.osoba || "";
             if (kdo) lide.add(kdo);
@@ -1823,12 +2075,24 @@
             if (den && (!od || den < od)) od = den;
             if (den && (!doKdy || den > doKdy)) doKdy = den;
         });
-        const budget = ukoly.reduce((s, u) => s + V.budgetUkolu(u, budgety), 0);
+
+        // hotovo vážené budgetem jako V.hotovoUkolu – jen z vybraných položek a podílu budgetu
+        let budget = 0, vahaPct = 0, soucetPct = 0;
+        const sleduje = rozpis.filter(r => V.sledujePlneni(r.u));
+        rozpis.forEach(r => {
+            const b = V.budgetUkolu(r.u, budgety) * r.podil;
+            budget += b;
+            if (sleduje.indexOf(r) !== -1) { vahaPct += b; soucetPct += r.pct * b; }
+        });
+        const hotovoPct = !sleduje.length ? null : Math.round(vahaPct ? soucetPct / vahaPct
+            : sleduje.reduce((x, r) => x + r.pct, 0) / sleduje.length);
+        const zaokr = (x) => Math.round(x * 100) / 100;
+
         return {
             ukolu: ukoly.length,
-            hotovych: ukoly.filter(u => u.stav === "hotovo").length,
-            hotovoPct: V.hotovoUkolu(ukoly, budgety),
-            hodiny: Math.round(h * 100) / 100,
+            hotovych: rozpis.filter(r => r.u.stav === "hotovo" || (!r.cely && r.vybrano > 0 && r.pct >= 100)).length,
+            hotovoPct: hotovoPct,
+            hodiny: zaokr(h),
             kc: Math.round(kc),
             lide: lide.size,
             lideUid: Array.from(lide),
@@ -1836,7 +2100,10 @@
             od: od,
             do: doKdy,
             budget: Math.round(budget),
-            rozdil: Math.round(budget - kc)
+            rozdil: Math.round(budget - kc),
+            rozpis: rozpis.map(r => ({ id: r.id, nazev: r.nazev, cely: r.cely, vybrano: r.vybrano, aktivnich: r.aktivnich,
+                podil: r.podil, polozky: r.polozky, pct: r.pct, chybi: r.chybi, sdilenoS: r.sdilenoS,
+                hodiny: zaokr(r.hodiny), kc: Math.round(r.kc) }))
         };
     };
 

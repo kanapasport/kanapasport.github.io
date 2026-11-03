@@ -842,7 +842,7 @@ KB.watchQuickTodo = async () => {
 
 KB.newQuickId = () => "qt_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
 
-KB.saveQuickTodo = async (id, data) => {
+KB.saveQuickTodo = async (id, data, volby) => {
     if (authReady) await authReady;
     requireDb();
 
@@ -925,7 +925,11 @@ KB.saveQuickTodo = async (id, data) => {
        (Beru na vědomí – stejné pole jako splnění). Jen když ho volající
        posílá: odškrtnutí posílá celý vzkaz zpátky, takže se zachová, a starší
        vzkazy bez pole pozná KBUI.jeOznameni podle textu. */
-    if ("druh" in data) zapis.druh = info ? "info" : "";
+    /* "milnikTodo" (3. 11. 2026) = „aktualizuj TO-DO u úkolů odevzdaného
+       milníku“ (KB.zalozTodoMilniku) – plní se jako úkol (Splněno), jen
+       podle druhu a `milnikId` se pozná, ke kterému milníku patří. */
+    if ("druh" in data) zapis.druh = info ? "info" : (data.druh === "milnikTodo" ? "milnikTodo" : "");
+    if ("milnikId" in data) zapis.milnikId = String(data.milnikId || "").slice(0, 80);
     if ("opakovaniDen" in data) zapis.opakovaniDen = Number(data.opakovaniDen) || 0;
     if ("opakovaniKoren" in data) zapis.opakovaniKoren = String(data.opakovaniKoren || "").slice(0, 80);
     if ("opakovanyZ" in data) zapis.opakovanyZ = String(data.opakovanyZ || "").slice(0, 80);
@@ -934,6 +938,8 @@ KB.saveQuickTodo = async (id, data) => {
     if ("odkazy" in data && window.KBUI) zapis.odkazy = window.KBUI.cisteOdkazy(data.odkazy);
 
     await setDoc(quickDoc(id), zapis, { merge: true });
+    // hromadné založení (KB.zalozTodoMilniku) si zapíše jeden souhrnný řádek samo
+    if (volby && volby.bezAktivity) return id;
     /* Od 21. 8. jde do aktivit i text vzkazu – Michal chce v reportech
        vidět, o jaký vzkaz šlo. Vzkaz tím pádem čtou i manažeři. */
     KB.zapisAktivitu("quicktodo", (data.hotovo === true
@@ -2045,6 +2051,23 @@ KB.ulozSplneniMilniku = async (id, patch) => {
         !(m && m.hotovo === true && m.potvrzeno === false)) {
         KB.ohlasPotvrzeni({ udalost: "ceka", druh: "milniky", id: id, uid: KB.currentUid() });
     }
+    /* Hotový milník má mít hotové úkoly (Michal, Iris 3. 11. 2026): odevzdání
+       založí zpracovatelům Quick TO-DO „aktualizuj TO-DO u úkolů…“. Znovu při
+       potvrzení manažerem – zaměstnanec párování nepřečte (je v private), takže
+       u něj vzniká jen z návrhu; co už má nesplněné, se nezdvojí. Vrácení
+       (i „Zpět“ hned po odškrtnutí) uklidí ty, které jsem k milníku založil já.
+       Nic z toho nesmí shodit uložení milníku. */
+    if (m && patch && patch.hotovo !== false) {
+        const odevzdano = patch.hotovo === true && m.hotovo !== true;
+        const potvrzeno = patch.potvrzeno === true && m.hotovo === true && m.potvrzeno === false;
+        if (odevzdano || potvrzeno) {
+            const beh = KB.pripomenTodoMilniku(Object.assign({}, m, patch, { id: id }))
+                .catch(err => { console.warn("Quick TO-DO k milníku se nezaložil:", err); return null; });
+            milnikTodoBezi.set(id, beh);
+        }
+    } else if (m && patch && patch.hotovo === false && m.hotovo === true) {
+        await uklidTodoMilniku(id).catch(err => console.warn("Quick TO-DO k vrácenému milníku zůstal:", err));
+    }
 };
 
 /**
@@ -2184,10 +2207,13 @@ KB.importMilniky = async (polozky) => {
 
      private/milniky/parovani/{milnikId} = { projektId, ukoly: [ukolId…],
        zpusob, navrh: [ukolId…] (co navrhl stroj v době potvrzení),
-       potvrdil, potvrzenoMs, updatedMs, updatedBy }
+       polozky?: { ukolId: [todoId…] } (od 3. 11. 2026 – milník bere jen
+       tyto položky TO-DO úkolu; úkol bez klíče = celý úkol, pole chybí =
+       všechny úkoly celé), potvrdil, potvrzenoMs, updatedMs, updatedBy }
 
    Pravidla: spadá pod záchytné `private/{kolekce}/{document=**}` – čte
    i píše jen správce; vedle výkazů a peněz tu nikdo jiný nemá co dělat.
+   Tvar pravidla nehlídají, `polozky` tedy nic nemění.
    Na `ukol.milnikId` ani na dotažení úkolů po potvrzení milníku
    (KB.dokonciUkolyMilniku, zatím jen VZT) se tu nesahá. */
 
@@ -2228,21 +2254,23 @@ const popisMilniku = (id) => {
 };
 
 /**
- * Potvrdí (uloží) párování milníku s úkoly. Pole `ukoly` a `navrh` se
- * přepisují celé (merge pole neslučuje). `volby.bezAktivity` = hromadné
- * potvrzení si zapíše jeden souhrnný řádek samo.
+ * Potvrdí (uloží) párování milníku s úkoly. Dokument se zapisuje celý
+ * (bez merge): `polozky` je mapa a merge by klíč úkolu, který se vrátil
+ * na „celý úkol“, nechal ležet. `data.polozky` = { ukolId: [todoId] } jen
+ * u úkolů z `ukoly`; prázdný výběr se neukládá. `volby.bezAktivity` =
+ * hromadné potvrzení si zapíše jeden souhrnný řádek samo.
  */
 KB.ulozParovaniMilniku = async (milnikId, data, volby) => {
     if (authReady) await authReady;
     requireDb();
     if (!milnikId) return;
     const d = data || {};
-    const idcka = (pole) => (Array.isArray(pole) ? pole : []).map(String)
-        .filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 300);
+    const idcka = (pole, max) => (Array.isArray(pole) ? pole : []).map(String)
+        .filter((x, i, a) => x && a.indexOf(x) === i).slice(0, max || 300).map(x => x.slice(0, 120));
     const ted = Date.now();
     const kdo = window.KB_USER || "";
     const ukoly = idcka(d.ukoly);
-    await setDoc(parovaniDoc(milnikId), {
+    const zapis = {
         projektId: String(d.projektId || "").slice(0, 80),
         ukoly: ukoly,
         zpusob: String(d.zpusob || "rucne").slice(0, 20),
@@ -2251,7 +2279,16 @@ KB.ulozParovaniMilniku = async (milnikId, data, volby) => {
         potvrzenoMs: Number(d.potvrzenoMs) || ted,
         updatedMs: ted,
         updatedBy: kdo
-    }, { merge: true });
+    };
+    const polozky = {};
+    if (d.polozky && typeof d.polozky === "object") {
+        ukoly.forEach(id => {
+            const p = idcka(d.polozky[id], 200);
+            if (Array.isArray(d.polozky[id]) && p.length) polozky[id] = p;
+        });
+    }
+    if (Object.keys(polozky).length) zapis.polozky = polozky;
+    await setDoc(parovaniDoc(milnikId), zapis);
     if (!(volby && volby.bezAktivity)) {
         KB.zapisAktivitu("milnik", "potvrdil párování milníku " + popisMilniku(milnikId) +
             " (" + ukoly.length + (ukoly.length === 1 ? " úkol)" : (ukoly.length > 1 && ukoly.length < 5 ? " úkoly)" : " úkolů)")));
@@ -2268,6 +2305,163 @@ KB.smazParovaniMilniku = async (milnikId, volby) => {
         KB.zapisAktivitu("milnik", "zrušil potvrzení párování milníku " + popisMilniku(milnikId));
     }
 };
+
+/* ------------------------------- Quick TO-DO k odevzdanému milníku ----
+   Hotový milník má mít hotové úkoly (Michal, Iris 3. 11. 2026). Po
+   odevzdání milníku dostane každý jeho zpracovatel (a přiřazení lidé
+   nehotových úkolů) JEDNO Quick TO-DO „Milník … je odevzdaný: aktualizuj
+   TO-DO u úkolů …“ – text a adresáty skládá V.milnikTodoPlan (vykazy.js).
+   Vzkaz má pevné id `qt_mt_<milník>_<uid>`, jeden na milník a člověka,
+   takže se nezdvojí ani mezi lidmi, kteří si vzkazy navzájem nevidí:
+     vidím ho a je nesplněný → nic,
+     vidím ho a je splněný   → otevře se znovu (nové odevzdání po vrácení),
+     nevidím ho              → založí se; patří-li cizímu autorovi a jinému
+                               adresátovi, databáze zápis odmítne (měnit smí
+                               jen autor a adresát) = ten člověk ho už má.
+   Volá se z KB.ulozSplneniMilniku (stránka Milníky i nabídka na nástěnce)
+   a z tlačítka „Připomenout TO-DO u hotových milníků“ (Vyhodnocení milníků). */
+
+const milnikTodoId = (milnikId, uid) => "qt_mt_" + String(milnikId) + "_" + String(uid);
+const milnikTodoBezi = new Map();      // milnikId → běžící založení („Zpět“ na něj počká)
+const quickHotovoPro = (q, uid) => q.rezim === "kazdy"
+    ? (Array.isArray(q.hotoviUids) ? q.hotoviUids : []).indexOf(uid) !== -1 : q.hotovo === true;
+
+/** Má člověk k milníku nesplněné Quick TO-DO, které vidím? (náhled „Připomenout…“; cizí nevidím) */
+KB.maMilnikTodo = (milnikId, uid) => {
+    const q = (KB.quicktodo || []).find(x => x.id === milnikTodoId(milnikId, uid));
+    return !!q && !quickHotovoPro(q, String(uid));
+};
+
+/**
+ * Plán Quick TO-DO k milníku: spárované úkoly (potvrzené párování, když ho
+ * smím číst – zaměstnanec ne, ten vezme návrh z náplně), z nich nehotové
+ * a vzkazy po lidech.
+ *   m  milník ve tvaru KB.milniky ({ id, cinnost, napln, zakazka, owners, hotovo, potvrzeno })
+ * @returns {Promise<{ nehotovych: number, vzkazy: [{ milnikId, projekt, uid, text, odkazy, ukoly }] }>}
+ */
+KB.planTodoMilniku = async (m) => {
+    const V = window.KBVYK;
+    if (!m || !m.id || !V || !V.parovaniMilniku || !V.milnikTodoPlan) return { nehotovych: 0, vzkazy: [] };
+    let potvrzene = KB.parovaniPrislo ? (KB.parovaniMilniku[m.id] || null) : undefined;
+    if (potvrzene === undefined) {
+        potvrzene = null;
+        if (jsemManazer()) {
+            try {
+                const s = await getDoc(parovaniDoc(m.id));
+                potvrzene = s.exists() ? s.data() : null;
+            } catch (err) { potvrzene = null; }
+        }
+    }
+    const nazev = String(m.zakazka || "").replace(/\s+/g, " ").trim();
+    const p = (KB.projektyDocs || []).find(x => String(x.nazev || "").replace(/\s+/g, " ").trim() === nazev) ||
+        { id: "", nazev: nazev };
+    const ukoly = V.ukolyZakazky(p.nazev || nazev, p.id, KB.ukoly || []).slice();
+    // potvrzený úkol, který stránka načtený nemá, se dočte (úkoly čte každý člen)
+    const chybi = potvrzene && Array.isArray(potvrzene.ukoly)
+        ? potvrzene.ukoly.map(String).filter(id => !ukoly.some(u => u.id === id)) : [];
+    for (const id of chybi.slice(0, 50)) {
+        const zPameti = (KB.ukoly || []).find(u => u.id === id);
+        if (zPameti) { ukoly.push(zPameti); continue; }
+        try {
+            const s = await getDoc(ukolDoc(id));
+            if (s.exists()) ukoly.push(Object.assign({}, s.data(), { id: id }));
+        } catch (err) { /* smazaný nebo nečitelný úkol se vynechá */ }
+    }
+    const par = V.parovaniMilniku(m, ukoly, V.osyProjektu(p), { potvrzene: potvrzene });
+    /* Potvrzený milník manažer dotáhne i s úkolem, který z něj vznikl
+       (KB.dokonciUkolyMilniku, VZT) – o ten se vzkaz neposílá. */
+    const dotazene = m.hotovo === true && m.potvrzeno === true && jsemManazer();
+    const plan = V.milnikTodoPlan(m, par.ukoly.filter(u => !(dotazene && u.milnikId === m.id)), par.polozky);
+    // vyřazený účet by vzkaz nikdy neviděl
+    const naWebu = (uid) => !(KB.users || []).length ||
+        (KB.users || []).some(u => u.id === uid && u.active !== false);
+    return {
+        nehotovych: plan.nehotove.length,
+        vzkazy: plan.vzkazy.filter(v => naWebu(v.uid))
+            .map(v => Object.assign({ milnikId: m.id, projekt: nazev }, v))
+    };
+};
+
+/**
+ * Založí Quick TO-DO z plánu (KB.planTodoMilniku nebo stránka Vyhodnocení
+ * milníků) – viz výklad nad milnikTodoId. Do historie aktivit jeden řádek.
+ *   vzkazy  [{ milnikId, uid, text, odkazy, projekt }]
+ * @returns {Promise<{ zalozeno: string[], obnoveno: string[], preskoceno: number, chyb: number }>}
+ */
+KB.zalozTodoMilniku = async (vzkazy) => {
+    if (authReady) await authReady;
+    requireDb();
+    const out = { zalozeno: [], obnoveno: [], preskoceno: 0, chyb: 0 };
+    const milniky = new Set();
+    for (const v of (Array.isArray(vzkazy) ? vzkazy : [])) {
+        if (!v || !v.milnikId || !v.uid || !v.text) continue;
+        const qid = milnikTodoId(v.milnikId, v.uid);
+        const data = {
+            text: String(v.text), proUids: [String(v.uid)], projekt: v.projekt || "",
+            druh: "milnikTodo", milnikId: v.milnikId, odkazy: v.odkazy || [],
+            rezim: "", hotoviUids: [], hotovo: false
+        };
+        let q = (KB.quicktodo || []).find(x => x.id === qid) || null;
+        if (!q) {
+            try {
+                const s = await getDoc(quickDoc(qid));
+                q = s.exists() ? Object.assign({}, s.data(), { id: qid }) : null;
+            } catch (err) { q = null; }      // nevidím ho: neexistuje, nebo je cizí
+        }
+        try {
+            if (q && !quickHotovoPro(q, String(v.uid))) { out.preskoceno++; continue; }
+            if (q) {
+                // splněný z dřívějška – autor a adresáti se měnit nesmí (pravidla)
+                await KB.saveQuickTodo(qid, Object.assign(data, {
+                    odKoho: q.odKoho, odKohoJmeno: q.odKohoJmeno || "",
+                    proUids: Array.isArray(q.proUids) && q.proUids.length ? q.proUids : data.proUids
+                }), { bezAktivity: true });
+                out.obnoveno.push(qid);
+            } else {
+                await KB.saveQuickTodo(qid, data, { bezAktivity: true });
+                out.zalozeno.push(qid);
+            }
+            milniky.add(v.milnikId);
+        } catch (err) {
+            if (err && err.code === "permission-denied") out.preskoceno++;     // má ho už od kolegy
+            else { out.chyb++; console.warn("Quick TO-DO k milníku se nezaložil:", err); }
+        }
+    }
+    const n = out.zalozeno.length + out.obnoveno.length;
+    if (n) {
+        KB.zapisAktivitu("quicktodo", "zadal quick to-do „aktualizuj TO-DO“ " + (milniky.size === 1
+            ? "k odevzdanému milníku " + popisMilniku(Array.from(milniky)[0])
+            : "k " + milniky.size + " odevzdaným milníkům") + " (" + n + (n === 1 ? " vzkaz)" : n < 5 ? " vzkazy)" : " vzkazů)"));
+    }
+    return out;
+};
+
+/** Po odevzdání milníku: plán + založení (KB.ulozSplneniMilniku). */
+KB.pripomenTodoMilniku = async (m) => {
+    const plan = await KB.planTodoMilniku(m);
+    return plan.vzkazy.length ? KB.zalozTodoMilniku(plan.vzkazy)
+        : { zalozeno: [], obnoveno: [], preskoceno: 0, chyb: 0 };
+};
+
+/**
+ * Milník se vrátil mezi rozdělané (Zpět hned po odškrtnutí, Vrátit,
+ * Odmítnout): nesplněné Quick TO-DO „aktualizuj TO-DO“, které jsem k němu
+ * založil já, zmizí – milník už odevzdaný není. Cizí se nesahá.
+ */
+async function uklidTodoMilniku(milnikId) {
+    const beh = milnikTodoBezi.get(milnikId);
+    milnikTodoBezi.delete(milnikId);
+    const vysledek = beh ? await beh : null;
+    const ja = KB.currentUid();
+    const ids = new Set(vysledek ? vysledek.zalozeno : []);
+    (KB.quicktodo || []).forEach(q => {
+        if (q && q.druh === "milnikTodo" && q.milnikId === milnikId && q.odKoho === ja &&
+            !quickHotovoPro(q, (q.proUids || [])[0])) ids.add(q.id);
+    });
+    for (const qid of ids) {
+        await KB.deleteQuickTodo(qid).catch(err => console.warn("Quick TO-DO k milníku se nesmazal:", err));
+    }
+}
 
 /* ------------------------------------------------------------- uživatelé --
    Seznam lidí, kteří mají na web přístup, a jejich role. Spravuje ho hlavní
