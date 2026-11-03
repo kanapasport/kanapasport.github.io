@@ -3679,6 +3679,45 @@ KB.saveVykazNastaveni = async (patch) => {
 };
 
 /**
+ * Schválení čerpání rozpočtu = „čerpání v tomhle stavu jsem vzal na vědomí“
+ * (Michal 3. 11. 2026). Leží u rozpočtu zakázky:
+ *   rozpocty[název].schvaleno = { pct, kc, ms, kdo }
+ * Kdy se čerpání hlásí znovu, říká V.rozpocetHlasit (vykazy.js) – stejně ho
+ * opisuje Apps Script v týdenním souhrnu. Zapisuje se JEN tohle pole přes
+ * slučování (mapa do hloubky, název zakázky je klíč mapy, ne cesta pole –
+ * tečka v názvu tedy nevadí), ne celý číselník přes saveVykazNastaveni,
+ * který by poslal kopii všech rozpočtů z paměti. Smí to, kdo smí rozpočty
+ * nastavovat: manažer (vykaz.view; v pravidlech spravce() nad private/**).
+ */
+KB.schvalRozpocet = async (nazev, stav) => {
+    if (authReady) await authReady;
+    requireDb();
+    nazev = String(nazev || "");
+    if (!nazev || !(KB.rozpocty || {})[nazev]) throw new Error("Zakázka nemá rozpočet.");
+    const pct = Number(stav && stav.pct);
+    if (!(stav && stav.pct !== null && stav.pct !== "") || !isFinite(pct)) throw new Error("Neplatné čerpání.");
+    const schvaleno = {
+        pct: Math.round(pct * 10) / 10,
+        kc: Math.round(Number(stav.kc) || 0),
+        ms: Date.now(),
+        kdo: window.KB_USER || ""
+    };
+    await setDoc(vykazyMeta(), { rozpocty: { [nazev]: { schvaleno: schvaleno } } }, { merge: true });
+    KB.zapisAktivitu("vykaz", "schválil čerpání rozpočtu " + Math.round(pct) + " % – " + nazev);
+    return schvaleno;
+};
+
+/** Zrušení schválení – čerpání se zase hlásí podle prahů 80 / 100 %. */
+KB.zrusSchvaleniRozpoctu = async (nazev) => {
+    if (authReady) await authReady;
+    requireDb();
+    nazev = String(nazev || "");
+    if (!nazev || !(KB.rozpocty || {})[nazev]) throw new Error("Zakázka nemá rozpočet.");
+    await setDoc(vykazyMeta(), { rozpocty: { [nazev]: { schvaleno: deleteField() } } }, { merge: true });
+    KB.zapisAktivitu("vykaz", "zrušil schválení čerpání rozpočtu – " + nazev);
+};
+
+/**
  * Netajná část číselníku zakázek – názvy, projekty uvnitř zakázky a firmy.
  * Leží v `meta/zakazky` vedle skupin úkolů, aby si je u svého výkazu mohl
  * vybrat i zaměstnanec. Zapisuje se přírůstkově ze stejného důvodu jako výše.
