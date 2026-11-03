@@ -5498,7 +5498,9 @@ KB.smazPokladnu = async (id) => {
    rozesílku samotnou dělá Apps Script – web je jen stránka v prohlížeči
    a odesílat poštu neumí.
 
-     private/upozorneni/lide/{uid}   { zapnuto, volby:{klic:true}, ms } */
+     private/upozorneni/lide/{uid}   { zapnuto, volby:{klic:true}, ms }
+   Stejný dokument nese i nastavení Vlastní nástěnky (`nastenka`,
+   KB.ulozNastenku) – čte se tímhle odběrem, druhý se nezakládá. */
 
 const upozDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "upozorneni", "lide", uid);
 
@@ -5569,6 +5571,37 @@ KB.ulozNtfy = async (data) => {
     }
     if ("ostatni" in data) zapis.ntfyOstatni = data.ostatni !== false;
     await setDoc(upozDoc(uid), zapis, { merge: true });
+};
+
+/* Vlastní nástěnka (Michal 3. 11. 2026): které dlaždice manažer ve třetím
+   režimu nástěnky vidí, v jaké barvě a v jakém pořadí. Leží ve stejném
+   osobním dokumentu jako upozornění – píše si ho každý sám (pravidla
+   `upozorneni/lide/{uid}` beze změny) a čte ho KB.watchUpozorneni, takže
+   nastavení platí na všech zařízeních. Zapisuje se jen pole `nastenka`,
+   e-mailové volby ani zařízení se nemění.
+     nastenka: { dlazdice: { <id>: { zap, barva: "#rrggbb" | "", poradi } }, updatedMs }
+   Id jen ve tvaru id dlaždice (w + písmena a číslice, nejvýš 40), barva jen
+   #rrggbb přes KBUI.barva – které id stránka opravdu použije, hlídá ještě
+   nástěnka sama (bere jen dlaždice, které na ní jsou). */
+KB.ulozNastenku = async (nastaveni) => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid) throw new Error("Není kdo ukládá.");
+    const vstup = nastaveni && nastaveni.dlazdice && typeof nastaveni.dlazdice === "object"
+        ? nastaveni.dlazdice : {};
+    const dlazdice = {};
+    Object.keys(vstup).slice(0, 40).forEach(id => {
+        if (!/^w[A-Za-z0-9]{1,40}$/.test(id)) return;
+        const d = vstup[id] && typeof vstup[id] === "object" ? vstup[id] : {};
+        const barva = window.KBUI ? window.KBUI.barva(d.barva, "") : "";
+        const zapis = { zap: d.zap !== false, barva: /^#[0-9a-f]{6}$/i.test(barva) ? barva.toLowerCase() : "" };
+        if (typeof d.poradi === "number" && isFinite(d.poradi)) {
+            zapis.poradi = Math.max(0, Math.min(99, Math.round(d.poradi)));
+        }
+        dlazdice[id] = zapis;
+    });
+    await setDoc(upozDoc(uid), { nastenka: { dlazdice: dlazdice, updatedMs: Date.now() } }, { merge: true });
 };
 
 /** Zkušební pípnutí do mobilu PŘES Apps Script (ne z prohlížeče) – vrátí {ok, kod, chyba}.

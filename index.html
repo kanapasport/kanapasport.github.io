@@ -285,6 +285,76 @@
            vytlačilo jméno toho, kdo má volno – zůstane jen „(potvrzeno)",
            celé jméno je v dlaždici Potvrzení dovolených. */
         @media (max-width: 600px) { .rychly__kdo { display: none; } }
+
+        /* Režim Vlastní (Michal 3. 11. 2026): dlaždice s barvou, kterou si
+           manažer vybral. Hlavička nese tu barvu, okraj taky, tělo karty
+           světlý odstín z ní (skript ho míchá tak, aby šedý text zůstal
+           čitelný) a písmo v hlavičce je bílé, nebo tmavé – podle kontrastu.
+           Barvy chodí jen přes proměnné, které nastaví skript (hex). */
+        .nastenka__karta--barva { border-color: var(--dl-hlava); background: var(--dl-telo); }
+        .nastenka__karta--barva .nastenka__hlava { background: var(--dl-hlava); }
+        .nastenka__karta--barva .nastenka__hlava:hover { background: var(--dl-hlava-hover); }
+        .nastenka__karta--barva .nastenka__hlava b { color: var(--dl-text); }
+        /* světlá barva = tmavé písmo; přepínače v hlavičce se přebarví s ním */
+        .nastenka__karta--svetla .nastenka__prep .chip { background: rgba(0, 0, 0, .05);
+            border-color: rgba(0, 0, 0, .4); color: var(--text); }
+        .nastenka__karta--svetla .nastenka__prep .chip--active,
+        .nastenka__karta--svetla .nastenka__prep .chip--nove:hover { background: var(--text);
+            border-color: var(--text); color: #fff; }
+
+        /* „Upravit dlaždice" vedle přepínače režimu – v modrém pruhu i v pásu
+           na telefonu. Čárkovaný rámeček: je to nastavení, ne čtvrtý režim. */
+        #rezimBox { flex-wrap: wrap; }
+        .nastenka-upravit { display: inline-flex; align-items: center; gap: 6px;
+            background: transparent; color: #fff; border: 1px dashed rgba(255, 255, 255, .65); }
+        .nastenka-upravit:hover { background: rgba(255, 255, 255, .14); color: #fff; border-color: #fff; }
+        .nastenka-upravit svg { width: 15px; height: 15px; flex: none; }
+
+        /* Okno „Upravit dlaždice": řádek = zaškrtnutí s názvem (náhled
+           hlavičky v její barvě), paleta a šipky pořadí. */
+        .dlok__deska { max-width: 780px; }
+        .dlok__uvod { margin: 0 0 12px; font-size: var(--fs-2); line-height: 1.55; color: var(--text-soft); }
+        .dlok__seznam { display: flex; flex-direction: column; gap: 6px; }
+        .dlok__radek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+            padding: 7px 10px; border: 1px solid var(--line-soft); border-radius: var(--r);
+            background: var(--surface); }
+        .dlok__zap { display: flex; align-items: center; gap: 9px; flex: 1 1 200px; min-width: 0;
+            cursor: pointer; }
+        .dlok__zap input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+        .dlok__nazev { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            padding: 4px 9px; border-radius: var(--r-sm); font-size: var(--fs-1); font-weight: 900;
+            letter-spacing: .07em; text-transform: uppercase;
+            background: var(--dl-hlava, var(--accent)); color: var(--dl-text, #fff); }
+        /* manažerská dlaždice má bez vlastní barvy zelenou hlavičku (app.css) */
+        .dlok__radek--man .dlok__nazev { background: var(--dl-hlava, var(--ok)); }
+        .dlok__radek--vyp .dlok__nazev { opacity: .45; text-decoration: line-through; }
+        .dlok__barvy { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+        .dlok__vzorek, .dlok__vlastni { flex: none; width: 24px; height: 24px; padding: 0;
+            border: 1px solid rgba(0, 0, 0, .2); border-radius: var(--r-sm); cursor: pointer; }
+        .dlok__vzorek.je-vybrany, .dlok__vlastni.je-vybrany {
+            box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
+        .dlok__vzorek:focus-visible, .dlok__vlastni:focus-within { outline: 2px solid var(--accent-lt); outline-offset: 3px; }
+        /* „bez barvy" = bílý čtvereček přeškrtnutý úhlopříčkou */
+        .dlok__vzorek--bez { background: var(--surface) linear-gradient(to top right, transparent calc(50% - 1px),
+            var(--danger) calc(50% - 1px), var(--danger) calc(50% + 1px), transparent calc(50% + 1px)); }
+        /* vlastní barva: duhový čtvereček, výběr barvy pod ním přes celou plochu */
+        .dlok__vlastni { position: relative; overflow: hidden;
+            background: conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935); }
+        .dlok__vlastni input { position: absolute; inset: 0; width: 100%; height: 100%;
+            opacity: 0; cursor: pointer; border: none; padding: 0; }
+        .dlok__poradi { display: flex; gap: 4px; }
+        .dlok__sipka { width: 32px; height: 30px; padding: 0; font-size: var(--fs-3); font-weight: 900; }
+        .dlok__pata { gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); }
+        /* Telefon: okno je list přes celou šířku zespodu, paleta pod názvem */
+        @media (max-width: 600px) {
+            .dlok { padding: 0; align-items: flex-end; }
+            .dlok__deska { max-width: none; max-height: 92vh; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+            .dlok .hookno__telo { padding: 12px 12px 14px; }
+            .dlok__pata { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+            .dlok__poradi { order: 1; }
+            .dlok__barvy { order: 2; flex-basis: 100%; gap: 6px; }
+            .dlok__vzorek, .dlok__vlastni { width: 28px; height: 28px; }
+        }
     </style>
 </head>
 <body>
@@ -460,6 +530,31 @@
         <div class="row" style="gap:10px;padding:12px 18px;border-top:1px solid var(--line)">
             <div class="grow"></div>
             <button type="button" id="btnNovinkyZavri" class="btn btn--primary btn--sm">Rozumím</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================= UPRAVIT DLAŽDICE --
+     Režim Vlastní (jen manažeři): které dlaždice ukázat, jejich barva
+     a pořadí. Řádky skládá skript ze samotných karet nástěnky. Změny se
+     hned ukazují za oknem; do databáze jdou až tlačítkem Uložit. -->
+<div id="dlazdiceOkno" class="hookno dlok no-print" hidden role="dialog" aria-modal="true" aria-labelledby="dlazdiceNadpis">
+    <div class="card hookno__deska dlok__deska">
+        <div class="hookno__hlava">
+            <span id="dlazdiceNadpis">Upravit dlaždice</span>
+            <button type="button" class="linkbtn linkbtn--tmavy" data-dlok-zavri aria-label="Zavřít">✕</button>
+        </div>
+        <div class="hookno__telo">
+            <p class="dlok__uvod">Zaškrtni dlaždice, které chceš v režimu <b>Vlastní</b> vidět, vyber jim barvu
+                a šipkami pořadí. Nastavení se uloží k tvému účtu a platí na všech zařízeních.</p>
+            <div id="dlazdiceSeznam" class="dlok__seznam"></div>
+        </div>
+        <div class="row dlok__pata">
+            <button type="button" class="btn btn--ghost btn--sm" data-dlok-vychozi
+                    title="Všechny dlaždice zapnuté, bez barvy, v původním pořadí">Výchozí</button>
+            <div class="grow"></div>
+            <button type="button" class="btn btn--ghost btn--sm" data-dlok-zavri>Zrušit</button>
+            <button type="button" class="btn btn--primary btn--sm" data-dlok-ulozit>Uložit</button>
         </div>
     </div>
 </div>
@@ -806,13 +901,21 @@
                 : '<div class="tiny muted" style="margin-top:10px;text-align:right">Úkol je hotový.</div>'));
     }
 
-    /* ------------------------------------------- dvě sekce nástěnky ----
+    /* ------------------------------------------ tři režimy nástěnky ----
        Manažer má dlaždice rozdělené: ZÁKLADNÍ je to, co vidí zaměstnanci,
        MANAŽERSKÁ jsou okna navíc (dovolené, kontrola, aktivita). Přepíná
        se nahoře v modré liště (slot vlevo, na telefonu dole v pásu).
-       Zaměstnanci žádné přepínání nevidí – mají jen základ. */
+       Zaměstnanci žádné přepínání nevidí – mají jen základ.
+
+       VLASTNÍ (Michal 3. 11. 2026): manažer si sám zapne, které dlaždice
+       chce vidět (základní i manažerské), a dá jim barvu a pořadí – okno
+       „Upravit dlaždice". Nastavení leží v jeho osobním dokumentu
+       private/upozorneni/lide/{uid}.nastenka (píše si ho sám, pravidla se
+       neměnila) a chodí tím samým odběrem jako upozornění, takže platí na
+       všech zařízeních. Výchozí = všechno zapnuté, bez barvy. */
 
     const REZIM_KLIC = "kb-nastenka-rezim";
+    const REZIMY = ["zakladni", "manazerska", "vlastni"];
     const MANAZERSKE_DLAZDICE = ["wDovolene", "wRychly", "wFakturyPlatby", "wFakturyNove",
         "wKontrola", "wRozpocty", "wAktivita"];
 
@@ -821,19 +924,142 @@
         catch (err) { return "zakladni"; }
     }
 
+    /** Režim, který opravdu platí – zaměstnanec má vždycky základ. */
+    function aktivniRezim() {
+        if (!window.KBUI.can("vykaz.view")) return "zakladni";
+        const rezim = rezimNastenky();
+        return REZIMY.indexOf(rezim) !== -1 ? rezim : "zakladni";
+    }
+
+    /* Dlaždice, které jde ve Vlastním zapínat: všechny karty nástěnky
+       kromě výzvy k upozornění (ta se ukáže sama, jen když je potřeba).
+       Seznam bere stránka ze sebe – nová dlaždice se v okně objeví sama
+       a z databáze se nepřevezme id, které na stránce není. */
+    const dlazdiceNastenky = () => Array.from(document.querySelectorAll(".nastenka > .nastenka__karta"))
+        .filter(k => k.id && !k.classList.contains("nastenka__karta--vyzva"));
+    const nazevDlazdice = (k) =>
+        ((k.querySelector(".nastenka__hlava b") || {}).textContent || "").replace(/\s+/g, " ").trim() || k.id;
+    // dlaždice faktur jen s právem finance.view – kdo ji nevidí, nenastavuje ji
+    const dlazdiceSmi = (k) => !!k && (!k.dataset.need || window.KBUI.can(k.dataset.need));
+
+    /** Barva z dat jen jako #rrggbb (přes KBUI.barva – jen hex), jinak "". */
+    function hexBarva(hodnota) {
+        let s = window.KBUI.barva(hodnota, "").toLowerCase();
+        if (/^#[0-9a-f]{3,4}$/.test(s)) s = "#" + s.slice(1, 4).split("").map(c => c + c).join("");
+        return /^#[0-9a-f]{6}/.test(s) ? s.slice(0, 7) : "";
+    }
+    /** Barva z tokenu webu (app.css), aby paleta i písmo držely barvy webu. */
+    const tokenBarva = (jmeno, nahradni) =>
+        hexBarva(getComputedStyle(document.documentElement).getPropertyValue(jmeno).trim()) || nahradni;
+
+    /* Kontrast podle WCAG: relativní jas a poměr dvou barev. */
+    const rgbZHex = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    function jasBarvy(hex) {
+        const [r, g, b] = rgbZHex(hex).map(c => {
+            c /= 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    const kontrastBarev = (a, b) => {
+        const x = jasBarvy(a), y = jasBarvy(b);
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    /** podil = kolik z první barvy (0–1), zbytek z druhé */
+    const smichejBarvy = (a, b, podil) => {
+        const x = rgbZHex(a), y = rgbZHex(b);
+        return "#" + x.map((c, i) => Math.round(c * podil + y[i] * (1 - podil))
+            .toString(16).padStart(2, "0")).join("");
+    };
+
+    /* Co se z jedné barvy odvodí. Písmo v hlavičce bílé, nebo tmavé (--text)
+       – podle toho, co má s barvou větší kontrast. Tělo karty je světlý
+       odstín barvy: míchá se s plochou karty tak, aby jas zůstal ≥ 0,85
+       a šedý text webu (--muted) na něm měl aspoň 4,5 : 1. Najetí myší na
+       hlavičku tmavou barvu ztmaví, světlou zesvětlí (písmo zůstane čitelné). */
+    const JAS_TELA = 0.85;
+    function barvyDlazdice(hex) {
+        const tmavy = tokenBarva("--text", "#16191d");
+        const bila = "#ffffff";
+        const plocha = tokenBarva("--surface", bila);
+        const svetla = kontrastBarev(hex, tmavy) > kontrastBarev(hex, bila);
+        let podil = svetla ? 0.5 : 0.12;
+        let telo = smichejBarvy(hex, plocha, podil);
+        while (podil > 0.02 && jasBarvy(telo) < JAS_TELA) {
+            podil -= 0.02;
+            telo = smichejBarvy(hex, plocha, podil);
+        }
+        return { hlava: hex, text: svetla ? tmavy : bila, telo: telo, svetla: svetla,
+            hover: smichejBarvy(hex, svetla ? bila : "#000000", 0.85) };
+    }
+
+    /** Barvu (nebo žádnou) na prvek: proměnné --dl-* + volitelně třídy. */
+    function nastavBarvu(el, hex, tridaBarva, tridaSvetla) {
+        if (!el) return;
+        const b = hex ? barvyDlazdice(hex) : null;
+        const promenne = { "--dl-hlava": "hlava", "--dl-text": "text", "--dl-telo": "telo", "--dl-hlava-hover": "hover" };
+        Object.keys(promenne).forEach(p => {
+            if (b) el.style.setProperty(p, b[promenne[p]]); else el.style.removeProperty(p);
+        });
+        if (tridaBarva) el.classList.toggle(tridaBarva, !!b);
+        if (tridaSvetla) el.classList.toggle(tridaSvetla, !!(b && b.svetla));
+    }
+
+    let dlazdiceKoncept = null;     // rozpracované nastavení v otevřeném okně (náhled), jinak null
+
+    /**
+     * Nastavení Vlastního režimu v pořadí: [{ id, zap, barva, poradi }] pro
+     * každou dlaždici stránky. Z databáze se bere jen to, co sedí: známé id,
+     * zap jako ano/ne (cokoliv jiného = zapnuto), barva jen hex, pořadí jen
+     * číslo – co chybí, dostane výchozí (zapnuto, bez barvy, za seřazenými
+     * v pořadí stránky).
+     */
+    function nastaveniVlastni() {
+        if (dlazdiceKoncept) return dlazdiceKoncept;
+        const n = window.KB.upozorneni && window.KB.upozorneni.nastenka;
+        const ulozene = n && n.dlazdice && typeof n.dlazdice === "object" ? n.dlazdice : {};
+        return dlazdiceNastenky().map((k, i) => {
+            const z = Object.prototype.hasOwnProperty.call(ulozene, k.id) ? ulozene[k.id] : null;
+            const d = z && typeof z === "object" ? z : {};
+            const poradi = typeof d.poradi === "number" && isFinite(d.poradi) ? d.poradi : 1000 + i;
+            return { id: k.id, zap: d.zap !== false, barva: hexBarva(d.barva), klic: poradi, dom: i };
+        }).sort((a, b) => a.klic - b.klic || a.dom - b.dom)
+          .map((d, i) => ({ id: d.id, zap: d.zap, barva: d.barva, poradi: i }));
+    }
+    const vychoziVlastni = () => dlazdiceNastenky().map((k, i) => ({ id: k.id, zap: true, barva: "", poradi: i }));
+
     function aplikujRezim() {
         const manazer = window.KBUI.can("vykaz.view");
-        const rezim = manazer ? rezimNastenky() : "zakladni";
+        const rezim = aktivniRezim();
+        const vlastni = rezim === "vlastni" ? nastaveniVlastni() : null;
+        const podleId = new Map((vlastni || []).map(d => [d.id, d]));
         document.querySelectorAll(".nastenka > .nastenka__karta").forEach(k => {
-            const manazerska = MANAZERSKE_DLAZDICE.indexOf(k.id) !== -1;
+            const d = podleId.get(k.id);
+            const videt = vlastni
+                ? (d ? d.zap : true)     // výzva k upozornění se ve Vlastním řídí sama sebou
+                : (rezim === "manazerska") === (MANAZERSKE_DLAZDICE.indexOf(k.id) !== -1);
             /* hidden z data-need nechává na pokoji – tady se jen volí sekce */
-            k.style.display = (rezim === "manazerska") === manazerska ? "" : "none";
+            k.style.display = videt ? "" : "none";
+            // pořadí přes CSS order (mřížka zůstává); výzva má 0 a drží se nahoře
+            k.style.order = d ? String(d.poradi + 1) : "";
+            nastavBarvu(k, d ? d.barva : "", "nastenka__karta--barva", "nastenka__karta--svetla");
         });
         document.querySelectorAll("[data-rezim]").forEach(b => {
             b.classList.toggle("chip--active", b.dataset.rezim === rezim);
+            b.setAttribute("aria-pressed", b.dataset.rezim === rezim ? "true" : "false");
         });
+        const upravit = document.querySelector("[data-nastenka-upravit]");
+        if (upravit) upravit.hidden = rezim !== "vlastni";
+        // okno úprav patří jen k Vlastnímu (odhlášení, změna role)
+        if (rezim !== "vlastni" && dlazdiceKoncept) {
+            dlazdiceKoncept = null;
+            document.getElementById("dlazdiceOkno").hidden = true;
+        }
         const box = document.getElementById("rezimBox");
         if (box) box.hidden = !manazer;
+        /* Nastavení Vlastního chodí s osobním dokumentem upozornění – jeden
+           odběr vlastního dokumentu, a jen když je Vlastní opravdu zapnutý. */
+        if (rezim === "vlastni") window.KB.watchUpozorneni();
         // dlaždice Rozpočty si data dočte, až když je opravdu vidět
         renderRozpocty();
     }
@@ -851,14 +1077,191 @@
         box.style.cssText = "gap:6px;align-items:center";
         box.innerHTML =
             '<button type="button" class="chip" data-rezim="zakladni">Základní</button>' +
-            '<button type="button" class="chip" data-rezim="manazerska">Manažerská</button>';
+            '<button type="button" class="chip" data-rezim="manazerska">Manažerská</button>' +
+            '<button type="button" class="chip" data-rezim="vlastni">Vlastní</button>' +
+            '<button type="button" class="chip nastenka-upravit" data-nastenka-upravit hidden' +
+                ' title="Které dlaždice ukázat, jejich barva a pořadí">' + icon("cog") +
+                "<span>Upravit dlaždice</span></button>";
         if (kotva) kotva.appendChild(box);
         else document.getElementById("nastenka").prepend(box);
         box.addEventListener("click", (event) => {
+            if (event.target.closest("[data-nastenka-upravit]")) return void otevriDlazdice();
             const b = event.target.closest("[data-rezim]");
             if (!b) return;
             try { localStorage.setItem(REZIM_KLIC, b.dataset.rezim); } catch (err) {}
             aplikujRezim();
+        });
+    }
+
+    /* ------------------------------------------- okno Upravit dlaždice ---
+       Paleta = barvy webu (tokeny z app.css, ukládá se jejich hex): barva
+       webu, zelená, oranžová, červená, šedá a stupnice rozpracovanosti.
+       K tomu „bez barvy" a vlastní barva z <input type="color">. */
+    const PALETA = [
+        ["--accent", "Barva webu"], ["--ok", "Zelená"], ["--warn", "Oranžová"], ["--danger", "Červená"],
+        ["--muted", "Šedá"], ["--p0-bg", "Světle šedá"], ["--p50-bg", "Žlutá (rozpracováno)"],
+        ["--p75-bg", "Meruňková (75 %)"], ["--p95-bg", "Limetková (95 %)"], ["--p100-bg", "Světle zelená (hotovo)"]
+    ];
+    const paletaBarev = () => PALETA.map(([token, nazev]) => ({ hex: tokenBarva(token, ""), nazev: nazev }))
+        .filter(p => p.hex);
+
+    const vzorekBarvy = (hex, nazev, vybrany) =>
+        '<button type="button" class="dlok__vzorek' + (hex ? "" : " dlok__vzorek--bez") +
+            (vybrany ? " je-vybrany" : "") + '" data-dlok-barva="' + esc(hex) + '"' +
+            (hex ? ' style="background:' + esc(window.KBUI.barva(hex, "")) + '"' : "") +
+            ' title="' + esc(nazev) + '" aria-label="' + esc(nazev) + '"' +
+            ' aria-pressed="' + (vybrany ? "true" : "false") + '"></button>';
+
+    /** Řádky okna – jen dlaždice, které člověk smí vidět, v nastaveném pořadí. */
+    function kresliDlazdiceOkno() {
+        const barvy = paletaBarev();
+        const radky = dlazdiceKoncept.filter(d => dlazdiceSmi(document.getElementById(d.id)));
+        const seznam = document.getElementById("dlazdiceSeznam");
+        seznam.innerHTML = radky.map((d, i) => {
+            const karta = document.getElementById(d.id);
+            const nazev = nazevDlazdice(karta);
+            const zPalety = !d.barva || barvy.some(p => p.hex === d.barva);
+            return '<div class="dlok__radek' + (d.zap ? "" : " dlok__radek--vyp") +
+                (karta.classList.contains("nastenka__karta--man") ? " dlok__radek--man" : "") +
+                '" data-dlok-id="' + esc(d.id) + '">' +
+                '<label class="dlok__zap"><input type="checkbox" data-dlok-zap' + (d.zap ? " checked" : "") + ">" +
+                    '<span class="dlok__nazev">' + esc(nazev) + "</span></label>" +
+                '<div class="dlok__barvy" role="group" aria-label="' + esc("Barva dlaždice " + nazev) + '">' +
+                    vzorekBarvy("", "Bez barvy", !d.barva) +
+                    barvy.map(p => vzorekBarvy(p.hex, p.nazev, d.barva === p.hex)).join("") +
+                    '<label class="dlok__vlastni' + (zPalety ? "" : " je-vybrany") + '" title="Vlastní barva">' +
+                        '<input type="color" data-dlok-vlastni aria-label="' + esc("Vlastní barva – " + nazev) + '"' +
+                        ' value="' + esc(d.barva || tokenBarva("--accent", "#1d556d")) + '"></label>' +
+                "</div>" +
+                '<div class="dlok__poradi">' +
+                    '<button type="button" class="btn btn--ghost btn--sm dlok__sipka" data-dlok-posun="-1"' +
+                        (i === 0 ? " disabled" : "") + ' title="Posunout výš" aria-label="' + esc("Posunout výš – " + nazev) + '">↑</button>' +
+                    '<button type="button" class="btn btn--ghost btn--sm dlok__sipka" data-dlok-posun="1"' +
+                        (i === radky.length - 1 ? " disabled" : "") + ' title="Posunout níž" aria-label="' + esc("Posunout níž – " + nazev) + '">↓</button>' +
+                "</div>" +
+            "</div>";
+        }).join("");
+        seznam.querySelectorAll("[data-dlok-id]").forEach(obnovRadekDlazdice);
+    }
+
+    /** Řádek po změně zapnutí / barvy – bez překreslení (výběr barvy zůstane otevřený). */
+    function obnovRadekDlazdice(radek) {
+        const d = (dlazdiceKoncept || []).find(x => x.id === radek.dataset.dlokId);
+        if (!d) return;
+        radek.classList.toggle("dlok__radek--vyp", !d.zap);
+        let zPalety = false;
+        radek.querySelectorAll("[data-dlok-barva]").forEach(b => {
+            const ano = b.dataset.dlokBarva === d.barva;
+            zPalety = zPalety || ano;
+            b.classList.toggle("je-vybrany", ano);
+            b.setAttribute("aria-pressed", ano ? "true" : "false");
+        });
+        radek.querySelector(".dlok__vlastni").classList.toggle("je-vybrany", !zPalety);
+        // název = malá hlavička dlaždice: hned je vidět barva i čitelnost písma
+        nastavBarvu(radek.querySelector(".dlok__nazev"), d.barva);
+    }
+
+    function otevriDlazdice() {
+        if (aktivniRezim() !== "vlastni") return;
+        dlazdiceKoncept = nastaveniVlastni().map(d => Object.assign({}, d));
+        kresliDlazdiceOkno();
+        const okno = document.getElementById("dlazdiceOkno");
+        okno.hidden = false;
+        const prvni = okno.querySelector("[data-dlok-zap]");
+        if (prvni) prvni.focus();
+    }
+
+    /** Zavřít bez uložení – náhled se vrátí k uloženému. */
+    function zavriDlazdice() {
+        dlazdiceKoncept = null;
+        document.getElementById("dlazdiceOkno").hidden = true;
+        aplikujRezim();
+    }
+
+    async function ulozDlazdice(tlacitko) {
+        if (!dlazdiceKoncept) return;
+        const dlazdice = {};
+        dlazdiceKoncept.forEach((d, i) => { dlazdice[d.id] = { zap: d.zap, barva: d.barva, poradi: i }; });
+        tlacitko.disabled = true;
+        try {
+            await window.KB.ulozNastenku({ dlazdice: dlazdice });
+            zavriDlazdice();
+            window.KBUI.toast("Nastavení dlaždic je uložené.");
+        } catch (err) {
+            console.error("Nastavení dlaždic se neuložilo:", err);
+            window.KBUI.toast("Nastavení dlaždic se neuložilo.", "error");
+        } finally {
+            tlacitko.disabled = false;
+        }
+    }
+
+    /** Posun mezi dlaždicemi, které člověk vidí (skryté faktury se přeskočí). */
+    function posunDlazdici(id, smer) {
+        const viditelne = dlazdiceKoncept.filter(d => dlazdiceSmi(document.getElementById(d.id))).map(d => d.id);
+        const kde = viditelne.indexOf(id);
+        const soused = viditelne[kde + smer];
+        if (kde === -1 || !soused) return;
+        const a = dlazdiceKoncept.findIndex(d => d.id === id);
+        const b = dlazdiceKoncept.findIndex(d => d.id === soused);
+        const x = dlazdiceKoncept[a];
+        dlazdiceKoncept[a] = dlazdiceKoncept[b];
+        dlazdiceKoncept[b] = x;
+        dlazdiceKoncept.forEach((d, i) => { d.poradi = i; });
+        kresliDlazdiceOkno();
+        // fokus zůstane na šipce posunuté dlaždice (nebo na té druhé, když je na kraji)
+        const radek = document.querySelector('#dlazdiceSeznam [data-dlok-id="' + id + '"]');
+        const sipka = radek && (radek.querySelector('[data-dlok-posun="' + smer + '"]:not([disabled])') ||
+            radek.querySelector("[data-dlok-posun]:not([disabled])"));
+        if (sipka) sipka.focus();
+        aplikujRezim();
+    }
+
+    function pripravDlazdiceOkno() {
+        const okno = document.getElementById("dlazdiceOkno");
+        const dlazdiceRadku = (el) => {
+            const radek = el.closest("[data-dlok-id]");
+            const d = radek && (dlazdiceKoncept || []).find(x => x.id === radek.dataset.dlokId);
+            return d ? { radek: radek, d: d } : null;
+        };
+        okno.addEventListener("click", (event) => {
+            if (event.target === okno || event.target.closest("[data-dlok-zavri]")) return void zavriDlazdice();
+            const ulozit = event.target.closest("[data-dlok-ulozit]");
+            if (ulozit) return void ulozDlazdice(ulozit);
+            if (!dlazdiceKoncept) return;
+            if (event.target.closest("[data-dlok-vychozi]")) {
+                dlazdiceKoncept = vychoziVlastni();
+                kresliDlazdiceOkno();
+                return void aplikujRezim();
+            }
+            const posun = event.target.closest("[data-dlok-posun]");
+            if (posun) {
+                const r = dlazdiceRadku(posun);
+                if (r) posunDlazdici(r.d.id, Number(posun.dataset.dlokPosun) < 0 ? -1 : 1);
+                return;
+            }
+            const vzorek = event.target.closest("[data-dlok-barva]");
+            if (vzorek) {
+                const r = dlazdiceRadku(vzorek);
+                if (!r) return;
+                r.d.barva = hexBarva(vzorek.dataset.dlokBarva);
+                obnovRadekDlazdice(r.radek);
+                aplikujRezim();
+            }
+        });
+        // zaškrtnutí i vlastní barva: „input" při tažení ve výběru barvy, „change" na konci
+        const zmena = (event) => {
+            const r = dlazdiceRadku(event.target);
+            if (!r) return;
+            if (event.target.matches("[data-dlok-zap]")) r.d.zap = event.target.checked;
+            else if (event.target.matches("[data-dlok-vlastni]")) r.d.barva = hexBarva(event.target.value);
+            else return;
+            obnovRadekDlazdice(r.radek);
+            aplikujRezim();
+        };
+        okno.addEventListener("input", zmena);
+        okno.addEventListener("change", zmena);
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !okno.hidden) zavriDlazdice();
         });
     }
 
@@ -1625,7 +2028,8 @@
 
        Čtení: výkazy s částkami, rozpočty, úkoly a projekty čte manažerská
        nástěnka i bez téhle dlaždice. Navíc jen to, bez čeho to nejde, a až
-       když je dlaždice opravdu vidět (režim Manažerská): budgety úkolů
+       když je dlaždice opravdu vidět (režim Manažerská, nebo Vlastní se zapnutými
+       Rozpočty): budgety úkolů
        (jeden odběr) a externí náklady otevřených zakázek s rozpočtem, na
        které se pracuje (jedno čtení na zakázku za načtení stránky). Faktury
        jen tomu, kdo je tu čte stejně (finance.view). */
@@ -1634,7 +2038,11 @@
     const nakladyZakazek = new Map();       // id projektu → náklady (null = čte se)
     let rozpoctyCasovac = null;
 
-    const rozpoctyVidet = () => window.KBUI.can("vykaz.view") && rezimNastenky() === "manazerska";
+    const rozpoctyVidet = () => {
+        const rezim = aktivniRezim();     // zaměstnanec má vždy „zakladni“
+        return rezim === "manazerska" ||
+            (rezim === "vlastni" && nastaveniVlastni().some(d => d.id === "wRozpocty" && d.zap));
+    };
 
     /** Překreslení posbírá víc událostí naráz (výkazy, úkoly, budgety…). */
     function renderRozpocty() {
@@ -2005,7 +2413,10 @@
         const karta = document.getElementById("wUpozVyzva");
         if (!karta) return;
         const uid = mojeUid();
-        const ulozeno = !!window.KB.upozorneni;
+        /* Dokument nese i nastavení Vlastní nástěnky (pole `nastenka`) –
+           samo o sobě to ještě není uložené upozornění, výzva má zůstat. */
+        const u = window.KB.upozorneni;
+        const ulozeno = !!u && Object.keys(u).some(k => k !== "nastenka");
         if (uid && ulozeno) pisPamet(UPOZ_ULOZENO_KLIC(), "1");
         /* Ukázat až po odpovědi databáze – „nic nepřišlo" ještě neznamená
            „nic tam není". */
@@ -2187,8 +2598,11 @@
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         pripravRezimy();
+        pripravDlazdiceOkno();
         aplikujRezim();
         document.addEventListener("kb-role", aplikujRezim);
+        // nastavení Vlastního režimu (barvy, pořadí) – i změna z jiného zařízení
+        window.KB.on("upozorneni", aplikujRezim);
 
         window.KB.on("gsync", renderKontrola);
         /* Vzkazy svázané s poznámkou ukazují její text a otevřou ji přes
