@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=323">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=323">
+    <link rel="stylesheet" href="assets/css/app.css?v=324">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=324">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -798,12 +798,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=323"></script>
-<script src="assets/js/doc.js?v=323"></script>
-<script src="assets/js/ui.js?v=323"></script>
-<script src="assets/js/nabidka.js?v=323"></script>
-<script src="assets/js/vykazy.js?v=323"></script>
-<script type="module" src="assets/js/store.js?v=323"></script>
+<script src="assets/js/taxonomy.js?v=324"></script>
+<script src="assets/js/doc.js?v=324"></script>
+<script src="assets/js/ui.js?v=324"></script>
+<script src="assets/js/nabidka.js?v=324"></script>
+<script src="assets/js/vykazy.js?v=324"></script>
+<script type="module" src="assets/js/store.js?v=324"></script>
 
 <script>
 (function () {
@@ -2304,6 +2304,11 @@
     const fakturaCastka = (f) => (!f.mena || f.mena === "CZK") ? V.kc(f.castkaCelkem)
         : (Number(f.castkaCelkem) || 0).toLocaleString("cs-CZ",
             { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + f.mena;
+    /* Částka faktury za tečkami – odkrývá ji stejné „zobrazit / skrýt“ jako součty
+       (Michal 4. 11. 2026: skrýt i jednotlivé faktury). Tečky v řádku nepřepínají,
+       řádek je odkaz na fakturu. */
+    const tajnaCastka = (text) => '<span class="tajne">' + esc(text) + '</span>' +
+        '<span class="tajne__zastup" title="Částka je skrytá – zobrazit tlačítkem v hlavičce">•••</span>';
     /** Celkem v Kč pro součty – cizí měna jen s kurzem. */
     const fakturaKc = (f) => (!f.mena || f.mena === "CZK") ? (Number(f.castkaCelkem) || 0)
         : (Number(f.kurz) ? (Number(f.castkaCelkem) || 0) * Number(f.kurz) : 0);
@@ -2341,7 +2346,7 @@
                         '" title="Otevřít fakturu">' +
                         '<span class="kontrola__datum"' + (po ? "" : ' style="color:var(--text)"') + ">" +
                             esc(czDatum(f.splatnost)) + "</span>" +
-                        '<span class="truncate"><b>' + esc(fakturaNazev(f)) + "</b> · " + esc(fakturaCastka(f)) +
+                        '<span class="truncate"><b>' + esc(fakturaNazev(f)) + "</b> · " + tajnaCastka(fakturaCastka(f)) +
                             (po ? ' · <span style="color:var(--danger);font-weight:700">po splatnosti</span>' : "") +
                             (fakturaCeka(f) ? ' · <span class="muted">ke kontrole</span>' : "") + "</span>" +
                     "</a>" +
@@ -2377,8 +2382,8 @@
         pouzijSkrytiFaktur();
     }
 
-    /* Celkové součty za faktury jsou za tečkami, dokud si je manažer neodkryje
-       (stejně jako sazby u výkazů) – částky jednotlivých faktur zůstávají vidět. */
+    /* Součty i částky jednotlivých faktur jsou za tečkami, dokud si je manažer
+       neodkryje (stejně jako sazby u výkazů; jednotlivé od 4. 11. 2026). */
     let penizeFakturVidet = false;
     function pouzijSkrytiFaktur() {
         document.body.classList.toggle("penize-videt", penizeFakturVidet);
@@ -2429,7 +2434,7 @@
                       '<b style="flex:none;min-width:46px">' + esc(d.getDate() + ". " + (d.getMonth() + 1) + ".") + "</b>" +
                       '<span class="grow truncate">' + esc(fakturaNazev(f)) +
                           ' <span class="muted">· ' + esc(zarazeni) + "</span></span>" +
-                      '<span style="flex:none;font-weight:700">' + esc(fakturaCastka(f)) + "</span>" +
+                      '<span style="flex:none;font-weight:700">' + tajnaCastka(fakturaCastka(f)) + "</span>" +
                   "</a>";
               }).join("")
             : (cekaji.length ? "" : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
@@ -2822,15 +2827,17 @@
         const radek = (ch, hotovo) => {
             const kdoOk = hotovo ? (ok[ch.klic] || []).filter(Boolean) : [];
             const doKdy = hotovo ? 0 : odlozenoDo(ch);
-            // datum (u štítku ne), kdo odbavil a dokdy je odloženo = vedlejší údaje
-            const maVedl = !ch.stitek || kdoOk.length || doKdy;
+            /* Vedlejší údaje (jen po najetí ve 3–4 sloupcích): kdo odbavil a dokdy je
+               odloženo. Datum je vidět vždy – schované datum posouvalo řádky při najetí
+               (Michal 4. 11. 2026). */
+            const maVedl = !!(kdoOk.length || doKdy);
             return '<div class="kontrola__radek' + (maVedl ? " dl-radek" : "") +
                     (hotovo || doKdy ? " kontrola__radek--ok" : "") + '"' +
                 ' data-kontrola-radek="' + esc(ch.klic) + '">' +
                 '<a class="kontrola__odkaz" href="' + esc(ch.zapis
                         ? "vykazy.html?zapis=" + encodeURIComponent(ch.zapis) : "vykazy.html") + '"' +
                     ' title="' + esc(ch.zapis ? "Otevřít výkazy toho dne" : "Otevřít výkazy") + '">' +
-                    '<span class="kontrola__datum' + (ch.stitek ? "" : " dl-vedl") + '"' +
+                    '<span class="kontrola__datum"' +
                         (ch.stitek ? ' style="color:var(--accent)"' : "") +
                         (ch.stitek ? "" : ' title="' + esc(czDatum(ch.datum)) + '"') + ">" +
                         esc(ch.stitek || denKratce(ch.datum)) + "</span>" +
