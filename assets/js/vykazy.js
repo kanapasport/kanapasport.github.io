@@ -616,7 +616,10 @@
         const absenceHodin = absence.reduce((n, v) => n + V.hodinyKFondu(v), 0);
         const prace = moje.filter(v => v.absence !== true)
             .reduce((n, v) => n + (Number(v.hodiny) || 0), 0);
-        const fond = V.fondHodin(od, dnes);
+        /* Fond běží jen do včerejška – dnešní den se do fondu přičte až zítra,
+           dnešní zápisy se ale počítají hned. Jinak každé ráno svítilo o 8 h
+           méně, dokud člověk den nezapsal (Michal 9. 11. 2026). */
+        const fond = V.fondHodin(od, V.posunIso(dnes, -1));
         const prescas = (Number(z.prescasPred) || 0) + prace + absenceHodin - fond;
 
         /* Kdo za celé období nemá ani jeden zápis, tomu přesčas spočítat
