@@ -3341,6 +3341,12 @@ function spojVykazy() {
 
 const DAVKA_CASTEK = 60;      // víc než dost na den; zbytek dojede příště
 
+/** Částku založil automat (dopočet z prohlížeče nebo Apps Script), ne člověk. */
+KB.castkaAutomaticka = (c) => {
+    const kdo = String((c && c.updatedBy) || "").trim();
+    return !kdo || kdo === "dopočet" || kdo === "zápis";
+};
+
 KB.doplnCastky = async () => {
     if (!db || !auth || !auth.currentUser) return null;
     if (!KB.sazbyPrisly || vykazyRezim !== "vse") return null;   // jen manažer
@@ -3366,11 +3372,16 @@ KB.doplnCastky = async () => {
             kUlozeni.push({ z: z, sazba: sazbaZCiselniku });
             continue;
         }
-        // zápis se po výpočtu změnil (opravené hodiny, oběd, kilometry)
+        /* Částku, kterou nastavil člověk (manažer ve formuláři nebo ručně),
+           dopočet NIKDY nepřepisuje – je konečná (Michal 9. 11. 2026: „ať to
+           nedělá“). Přepočítat smí jen částku, kterou založil sám („dopočet“)
+           nebo Apps Script („zápis“), a jen když zaměstnanec zápis potom změnil
+           (opravené hodiny, oběd, kilometry). Když ručně nastavená částka
+           neodpovídá hodinám, ukáže to Upozornění pro kontrolu (druh „castka“). */
+        if (!KB.castkaAutomaticka(c)) continue;
         if (Number(z.updatedMs || 0) > Number(c.updatedMs || 0)) {
-            /* Ručně nastavená sazba zůstává. Nula u placeného zápisu (práce,
-               placené školení) ale není historie, nýbrž rozbitý stav – ta se
-               dohledá znovu z číselníku, jinak by se nula přepisovala donekonečna
+            /* Držená sazba zůstává; nula u placeného zápisu (práce, placené
+               školení) není historie, ale rozbitý stav – dohledá se znovu
                (Davidovo školení 7. 10., 9. 11. 2026). */
             const drzena = Number(c.sazba) > 0 ? Number(c.sazba) : sazbaZCiselniku;
             if (!jeAbsence && !drzena) { chybiSazba.add(z.uid); continue; }

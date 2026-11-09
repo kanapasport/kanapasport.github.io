@@ -2686,6 +2686,22 @@
             }
         });
 
+        /* Částka nesedí k hodinám × sazbě: dopočet ručně nastavené částky
+           nepřepisuje (Michal 9. 11. 2026), takže když zaměstnanec potom změní
+           hodiny, musí si toho všimnout manažer tady. Jen tam, kde peníze vidí
+           (sazba > 0 a částka načtená). */
+        (zaznamy || []).forEach(z => {
+            if (!z || !z.uid || !jeIso(z.datum)) return;
+            if (!(Number(z.sazba) > 0) || z.castkaPrace === undefined || z.castkaPrace === null) return;
+            if (z.absence === true && z.absencePlacena !== true) return;
+            const ma = Math.round((Number(z.hodiny) || 0) * Number(z.sazba) * 100) / 100;
+            if (Math.abs(ma - (Number(z.castkaPrace) || 0)) <= 1) return;
+            pridej({ klic: z.uid + "|" + z.datum + "|castka|" + (z.id || ""), druh: "castka", uid: z.uid, datum: z.datum,
+                zapis: z.id || "",
+                duvod: "částka neodpovídá hodinám × sazbě (" + String(Number(z.hodiny) || 0).replace(".", ",") +
+                    " h × sazba) – zápis se změnil po ručním nastavení částky, zkontroluj a ulož znovu" });
+        });
+
         Object.keys(dny).forEach(k => {
             const den = dny[k];
             /* Odkaz míří na konkrétní zápis. U nálezu přes celý den stačí
