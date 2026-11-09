@@ -3340,6 +3340,11 @@ function spojVykazy() {
    Absence má sazbu nula schválně – proplácet se nemá.                    */
 
 const DAVKA_CASTEK = 60;      // víc než dost na den; zbytek dojede příště
+/* Zápis změněný před méně než dvěma minutami se nechává být: ten, kdo ho
+   změnil (formulář manažera, robot, Apps Script), k němu částku právě dopisuje
+   a odběr částek ji ještě nemusel dostat – dopočet by ji předběhl a přepsal
+   starými čísly (RD Vrbice, 9. 11. 2026: přepsáno vteřinu po ruční opravě). */
+const DOPOCET_PRODLEVA_MS = 2 * 60 * 1000;
 
 /** Částku založil automat (dopočet z prohlížeče nebo Apps Script), ne člověk. */
 KB.castkaAutomaticka = (c) => {
@@ -3361,6 +3366,7 @@ KB.doplnCastky = async () => {
            a sazbaZapisu_ v Apps Scriptu. Bez toho ho dopočet zapsal za nulu
            a ve Výplatách chybělo (3. 11. 2026). */
         const jeAbsence = z.absence === true && z.absencePlacena !== true;
+        if (Date.now() - Number(z.updatedMs || 0) < DOPOCET_PRODLEVA_MS) continue;   // čerstvá změna – počká
         /* Platí sazba člověka z Nastavení; když má projekt nastavenou
            vlastní sazbu pro toho člověka, vyhrává ta (Michal 2. 9. 2026). */
         const proj = ((KB.rozpocty || {})[z.zakazka] || {}).sazby || {};
