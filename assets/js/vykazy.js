@@ -529,6 +529,11 @@
 
     /** Náhradní volno – jediná absence, která čerpá přesčas. */
     V.NAHRADNI_VOLNO = "Volno";
+    /* Popisek pro lidi (Michal 9. 11. 2026): uložená hodnota zůstává „Volno“
+       (zápisy, kalendář `volno`, Apps Script), jen se všude ukazuje s dovětkem,
+       ať je jasné, že den volna ubírá z přesčasu. */
+    V.NAZEV_ABSENCE = { "Volno": "Volno (čerpání přesčasu)" };
+    V.nazevAbsence = (x) => V.NAZEV_ABSENCE[String(x == null ? "" : x).trim()] || x;
 
     /* Kdo vůbec fond hodin má. OSVČ a student ne – přesčas ani dovolená
        se jim nikde neukazují a nic se u nich nenastavuje (Michal 26. 10.
@@ -2115,7 +2120,7 @@
         (prazdne ? '<option value="">' + esc(prazdne) + "</option>" : "") +
         (hodnoty || []).map(h => {
             const value = typeof h === "string" ? h : h.value;
-            const label = typeof h === "string" ? h : h.label;
+            const label = typeof h === "string" ? V.nazevAbsence(h) : h.label;
             return '<option value="' + esc(value) + '"' +
                 (value === vybrano ? " selected" : "") + ">" + esc(label) + "</option>";
         }).join("");

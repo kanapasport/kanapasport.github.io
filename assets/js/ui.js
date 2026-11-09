@@ -4025,7 +4025,7 @@
 
     const HO_TYPY = [
         { id: "homeoffice", popis: "HO",       cely: "Home office" },
-        { id: "volno",      popis: "Volno",    cely: "Volno" },
+        { id: "volno",      popis: "Volno",    cely: "Volno (čerpání přesčasu)" },
         /* Neplacené volno (Michal 2. 11. 2026): přesčas ani dovolenou
            nemění. Na tlačítku kratší, celý název je v bublině a ve výkazu. */
         { id: "neplacene",  popis: "Neplacené", cely: "Neplacené volno" },
