@@ -3355,20 +3355,26 @@ KB.doplnCastky = async () => {
            a sazbaZapisu_ v Apps Scriptu. Bez toho ho dopočet zapsal za nulu
            a ve Výplatách chybělo (3. 11. 2026). */
         const jeAbsence = z.absence === true && z.absencePlacena !== true;
+        /* Platí sazba člověka z Nastavení; když má projekt nastavenou
+           vlastní sazbu pro toho člověka, vyhrává ta (Michal 2. 9. 2026). */
+        const proj = ((KB.rozpocty || {})[z.zakazka] || {}).sazby || {};
+        const sazbaZCiselniku = jeAbsence ? 0
+            : (Number(proj[z.uid]) || Number(KB.sazby[z.uid]) || 0);
 
         if (!c) {
-            /* Platí sazba člověka z Nastavení; když má projekt nastavenou
-               vlastní sazbu pro toho člověka, vyhrává ta (Michal 2. 9. 2026). */
-            const proj = ((KB.rozpocty || {})[z.zakazka] || {}).sazby || {};
-            const sazba = jeAbsence ? 0
-                : (Number(proj[z.uid]) || Number(KB.sazby[z.uid]) || 0);
-            if (!jeAbsence && !sazba) { chybiSazba.add(z.uid); continue; }
-            kUlozeni.push({ z: z, sazba: sazba });
+            if (!jeAbsence && !sazbaZCiselniku) { chybiSazba.add(z.uid); continue; }
+            kUlozeni.push({ z: z, sazba: sazbaZCiselniku });
             continue;
         }
         // zápis se po výpočtu změnil (opravené hodiny, oběd, kilometry)
         if (Number(z.updatedMs || 0) > Number(c.updatedMs || 0)) {
-            kUlozeni.push({ z: z, sazba: Number(c.sazba) || 0 });
+            /* Ručně nastavená sazba zůstává. Nula u placeného zápisu (práce,
+               placené školení) ale není historie, nýbrž rozbitý stav – ta se
+               dohledá znovu z číselníku, jinak by se nula přepisovala donekonečna
+               (Davidovo školení 7. 10., 9. 11. 2026). */
+            const drzena = Number(c.sazba) > 0 ? Number(c.sazba) : sazbaZCiselniku;
+            if (!jeAbsence && !drzena) { chybiSazba.add(z.uid); continue; }
+            kUlozeni.push({ z: z, sazba: drzena });
         }
         if (kUlozeni.length >= DAVKA_CASTEK) break;
     }
