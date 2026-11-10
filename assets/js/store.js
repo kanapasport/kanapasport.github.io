@@ -450,6 +450,7 @@ try {
             if (pritomnostOdber) { try { pritomnostOdber(); } catch (e) {} pritomnostOdber = null; }
             if (autaOdber) { try { autaOdber(); } catch (e) {} autaOdber = null; }
             zrusVybaveni();
+            zrusVybaveniPolozky();
             if (tasksOdber) { try { tasksOdber(); } catch (e) {} tasksOdber = null; }
             KB.pritomnost = [];
             if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
@@ -7082,6 +7083,270 @@ KB.smazZnacku = async (planId, zid) => {
     if (authReady) await authReady;
     requireDb();
     await deleteDoc(planZnacka(planId, zid));
+};
+
+/* ------------------------------------------------------ evidence vybavení ---
+   Kdo má jaký notebook, tablet, telefon, dálkoměr, klíč, oblečení, auto,
+   licenci nebo e-mailový účet (Michal 10. 11. 2026, rozhodnuto v Iris).
+   Jedna položka = jeden dokument, id = kód (TAB001, KLI012…). Čte a píše
+   jen manažerská role – kryje to zachytávací pravidlo private/{kolekce}/**
+   → spravce(); zaměstnanci stránka ukáže jen zátaras a nic neodebírá.
+   Hesla k účtům sem NIKDY nepatří – jen název účtu. Nesouvisí s rezervacemi
+   přístrojů (`public/data/vybaveni`, KB.watchVybaveni výš). */
+
+const vybPolozkyCol = () => collection(db, "artifacts", APP_ID, "private", "vybaveni", "polozky");
+const vybPolozkaDoc = (kod) => doc(db, "artifacts", APP_ID, "private", "vybaveni", "polozky", kod);
+const KOD_POLOZKY = /^[A-Z]{2,4}\d{2,4}$/;
+const HISTORIE_POLOZKY_MAX = 60;
+const UCET_TYPY_VYBAVENI = ["", "apple", "android", "ms", "google"];
+
+/* Kategorie: prefix kódu, název a pole navíc (`navic`), která má jen ta
+   kategorie – stránka z nich kreslí formulář, převod z tabulky kontroluje
+   kódy. `typ`: text | number | date | month | select (`moznosti`) | seznam
+   (pole textů, zadává se čárkami). */
+KB.KATEGORIE_VYBAVENI = [
+    { klic: "tablet",   prefix: "TAB", nazev: "Tablety", zarizeni: true },
+    { klic: "telefon",  prefix: "TEL", nazev: "Telefony", zarizeni: true },
+    { klic: "notebook", prefix: "NTB", nazev: "Notebooky", zarizeni: true,
+      navic: [{ klic: "programy", nazev: "Programy", typ: "text" }] },
+    { klic: "pc",       prefix: "PC",  nazev: "Stolní PC", zarizeni: true,
+      navic: [{ klic: "umisteni", nazev: "Kde stojí", typ: "text" }] },
+    { klic: "dalkomer", prefix: "LAS", nazev: "Laserové dálkoměry", zarizeni: true },
+    { klic: "hub",      prefix: "HUB", nazev: "USB-C huby a doky", zarizeni: true },
+    { klic: "monitor",  prefix: "MON", nazev: "Monitory", zarizeni: true },
+    { klic: "mys",      prefix: "MYS", nazev: "Myši a podložky", zarizeni: true },
+    { klic: "ostatni",  prefix: "OST", nazev: "Ostatní", zarizeni: true },
+    { klic: "auto",     prefix: "AUT", nazev: "Auta", zarizeni: true,
+      navic: [{ klic: "spz", nazev: "SPZ", typ: "text" }, { klic: "stk", nazev: "STK do", typ: "date" },
+              { klic: "hasiciPristroj", nazev: "Hasicí přístroj (kód)", typ: "text" }] },
+    { klic: "klic",     prefix: "KLI", nazev: "Klíče",
+      navic: [{ klic: "cislo", nazev: "Číslo klíče / čipu", typ: "text" },
+              { klic: "dvere", nazev: "Od čeho", typ: "text" }] },
+    { klic: "obleceni", prefix: "OBL", nazev: "Pracovní oblečení",
+      navic: [{ klic: "artikl", nazev: "Artikl", typ: "text" }, { klic: "velikost", nazev: "Velikost", typ: "text" },
+              { klic: "ks", nazev: "Kusů", typ: "number" }] },
+    { klic: "hasici",   prefix: "HAS", nazev: "Hasicí přístroje",
+      navic: [{ klic: "typ", nazev: "Typ", typ: "text" }, { klic: "vyrobniCislo", nazev: "Výrobní číslo", typ: "text" },
+              { klic: "umisteni", nazev: "Umístění", typ: "text" }, { klic: "vyroba", nazev: "Výroba", typ: "text" },
+              { klic: "kontrola", nazev: "Kontrola", typ: "month" },
+              { klic: "tlakovaZkouska", nazev: "Tlaková zkouška", typ: "month" }] },
+    { klic: "licence",  prefix: "LIC", nazev: "Programy a licence",
+      navic: [{ klic: "program", nazev: "Program", typ: "text" }, { klic: "ucetNazev", nazev: "Účet / licence", typ: "text" },
+              { klic: "platnost", nazev: "Platnost do", typ: "text" }] },
+    { klic: "email",    prefix: "EML", nazev: "E-mailové účty",
+      navic: [{ klic: "adresa", nazev: "Adresa", typ: "text" },
+              { klic: "druh", nazev: "Druh", typ: "select", moznosti: ["osobni", "alias", "zarizeni", "byvaly"] },
+              { klic: "aliasy", nazev: "Aliasy (hub, kana, admin)", typ: "seznam" },
+              { klic: "cislo", nazev: "Pořadí v tabulce", typ: "text" },
+              { klic: "preposilani", nazev: "Přeposílání na", typ: "text" }] }
+];
+KB.STAVY_VYBAVENI = ["u-cloveka", "volne", "rezerva", "firemni", "vyrazene", "ztracene", "vadne"];
+KB.STAV_TEXT_VYBAVENI = { "u-cloveka": "u člověka", volne: "volné", rezerva: "rezerva", firemni: "firemní",
+    vyrazene: "vyřazené", ztracene: "ztracené", vadne: "vadné" };
+KB.STITKY_VYBAVENI = ["nedoplneno", "bez-uctu", "bez-stitku", "soukromy-ucet", "sim-cizi"];
+
+KB.vybaveniPolozky = [];
+KB.vybaveniPolozkyPrisly = false;
+let vybPolozkyOdber = null;
+
+function zrusVybaveniPolozky() {
+    if (vybPolozkyOdber) { try { vybPolozkyOdber(); } catch (e) {} vybPolozkyOdber = null; }
+    KB.vybaveniPolozky = [];
+    KB.vybaveniPolozkyPrisly = false;
+}
+
+/** Odběr celé evidence – jen manažer; jinému by ho databáze zamítla, tak se ani nezkouší. */
+KB.watchVybaveniPolozky = async () => {
+    if (vybPolozkyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || vybPolozkyOdber) return;
+    if (pockejNaRoli(KB.watchVybaveniPolozky)) return;
+    if (vybPolozkyOdber) return;
+    if (!jsemManazer()) {
+        KB.vybaveniPolozkyPrisly = true;
+        emit("vybaveni-polozky", KB.vybaveniPolozky);
+        return;
+    }
+    vybPolozkyOdber = onSnapshot(vybPolozkyCol(), (snap) => {
+        KB.vybaveniPolozky = [];
+        snap.forEach(d => KB.vybaveniPolozky.push(Object.assign({ id: d.id }, d.data())));
+        KB.vybaveniPolozky.sort((a, b) =>
+            String(a.kod || a.id).localeCompare(String(b.kod || b.id), "cs", { numeric: true }));
+        KB.vybaveniPolozkyPrisly = true;
+        emit("vybaveni-polozky", KB.vybaveniPolozky);
+    }, (err) => {
+        console.error("Chyba čtení evidence vybavení:", err);
+        emit("vybaveni-polozky-chyba", err);
+    });
+};
+
+const textPolozky = (v, n) => String(v == null ? "" : v).trim().slice(0, n || 200);
+const jeIsoDen = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+const dnesIsoDen = () => {
+    const t = new Date();
+    return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+};
+const jmenoPodleUid = (uid) => {
+    const u = (KB.users || []).find(x => x.id === uid);
+    return u ? (((u.first || "") + " " + (u.last || "")).trim() || u.email || "") : "";
+};
+
+/** Kdo nebo co položku drží – text do historie a do řádku. */
+KB.drzitelVybaveni = (p) => (p && (p.uzivatelJmeno || (p.uzivatel ? jmenoPodleUid(p.uzivatel) : "")))
+    || KB.STAV_TEXT_VYBAVENI[(p || {}).stav] || "";
+
+const zaznamHistorieVybaveni = (akce, text) => ({
+    ms: Date.now(), uid: KB.currentUid(), jmeno: window.KB_USER || "", akce: akce, text: textPolozky(text, 200)
+});
+
+/* Dokument se skládá celý znovu (jako saveProjekt) – chybějící pole se
+   vyprázdní, proto stránka posílá všechna. `navic` jen klíče kategorie.
+   Stav se srovná s držitelem: s člověkem nemůže být „volné“ a naopak. */
+function normalizujPolozkuVybaveni(data, stara) {
+    const d = data || {};
+    const kod = textPolozky(d.kod, 8).toUpperCase().replace(/[\s-]+/g, "");
+    if (!KOD_POLOZKY.test(kod)) throw new Error("Kód musí být písmena a číslo, třeba TAB001.");
+    const kat = KB.KATEGORIE_VYBAVENI.find(k => k.klic === d.kategorie);
+    if (!kat) throw new Error("Vyber kategorii.");
+    const nazev = textPolozky(d.nazev, 120);
+    if (!nazev) throw new Error("Název položky nesmí být prázdný.");
+    const uzivatel = textPolozky(d.uzivatel, 64).replace(/\//g, "");
+    const uzivatelJmeno = textPolozky(d.uzivatelJmeno, 80) || (uzivatel ? jmenoPodleUid(uzivatel) : "");
+    let stav = KB.STAVY_VYBAVENI.indexOf(d.stav) !== -1 ? d.stav : (uzivatel || uzivatelJmeno ? "u-cloveka" : "volne");
+    if ((uzivatel || uzivatelJmeno) && (stav === "volne" || stav === "rezerva")) stav = "u-cloveka";
+    if (!uzivatel && !uzivatelJmeno && stav === "u-cloveka") stav = "volne";
+    const navic = {};
+    (kat.navic || []).forEach(p => {
+        const v = d.navic ? d.navic[p.klic] : undefined;
+        if (p.typ === "number") navic[p.klic] = (v === "" || v == null || isNaN(Number(v))) ? null : Number(v);
+        else if (p.typ === "seznam") navic[p.klic] = (Array.isArray(v) ? v : String(v || "").split(/[,;\s]+/))
+            .map(x => textPolozky(x, 40)).filter(Boolean).slice(0, 20);
+        else if (p.typ === "select") navic[p.klic] = (p.moznosti || []).indexOf(v) !== -1 ? v : "";
+        else navic[p.klic] = textPolozky(v, 200);
+    });
+    return {
+        kod: kod, kategorie: kat.klic, nazev: nazev,
+        nick: textPolozky(d.nick, 120),
+        seriove: textPolozky(d.seriove, 80),
+        prislusenstvi: textPolozky(d.prislusenstvi, 200),
+        prislusenstviSn: textPolozky(d.prislusenstviSn, 80),
+        uzivatel: uzivatel, uzivatelJmeno: uzivatelJmeno, stav: stav,
+        // „má od“ dává smysl jen u držitele – ve skladu se vyprázdní
+        od: (uzivatel || uzivatelJmeno) && jeIsoDen(d.od) ? d.od : "",
+        ucet: textPolozky(d.ucet, 120),
+        ucetTyp: UCET_TYPY_VYBAVENI.indexOf(d.ucetTyp) !== -1 ? d.ucetTyp : "",
+        telCislo: textPolozky(d.telCislo, 40),
+        operator: textPolozky(d.operator, 40),
+        dodavatel: textPolozky(d.dodavatel, 60),
+        porizeno: textPolozky(d.porizeno, 40),
+        mac: textPolozky(d.mac, 200),
+        stitky: (Array.isArray(d.stitky) ? d.stitky : []).filter(s => KB.STITKY_VYBAVENI.indexOf(s) !== -1),
+        poznamka: textPolozky(d.poznamka, 1000),
+        navic: navic,
+        historie: Array.isArray(stara && stara.historie) ? stara.historie.slice(-HISTORIE_POLOZKY_MAX) : [],
+        createdMs: (stara && stara.createdMs) || Date.now(),
+        createdUid: (stara && stara.createdUid) || KB.currentUid(),
+        updatedMs: Date.now(),
+        updatedUid: KB.currentUid()
+    };
+}
+
+/**
+ * Založí nebo přepíše položku (id = kód). Transakcí: čte starý dokument,
+ * ať se historie nepřepíše a změna držitele se zapíše jako předání.
+ * `volby.novy` = zakládá se nová – existující kód skončí chybou místo
+ * tichého přepsání. Vrací uloženou položku.
+ */
+KB.ulozPolozkuVybaveni = async (data, volby) => {
+    if (authReady) await authReady;
+    requireDb();
+    const kontrola = normalizujPolozkuVybaveni(data, null);     // chyby zadání ještě před transakcí
+    const ref = vybPolozkaDoc(kontrola.kod);
+    const ulozeno = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        const stara = snap.exists() ? snap.data() : null;
+        if (stara && volby && volby.novy) throw new Error("Kód " + kontrola.kod + " už v evidenci je.");
+        const p = normalizujPolozkuVybaveni(data, stara);
+        if (!stara) {
+            p.historie = [zaznamHistorieVybaveni("zalozeno", KB.drzitelVybaveni(p))];
+        } else {
+            const drzelo = KB.drzitelVybaveni(stara), drzi = KB.drzitelVybaveni(p);
+            /* jméno se porovnává přes držitele (text), ne přes pole – starý
+               dokument s uid bez `uzivatelJmeno` není změna držitele */
+            const zmenaDrzitele = (stara.uzivatel || "") !== p.uzivatel || stara.stav !== p.stav || drzelo !== drzi;
+            const akce = !zmenaDrzitele ? "upraveno"
+                : (p.stav === "vyrazene" || p.stav === "ztracene") ? "vyrazeno"
+                : (p.uzivatel || p.uzivatelJmeno) ? "predano" : "vraceno";
+            p.historie = p.historie.concat([zaznamHistorieVybaveni(akce, akce === "upraveno" ? "" : drzelo + " → " + drzi)])
+                .slice(-HISTORIE_POLOZKY_MAX);
+        }
+        tx.set(ref, p);
+        return p;
+    });
+    KB.zapisAktivitu("vybaveni", "Vybavení " + ulozeno.kod + " (" + ulozeno.nazev + ") uloženo");
+    return ulozeno;
+};
+
+/**
+ * Předání, vrácení do skladu nebo vyřazení – mění jen držitele, stav
+ * a datum, zbytek položky nechá. `zmena` = { uzivatel, uzivatelJmeno,
+ * stav, od, pozn }. Vrací položku po změně.
+ */
+KB.predejPolozkuVybaveni = async (kod, zmena) => {
+    if (authReady) await authReady;
+    requireDb();
+    kod = textPolozky(kod, 8).toUpperCase();
+    if (!KOD_POLOZKY.test(kod)) throw new Error("Neplatný kód položky.");
+    const z = zmena || {};
+    const ref = vybPolozkaDoc(kod);
+    const vysledek = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("Položka " + kod + " v evidenci není.");
+        const stara = snap.data();
+        const uzivatel = textPolozky(z.uzivatel, 64).replace(/\//g, "");
+        const uzivatelJmeno = textPolozky(z.uzivatelJmeno, 80) || (uzivatel ? jmenoPodleUid(uzivatel) : "");
+        let stav = KB.STAVY_VYBAVENI.indexOf(z.stav) !== -1 ? z.stav : (uzivatel || uzivatelJmeno ? "u-cloveka" : "volne");
+        if ((uzivatel || uzivatelJmeno) && (stav === "volne" || stav === "rezerva")) stav = "u-cloveka";
+        if (!uzivatel && !uzivatelJmeno && stav === "u-cloveka") stav = "volne";
+        const p = {
+            uzivatel: uzivatel, uzivatelJmeno: uzivatelJmeno, stav: stav,
+            od: (uzivatel || uzivatelJmeno) ? (jeIsoDen(z.od) ? z.od : dnesIsoDen()) : "",
+            updatedMs: Date.now(), updatedUid: KB.currentUid()
+        };
+        const akce = (stav === "vyrazene" || stav === "ztracene") ? "vyrazeno"
+            : (uzivatel || uzivatelJmeno) ? "predano" : "vraceno";
+        const text = KB.drzitelVybaveni(stara) + " → " + KB.drzitelVybaveni(Object.assign({}, stara, p))
+            + (z.pozn ? " (" + textPolozky(z.pozn, 120) + ")" : "");
+        p.historie = (Array.isArray(stara.historie) ? stara.historie : [])
+            .concat([zaznamHistorieVybaveni(akce, text)]).slice(-HISTORIE_POLOZKY_MAX);
+        tx.update(ref, p);
+        return Object.assign({ id: kod }, stara, p);
+    });
+    KB.zapisAktivitu("vybaveni", "Vybavení " + kod + ": " + (vysledek.historie[vysledek.historie.length - 1] || {}).text);
+    return vysledek;
+};
+
+/** Smazání z evidence – jen pro omyly; vyřazená věc má zůstat se stavem „vyřazené“. */
+KB.smazPolozkuVybaveni = async (kod) => {
+    if (authReady) await authReady;
+    requireDb();
+    kod = textPolozky(kod, 8).toUpperCase();
+    if (!KOD_POLOZKY.test(kod)) throw new Error("Neplatný kód položky.");
+    await deleteDoc(vybPolozkaDoc(kod));
+    KB.zapisAktivitu("vybaveni", "Vybavení " + kod + " smazáno z evidence");
+};
+
+/** Další volný kód v prefixu (TAB → TAB018). Šířka čísla podle stávajících kódů, nejméně 3 místa. */
+KB.dalsiKodVybaveni = (prefix) => {
+    prefix = String(prefix || "").toUpperCase();
+    let max = 0, sirka = 3;
+    (KB.vybaveniPolozky || []).forEach(p => {
+        const m = /^([A-Z]+)(\d+)$/.exec(String(p.kod || p.id || ""));
+        if (!m || m[1] !== prefix) return;
+        max = Math.max(max, Number(m[2]));
+        sirka = Math.max(sirka, m[2].length);
+    });
+    return prefix + String(max + 1).padStart(sirka, "0");
 };
 
 emit("boot");

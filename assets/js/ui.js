@@ -2109,7 +2109,9 @@
         stativ: cesta("M9 6a3 3 0 106 0 3 3 0 00-6 0zM12 9v4m0 0l-6 8m6-8l6 8m-6-8v8"),
         // bankovka (Výplaty) a list s grafem (Výpis pro mzdovou)
         vyplata: cesta("M3 7h18v10H3V7zm9 7a2 2 0 100-4 2 2 0 000 4zM3 10a3 3 0 003-3m12 0a3 3 0 003 3M3 14a3 3 0 013 3m12 0a3 3 0 013-3"),
-        vypis: cesta("M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z")
+        vypis: cesta("M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"),
+        // podložka se seznamem a fajfkou (Evidence vybavení)
+        inventar: cesta("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4")
     };
     const ikonaPasu = (nazev, trida) => '<svg' + (trida ? ' class="' + trida + '"' : "") +
         ' fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">' +
@@ -2133,7 +2135,10 @@
             { nazev: "Porady", ikona: "bublina", href: "porady.html" },
             { nazev: "Správa aut", ikona: "car", attr: "data-auta-otevri" },
             { nazev: "Vybavení", ikona: "stativ", attr: "data-vybaveni-otevri",
-              popis: "Rezervace přístrojů – kdo má který přístroj a kdy" }
+              popis: "Rezervace přístrojů – kdo má který přístroj a kdy" },
+            // evidence majetku firmy – zatím jen kancelář (Michal 10. 11. 2026)
+            { nazev: "Evidence vybavení", ikona: "inventar", href: "vybaveni.html", need: "vykaz.view",
+              popis: "Kdo má jaký notebook, tablet, telefon, dálkoměr, klíč nebo auto – vidí jen kancelář" }
         ] },
         { id: "zakazky", nazev: "Zakázky", ikona: "kufr", polozky: [
             { nazev: "Seznam zakázek", ikona: "building", href: "zakazky.html" },

@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Evidence vybavení – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=330">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=330">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* =====================================================================
+           EVIDENCE VYBAVENÍ (Michal 10. 11. 2026, rozhodnuto v Iris)
+           Kdo má jaký notebook, tablet, telefon, dálkoměr, klíč, oblečení,
+           auto, licenci nebo e-mailový účet. Jedna evidence položek po
+           kategoriích, karta na člověka, sklad (volné kusy) a seznam
+           „dodělat“. Vidí jen manažerské role (vykaz.view) – ostatním
+           stránka ukáže zátaras. Jen tokeny z app.css.
+           ===================================================================== */
+        main .chip { border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-1); background: var(--surface); }
+        main .chip--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        main .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        main .chip .evpocet { opacity: .7; font-weight: 700; margin-left: 4px; }
+        /* hlavička: popis má mít aspoň 320 px, jinak se na telefonu lámal po slovech a chipy mu braly šířku */
+        .evhlava__text { flex: 1 1 320px; min-width: 0; }
+
+        /* ------------------------------------------------------- filtr */
+        .evf { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; }
+        .evf__radek { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+        .evf__nadpis { min-width: 70px; margin: 0; font-size: var(--fs-1); font-weight: 800; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); }
+        .evf .field { width: auto; min-height: 34px; padding: 4px 10px; font-size: var(--fs-2); }
+        .evf__hledat { flex: 1 1 220px; min-width: 200px; }
+
+        /* -------------------------------------------- karta kategorie */
+        .evk { padding: 0; overflow: hidden; }
+        .evk__hlava { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px;
+            border-bottom: 1px solid var(--line-soft); background: var(--bg-soft); }
+        .evk__hlava b { font-size: var(--fs-3); font-weight: 900; }
+        .evk__pocet { color: var(--muted); font-size: var(--fs-1); font-weight: 800; }
+        .evk__obal { overflow-x: auto; }
+        table.evt { width: 100%; border-collapse: collapse; font-size: var(--fs-2); }
+        .evt th, .evt td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: middle; }
+        .evt th { font-size: var(--fs-1); font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
+            color: var(--muted); white-space: nowrap; }
+        .evt tr:last-child td { border-bottom: 0; }
+        .evt tr.evr { cursor: pointer; }
+        .evt tr.evr:hover > td { background: var(--bg-soft); }
+        .evt tr.evr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        .evt tr.evr.je-v-nabidce > td { background: var(--accent-tint); }
+        .evkod { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 800; white-space: nowrap; }
+        .evnazev { min-width: 0; }
+        .evnazev b { font-weight: 800; overflow-wrap: anywhere; }   /* dlouhé e-mailové adresy na telefonu */
+        .evnazev span { display: block; color: var(--muted); font-size: var(--fs-1); line-height: 1.4; }
+        .evsn { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-1);
+            color: var(--text-soft); white-space: nowrap; }
+        .evod { display: block; color: var(--muted); font-size: var(--fs-1); }
+        .evakce { width: 36px; text-align: right; white-space: nowrap; }
+
+        /* ---------------------------------------------------- štítky */
+        .evst { display: inline-block; max-width: 100%; padding: 0 7px; border-radius: var(--r-pill);
+            border: 1px solid var(--line); background: var(--bg-soft); color: var(--text-soft); font-size: var(--fs-1);
+            font-weight: 800; line-height: 1.65; white-space: nowrap; vertical-align: middle; }
+        .evst--u-cloveka { background: var(--ok-tint); color: var(--ok); border-color: transparent; }
+        .evst--volne { background: var(--surface); color: var(--accent); border-color: var(--accent-lt); }
+        .evst--vyrazene, .evst--ztracene { background: var(--danger-tint); color: var(--danger); border-color: var(--danger); }
+        .evst--vadne, .evst--stitek { background: var(--warn-tint); color: var(--warn); border-color: var(--warn); }
+        .evst--jmeno { background: var(--surface); color: var(--text); border-style: dashed; }
+        .evstitky { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: middle; }
+
+        /* ------------------------------------------------------ lidé */
+        .evlide { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+        .evl { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+        .evl__hlava { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+        .evl__jmeno { font-size: var(--fs-3); font-weight: 900; }
+        .evl__pocty { display: flex; flex-wrap: wrap; gap: 4px; }
+        .evl__skupina b { display: block; font-size: var(--fs-1); font-weight: 900; letter-spacing: .05em;
+            text-transform: uppercase; color: var(--muted); margin: 6px 0 2px; }
+        .evl__radek { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--r-sm);
+            cursor: pointer; font-size: var(--fs-2); }
+        .evl__radek:hover { background: var(--bg-soft); }
+        .evl__radek:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        .evl__radek .evkod { font-size: var(--fs-1); color: var(--muted); }
+        .evl__radek .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .evprazdno { padding: 30px 20px; text-align: center; color: var(--muted); line-height: 1.6; }
+
+        /* ------------------------------------------------------ okno */
+        .evokno { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center;
+            padding: 18px; background: rgba(11, 13, 16, .55); }
+        .evokno[hidden] { display: none; }
+        .evokno__deska { width: 100%; max-width: 880px; max-height: 92vh; overflow-y: auto; padding: 20px;
+            display: flex; flex-direction: column; gap: 12px; }
+        .evokno__deska--uzka { max-width: 480px; }
+        .evokno__nadpis { font-size: var(--fs-4); font-weight: 900; }
+        .evokno__mrizka { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .evokno__pole { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .evokno__pole .label { font-size: var(--fs-1); font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+            color: var(--muted); }
+        .evokno__pole .field { width: 100%; min-height: 36px; }
+        .evokno__pole textarea.field { min-height: 64px; resize: vertical; }
+        .evokno__pole--cely { grid-column: 1 / -1; }
+        .evokno__oddil { grid-column: 1 / -1; margin: 6px 0 -4px; font-size: var(--fs-1); font-weight: 900;
+            letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+        .evokno__chyba { margin: 0; color: var(--danger); font-size: var(--fs-2); font-weight: 700; }
+        .evstitky-vyber { display: flex; flex-wrap: wrap; gap: 6px; }
+        .evstitky-vyber label { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-1); font-weight: 700;
+            padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); cursor: pointer; background: var(--surface); }
+        .evstitky-vyber label.je-zap { background: var(--accent-tint); border-color: var(--accent); color: var(--accent); }
+        .evstitky-vyber input { margin: 0; }
+        .evhist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px;
+            font-size: var(--fs-1); color: var(--text-soft); max-height: 150px; overflow: auto; }
+        .evhist li b { font-weight: 800; color: var(--text); }
+
+        /* ================================================== telefon */
+        @media (max-width: 760px) {
+            .evokno__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .evt .evsn { display: none; }
+            .evf__nadpis { min-width: 0; }
+        }
+        @media (max-width: 520px) {
+            .evokno__mrizka { grid-template-columns: minmax(0, 1fr); }
+            .evt .evstitky-td { display: none; }
+            .evlide { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:20px;padding-bottom:60px;display:flex;flex-direction:column;gap:14px">
+
+    <div id="stop" class="card center" style="padding:44px 22px" hidden>
+        <b style="font-size:var(--fs-4)">Evidenci vybavení vidí jen kancelář.</b>
+        <p class="small muted" style="margin-top:8px;line-height:1.6">
+            Kdo má jaký notebook, tablet, telefon, klíč nebo auto, vedou manažeři a asistentky.
+            Svou kartu uvidíš, až ji kancelář zpřístupní.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:14px">
+
+        <div class="spread">
+            <div class="evhlava__text">
+                <h2 class="nadpis-stranky" style="margin:0">Vybavení firmy</h2>
+                <p class="small muted" style="margin:3px 0 0;line-height:1.6">
+                    Kdo má jaký notebook, tablet, telefon, dálkoměr, klíč, oblečení, auto, licenci nebo e-mailový účet.
+                    Klik na řádek položku otevře, pravé tlačítko nebo ⋯ nabídne předat, vrátit do skladu a vyřadit.
+                </p>
+            </div>
+            <div class="row row--wrap" style="gap:8px">
+                <span id="fPohled" class="row row--wrap" style="gap:6px" role="group" aria-label="Pohled"></span>
+                <button type="button" id="btnNova" class="btn btn--primary btn--sm">+ Položka</button>
+            </div>
+        </div>
+
+        <div class="card evf" role="search" aria-label="Filtr evidence">
+            <div class="evf__radek">
+                <label class="evf__nadpis" for="fHledat">Hledat</label>
+                <input type="search" id="fHledat" class="field evf__hledat" placeholder="kód, název, sériové číslo, člověk…" autocomplete="off">
+                <label class="evf__nadpis" for="fClovek">Člověk</label>
+                <select id="fClovek" class="field"></select>
+                <label class="evf__nadpis" for="fStav">Stav</label>
+                <select id="fStav" class="field"></select>
+            </div>
+            <div class="evf__radek">
+                <span class="evf__nadpis">Kategorie</span>
+                <span id="fKat" class="row row--wrap" style="gap:6px" role="group" aria-label="Kategorie"></span>
+            </div>
+        </div>
+
+        <div id="vypis" style="display:flex;flex-direction:column;gap:14px"></div>
+    </div>
+</main>
+
+<!-- ================================================== OKNO POLOŽKY -->
+<div id="okno" class="evokno" hidden>
+    <div class="card evokno__deska" role="dialog" aria-modal="true" aria-labelledby="oNadpis">
+        <div class="spread">
+            <b id="oNadpis" class="evokno__nadpis">Položka</b>
+            <span id="oKategorieText" class="tiny muted"></span>
+        </div>
+        <div id="oTelo" class="evokno__mrizka"></div>
+        <div id="oHistorieObal" hidden>
+            <span class="label" style="font-size:var(--fs-1);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Historie</span>
+            <ul id="oHistorie" class="evhist"></ul>
+        </div>
+        <p id="oChyba" class="evokno__chyba" role="alert" hidden></p>
+        <div class="row row--wrap" style="gap:10px;justify-content:space-between">
+            <button type="button" id="oSmazat" class="btn btn--ghost btn--sm" style="color:var(--danger)" hidden>Smazat z evidence</button>
+            <span class="row row--wrap" style="gap:10px;margin-left:auto">
+                <button type="button" id="oZrusit" class="btn btn--ghost">Zrušit</button>
+                <button type="button" id="oUlozit" class="btn btn--primary">Uložit</button>
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================== OKNO PŘEDÁNÍ -->
+<div id="predat" class="evokno" hidden>
+    <div class="card evokno__deska evokno__deska--uzka" role="dialog" aria-modal="true" aria-labelledby="dNadpis">
+        <b id="dNadpis" class="evokno__nadpis">Předat</b>
+        <p id="dInfo" class="small muted" style="margin:0;line-height:1.6"></p>
+        <label class="evokno__pole"><span class="label">Komu / kam</span>
+            <select id="dKomu" class="field"></select></label>
+        <label class="evokno__pole" id="dJmenoPole" hidden><span class="label">Jméno (bez účtu webu)</span>
+            <input type="text" id="dJmeno" class="field" maxlength="80" autocomplete="off"></label>
+        <div class="evokno__mrizka" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+            <label class="evokno__pole"><span class="label">Od</span>
+                <input type="date" id="dOd" class="field"></label>
+            <label class="evokno__pole"><span class="label">Poznámka</span>
+                <input type="text" id="dPozn" class="field" maxlength="120" autocomplete="off"></label>
+        </div>
+        <p id="dChyba" class="evokno__chyba" role="alert" hidden></p>
+        <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+            <button type="button" id="dZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="dUlozit" class="btn btn--primary">Předat</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=330"></script>
+<script src="assets/js/ui.js?v=330"></script>
+<script src="assets/js/nabidka.js?v=330"></script>
+<script type="module" src="assets/js/store.js?v=330"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+
+    const POHLEDY = [
+        { klic: "polozky", nazev: "Položky" },
+        { klic: "lide", nazev: "Lidé" },
+        { klic: "sklad", nazev: "Sklad" },
+        { klic: "dodelat", nazev: "Dodělat" }
+    ];
+    const POHLED_KLIC = "kb-vybaveni-pohled";
+    const SKLAD_STAVY = ["volne", "rezerva", "firemni"];
+    const STITEK_TEXT = { nedoplneno: "nedoplněno", "bez-uctu": "bez účtu", "bez-stitku": "bez štítku",
+        "soukromy-ucet": "soukromý účet", "sim-cizi": "cizí SIM" };
+    const UCET_TYP_TEXT = { "": "—", apple: "Apple ID", android: "Google / Android", ms: "Microsoft", google: "Google" };
+    const DRUH_EMAIL_TEXT = { osobni: "osobní", alias: "skupinový alias", zarizeni: "účet zařízení", byvaly: "bývalý" };
+    const JINE = "__jine";          // držitel bez účtu webu – jméno se píše ručně
+    const NIKDO = "__nikdo";
+
+    let pohled = "polozky";
+    try { const p = localStorage.getItem(POHLED_KLIC); if (POHLEDY.some(x => x.klic === p)) pohled = p; } catch (err) { /* soukromý režim */ }
+    const filtr = { hledat: "", kat: "", clovek: "", stav: "" };
+    let okno = null;                // { kod, novy }
+    let predavam = null;            // { kod }
+    let pracuji = false;
+    let sledovani = false;
+    let kodRucne = false;           // v okně nové položky člověk kód přepsal – nepřepisovat návrhem
+    let planovano = false;
+
+    /* Překreslení jen tam, kde se HTML opravdu změnilo (otisk je zprvu null). */
+    const otisky = new Map();
+    function nastav(el, html) {
+        if (!el || otisky.get(el) === html) return;
+        otisky.set(el, html);
+        el.innerHTML = html;
+    }
+
+    const smim = () => window.KBUI.can("vykaz.view");
+    const KAT = () => (window.KB && window.KB.KATEGORIE_VYBAVENI) || [];
+    const kat = (klic) => KAT().find(k => k.klic === klic) || null;
+    const STAV_TEXT = () => (window.KB && window.KB.STAV_TEXT_VYBAVENI) || {};
+    const STAVY = () => (window.KB && window.KB.STAVY_VYBAVENI) || [];
+    const STITKY = () => (window.KB && window.KB.STITKY_VYBAVENI) || [];
+    const polozky = () => (window.KB && window.KB.vybaveniPolozky) || [];
+    const prisly = () => !!(window.KB && window.KB.vybaveniPolozkyPrisly);
+    const lide = () => ((window.KB && window.KB.users) || [])
+        .filter(u => u.active !== false && !window.KBUI.jeSluzebni(u));
+    const jmeno = (u) => (((u.first || "") + " " + (u.last || "")).trim()) || u.email || "";
+    const jmenoUid = (uid) => { const u = ((window.KB && window.KB.users) || []).find(x => x.id === uid); return u ? jmeno(u) : ""; };
+    const drzitel = (p) => p.uzivatelJmeno || jmenoUid(p.uzivatel) || "";
+    const maCloveka = (p) => !!(p.uzivatel || p.uzivatelJmeno);
+    const bezDiakritiky = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const dnesIso = () => {
+        const t = new Date();
+        return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+    };
+    const datumCz = (iso) => /^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))
+        ? Number(iso.slice(8, 10)) + ". " + Number(iso.slice(5, 7)) + ". " + iso.slice(0, 4) : "";
+    const kdyMs = (ms) => { const d = new Date(Number(ms) || 0); return Number(ms)
+        ? d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() + " " + d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0") : ""; };
+    const pocet = (n, tvary) => n + " " + (n === 1 ? tvary[0] : (n >= 2 && n <= 4 ? tvary[1] : tvary[2]));
+
+    /* ------------------------------------------------------------- filtr */
+
+    function vyhovuje(p) {
+        if (filtr.kat && p.kategorie !== filtr.kat) return false;
+        if (filtr.stav && p.stav !== filtr.stav) return false;
+        if (filtr.clovek) {
+            if (filtr.clovek === NIKDO) { if (maCloveka(p)) return false; }
+            else if (filtr.clovek.indexOf("j:") === 0) { if (drzitel(p) !== filtr.clovek.slice(2)) return false; }
+            else if (p.uzivatel !== filtr.clovek) return false;
+        }
+        if (filtr.hledat) {
+            const h = bezDiakritiky(filtr.hledat);
+            const text = bezDiakritiky([p.kod, p.nazev, p.nick, p.seriove, drzitel(p), p.ucet, p.telCislo, p.poznamka,
+                p.mac, p.prislusenstvi].concat(Object.values(p.navic || {}).map(v => Array.isArray(v) ? v.join(" ") : v)).join(" "));
+            if (text.indexOf(h) === -1) return false;
+        }
+        return true;
+    }
+    const vyfiltrovane = () => polozky().filter(vyhovuje);
+
+    /* Jména bez účtu webu, která se v evidenci vyskytují (lidé z tabulky, co účet nemají) */
+    function jmenaBezUctu() {
+        const s = new Set();
+        polozky().forEach(p => { if (!p.uzivatel && p.uzivatelJmeno) s.add(p.uzivatelJmeno); });
+        return Array.from(s).sort((a, b) => a.localeCompare(b, "cs"));
+    }
+
+    function paintFiltr() {
+        const vse = polozky();
+        nastav($("fPohled"), POHLEDY.map(x => '<button type="button" class="chip' + (pohled === x.klic ? " chip--active" : "") +
+            '" data-pohled="' + esc(x.klic) + '">' + esc(x.nazev) + "</button>").join(""));
+        const pocty = {};
+        vse.forEach(p => { pocty[p.kategorie] = (pocty[p.kategorie] || 0) + 1; });
+        nastav($("fKat"), '<button type="button" class="chip' + (!filtr.kat ? " chip--active" : "") + '" data-kat="">Vše' +
+            '<span class="evpocet">' + vse.length + "</span></button>" +
+            KAT().filter(k => pocty[k.klic] || filtr.kat === k.klic).map(k => '<button type="button" class="chip' +
+                (filtr.kat === k.klic ? " chip--active" : "") + '" data-kat="' + esc(k.klic) + '">' + esc(k.nazev) +
+                '<span class="evpocet">' + (pocty[k.klic] || 0) + "</span></button>").join(""));
+
+        const lidi = lide().slice().sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+        const clovekHtml = '<option value="">— všichni —</option><option value="' + NIKDO + '">— bez člověka (sklad) —</option>' +
+            lidi.map(u => '<option value="' + esc(u.id) + '">' + esc(jmeno(u)) + "</option>").join("") +
+            jmenaBezUctu().map(j => '<option value="j:' + esc(j) + '">' + esc(j) + " (bez účtu webu)</option>").join("");
+        if (otisky.get($("fClovek")) !== clovekHtml) {
+            otisky.set($("fClovek"), clovekHtml);
+            $("fClovek").innerHTML = clovekHtml;
+            $("fClovek").value = filtr.clovek;
+            if ($("fClovek").value !== filtr.clovek) { filtr.clovek = ""; $("fClovek").value = ""; }
+        }
+        const stavHtml = '<option value="">— všechny —</option>' + STAVY().map(s => '<option value="' + esc(s) + '">' +
+            esc(STAV_TEXT()[s] || s) + "</option>").join("");
+        if (otisky.get($("fStav")) !== stavHtml) {
+            otisky.set($("fStav"), stavHtml);
+            $("fStav").innerHTML = stavHtml;
+            $("fStav").value = filtr.stav;
+        }
+    }
+
+    /* ------------------------------------------------------------ řádky */
+
+    /** Druhý řádek pod názvem – co je pro kategorii podstatné. */
+    function podtitul(p) {
+        const n = p.navic || {};
+        const casti = [];
+        if (p.nick && p.nick !== p.nazev) casti.push(p.nick);
+        switch (p.kategorie) {
+            case "klic": if (n.cislo) casti.push("č. " + n.cislo); if (n.dvere) casti.push(n.dvere); break;
+            case "obleceni": casti.push([n.artikl, n.velikost].filter(Boolean).join(" ") + (n.ks != null && n.ks !== "" ? " × " + n.ks : "")); break;
+            case "hasici": if (n.typ) casti.push(n.typ); if (n.umisteni) casti.push(n.umisteni); if (n.kontrola) casti.push("kontrola " + n.kontrola); break;
+            case "auto": if (n.spz) casti.push(n.spz); if (n.stk) casti.push("STK " + datumCz(n.stk)); break;
+            case "licence": if (n.program) casti.push(n.program); if (n.ucetNazev) casti.push(n.ucetNazev); break;
+            case "email": if (n.druh) casti.push(DRUH_EMAIL_TEXT[n.druh] || n.druh);
+                if (Array.isArray(n.aliasy) && n.aliasy.length) casti.push(n.aliasy.join(" + ")); break;
+            default:
+                if (p.prislusenstvi) casti.push(p.prislusenstvi);
+                if (p.ucet) casti.push((UCET_TYP_TEXT[p.ucetTyp] && p.ucetTyp ? UCET_TYP_TEXT[p.ucetTyp] + " " : "") + p.ucet);
+                if (p.telCislo) casti.push(p.telCislo + (p.operator ? " (" + p.operator + ")" : ""));
+        }
+        return casti.filter(Boolean).join(" · ");
+    }
+
+    function stavHtml(p) {
+        if (maCloveka(p) && ["vyrazene", "ztracene", "vadne"].indexOf(p.stav) === -1) {
+            return '<span class="evst evst--u-cloveka' + (p.uzivatel ? "" : " evst--jmeno") + '" title="' +
+                (p.uzivatel ? "" : "bez účtu webu") + '">' + esc(drzitel(p)) + "</span>" +
+                (p.od ? '<span class="evod">od ' + esc(datumCz(p.od)) + "</span>" : "");
+        }
+        return '<span class="evst evst--' + esc(p.stav) + '">' + esc(STAV_TEXT()[p.stav] || p.stav) + "</span>" +
+            (maCloveka(p) ? '<span class="evod">' + esc(drzitel(p)) + "</span>" : "");
+    }
+
+    const stitkyHtml = (p) => '<span class="evstitky">' + (p.stitky || []).map(s =>
+        '<span class="evst evst--stitek">' + esc(STITEK_TEXT[s] || s) + "</span>").join("") + "</span>";
+
+    function radekHtml(p) {
+        const pod = podtitul(p);
+        return '<tr class="evr" data-kod="' + esc(p.kod || p.id) + '" tabindex="0">' +
+            '<td class="evkod">' + esc(p.kod || p.id) + "</td>" +
+            '<td class="evnazev"><b>' + esc(p.nazev) + "</b>" + (pod ? "<span>" + esc(pod) + "</span>" : "") + "</td>" +
+            "<td>" + stavHtml(p) + "</td>" +
+            '<td class="evsn">' + esc(p.seriove || "") + "</td>" +
+            '<td class="evstitky-td">' + stitkyHtml(p) + "</td>" +
+            '<td class="evakce">' + window.KBNabidka.tlacitko("Další akce: " + (p.kod || "")) + "</td>" +
+        "</tr>";
+    }
+
+    function kartaKategorie(k, seznam) {
+        const uLidi = seznam.filter(maCloveka).length;
+        const volne = seznam.filter(p => SKLAD_STAVY.indexOf(p.stav) !== -1).length;
+        return '<section class="card evk" aria-label="' + esc(k.nazev) + '">' +
+            '<div class="evk__hlava"><b>' + esc(k.nazev) + '</b><span class="evk__pocet">' +
+                esc(pocet(seznam.length, ["položka", "položky", "položek"])) +
+                (uLidi ? " · u lidí " + uLidi : "") + (volne ? " · ve skladu " + volne : "") + "</span></div>" +
+            '<div class="evk__obal"><table class="evt"><thead><tr><th>Kód</th><th>Položka</th><th>Kdo / stav</th>' +
+                '<th class="evsn">Sériové číslo</th><th class="evstitky-td">Štítky</th><th></th></tr></thead><tbody>' +
+                seznam.map(radekHtml).join("") + "</tbody></table></div></section>";
+    }
+
+    function poKategoriich(seznam) {
+        return KAT().map(k => {
+            const s = seznam.filter(p => p.kategorie === k.klic);
+            return s.length ? kartaKategorie(k, s) : "";
+        }).join("") + (seznam.some(p => !kat(p.kategorie))
+            ? kartaKategorie({ nazev: "Bez kategorie" }, seznam.filter(p => !kat(p.kategorie))) : "");
+    }
+
+    /* ----------------------------------------------------------- pohledy */
+
+    function prazdno(text) {
+        return '<div class="card evprazdno">' + text + "</div>";
+    }
+
+    function paintPolozky() {
+        const seznam = vyfiltrovane();
+        if (!prisly()) return prazdno("Načítám…");
+        if (!polozky().length) return prazdno("Evidence je zatím prázdná. Přidej první položku tlačítkem <b>+ Položka</b>, " +
+            "nebo nahraj převod z Google tabulky (nástroj <code>import_vybaveni.py</code> na pracovním PC).");
+        if (!seznam.length) return prazdno("Filtru nic neodpovídá.");
+        return poKategoriich(seznam);
+    }
+
+    function paintSklad() {
+        if (!prisly()) return prazdno("Načítám…");
+        const seznam = vyfiltrovane().filter(p => SKLAD_STAVY.indexOf(p.stav) !== -1 && !maCloveka(p));
+        if (!seznam.length) return prazdno("Ve skladu nic volného není" + (filtr.kat || filtr.hledat ? " (podle filtru)" : "") + ".");
+        return poKategoriich(seznam);
+    }
+
+    /** Co položce chybí – seznam „dodělat“ (štítek nedoplněno nebo prázdné základní údaje). */
+    function coChybi(p) {
+        const k = kat(p.kategorie) || {};
+        const chybi = [];
+        if ((p.stitky || []).indexOf("nedoplneno") !== -1) chybi.push("nedoplněno z tabulky");
+        if ((p.stitky || []).indexOf("bez-uctu") !== -1) chybi.push("účet zařízení");
+        if ((p.stitky || []).indexOf("bez-stitku") !== -1) chybi.push("štítek s kódem");
+        if (k.zarizeni && p.kategorie !== "auto" && !p.seriove) chybi.push("sériové číslo");
+        if (p.kategorie === "auto" && !(p.navic || {}).spz) chybi.push("SPZ");
+        if (p.kategorie === "hasici" && !(p.navic || {}).vyrobniCislo) chybi.push("výrobní číslo");
+        if (p.uzivatelJmeno && !p.uzivatel) chybi.push("člověk bez účtu webu (" + p.uzivatelJmeno + ")");
+        return chybi;
+    }
+
+    function paintDodelat() {
+        if (!prisly()) return prazdno("Načítám…");
+        const seznam = vyfiltrovane().map(p => ({ p: p, chybi: coChybi(p) })).filter(x => x.chybi.length);
+        if (!seznam.length) return prazdno("Nic k dodělání – všechno má kód, sériové číslo i člověka s účtem.");
+        return '<section class="card evk" aria-label="Dodělat"><div class="evk__hlava"><b>Dodělat</b>' +
+            '<span class="evk__pocet">' + esc(pocet(seznam.length, ["položka", "položky", "položek"])) + "</span></div>" +
+            '<div class="evk__obal"><table class="evt"><thead><tr><th>Kód</th><th>Položka</th><th>Kdo / stav</th>' +
+                "<th>Co chybí</th><th></th></tr></thead><tbody>" +
+            seznam.map(x => '<tr class="evr" data-kod="' + esc(x.p.kod || x.p.id) + '" tabindex="0">' +
+                '<td class="evkod">' + esc(x.p.kod || x.p.id) + "</td>" +
+                '<td class="evnazev"><b>' + esc(x.p.nazev) + "</b><span>" + esc((kat(x.p.kategorie) || {}).nazev || "") + "</span></td>" +
+                "<td>" + stavHtml(x.p) + "</td>" +
+                "<td>" + x.chybi.map(c => '<span class="evst evst--stitek">' + esc(c) + "</span>").join(" ") + "</td>" +
+                '<td class="evakce">' + window.KBNabidka.tlacitko("Další akce: " + (x.p.kod || "")) + "</td></tr>").join("") +
+            "</tbody></table></div></section>";
+    }
+
+    function paintLide() {
+        if (!prisly()) return prazdno("Načítám…");
+        const seznam = vyfiltrovane().filter(maCloveka);
+        /* skupiny: podle uid, jinak podle jména bez účtu */
+        const skupiny = new Map();
+        seznam.forEach(p => {
+            const klic = p.uzivatel ? p.uzivatel : "j:" + p.uzivatelJmeno;
+            if (!skupiny.has(klic)) skupiny.set(klic, { klic: klic, jmeno: drzitel(p), uid: p.uzivatel, polozky: [] });
+            skupiny.get(klic).polozky.push(p);
+        });
+        const karty = Array.from(skupiny.values()).sort((a, b) => {
+            const pa = a.jmeno.split(" ").pop(), pb = b.jmeno.split(" ").pop();
+            return pa.localeCompare(pb, "cs") || a.jmeno.localeCompare(b.jmeno, "cs");
+        });
+        const bezVybaveni = lide().filter(u => !skupiny.has(u.id)).map(jmeno).sort((a, b) => a.localeCompare(b, "cs"));
+        if (!karty.length) return prazdno("Nikdo zatím nic nemá" + (filtr.kat || filtr.hledat || filtr.stav ? " (podle filtru)" : "") + ".");
+        return '<div class="evlide">' + karty.map(k => {
+            const pocty = {};
+            k.polozky.forEach(p => { pocty[p.kategorie] = (pocty[p.kategorie] || 0) + 1; });
+            return '<section class="card evl" aria-label="' + esc(k.jmeno) + '">' +
+                '<div class="evl__hlava"><span class="evl__jmeno">' + esc(k.jmeno) + "</span>" +
+                    (k.uid ? "" : '<span class="evst evst--jmeno" title="Jméno z tabulky – účet webu nenalezen">bez účtu webu</span>') +
+                "</div>" +
+                '<div class="evl__pocty">' + KAT().filter(x => pocty[x.klic]).map(x => '<span class="evst">' +
+                    esc(x.nazev) + " " + pocty[x.klic] + "</span>").join("") + "</div>" +
+                KAT().filter(x => pocty[x.klic]).map(x => '<div class="evl__skupina"><b>' + esc(x.nazev) + "</b>" +
+                    k.polozky.filter(p => p.kategorie === x.klic).map(p => '<div class="evl__radek" data-kod="' + esc(p.kod || p.id) +
+                        '" tabindex="0"><span class="evkod">' + esc(p.kod || p.id) + '</span><span class="grow">' + esc(p.nazev) +
+                        (podtitul(p) ? ' <span class="muted tiny">' + esc(podtitul(p)) + "</span>" : "") + "</span>" +
+                        (p.stitky && p.stitky.length ? stitkyHtml(p) : "") +
+                        window.KBNabidka.tlacitko("Další akce: " + (p.kod || "")) + "</div>").join("") + "</div>").join("") +
+            "</section>";
+        }).join("") + "</div>" +
+        (bezVybaveni.length && !filtr.kat && !filtr.hledat && !filtr.stav && !filtr.clovek
+            ? '<p class="tiny muted" style="margin:0">Bez vybavení v evidenci: ' + esc(bezVybaveni.join(", ")) + "</p>" : "");
+    }
+
+    function vykresli() {
+        paintFiltr();
+        const html = pohled === "lide" ? paintLide() : pohled === "sklad" ? paintSklad()
+            : pohled === "dodelat" ? paintDodelat() : paintPolozky();
+        nastav($("vypis"), html);
+    }
+
+    function paint() {
+        const prihlasen = !!window.KB_USER;
+        const ok = smim();
+        $("stop").hidden = !prihlasen || ok;
+        $("obsah").hidden = !ok;
+        if (!ok) return;
+        if (!sledovani) { sledovani = true; window.KB.watchVybaveniPolozky(); }
+        vykresli();
+    }
+    function naplanuj() {
+        if (planovano) return;
+        planovano = true;
+        requestAnimationFrame(() => { planovano = false; paint(); });
+    }
+
+    /* ------------------------------------------------------- okno položky */
+
+    const pole = (id, popisek, vnitrek, cely) => '<label class="evokno__pole' + (cely ? " evokno__pole--cely" : "") +
+        '" for="' + id + '"><span class="label">' + esc(popisek) + "</span>" + vnitrek + "</label>";
+    const vstup = (id, hodnota, navic) => '<input type="text" id="' + id + '" class="field" value="' + esc(hodnota || "") +
+        '" autocomplete="off"' + (navic || "") + ">";
+    const volby = (seznam, vybrano) => seznam.map(v => '<option value="' + esc(v.hodnota) + '"' +
+        (String(v.hodnota) === String(vybrano) ? " selected" : "") + ">" + esc(v.text) + "</option>").join("");
+
+    function navicHtml(k, navic) {
+        const n = navic || {};
+        return (k.navic || []).map(p => {
+            const id = "pN_" + p.klic;
+            const v = n[p.klic];
+            if (p.typ === "select") return pole(id, p.nazev, '<select id="' + id + '" class="field">' +
+                volby([{ hodnota: "", text: "—" }].concat((p.moznosti || []).map(m => ({ hodnota: m, text: DRUH_EMAIL_TEXT[m] || m }))), v || "") + "</select>");
+            if (p.typ === "number") return pole(id, p.nazev, '<input type="number" id="' + id + '" class="field" value="' +
+                esc(v == null ? "" : v) + '" min="0" step="1" inputmode="numeric">');
+            if (p.typ === "date") return pole(id, p.nazev, '<input type="date" id="' + id + '" class="field" value="' + esc(v || "") + '">');
+            if (p.typ === "month") return pole(id, p.nazev, '<input type="month" id="' + id + '" class="field" value="' + esc(v || "") + '">');
+            if (p.typ === "seznam") return pole(id, p.nazev, vstup(id, Array.isArray(v) ? v.join(", ") : (v || ""), ' placeholder="čárkami"'));
+            return pole(id, p.nazev, vstup(id, v || ""));
+        }).join("");
+    }
+
+    function formularHtml(p) {
+        const k = kat(p.kategorie) || KAT()[0];
+        const lidi = lide().slice().sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+        const uzivatelVolby = [{ hodnota: "", text: "— nikdo (sklad) —" }]
+            .concat(lidi.map(u => ({ hodnota: u.id, text: jmeno(u) })))
+            .concat([{ hodnota: JINE, text: "jiné jméno (bez účtu webu)…" }]);
+        const uzivatelHodnota = p.uzivatel ? p.uzivatel : (p.uzivatelJmeno ? JINE : "");
+        return '<div class="evokno__oddil">Co to je</div>' +
+            pole("pKategorie", "Kategorie", '<select id="pKategorie" class="field"' + (okno.novy ? "" : " disabled") + ">" +
+                volby(KAT().map(x => ({ hodnota: x.klic, text: x.nazev })), k.klic) + "</select>") +
+            pole("pKod", "Kód", '<input type="text" id="pKod" class="field evkod" value="' + esc(p.kod || "") + '" maxlength="8" ' +
+                'autocomplete="off" spellcheck="false"' + (okno.novy ? "" : " readonly") + ">") +
+            pole("pNazev", "Název / model", vstup("pNazev", p.nazev, ' maxlength="120" placeholder="iPad Air 5, Bosch GLM 50-27 C, kalhoty L…"')) +
+            pole("pNick", "Pracovní označení", vstup("pNick", p.nick, ' maxlength="120" placeholder="Peťův iPad, DELL 3…"')) +
+            (k.zarizeni ? pole("pSeriove", "Sériové číslo", vstup("pSeriove", p.seriove, ' maxlength="80" spellcheck="false"')) : "") +
+            pole("pPorizeno", "Pořízeno", vstup("pPorizeno", p.porizeno, ' maxlength="40" placeholder="2024-11 nebo rok"')) +
+            (k.zarizeni ? pole("pDodavatel", "Dodavatel", vstup("pDodavatel", p.dodavatel, ' maxlength="60"')) : "") +
+            navicHtml(k, p.navic) +
+            '<div class="evokno__oddil">Kdo to má</div>' +
+            pole("pUzivatel", "Člověk", '<select id="pUzivatel" class="field">' + volby(uzivatelVolby, uzivatelHodnota) + "</select>") +
+            pole("pUzivatelJmeno", "Jméno bez účtu webu", vstup("pUzivatelJmeno", p.uzivatelJmeno, ' maxlength="80"')) +
+            pole("pStav", "Stav", '<select id="pStav" class="field">' + volby(STAVY().map(s => ({ hodnota: s, text: STAV_TEXT()[s] || s })), p.stav || "volne") + "</select>") +
+            pole("pOd", "Má od", '<input type="date" id="pOd" class="field" value="' + esc(p.od || "") + '">') +
+            (k.zarizeni ? '<div class="evokno__oddil">Účet a SIM</div>' +
+                pole("pUcet", "Účet zařízení (jen název, nikdy heslo)", vstup("pUcet", p.ucet, ' maxlength="120" spellcheck="false"')) +
+                pole("pUcetTyp", "Typ účtu", '<select id="pUcetTyp" class="field">' +
+                    volby(Object.keys(UCET_TYP_TEXT).map(t => ({ hodnota: t, text: UCET_TYP_TEXT[t] })), p.ucetTyp || "") + "</select>") +
+                pole("pTelCislo", "Telefonní číslo", vstup("pTelCislo", p.telCislo, ' maxlength="40" inputmode="tel"')) +
+                pole("pOperator", "Operátor", vstup("pOperator", p.operator, ' maxlength="40"')) +
+                pole("pPrislusenstvi", "Příslušenství", vstup("pPrislusenstvi", p.prislusenstvi, ' maxlength="200" placeholder="Pencil, kryt, taška…"')) +
+                pole("pPrislusenstviSn", "SN příslušenství", vstup("pPrislusenstviSn", p.prislusenstviSn, ' maxlength="80" spellcheck="false"')) +
+                pole("pMac", "MAC adresy", vstup("pMac", p.mac, ' maxlength="200" spellcheck="false" placeholder="čárkami"'), true)
+            : "") +
+            '<div class="evokno__oddil">Poznámky</div>' +
+            '<div class="evokno__pole evokno__pole--cely"><span class="label">Štítky</span><div class="evstitky-vyber" id="pStitky">' +
+                STITKY().map(s => '<label' + ((p.stitky || []).indexOf(s) !== -1 ? ' class="je-zap"' : "") +
+                    '><input type="checkbox" value="' + esc(s) + '"' + ((p.stitky || []).indexOf(s) !== -1 ? " checked" : "") + ">" +
+                    esc(STITEK_TEXT[s] || s) + "</label>").join("") + "</div></div>" +
+            pole("pPoznamka", "Poznámka", '<textarea id="pPoznamka" class="field" maxlength="1000">' + esc(p.poznamka || "") + "</textarea>", true);
+    }
+
+    function srovnejJmenoPole() {
+        const jine = $("pUzivatel").value === JINE;
+        $("pUzivatelJmeno").closest("label").hidden = !jine;
+    }
+
+    function otevriOkno(kod) {
+        const p = kod ? polozky().find(x => (x.kod || x.id) === kod) : null;
+        okno = { kod: p ? (p.kod || p.id) : "", novy: !p };
+        kodRucne = false;
+        const vzor = p || { kategorie: filtr.kat || "tablet", stav: "volne", stitky: [], navic: {} };
+        if (!p) vzor.kod = window.KB.dalsiKodVybaveni((kat(vzor.kategorie) || {}).prefix || "OST");
+        $("oNadpis").textContent = p ? (p.kod || p.id) + " – " + p.nazev : "Nová položka";
+        $("oKategorieText").textContent = p ? ((kat(p.kategorie) || {}).nazev || "") : "";
+        $("oTelo").innerHTML = formularHtml(vzor);
+        srovnejJmenoPole();
+        $("oSmazat").hidden = !p;
+        $("oChyba").hidden = true;
+        const hist = (p && Array.isArray(p.historie) ? p.historie : []).slice().reverse();
+        $("oHistorieObal").hidden = !hist.length;
+        $("oHistorie").innerHTML = hist.map(h => "<li><b>" + esc(kdyMs(h.ms)) + "</b> " + esc(h.jmeno || "") + " – " +
+            esc({ zalozeno: "založeno", import: "převod z tabulky", upraveno: "upraveno", predano: "předáno", vraceno: "vráceno", vyrazeno: "vyřazeno" }[h.akce] || h.akce) +
+            (h.text ? ": " + esc(h.text) : "") + "</li>").join("");
+        $("okno").hidden = false;
+        const prvni = $(p ? "pNazev" : "pNazev");
+        if (prvni) setTimeout(() => prvni.focus(), 30);
+    }
+
+    function zavriOkno() { okno = null; $("okno").hidden = true; }
+
+    function zmenaKategorie() {
+        if (!okno || !okno.novy) return;
+        const k = kat($("pKategorie").value);
+        if (!k) return;
+        const data = sesbirej();
+        data.kategorie = k.klic;
+        if (!kodRucne) data.kod = window.KB.dalsiKodVybaveni(k.prefix);
+        $("oTelo").innerHTML = formularHtml(data);
+        srovnejJmenoPole();
+    }
+
+    function sesbirej() {
+        const hodnota = (id) => { const el = $(id); return el ? el.value : ""; };
+        const k = kat(hodnota("pKategorie")) || {};
+        const navic = {};
+        (k.navic || []).forEach(p => { navic[p.klic] = hodnota("pN_" + p.klic); });
+        const uziv = hodnota("pUzivatel");
+        return {
+            kod: hodnota("pKod"), kategorie: k.klic, nazev: hodnota("pNazev"), nick: hodnota("pNick"),
+            seriove: hodnota("pSeriove"), porizeno: hodnota("pPorizeno"), dodavatel: hodnota("pDodavatel"),
+            uzivatel: uziv === JINE ? "" : uziv,
+            uzivatelJmeno: uziv === JINE ? hodnota("pUzivatelJmeno") : "",
+            stav: hodnota("pStav"), od: hodnota("pOd"),
+            ucet: hodnota("pUcet"), ucetTyp: hodnota("pUcetTyp"), telCislo: hodnota("pTelCislo"), operator: hodnota("pOperator"),
+            prislusenstvi: hodnota("pPrislusenstvi"), prislusenstviSn: hodnota("pPrislusenstviSn"), mac: hodnota("pMac"),
+            stitky: Array.from(document.querySelectorAll("#pStitky input:checked")).map(i => i.value),
+            poznamka: hodnota("pPoznamka"), navic: navic
+        };
+    }
+
+    async function ulozOkno() {
+        if (!okno || pracuji) return;
+        const data = sesbirej();
+        $("oChyba").hidden = true;
+        if (okno.novy && polozky().some(p => (p.kod || p.id) === String(data.kod || "").trim().toUpperCase())) {
+            $("oChyba").textContent = "Kód " + data.kod.toUpperCase() + " už v evidenci je – zvol jiný.";
+            $("oChyba").hidden = false;
+            return;
+        }
+        pracuji = true;
+        $("oUlozit").disabled = true;
+        try {
+            const p = await window.KB.ulozPolozkuVybaveni(data, { novy: okno.novy });
+            window.KBUI.toast(okno.novy ? "Položka " + p.kod + " založena." : "Položka " + p.kod + " uložena.");
+            zavriOkno();
+        } catch (err) {
+            // chyba zadání (prázdný název, špatný kód) patří do okna, ne do konzole
+            console.warn("Položka se neuložila:", err && err.message);
+            $("oChyba").textContent = (err && err.message) || "Uložení se nepovedlo.";
+            $("oChyba").hidden = false;
+        } finally {
+            pracuji = false;
+            $("oUlozit").disabled = false;
+        }
+    }
+
+    async function smazOkno() {
+        if (!okno || okno.novy || pracuji) return;
+        const kod = okno.kod;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat " + kod + " z evidence?",
+            text: "Položka zmizí i s historií. Vyřazenou věc radši nech se stavem „vyřazené“ – smazání je jen pro omyly.",
+            ano: "Smazat", nebezpecne: true }))) return;
+        pracuji = true;
+        try {
+            await window.KB.smazPolozkuVybaveni(kod);
+            window.KBUI.toast("Položka " + kod + " smazána.");
+            zavriOkno();
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Smazání se nepovedlo.", "error");
+        } finally { pracuji = false; }
+    }
+
+    /* ------------------------------------------------------- okno předání */
+
+    function otevriPredat(kod, prednastav) {
+        const p = polozky().find(x => (x.kod || x.id) === kod);
+        if (!p) return;
+        predavam = { kod: kod };
+        $("dNadpis").textContent = "Předat " + kod;
+        $("dInfo").textContent = p.nazev + " – teď: " + (window.KB.drzitelVybaveni(p) || "—");
+        const lidi = lide().slice().sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
+        $("dKomu").innerHTML = '<optgroup label="Člověk">' + lidi.map(u => '<option value="' + esc(u.id) + '">' + esc(jmeno(u)) + "</option>").join("") +
+            '<option value="' + JINE + '">jiné jméno (bez účtu webu)…</option></optgroup>' +
+            '<optgroup label="Sklad / stav">' + STAVY().filter(s => s !== "u-cloveka").map(s => '<option value="s:' + esc(s) + '">' +
+                esc(STAV_TEXT()[s] || s) + "</option>").join("") + "</optgroup>";
+        $("dKomu").value = prednastav || (lidi[0] ? lidi[0].id : "s:volne");
+        if ($("dKomu").value !== (prednastav || (lidi[0] ? lidi[0].id : "s:volne"))) $("dKomu").value = "s:volne";
+        $("dJmeno").value = "";
+        $("dJmenoPole").hidden = $("dKomu").value !== JINE;
+        $("dOd").value = dnesIso();
+        $("dPozn").value = "";
+        $("dChyba").hidden = true;
+        $("dUlozit").textContent = prednastav && prednastav.indexOf("s:") === 0 ? "Uložit" : "Předat";
+        $("predat").hidden = false;
+        setTimeout(() => $("dKomu").focus(), 30);
+    }
+    function zavriPredat() { predavam = null; $("predat").hidden = true; }
+
+    async function ulozPredat() {
+        if (!predavam || pracuji) return;
+        const komu = $("dKomu").value;
+        const zmena = { od: $("dOd").value, pozn: $("dPozn").value };
+        if (komu.indexOf("s:") === 0) { zmena.uzivatel = ""; zmena.uzivatelJmeno = ""; zmena.stav = komu.slice(2); }
+        else if (komu === JINE) {
+            zmena.uzivatel = ""; zmena.uzivatelJmeno = $("dJmeno").value.trim(); zmena.stav = "u-cloveka";
+            if (!zmena.uzivatelJmeno) { $("dChyba").textContent = "Napiš jméno."; $("dChyba").hidden = false; return; }
+        } else { zmena.uzivatel = komu; zmena.uzivatelJmeno = jmenoUid(komu); zmena.stav = "u-cloveka"; }
+        pracuji = true;
+        $("dUlozit").disabled = true;
+        try {
+            const p = await window.KB.predejPolozkuVybaveni(predavam.kod, zmena);
+            window.KBUI.toast(p.kod + ": " + (p.historie[p.historie.length - 1] || {}).text);
+            zavriPredat();
+        } catch (err) {
+            console.warn("Předání se neuložilo:", err && err.message);
+            $("dChyba").textContent = (err && err.message) || "Uložení se nepovedlo.";
+            $("dChyba").hidden = false;
+        } finally {
+            pracuji = false;
+            $("dUlozit").disabled = false;
+        }
+    }
+
+    async function vyrad(kod) {
+        const p = polozky().find(x => (x.kod || x.id) === kod);
+        if (!p || pracuji) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Vyřadit " + kod + "?",
+            text: p.nazev + " dostane stav „vyřazené“ a zmizí z karet lidí i ze skladu. Zůstane v evidenci s historií.",
+            ano: "Vyřadit", nebezpecne: true }))) return;
+        pracuji = true;
+        try {
+            await window.KB.predejPolozkuVybaveni(kod, { uzivatel: "", uzivatelJmeno: "", stav: "vyrazene" });
+            window.KBUI.toast(kod + " vyřazeno.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Vyřazení se nepovedlo.", "error");
+        } finally { pracuji = false; }
+    }
+
+    /* --------------------------------------------------- nabídka u řádku */
+
+    window.KBNabidka.pripoj((prvek) => {
+        const radek = prvek.closest && prvek.closest("[data-kod]");
+        if (!radek || !smim()) return null;
+        const kod = radek.dataset.kod;
+        const p = polozky().find(x => (x.kod || x.id) === kod);
+        if (!p) return null;
+        const polozkyNabidky = [
+            { text: "Upravit", ikona: "upravit", fn: () => otevriOkno(kod) },
+            { text: "Předat jinému…", ikona: "otevrit", fn: () => otevriPredat(kod) }
+        ];
+        if (maCloveka(p)) polozkyNabidky.push({ text: "Vrátit do skladu", ikona: "vratit", fn: () => otevriPredat(kod, "s:volne") });
+        if (p.stav !== "vyrazene") polozkyNabidky.push({ text: "Vyřadit", ikona: "skryt", fn: () => vyrad(kod) });
+        polozkyNabidky.push({ text: "Kopírovat kód", ikona: "kopirovat", fn: () => window.KBNabidka.kopiruj(kod, "Kód " + kod + " zkopírován.") });
+        polozkyNabidky.push({ text: "Smazat z evidence", ikona: "smazat", nebezpeci: true, oddel: true,
+            fn: () => { okno = { kod: kod, novy: false }; smazOkno().then(() => { if (okno && okno.kod === kod && $("okno").hidden) okno = null; }); } });
+        return { nadpis: kod + " – " + p.nazev, radek: radek, polozky: polozkyNabidky };
+    });
+
+    /* ---------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "vybaveni.html" });
+
+        $("fPohled").addEventListener("click", (event) => {
+            const b = event.target.closest("[data-pohled]");
+            if (!b) return;
+            pohled = b.dataset.pohled;
+            try { localStorage.setItem(POHLED_KLIC, pohled); } catch (err) { /* soukromý režim */ }
+            naplanuj();
+        });
+        $("fKat").addEventListener("click", (event) => {
+            const b = event.target.closest("[data-kat]");
+            if (!b) return;
+            filtr.kat = b.dataset.kat;
+            naplanuj();
+        });
+        let hledaniCasovac = null;
+        $("fHledat").addEventListener("input", () => {
+            clearTimeout(hledaniCasovac);
+            hledaniCasovac = setTimeout(() => { filtr.hledat = $("fHledat").value.trim(); naplanuj(); }, 120);
+        });
+        $("fClovek").addEventListener("change", () => { filtr.clovek = $("fClovek").value; naplanuj(); });
+        $("fStav").addEventListener("change", () => { filtr.stav = $("fStav").value; naplanuj(); });
+        $("btnNova").addEventListener("click", () => otevriOkno(""));
+
+        // řádek = otevřít položku (ne při kliku na „⋯“ – to otevírá nabídku)
+        $("vypis").addEventListener("click", (event) => {
+            if (event.target.closest("[data-nabidka-vic]")) return;
+            const radek = event.target.closest("[data-kod]");
+            if (radek) otevriOkno(radek.dataset.kod);
+        });
+        $("vypis").addEventListener("keydown", (event) => {
+            const radek = event.target.closest && event.target.closest("[data-kod]");
+            if (radek && (event.key === "Enter" || event.key === " ") && event.target === radek) {
+                event.preventDefault();
+                otevriOkno(radek.dataset.kod);
+            }
+        });
+
+        // okno položky
+        $("oTelo").addEventListener("change", (event) => {
+            if (event.target.id === "pKategorie") return zmenaKategorie();
+            if (event.target.id === "pUzivatel") {
+                srovnejJmenoPole();
+                if ($("pUzivatel").value && $("pUzivatel").value !== JINE && ["volne", "rezerva"].indexOf($("pStav").value) !== -1) $("pStav").value = "u-cloveka";
+                if (!$("pUzivatel").value && $("pStav").value === "u-cloveka") $("pStav").value = "volne";
+                if ($("pUzivatel").value === JINE) setTimeout(() => $("pUzivatelJmeno").focus(), 20);
+                return;
+            }
+            if (event.target.matches("#pStitky input")) event.target.closest("label").classList.toggle("je-zap", event.target.checked);
+        });
+        $("oTelo").addEventListener("input", (event) => { if (event.target.id === "pKod") kodRucne = true; });
+        $("oZrusit").addEventListener("click", zavriOkno);
+        $("oUlozit").addEventListener("click", ulozOkno);
+        $("oSmazat").addEventListener("click", smazOkno);
+        $("okno").addEventListener("click", (event) => { if (event.target === $("okno")) zavriOkno(); });
+
+        // okno předání
+        $("dKomu").addEventListener("change", () => {
+            $("dJmenoPole").hidden = $("dKomu").value !== JINE;
+            if ($("dKomu").value === JINE) setTimeout(() => $("dJmeno").focus(), 20);
+        });
+        $("dZrusit").addEventListener("click", zavriPredat);
+        $("dUlozit").addEventListener("click", ulozPredat);
+        $("predat").addEventListener("click", (event) => { if (event.target === $("predat")) zavriPredat(); });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                if (predavam) { event.preventDefault(); return zavriPredat(); }
+                if (okno && !$("okno").hidden) { event.preventDefault(); return zavriOkno(); }
+            }
+            if (event.key === "Enter" && event.target.closest) {
+                if (predavam && event.target.closest("#predat input")) { event.preventDefault(); return void ulozPredat(); }
+                if (okno && !$("okno").hidden && event.target.closest("#okno input")) { event.preventDefault(); return void ulozOkno(); }
+            }
+        });
+
+        document.addEventListener("kb-role", naplanuj);
+        ["vybaveni-polozky", "users"].forEach(ud => window.KB.on(ud, naplanuj));
+        paint();
+    });
+})();
+</script>
+</body>
+</html>
