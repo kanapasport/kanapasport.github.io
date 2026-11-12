@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Pokladna – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=334">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=334">
+    <link rel="stylesheet" href="assets/css/app.css?v=335">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=335">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -152,14 +152,14 @@
             </div>
         </div>
 
-        <div class="card col" style="padding:14px 16px;gap:12px">
-            <b>Nový zápis</b>
+        <div class="card col" id="fKarta" style="padding:14px 16px;gap:12px">
+            <b id="fNadpis">Nový zápis</b>
             <div class="pkform">
                 <label><span class="label">Datum</span>
                     <input type="date" class="field" id="fDatum"></label>
                 <label style="position:relative"><span class="label">Za co / komu</span>
                     <input type="text" class="field" id="fText" maxlength="200"
-                           placeholder="např. Oběd – @Petr Trávník"></label>
+                           placeholder="např. Oběd – @Jan Novák"></label>
                 <label><span class="label">Příjem</span>
                     <input type="number" class="field" id="fPrijem" min="0" step="1"
                            placeholder="0"></label>
@@ -168,7 +168,10 @@
                            placeholder="0"></label>
                 <label><span class="label">Kategorie</span>
                     <select class="field" id="fKategorie"></select></label>
-                <button type="button" id="btnPridej" class="btn btn--primary">Zapsat</button>
+                <div class="row" style="gap:8px;flex-wrap:wrap">
+                    <button type="button" id="btnPridej" class="btn btn--primary">Zapsat</button>
+                    <button type="button" id="btnZrusUpravu" class="btn" hidden>Zrušit</button>
+                </div>
             </div>
             <p class="tiny muted" style="margin:0;line-height:1.6">
                 Vyplň jen jedno z políček — příjem, nebo výdej. Kategorie se
@@ -187,11 +190,11 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=334"></script>
-<script src="assets/js/ui.js?v=334"></script>
-<script src="assets/js/nabidka.js?v=334"></script>
-<script src="assets/js/vykazy.js?v=334"></script>
-<script type="module" src="assets/js/store.js?v=334"></script>
+<script src="assets/js/taxonomy.js?v=335"></script>
+<script src="assets/js/ui.js?v=335"></script>
+<script src="assets/js/nabidka.js?v=335"></script>
+<script src="assets/js/vykazy.js?v=335"></script>
+<script type="module" src="assets/js/store.js?v=335"></script>
 
 <script>
 (function () {
@@ -488,6 +491,39 @@
         $("fKategorie").value = odhadniKategorii(pole.value);
     }
 
+    /* ------------------------------------------------- oprava zápisu --- */
+
+    /* Oprava zápisu ve stejném formuláři jako nový zápis – dřív se musel
+       smazat a zapsat znovu (Michal 12. 11. 2026). `upravuji` = id
+       opravovaného zápisu, "" = formulář zakládá nový. */
+    let upravuji = "";
+
+    function zacniUpravu(z) {
+        upravuji = z.id;
+        $("fDatum").value = z.datum || "";
+        $("fText").value = z.text || "";
+        $("fPrijem").value = Number(z.prijem) || "";
+        $("fVydej").value = Number(z.vydej) || "";
+        $("fKategorie").value = z.kategorie || "ostatni";
+        // uložená kategorie má přednost před odhadem z textu
+        $("fKategorie").dataset.rucne = "1";
+        $("fNadpis").textContent = "Oprava zápisu";
+        $("btnPridej").textContent = "Uložit změnu";
+        $("btnZrusUpravu").hidden = false;
+        $("fKarta").scrollIntoView({ behavior: "smooth", block: "center" });
+        $("fText").focus({ preventScroll: true });
+    }
+
+    function konecUpravy() {
+        upravuji = "";
+        $("fText").value = ""; $("fPrijem").value = ""; $("fVydej").value = "";
+        $("fDatum").value = new Date().toISOString().slice(0, 10);
+        delete $("fKategorie").dataset.rucne;
+        $("fNadpis").textContent = "Nový zápis";
+        $("btnPridej").textContent = "Zapsat";
+        $("btnZrusUpravu").hidden = true;
+    }
+
     /* ---------------------------------------------------------- start ---- */
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -552,21 +588,32 @@
             const jmeno = (/@([\wÀ-ž]+(?:\s+[A-ZÁ-Ž][\wÀ-ž]*)?)/.exec(text) || [])[1] || "";
             const clovek = (window.KB.users || []).find(u =>
                 ((u.first || "") + " " + (u.last || "")).trim() === jmeno);
+            /* Zápis mezitím někdo smazal – uložení by ho tiše vzkřísilo. */
+            if (upravuji && !(window.KB.pokladna || []).some(x => x.id === upravuji)) {
+                konecUpravy();
+                return window.KBUI.toast("Zápis mezitím někdo smazal.", "warn");
+            }
+            const oprava = !!upravuji;
             try {
-                await window.KB.ulozPokladnu("", {
+                await window.KB.ulozPokladnu(upravuji, {
                     datum: $("fDatum").value, text: text,
                     prijem: prijem, vydej: vydej,
                     kategorie: $("fKategorie").value,
                     jmeno: jmeno, uid: clovek ? clovek.id : ""
                 });
-                $("fText").value = ""; $("fPrijem").value = ""; $("fVydej").value = "";
-                delete $("fKategorie").dataset.rucne;
-                window.KBUI.toast("Zapsáno.");
+                if (oprava) konecUpravy();
+                else {
+                    $("fText").value = ""; $("fPrijem").value = ""; $("fVydej").value = "";
+                    delete $("fKategorie").dataset.rucne;
+                }
+                window.KBUI.toast(oprava ? "Změna uložena." : "Zapsáno.");
             } catch (err) {
                 console.error(err);
                 window.KBUI.toast("Zápis se neuložil.", "error");
             }
         });
+
+        $("btnZrusUpravu").addEventListener("click", konecUpravy);
 
         document.addEventListener("click", (e) => {
             const b = e.target.closest("[data-sbal]");
@@ -620,6 +667,7 @@
                         fn: () => { obdobi = mesic; vykresli(); } },
                     obdobi && { text: "Celá kniha", ikona: "seznam",
                         fn: () => { obdobi = ""; vykresli(); } },
+                    { text: "Upravit zápis…", ikona: "upravit", fn: () => zacniUpravu(z) },
                     { text: "Smazat zápis…", ikona: "smazat", nebezpeci: true, fn: () => smazZapis(z.id) }
                 ]
             };

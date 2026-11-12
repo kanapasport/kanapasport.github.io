@@ -800,7 +800,7 @@
        Vnitřní id `spravce` se NEMĚNÍ: sedí na něm pravidla databáze
        (firestore.rules) i role uložené u lidí. Přejmenovává se jen to,
        co je vidět. */
-    /* Majitel (Ondřej Kaňa) a asistentka (Věra Tothová) přibyli 21. 8. –
+    /* Majitel a asistentka přibyli 21. 8. –
        zatím mají práva manažera, dělení práv přijde později. Id rolí jsou
        i v firestore.rules (spravce()) a ve store.js (tabule). */
     UI.ROLES = [
@@ -1397,7 +1397,7 @@
     const isCompact = () => window.matchMedia("(max-width: 1120px), (hover: none)").matches;
 
     /* Roletka ÚKOLY & TO-DO (Michal 20. 10. 2026: „nechci, aby se tam
-       ukázalo všechno … primárně stačí Biopharm a pak co mají lidé
+       ukázalo všechno … primárně stačí BPH a pak co mají lidé
        přiřazeno k sobě"). Dřív vypisovala každou zakázku, ke které kdy
        byl úkol. Teď:
          MOJE ÚKOLY            počet mých otevřených
@@ -2681,7 +2681,7 @@
         .filter(Boolean);
 
     /**
-     * „2 z 5 splnilo · chybí Petr Trávník, Marek Pelikán" pod vzkazem, který
+     * „2 z 5 splnilo · chybí Jan Novák, Eva Svobodová" pod vzkazem, který
      * si každý škrtá sám. Samotný počet nestačil – zadavatel z něj nepoznal,
      * koho má popohnat (Michal 16. 9. 2026). Kdo si vzkaz vzal aspoň na
      * vědomí, je u jména poznat.
@@ -3223,7 +3223,7 @@
             /* Vzkaz už existuje: musí držet krok s akcí. Když se akce posune
                nebo přejmenuje, připomínka to vezme za svou – jinak v ní visí
                starý termín. (25. 9. 2026: akce vznikla na 25. 9., vzkaz se
-               založil o tři vteřiny později a Marek pak akci přesunul na
+               založil o tři vteřiny později a kolega pak akci přesunul na
                2. 10.; ve vzkazu zůstalo 25. 9.) Posun DNE odškrtnutý vzkaz
                zase otevře – je to jiný den, než na který se člověk chystal.
                Samotná změna názvu odškrtnutí nechá být. */
@@ -5427,7 +5427,7 @@
 
        Hledá se po slovech a bez ohledu na diakritiku v celém popisku
        volby. U úkolů je součástí popisku i jméno člověka, kterému úkol
-       patří – „travnik" tak najde všechno Petra Trávníka.
+       patří – „novak" tak najde všechno Jana Nováka.
 
        Skupiny (<optgroup>) se v nabídce vypíšou jako oddělovač a třída
        volby se přenese na řádek, takže si stránka může volby obarvit

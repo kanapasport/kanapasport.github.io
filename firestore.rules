@@ -69,6 +69,19 @@ service cloud.firestore {
       return clen() && typSpoluprace() == 'servis';
     }
 
+    /* ROBOT (audit 10. 11. 2026, Michal 12. 11. 2026, Iris – A3-06). Servisní
+       účty (Apps Script, nástroje na PC přes kb_api.py) dnes mají roli
+       `spravce`, a tím i všechna manažerská práva. Role `robot` jim má dát
+       jen to, co opravdu dělají: číst `private` (kromě faktur, pokladny,
+       výplat a uzávěrek – ty mají vlastní pravidla), psát částky, stavy
+       zápisu do Tabulek, upozornění, číselníky, projekty, úkoly, fotky BPH,
+       vybavení a dva dokumenty `meta` (upozorneni, zakazky). Kalendář,
+       výkazy, vzkazy ani lidi neměnit. Zatím jen PŘIDÁVÁ – role účtů se
+       přepne až po kontrole; do té doby platí spravce(). */
+    function robot() {
+      return clen() && role() == 'robot';
+    }
+
     /* --- KDO CO POTVRZUJE (Michal 3. 11. 2026, model A „tvrdě") ----------
        V Nastavení → Potvrzování hlavní správce u každého druhu zaškrtne, kteří
        manažeři ho potvrzují – stejně pro všechny lidi:
@@ -186,26 +199,70 @@ service cloud.firestore {
         || d.get('datum', '') >= uzaverkaOd();
     }
 
+    /* TVAR ZÁPISU VÝKAZU (audit 10. 11. 2026, Michal 12. 11. 2026, Iris –
+       A1-03, A1-06). Z polí zápisu počítá automat částky a Výplaty, takže
+       databáze hlídá i CO se zapisuje, ne jen kdo:
+       - klíče jen ty, které píše web (zaznamPayload ve store.js – jediné
+         místo, kudy web do `zaznamy` píše; Apps Script ani nástroje na PC
+         zápisy nepíšou). U úpravy se hlídají jen ZMĚNĚNÉ klíče – starší
+         dokumenty můžou nést pole z dřívějška a setDoc s merge je nechá být;
+       - `hodiny` číslo 0–24 (jeden den), `datum` tvar RRRR-MM-DD;
+       - placené školení (`absencePlacena`) zapne jen manažer; vlastník ho
+         smí nechat, když ho tam manažer už dal, nebo vypnout;
+       - vlastník píše `updatedMs` jen kolem času serveru (±10 min) – podle
+         něj se řídí dopočet částek i zápis do Tabulek. Manažera se to
+         netýká (import starších zápisů). Hlavní správce obchází vše. */
+    function vykazKlice() {
+      return ['uid', 'osoba', 'datum', 'nazev', 'nazevAuto', 'zakazka', 'projekt', 'firma',
+              'cinnost', 'technologie', 'ukolId', 'budova', 'patro', 'podilPatra', 'podilTech',
+              'od', 'do', 'pauza', 'hodiny', 'obed', 'km', 'absence', 'absencePlacena', 'ho',
+              'zdroj', 'poznamka', 'createdMs', 'createdBy', 'updatedMs', 'updatedBy'];
+    }
+    function vykazTvarOk(stary) {
+      return (stary == null
+               ? request.resource.data.keys().hasOnly(vykazKlice())
+               : request.resource.data.diff(stary).affectedKeys().hasOnly(vykazKlice()))
+        && request.resource.data.get('hodiny', 0) is number
+        && request.resource.data.get('hodiny', 0) >= 0
+        && request.resource.data.get('hodiny', 0) <= 24
+        && request.resource.data.get('datum', '') is string
+        && request.resource.data.get('datum', '').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    function vykazPlacenaOk(stary) {
+      return request.resource.data.get('absencePlacena', false) != true || spravce()
+        || (stary != null && stary.get('absencePlacena', false) == true);
+    }
+    function vykazCasOk() {
+      return request.resource.data.get('updatedMs', 0) is number
+        && request.resource.data.get('updatedMs', 0) > request.time.toMillis() - 600000
+        && request.resource.data.get('updatedMs', 0) < request.time.toMillis() + 600000;
+    }
+
     match /artifacts/firemni-kb-app/private/vykazy/zaznamy/{id} {
       // svoje vidí každý, cizí jen správce
       allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
       // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš
       // od 12. 11. 2026 drží čáru i manažer (poCare výš), obchází ji jen hlavní správce
-      allow create: if hlavniSpravce() || (mesicOtevreny(request.resource.data) && ((spravce()
+      // tvar zápisu (vykazTvarOk, vykazPlacenaOk, vykazCasOk) od 12. 11. 2026 – výklad výš
+      allow create: if hlavniSpravce() || (mesicOtevreny(request.resource.data)
+                       && vykazTvarOk(null) && vykazPlacenaOk(null) && ((spravce()
                        && poCare(request.resource.data)) || (clen()
                        && request.resource.data.uid == request.auth.uid
-                       && request.resource.data.datum >= uzaverkaOd())));
+                       && request.resource.data.datum >= uzaverkaOd()
+                       && vykazCasOk())));
       /* Vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho
          jiného, přesunout do uzavřeného období ani si dodatečně dopsat
          `zdroj: "panel"`, kterým se odemyká mazání. Z uzavřeného měsíce
          ani do něj nic nepřesune ani manažer. */
       allow update: if hlavniSpravce() || (mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data)
+                    && vykazTvarOk(resource.data) && vykazPlacenaOk(resource.data)
                     && ((spravce() && poCare(resource.data) && poCare(request.resource.data)) || (clen()
                        && resource.data.uid == request.auth.uid
                        && request.resource.data.uid == request.auth.uid
                        && resource.data.datum >= uzaverkaOd()
                        && request.resource.data.datum >= uzaverkaOd()
-                       && request.resource.data.get('zdroj', '') == resource.data.get('zdroj', ''))));
+                       && request.resource.data.get('zdroj', '') == resource.data.get('zdroj', '')
+                       && vykazCasOk())));
       /* Vlastní záznam si člověk smí smazat stejně, jako si ho smí opravit.
          Web mu to pouští jen do půlnoci dne, kdy zápis vznikl (přání Michala
          4. 9. 2026); tvrdou hranicí v databázi je uzávěrka – co je jednou
@@ -226,18 +283,25 @@ service cloud.firestore {
                       && resource.data.uid == request.auth.uid);
       // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš;
       // od 12. 11. 2026 i před čárou uzávěrky jen hlavní správce – poCare výš
-      allow create: if hlavniSpravce() || (spravce() && mesicOtevreny(request.resource.data)
+      // robot (Apps Script dopočítává částky, zajistiCastku_) stejně jako manažer – 12. 11. 2026
+      allow create: if hlavniSpravce() || ((spravce() || robot()) && mesicOtevreny(request.resource.data)
                        && poCare(request.resource.data));
-      allow update: if hlavniSpravce() || (spravce()
+      allow update: if hlavniSpravce() || ((spravce() || robot())
                        && mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data)
                        && poCare(resource.data) && poCare(request.resource.data));
       /* Když si člověk smaže svůj zápis, musí s ním zmizet i jeho částka –
          jinak by v databázi zůstala peněžní věta bez zápisu. Zapisovat
-         částky pořád smí jen manažer (4. 9. 2026). */
+         částky pořád smí jen manažer (4. 9. 2026).
+         Vlastník ale smí smazat částku JEN spolu se zápisem (zápis už není,
+         nebo mizí ve stejné dávce – existsAfter). Jinak by si smazal ručně
+         sníženou částku a dopočet by ji založil znovu podle plné sazby
+         (audit 10. 11. 2026 A1-05/A3-05, Michal 12. 11. 2026, Iris). Web
+         maže zápis před částkou (KB.deleteVykaz, dávka při zamítnutí). */
       allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && ((spravce()
                        && poCare(resource.data)) || (clen()
                        && resource.data.get('uid', '') == request.auth.uid
-                       && resource.data.get('datum', '') >= uzaverkaOd())));
+                       && resource.data.get('datum', '') >= uzaverkaOd()
+                       && !existsAfter(/databases/$(database)/documents/artifacts/firemni-kb-app/private/vykazy/zaznamy/$(id)))));
     }
 
     /* Vlastní sazba. Kdo si fakturuje sám, potřebuje svou sazbu vidět UŽ PŘI
@@ -318,9 +382,10 @@ service cloud.firestore {
 
     match /artifacts/firemni-kb-app/private/ukoly/seznam/{id} {
       allow read: if clen();
-      allow create: if spravce()
+      // robot = nástroj na PC (ukoly_zaloha.py: obnova úkolů ze zálohy) – 12. 11. 2026
+      allow create: if (spravce() || robot())
                        && (request.resource.data.get('potvrzeno', false) != true || smiPotvrdit('ukoly'));
-      allow update: if (spravce()
+      allow update: if ((spravce() || robot())
                         && (!ukolPotvrzuje() || smiPotvrdit('ukoly') || ukolZPotvrzenehoMilniku())
                         && (!ukolVraci() || request.auth.uid in resource.data.get('prirazeni', [])
                             || smiPotvrdit('ukoly')))
@@ -331,7 +396,7 @@ service cloud.firestore {
     }
     // ostatní pod `private/ukoly` (budgety…) zakládá a mění manažer jako dřív
     match /artifacts/firemni-kb-app/private/ukoly/{cast}/{document=**} {
-      allow create, update: if spravce() && cast != 'seznam';
+      allow create, update: if (spravce() || robot()) && cast != 'seznam';
     }
 
     // --- faktury ---------------------------------------------------------
@@ -470,10 +535,24 @@ service cloud.firestore {
     // --- historie aktivit ------------------------------------------------
     // Každý přihlášený zapisuje svoje kroky (jinak by log nešel plnit),
     // ale číst je smí jen manažer – jsou tam i zmínky o výkazech.
+    /* Od 12. 11. 2026 (audit 10. 11. 2026 A1-13, Michal, Iris) je kolekce
+       vyjmutá ze zachytávacího pravidla pro `private` – dřív přes něj
+       správce historii přepsal i smazal a `update, delete: if false` tady
+       nic neznamenalo. Zápis jen nový záznam v tvaru, který píše web
+       (KB.zapisAktivitu) a nástroje na PC (druh, text, uid, jmeno, ms);
+       pod cizím uid nikdo. Záznam „Systém" bez uid (nástroje na PC přes
+       kb_api.py) smí jen správce nebo robot. Číst manažer a robot (záloha
+       webu), mazat (úklid) jen hlavní správce, měnit nikdo. */
     match /artifacts/firemni-kb-app/private/aktivity/seznam/{id} {
-      allow create: if clen() && request.resource.data.uid == request.auth.uid;
-      allow read: if spravce();
-      allow update, delete: if false;
+      allow create: if clen()
+                       && (request.resource.data.uid == request.auth.uid
+                           || ((spravce() || robot()) && request.resource.data.uid == ''))
+                       && request.resource.data.keys().hasOnly(['druh', 'text', 'uid', 'jmeno', 'ms'])
+                       && request.resource.data.get('text', '') is string
+                       && request.resource.data.get('text', '').size() <= 200;
+      allow read: if spravce() || robot();
+      allow update: if false;
+      allow delete: if hlavniSpravce();
     }
 
     // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
@@ -486,17 +565,26 @@ service cloud.firestore {
     // potvrzení – jinak by je tohle pravidlo pustilo každému manažerovi.
     // Totéž výkazy: zápisy a částky hlídají zámek proplaceného měsíce
     // (mesicOtevreny), zbytek `private/vykazy` má pravidlo hned pod tímhle.
+    // Od 12. 11. 2026 (audit 10. 11. 2026, Michal, Iris): vyjmuté i `aktivity`
+    // (historie – vlastní pravidlo výš, A1-13) a totéž smí robot (A3-06) –
+    // Apps Script a nástroje na PC tu čtou a píšou upozornění, číselníky,
+    // projekty, fotky BPH, vybavení, zálohu webu…
     match /artifacts/firemni-kb-app/private/{kolekce}/{document=**} {
-      allow read: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'uzaverky']);
-      allow delete: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'vykazy', 'uzaverky']);
-      allow create, update: if spravce()
+      allow read: if (spravce() || robot())
+                     && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'uzaverky', 'aktivity']);
+      allow delete: if (spravce() || robot())
+                       && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'vykazy', 'uzaverky',
+                                        'aktivity']);
+      allow create, update: if (spravce() || robot())
                        && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky', 'vyplaty', 'vykazy',
-                                        'uzaverky']);
+                                        'uzaverky', 'aktivity']);
     }
     // ostatní pod `private/vykazy` (číselníky, zůstatky, kontrola týdnů, stavy
-    // zápisu do Tabulek, přehledy…) zakládá, mění a maže manažer jako dřív
+    // zápisu do Tabulek, přehledy…) zakládá, mění a maže manažer jako dřív;
+    // robot (Apps Script) píše stavy zápisu do Tabulek `gsync` – 12. 11. 2026
     match /artifacts/firemni-kb-app/private/vykazy/{cast}/{document=**} {
       allow create, update, delete: if spravce() && !(cast in ['zaznamy', 'castky']);
+      allow create, update: if robot() && cast == 'gsync';
     }
 
     /* Kdo co potvrzuje (výklad nahoře u smiPotvrdit). Číst musí každý člen –
@@ -512,12 +600,34 @@ service cloud.firestore {
     }
 
     // --- návody: tvořit a upravovat může každý, mazat jen správce ---
+    /* Od 12. 11. 2026 (audit 10. 11. 2026 A1-10 a A2-01, Michal, Iris):
+       - id obrázku jen [A-Za-z0-9_-]{1,64} (web tvoří „img_<ms>_<n>“) a stejně
+         případný klíč `id` v datech – id šlo do HTML (data-img) a s uvozovkou
+         z něj byl uložený skript;
+       - návod mění jen autor nebo manažer. Autor = `createdUid` (uid, ne
+         jméno – pole `author` je volný text z formuláře). Návody bez
+         `createdUid` (všechny dosavadní – web ho zatím nezapisuje) dál
+         upraví každý člen jako dřív; `createdUid` si nikdo nepřepíše ani
+         nepřipíše cizí. Platit to začne, až ho web při založení zapíše. */
+    function guideAutorOk(d) {
+      return spravce() || !('createdUid' in d) || d.createdUid == request.auth.uid;
+    }
+    function guideCesta(gid) {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/public/data/guides/$(gid);
+    }
     match /artifacts/firemni-kb-app/public/data/guides/{guideId} {
-      allow create, update: if clen();
+      allow create: if clen() && request.resource.data.get('createdUid', request.auth.uid) == request.auth.uid;
+      allow update: if clen() && guideAutorOk(resource.data)
+                       && (spravce() || request.resource.data.get('createdUid', '') == resource.data.get('createdUid', ''));
       allow delete: if spravce();
 
       match /images/{imageId} {
-        allow create, update: if clen();
+        allow create, update: if clen()
+                                 && imageId.matches('^[A-Za-z0-9_-]{1,64}$')
+                                 && (!('id' in request.resource.data)
+                                     || (request.resource.data.id is string
+                                         && request.resource.data.id.matches('^[A-Za-z0-9_-]{1,64}$')))
+                                 && (!exists(guideCesta(guideId)) || guideAutorOk(get(guideCesta(guideId)).data));
         allow delete: if spravce();
       }
     }
@@ -541,10 +651,21 @@ service cloud.firestore {
       // `meta/uzaverka` (čára) od 12. 11. 2026 (Michal, Iris): správce ji smí
       // jen posunout dopředu (uzavřít další měsíc); zpátky – odemknout měsíc –
       // jen hlavní správce. Jinak by si manažer uzavřený měsíc otevřel sám.
+      // `meta/gsync` (adresa Apps Scriptu, na kterou web posílá ID token
+      // přihlášeného) od 12. 11. 2026 jen hlavní správce a jen adresa skriptu
+      // Googlu (nebo prázdná) – dřív ji přepsal každý správce na svůj server
+      // (audit 10. 11. 2026 A1-04, Michal, Iris).
       allow write: if spravce() && (docId != 'zpetne' || smiPotvrdit('zpetne'))
                       && (docId != 'uzaverka' || hlavniSpravce()
                           || request.resource.data.get('odIso', '')
-                             >= (resource == null ? '' : resource.data.get('odIso', '')));
+                             >= (resource == null ? '' : resource.data.get('odIso', '')))
+                      && (docId != 'gsync' || (hlavniSpravce() && (request.resource == null
+                          || request.resource.data.get('url', '') == ''
+                          || request.resource.data.get('url', '')
+                               .matches('^https://script[.]google[.]com/macros/s/[A-Za-z0-9_-]+/exec$'))));
+      // robot: Apps Script píše stav rozesílky (`upozorneni`), nástroj na PC
+      // firmy z Pohody do `zakazky` – nic jiného z `meta` (12. 11. 2026, A3-06)
+      allow create, update: if robot() && docId in ['upozorneni', 'zakazky'];
     }
 
     /* --- milníky (harmonogram odevzdání) ---------------------------------
@@ -617,20 +738,53 @@ service cloud.firestore {
     //   private/plany/soubory/{id}/znacky/{zid}   značky se stavem – živě
     //
     // Vidí a upravují všichni členové – parta na patře si značí společně.
+    /* Od 12. 11. 2026 (audit 10. 11. 2026 A1-08, Michal, Iris) už ne „každý
+       cokoliv". Člen smí jen to, co dělá web: založit složku a plán (obrázek
+       po kouscích a dlaždice se nahrávají PŘED hlavičkou, pak už se nemění),
+       u plánu měnit společnou paletu a hladiny, kreslit značky pod svým uid
+       a měnit značky ostatních bez přepsání autora. Ostatní změny (a mazání)
+       jen manažer – přes zachytávací pravidlo pro `private`. Autora plánu
+       databáze nezná (pole `kdo` je jméno, ne uid), proto hlavičku kromě
+       palety a hladin mění jen manažer – web nic jiného nemění. */
+    function planCesta(pid) {
+      return /databases/$(database)/documents/artifacts/firemni-kb-app/private/plany/soubory/$(pid);
+    }
     match /artifacts/firemni-kb-app/private/plany/{dokument=**} {
       allow read:           if clen();
-      allow create, update: if clen();
       // `write` zahrnuje i mazání – jedno kliknutí by smazalo odznačkovanou
       // práci celé party, proto mazání jen manažer (Michal 1. 9. 2026)
       allow delete:         if spravce();
+    }
+    match /artifacts/firemni-kb-app/private/plany/slozky/{id} {
+      allow create: if clen();
+    }
+    match /artifacts/firemni-kb-app/private/plany/soubory/{planId} {
+      allow create: if clen();
+      allow update: if clen() && request.resource.data.diff(resource.data).affectedKeys()
+                                   .hasOnly(['paleta', 'hladiny']);
+    }
+    // obrázek plánu – jen při nahrávání, dokud plán nemá hlavičku
+    match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/kousky/{n} {
+      allow create: if clen() && !exists(planCesta(planId));
+    }
+    match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/dlazdice/{klic} {
+      allow create: if clen() && !exists(planCesta(planId));
     }
 
     /* Vlastní značku ale smaže i ten, kdo ji nakreslil. Tlačítko × mu ji
        nabízí („cizí značku smaže jen manažer"), jenže pravidlo výš mazání
        zakazovalo úplně všem kromě manažerů – vlastní omyl si tak nikdo
        uklidit nemohl (našlo se 2. 9. 2026, když k značkám přibyly
-       obdélníky). Pravidla se sčítají, takže tenhle match jen přidává. */
+       obdélníky). Pravidla se sčítají, takže tenhle match jen přidává.
+       Od 12. 11. 2026: novou značku jen pod svým uid; cizí značku smí
+       člen posunout a přebarvit, ale autora (`uid`) nepřepíše – dřív si ji
+       tak přivlastnil a smazal. Stará značka bez uid dostane autora toho,
+       kdo ji upraví (web to tak dělá). */
     match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/znacky/{zid} {
+      allow create: if clen() && request.resource.data.get('uid', '') == request.auth.uid;
+      allow update: if clen() && (request.resource.data.get('uid', '') == resource.data.get('uid', '')
+                                  || (resource.data.get('uid', '') == ''
+                                      && request.resource.data.get('uid', '') == request.auth.uid));
       allow delete: if clen() && resource.data.get('uid', '') == request.auth.uid;
     }
 
@@ -701,7 +855,16 @@ service cloud.firestore {
     match /artifacts/firemni-kb-app/private/tabule/seznam/{id} {
       allow read:   if vidiTabuli(resource.data);
       allow create: if clen() && request.resource.data.createdUid == request.auth.uid;
-      allow update: if vidiTabuli(resource.data);
+      /* Od 12. 11. 2026 (audit 10. 11. 2026 A1-09, Michal, Iris): zakladatele
+         (`createdUid`) nepřepíše nikdo – dřív si ho kolega přepsal na sebe
+         a tabuli smazal; kdo ji vidí a co v ní je (`viditelnost`, `proUids`)
+         mění jen zakladatel a manažer. Obsah kreslí dál každý, kdo tabuli
+         vidí – tabule je společná. */
+      allow update: if vidiTabuli(resource.data)
+                       && request.resource.data.get('createdUid', '') == resource.data.get('createdUid', '')
+                       && (spravce() || resource.data.get('createdUid', '') == request.auth.uid
+                           || !request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasAny(['viditelnost', 'proUids']));
       // smazat smí zakladatel a manažer – ne kdokoliv, kdo tabuli vidí
       allow delete: if spravce() || (clen() && resource.data.createdUid == request.auth.uid);
 
@@ -732,17 +895,77 @@ service cloud.firestore {
        musí existovat, patřit stejnému člověku, být potvrzená a nést stejné
        jméno toho, kdo potvrdil. Tím se dál nerozbije oprava výkazu
        zaměstnanci ani manažerovi, který nepřítomnosti nepotvrzuje. */
+    /* Od 12. 11. 2026 (audit 10. 11. 2026 A1-01, Michal, Iris) navíc stejný
+       DRUH (`typ`) a ROZSAH: převzaté potvrzení platí jen pro dny, které
+       zdrojová událost pokrývá – jinak si zaměstnanec z loňské potvrzené
+       dovolené „převzal" potvrzení na libovolné dny.
+       Jedna výjimka kvůli tomu, jak web dovolenou dělí (vykazy.html,
+       planKalendareAbsenci, smazání dne uprostřed): NEJDŘÍV zkrátí původní
+       událost a teprve potom založí druhou část, takže v tu chvíli už
+       zdroj druhou část nepokrývá. Druhá část proto projde i jako
+       NAVAZUJÍCÍ (kalendarNavazuje): obě z výkazu, začíná po konci zdroje
+       a končí nejvýš 31 dní po něm, zdroj je PŮVODNÍ potvrzená událost
+       (vznikla před potvrzením: createdMs <= potvrzenoMs) a nová část je
+       mladší než potvrzení – z navazující části se tak dál navazovat nedá.
+       Až web založí druhou část PŘED zkrácením zdroje, výjimka může pryč. */
+    function denMs(s) {
+      return timestamp.date(int(s[0:4]), int(s[5:7]), int(s[8:10])).toMillis();
+    }
+    function jeDen(s) {
+      return s is string && s.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    function kalendarUvnitr(z, n) {
+      return n.get('od', '') != '' && n.get('od', '') >= z.get('od', '')
+        && n.get('do', '') <= z.get('do', '');
+    }
+    function kalendarNavazuje(z, n) {
+      return z.get('zdroj', '') == 'vykaz' && n.get('zdroj', '') == 'vykaz'
+        && z.get('createdMs', 0) is number && z.get('potvrzenoMs', 0) is number
+        && n.get('createdMs', 0) is number
+        && z.get('potvrzenoMs', 0) > 0
+        && z.get('createdMs', 0) <= z.get('potvrzenoMs', 0)
+        && n.get('createdMs', 0) > z.get('potvrzenoMs', 0)
+        && jeDen(z.get('do', '')) && jeDen(n.get('od', '')) && jeDen(n.get('do', ''))
+        && n.od > z.do
+        && denMs(n.do) - denMs(z.do) <= 31 * 86400000;
+    }
+    function kalendarPrevzatoZ(z, n) {
+      return z.get('uid', '') == n.uid
+        && z.get('potvrzeno', false) == true
+        && z.get('potvrdil', '') == n.get('potvrdil', '')
+        && z.get('typ', '') == n.get('typ', '')
+        && (kalendarUvnitr(z, n) || kalendarNavazuje(z, n));
+    }
     function kalendarPrevzato() {
       return request.resource.data.get('potvrzenoZ', '') is string
         && request.resource.data.get('potvrzenoZ', '').matches('[A-Za-z0-9_-]{1,80}')
         && exists(kalendarCesta(request.resource.data.potvrzenoZ))
-        && get(kalendarCesta(request.resource.data.potvrzenoZ)).data.get('uid', '') == request.resource.data.uid
-        && get(kalendarCesta(request.resource.data.potvrzenoZ)).data.get('potvrzeno', false) == true
-        && get(kalendarCesta(request.resource.data.potvrzenoZ)).data.get('potvrdil', '')
-             == request.resource.data.get('potvrdil', '');
+        && kalendarPrevzatoZ(get(kalendarCesta(request.resource.data.potvrzenoZ)).data,
+                             request.resource.data);
     }
     function kalendarPotvrzeniOk() {
       return !kalendarPotvrzuje() || smiPotvrdit('nepritomnosti') || kalendarPrevzato();
+    }
+    /* UŽ POTVRZENÁ událost, která potvrzení nese dál (audit 10. 11. 2026
+       A1-02, Michal 12. 11. 2026, Iris). Dřív se hlídal jen přechod ne→ano,
+       takže potvrzený den šel přepsat na tři týdny nebo školení na
+       dovolenou. Kdo nepřítomnosti nepotvrzuje, smí u potvrzené události
+       nechat druh a dny, nebo ji ZKRÁTIT (web tak dělí dovolenou při
+       smazání dne), a měnit text, čas apod. Vznik, čas potvrzení ani
+       jméno potvrzujícího nepřepíše (podle nich se pozná původní událost
+       výš). Zrušení potvrzení a smazání se nehlídají jako dřív. */
+    function kalendarDrzeniOk() {
+      return !(resource.data.get('potvrzeno', false) == true
+               && request.resource.data.get('potvrzeno', false) == true)
+        || smiPotvrdit('nepritomnosti')
+        || (request.resource.data.get('typ', '') == resource.data.get('typ', '')
+            && request.resource.data.get('od', '') >= resource.data.get('od', '')
+            && request.resource.data.get('do', '') <= resource.data.get('do', '')
+            && request.resource.data.get('potvrdil', '') == resource.data.get('potvrdil', '')
+            && (!('createdMs' in resource.data)
+                || request.resource.data.get('createdMs', 0) == resource.data.createdMs)
+            && (!('potvrzenoMs' in resource.data)
+                || request.resource.data.get('potvrzenoMs', 0) == resource.data.potvrzenoMs));
     }
     /* Zamítnutí nepřítomnosti (KB.zamitniDovolenou): `zamitnuto` z ne na ano,
        nebo nová událost rovnou zamítnutá – jen kdo nepřítomnosti potvrzuje
@@ -762,7 +985,7 @@ service cloud.firestore {
       allow update: if (spravce() || (clen()
                        && resource.data.uid == request.auth.uid
                        && request.resource.data.uid == request.auth.uid))
-                       && kalendarPotvrzeniOk() && kalendarZamitnutiOk();
+                       && kalendarPotvrzeniOk() && kalendarZamitnutiOk() && kalendarDrzeniOk();
       allow delete: if spravce() || (clen() && resource.data.uid == request.auth.uid);
     }
 
@@ -856,6 +1079,10 @@ service cloud.firestore {
                            || (resource.data.proUids is list
                                && request.auth.uid in resource.data.proUids))
                        && request.resource.data.proUids == resource.data.proUids
+                       // i první adresát `proUid` – podle něj se vzkaz čte a mění,
+                       // přepsáním by ho adresát přeposlal třetímu (audit 10. 11. 2026
+                       // A1-07, Michal 12. 11. 2026, Iris)
+                       && request.resource.data.get('proUid', '') == resource.data.get('proUid', '')
                        && request.resource.data.odKoho == resource.data.odKoho;
       allow delete: if clen() && (resource.data.odKoho == request.auth.uid
                                   || resource.data.proUid == request.auth.uid

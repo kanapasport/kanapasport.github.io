@@ -58,7 +58,7 @@
             const order = second === undefined ? parseInt(first, 10) : parseInt(second, 10);
             const image = (imagesByStep[step] || [])[order - 1];
             if (!image) return match;
-            return '<a class="doc-ref" data-img="' + image.id + '">obr. ' + (step + 1) + "." + order + "</a>";
+            return '<a class="doc-ref" data-img="' + esc(image.id) + '">obr. ' + (step + 1) + "." + order + "</a>";
         });
         return out;
     }

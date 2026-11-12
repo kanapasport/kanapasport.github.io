@@ -559,7 +559,10 @@ try {
         }, () => { /* bez dokumentu žádná čára */ }));
 
         odbery.push(onSnapshot(metaDoc("gsync"), (snap) => {
-            KB.gsyncUrl = (snap.exists() ? (snap.data() || {}).url : "") || "";
+            const url = String((snap.exists() ? (snap.data() || {}).url : "") || "");
+            /* web na tuhle adresu posílá ID token – jen skutečný Apps Script (audit 10. 11. 2026, Michal 12. 11. 2026, Iris) */
+            KB.gsyncUrl = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url) ? url : "";
+            if (url && !KB.gsyncUrl) console.warn("meta/gsync: adresa není Apps Script – zápis do Tabulek vypnutý");
             emit("gsync-url", KB.gsyncUrl);
         }, () => { /* adresa nemusí být nastavená – zápis se pak jen nespustí */ }));
 
@@ -1618,6 +1621,11 @@ KB.saveGuide = async (id, data) => {
         updatedMs: Date.now(),
         lastEditor: window.KB_USER || ""
     };
+    /* Autor návodu podle uid (audit 10. 11. 2026, A1-10): pravidla pouští
+       úpravu jen autorovi a správci, ale poznají ho jen z `createdUid`.
+       Zapisuje se jen při založení – starší návody bez něj dál upraví
+       každý člen (doplnit ho zpětně by úpravu zamklo tomu, kdo ho doplnil). */
+    if (!(KB.guides || []).some(g => g && g.id === id)) payload.createdUid = KB.currentUid() || "";
     await setDoc(guideDoc(id), payload, { merge: true });
     return id;
 };
@@ -2519,7 +2527,7 @@ KB.saveUser = async (data) => {
     // typ spolupráce (zaměstnanec | osvc | student) – jen když ho volající předá
     if (data.typ !== undefined) payload.typ = data.typ || "";
     /* Výkaz po půlhodinách: člověk místo příchodu a odchodu vybírá rovnou
-       počet hodin (Petr Kyselka, Michal 14. 9. 2026). */
+       počet hodin (kolega, Michal 14. 9. 2026). */
     if (data.vykazPulhodiny !== undefined) payload.vykazPulhodiny = data.vykazPulhodiny === true;
     /* Momentálně nepracuje: účet zůstává živý (člověk se přihlásí a vidí
        svoje), ale v nabídkách lidí padá dolů a hlídka výkazů ho nechá být
@@ -3719,10 +3727,9 @@ KB.posliDoSheets = (id, akce) => {
        výsledek si skript zapíše zpátky do databáze. */
     poOdeslani().then(async () => {
         const telo = { id: id };
-        if (akce) {
-            telo.akce = String(akce);
-            try { telo.token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript nic nesmaže */ }
-        }
+        if (akce) telo.akce = String(akce);
+        /* token i u základní akce – skript ho zatím jen zaloguje, později bez něj odmítne (audit 10. 11. 2026, Michal 12. 11. 2026, Iris) */
+        try { telo.token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu jde jen { id } jako dřív */ }
         return fetch(KB.gsyncUrl, {
             method: "POST",
             mode: "no-cors",
@@ -6123,7 +6130,9 @@ KB.ulozFotkyBph = async (data, hlaseni) => {
 
      private/pokladna/zaznamy/{id}
        { datum:"2026-09-01", text, prijem, vydej, kategorie, uid, jmeno,
-         kdo, ms }
+         kdo, ms, updatedMs, updatedBy,
+         historie:[{ ms, kdo, uid, z:{prijem,vydej}, na:{prijem,vydej} }] }
+       (historie jen po opravě částky – Michal 12. 11. 2026)
 
    `prijem` a `vydej` jsou dvě pole, ne jedna částka se znaménkem – přesně
    jako v papírové knize. Sčítá se pak bez přemýšlení nad znaménky a nedá
@@ -6175,6 +6184,23 @@ KB.ulozPokladnu = async (id, data) => {
     if (!id) {
         zaznam.kdo = window.KB_USER || "";
         zaznam.ms = data.ms || Date.now();
+    } else {
+        /* Oprava zápisu místo smazat a zapsat znovu (Michal 12. 11. 2026).
+           Změněná částka se připíše do `historie` – kniha musí jít zpětně
+           odsouhlasit a má být vidět, kdo a z čeho ji opravil. arrayUnion,
+           ať se dva souběžné opravy nepřepíšou. V aktivitě částka není:
+           aktivitu vidí i lidé bez práva na finance. */
+        const stary = (KB.pokladna || []).find(x => x.id === id);
+        const z = stary && { prijem: Number(stary.prijem) || 0, vydej: Number(stary.vydej) || 0 };
+        if (z && (z.prijem !== zaznam.prijem || z.vydej !== zaznam.vydej)) {
+            zaznam.historie = arrayUnion({
+                ms: Date.now(), kdo: window.KB_USER || "",
+                uid: (auth && auth.currentUser && auth.currentUser.uid) || "",
+                z: z, na: { prijem: zaznam.prijem, vydej: zaznam.vydej }
+            });
+            KB.zapisAktivitu("pokladna", "opravil částku v pokladně " +
+                (stary.datum || "") + " – " + (stary.text || ""));
+        }
     }
     await setDoc(pokladnaDoc(pid), zaznam, { merge: true });
     return pid;

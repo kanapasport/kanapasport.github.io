@@ -617,8 +617,8 @@
            absence jich stejně nese osm, ale u částečné (návštěva doktora
            ráno a odpoledne práce) se dřív připsalo osm hodin k tomu, co
            člověk ten den odpracoval – a z osmihodinového dne vyšel přesčas
-           +6,5 h. Marcela si toho všimla 14. 10. 2026; stejně nafouklý
-           přesčas měli i Jakub (+12 h) a Dominik (+5,5 h).
+           +6,5 h. Kolegyně si toho všimla 14. 10. 2026; stejně nafouklý
+           přesčas měli i další dva kolegové.
 
            Které hodiny absence k fondu jdou, říká `V.hodinyKFondu`:
            náhradní volno a absence na svátek nesou nulu (viz výš). */
