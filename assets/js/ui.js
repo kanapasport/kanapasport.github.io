@@ -1120,6 +1120,12 @@
         document.querySelectorAll("[data-need]").forEach(el => {
             el.hidden = !window.KB_USER || !UI.can(el.dataset.need);
         });
+        /* Podlišta, ve které po právech nezůstala jediná záložka, by byl jen
+           prázdný šedý pruh (dohodář na „Moje výplaty“) – schová se celá. */
+        const podlista = document.getElementById("appSubbar");
+        if (podlista && podlista.querySelector(".subbar__cat")) {
+            podlista.hidden = !podlista.querySelector(".subbar__cat:not([hidden])");
+        }
 
         /* Osobní věci nemá nepřihlášený proč vidět: Quick TO-DO, Správa aut,
            Nový výkaz, Moje úkoly ani ikony nástrojů nic nenačtou (data drží
@@ -1778,6 +1784,14 @@
         { title: "SPRÁVA FIREM", href: "firmy.html", need: "vykaz.view", zamek: true },
         { title: "CELKOVÝ PŘEHLED", href: "vykazy-prehled.html", need: "vykaz.view", zamek: true }
     ];
+    /* Výplaty a výpis pro mzdovou účetní patří k sobě – jedna položka pásu
+       „Výplaty a mzdy“, dvě záložky (Michal 12. 11. 2026). Obě za heslem
+       k citlivým sekcím. Dohodář otevírá vyplaty.html jako „Moje výplaty“ –
+       záložky nevidí (need) a prázdná podlišta se schová v paintUser. */
+    UI.PODLISTA_MZDY = [
+        { title: "VÝPLATY", href: "vyplaty.html", need: "finance.view", zamek: true },
+        { title: "VÝPIS PRO MZDOVOU", href: "mzdy-vypis.html", need: "finance.view", zamek: true }
+    ];
     /* FAKTURY byly v podliště projektů – od 22. 9. 2026 jsou v levém pásu
        vedle Pokladny (přání Michala: mimo projekty, jen manažeři a asistentka). */
 
@@ -2150,9 +2164,9 @@
         { id: "penize", nazev: "Peníze", ikona: "penize", polozky: [
             { nazev: "Faktury", ikona: "receipt", href: "faktury.html", need: "finance.view" },
             { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" },
-            { nazev: "Výplaty", ikona: "vyplata", href: "vyplaty.html", need: "finance.view",
-              popis: "DPP, DPČ, OSVČ a studenti – kolik komu vychází, proplaceno, zbývá" },
-            { nazev: "Výpis pro mzdovou", ikona: "vypis", href: "mzdy-vypis.html", need: "finance.view" },
+            // výplaty a výpis pro mzdovou jako jedna položka se dvěma záložkami (Michal 12. 11. 2026)
+            { nazev: "Výplaty a mzdy", ikona: "vyplata", href: "vyplaty.html", need: "finance.view",
+              popis: "Výplaty DPP, DPČ, OSVČ a studentů a výpis nepřítomností zaměstnanců pro mzdovou účetní" },
             { nazev: "Moje výplaty", ikona: "vyplata", href: "vyplaty.html", gate: "data-jen-vyplaty",
               popis: "Kolik ti za měsíc vychází, kolik se proplatilo a kolik zbývá" }
         ] },
