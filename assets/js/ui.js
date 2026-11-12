@@ -255,10 +255,31 @@
         const obsah = options.obsah || ["obsah"];
         const need = options.need || "vykaz.view";
 
-        let meta = null;          // { salt, hash } z databáze, null = nikdo nezaložil
-        let stav = "nacitam";     // nacitam | hotovo | chyba
+        /* Otisk zámku (salt + hash) se pamatuje i v prohlížeči (localStorage,
+           KLIC + "_meta"): další stránka pak nečeká na přihlášení a databázi –
+           karta s heslem je hned a zapamatované odemčení platí okamžitě.
+           Databáze se dočte na pozadí; změněné heslo z ní obsah zase zamkne
+           (Michal 12. 11. 2026: „zámek a kontrola trvají“). Otisk není
+           tajemství – v databázi ho čte každý manažer – a odhlášení ho maže. */
+        const META_KLIC = KLIC + "_meta";
+        const ctiMeta = () => {
+            try {
+                const d = JSON.parse(localStorage.getItem(META_KLIC) || "null");
+                return d && d.salt && d.hash ? { salt: String(d.salt), hash: String(d.hash) } : null;
+            } catch (err) { return null; }
+        };
+        const ulozMeta = (m) => {
+            try {
+                if (m && m.hash) localStorage.setItem(META_KLIC, JSON.stringify({ salt: m.salt, hash: m.hash }));
+                else localStorage.removeItem(META_KLIC);
+            } catch (err) { /* soukromý režim */ }
+        };
+
+        let meta = ctiMeta();     // { salt, hash }, null = nikdo nezaložil (nebo ještě nevíme)
+        let overeno = false;      // otisk potvrzený databází, ne jen z prohlížeče
+        let stav = meta ? "hotovo" : "nacitam";     // nacitam | hotovo | chyba
         let nacita = false;
-        let odemceno = false;     // heslo sedí (nebo je zapamatované)
+        let odemceno = !!(meta && UI.zamekPamet(KLIC) === meta.hash);   // heslo sedí (nebo je zapamatované)
         let videt = false;        // obsah je odkrytý – i hlavnímu správci bez hesla
 
         zajistiZamekStyl();
@@ -336,14 +357,17 @@
         async function nacti() {
             // bez práva nemá smysl se databáze ptát (pravidla by to stejně
             // odmítly); `nacita` brání dvěma dotazům naráz
-            if (stav === "hotovo" || nacita || !window.KB || !window.KB.loadZamek || !UI.can(need)) return;
+            if (overeno || nacita || !window.KB || !window.KB.loadZamek || !UI.can(need)) return;
             nacita = true;
             try {
                 meta = await window.KB.loadZamek();
                 stav = "hotovo";
+                overeno = true;
+                ulozMeta(meta);
             } catch (err) {
-                // typicky ještě neproběhlo přihlášení – zkusí se znovu při kb-role
-                stav = "chyba";
+                // typicky ještě neproběhlo přihlášení – zkusí se znovu při kb-role;
+                // otisk z prohlížeče (když je) zatím platí dál
+                if (!meta) stav = "chyba";
             } finally {
                 nacita = false;
             }
@@ -406,6 +430,8 @@
             nastavMeta: (nova) => {
                 meta = nova;
                 stav = "hotovo";
+                overeno = true;
+                ulozMeta(nova);
                 odemceno = !!(nova && nova.hash);
                 UI.zamekZapamatuj(KLIC, odemceno ? nova.hash : "");
                 paint();
@@ -1225,7 +1251,7 @@
         /* Co o člověku zůstává v prohlížeči: role a odemčení zamčených
            stránek. Volby vzhledu (záložky, filtry, oblíbené) nic
            neprozradí, ty zůstávají. */
-        [ROLE_KEY, "company_kb_zamek"].forEach(k => localStorage.removeItem(k));
+        [ROLE_KEY, "company_kb_zamek", "company_kb_zamek_meta"].forEach(k => localStorage.removeItem(k));
         try { sessionStorage.clear(); } catch (err) { /* nevadí */ }
         window.KB_USER = "";
         window.KB_EMAIL = "";
