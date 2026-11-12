@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výplaty – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=335">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=335">
+    <link rel="stylesheet" href="assets/css/app.css?v=336">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=336">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -320,11 +320,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=335"></script>
-<script src="assets/js/ui.js?v=335"></script>
-<script src="assets/js/nabidka.js?v=335"></script>
-<script src="assets/js/vykazy.js?v=335"></script>
-<script type="module" src="assets/js/store.js?v=335"></script>
+<script src="assets/js/taxonomy.js?v=336"></script>
+<script src="assets/js/ui.js?v=336"></script>
+<script src="assets/js/nabidka.js?v=336"></script>
+<script src="assets/js/vykazy.js?v=336"></script>
+<script type="module" src="assets/js/store.js?v=336"></script>
 
 <script>
 (function () {
@@ -675,10 +675,24 @@
         return "<td" + trida + ' data-l="' + esc(popisek) + '" data-sl="' + esc(klic) + '">' + html + "</td>";
     }
 
+    /* Akce řádku – tlačítka v detailu i nabídka pravým tlačítkem (Michal 12. 11. 2026). */
+    function akceRadku(r) {
+        const smiPsat = finance() && (!r.uzavreno || hlavni());
+        return [
+            { akce: "proplaceno", text: "Proplaceno…", povoleno: smiPsat, ikona: "platba",
+                title: "Zapsat výplatu – uložením se měsíc uzavře" },
+            { akce: "bonus", text: "Bonus…", povoleno: smiPsat, ikona: "plus" },
+            r.uzavreno
+                ? (hlavni() ? { akce: "odemknout", text: "Odemknout měsíc", povoleno: true, ikona: "vratit", nebezpeci: true } : null)
+                : { akce: "uzavrit", text: "Uzavřít měsíc", povoleno: finance(), ikona: "hotovo" },
+            { akce: "prepocitat", text: "Přepočítat", povoleno: smiPsat, ikona: "historie",
+                title: "Spočítat znovu z výkazů a uložit" }
+        ].filter(Boolean);
+    }
+
     function detailHtml(r) {
         const d = r.d;
         const c = r.cisla;
-        const smiPsat = finance() && (!r.uzavreno || hlavni());
         const uid = esc(r.u.id);
         const prop = (d && d.proplaceno) || [];
         const bon = (d && d.bonusy) || [];
@@ -704,17 +718,10 @@
         if (r.limit) info.push(esc("Limit DPP: letos " + V.hod(r.limit.hodiny) + " z " + V.hod(r.limit.limitHodin) +
             " (" + r.limit.pctHodin + " %)" + (r.limit.hranice ? "" : " · hranice odvodů nenastavená")));
         const infoHtml = info.map(t => "<li>" + t + "</li>").join("");
-        const tl = (akce, text, povoleno, title) => '<button type="button" class="btn btn--sm ' +
-            (akce === "proplaceno" ? "btn--primary" : "btn--ghost") + '" data-akce="' + akce + '" data-uid="' + uid + '"' +
-            (povoleno && !pracuji ? "" : " disabled") + (title ? ' title="' + esc(title) + '"' : "") + ">" + esc(text) + "</button>";
-        const akce = [
-            tl("proplaceno", "Proplaceno…", smiPsat, "Zapsat výplatu – uložením se měsíc uzavře"),
-            tl("bonus", "Bonus…", smiPsat),
-            r.uzavreno
-                ? (hlavni() ? tl("odemknout", "Odemknout měsíc", true) : "")
-                : tl("uzavrit", "Uzavřít měsíc", finance()),
-            tl("prepocitat", "Přepočítat", smiPsat, "Spočítat znovu z výkazů a uložit")
-        ].join("");
+        const tl = (a) => '<button type="button" class="btn btn--sm ' +
+            (a.akce === "proplaceno" ? "btn--primary" : "btn--ghost") + '" data-akce="' + a.akce + '" data-uid="' + uid + '"' +
+            (a.povoleno && !pracuji ? "" : " disabled") + (a.title ? ' title="' + esc(a.title) + '"' : "") + ">" + esc(a.text) + "</button>";
+        const akce = akceRadku(r).map(tl).join("");
         return '<tr class="vyd" data-detail="' + uid + '"><td colspan="' + (SLOUPCE.length + 2) + '">' +
             '<div class="vyd__mrizka">' +
                 '<div class="vyd__oddil"><b>Proplaceno · ' + kcHtml(c.proplacenoCelkem) + "</b>" +
@@ -1113,6 +1120,20 @@
             }
             const tr = event.target.closest && event.target.closest("#tab tr.vyr[data-uid]");
             if (tr && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); tr.click(); }
+        });
+        // pravé tlačítko / dlouhý stisk na řádku člověka (i na jeho detailu) = stejné akce jako v detailu
+        // (Michal 12. 11. 2026); jen správa výplat, přehled dohodáře nabídku nemá
+        window.KBNabidka.pripoj((cil) => {
+            const tr = cil.closest("#tab tr.vyr[data-uid], #tab tr.vyd[data-detail]");
+            if (!tr || !finance() || pracuji) return null;
+            const uid = tr.dataset.uid || tr.dataset.detail;
+            const r = radek(clovek(uid) || { id: uid, first: "", last: uid }, mesic);
+            return {
+                nadpis: jmeno(clovek(uid), uid) + " · " + mesicText(mesic),
+                radek: $("tab").querySelector('tr.vyr[data-uid="' + CSS.escape(uid) + '"]') || tr,
+                polozky: akceRadku(r).filter(a => a.povoleno).map(a => ({
+                    text: a.text, ikona: a.ikona, nebezpeci: a.nebezpeci, fn: () => akce(a.akce, uid) }))
+            };
         });
         $("oZrusit").addEventListener("click", zavriOkno);
         $("oUlozit").addEventListener("click", ulozOkno);
