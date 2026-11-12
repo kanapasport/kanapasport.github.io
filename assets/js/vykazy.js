@@ -588,6 +588,25 @@
         return V.pracovniDnyIso(zacatek, doIso).filter(d => !ma[d]);
     };
 
+    /**
+     * Krátké dny člověka – pracovní dny od–do včetně (bez víkendů a svátků),
+     * kdy MÁ zápis, ale všech hodin dne (práce + absence včetně Volna) je
+     * pod 8. Michal 12. 11. 2026: jedna logika pro hlídku krátkých dnů
+     * (ui.js, Quick TO-DO) i uzávěrku měsíce. Začátek počítání (`odIso`
+     * zůstatku) si hlídá volající. Čte window.KB.vykazy.
+     * @returns {{datum: string, hodiny: number, chybi: number}[]} vzestupně
+     */
+    V.kratkeDnyCloveka = (uid, odIso, doIso) => {
+        if (!uid || !odIso || !doIso || odIso > doIso) return [];
+        const den = {};
+        (window.KB.vykazy || []).forEach(z => {
+            const d = z && z.uid === uid ? String(z.datum || "") : "";
+            if (d && d >= odIso && d <= doIso) den[d] = (den[d] || 0) + (Number(z.hodiny) || 0);
+        });
+        return V.pracovniDnyIso(odIso, doIso).filter(iso => iso in den && na2(den[iso]) < 8)
+            .map(iso => ({ datum: iso, hodiny: na2(den[iso]), chybi: na2(8 - den[iso]) }));
+    };
+
     /* `doIso` (nepovinné): stav k tomu dni VČETNĚ – zápisy i fond do něj.
        Uzávěrka měsíce potřebuje přesčas k poslednímu dni měsíce, ne k dnešku
        (Michal 12. 11. 2026, Iris). Bez něj jako dřív. */
@@ -2892,7 +2911,6 @@
         const vsechny = KB.vykazy || [];
         const vMesici = vsechny.filter(z => z && z.uid && String(z.datum || "") >= r.od && String(z.datum || "") <= r.do);
         const doKonceMesice = vsechny.filter(z => z && String(z.datum || "") <= r.do);
-        const pracovni = V.pracovniDnyIso(r.od, konec);
         const ok = KB.kontrolaOk || {};
         const podezrele = V.podezreleZapisy(vsechny, { dnes: r.do, dni: Number(r.do.slice(8, 10)) })
             .filter(p => p.datum >= r.od && p.datum <= r.do);
@@ -2951,14 +2969,11 @@
             const hlidany = V.maFond(u) && jeIso(zu.odIso) && zu.bezPrescasu !== true &&
                 u.nepracuje !== true && u.active !== false;
             const chybi = hlidany ? V.chybejiciDny(uid, konec, r.od) : [];
-            const kratke = [];
-            if (hlidany) {
-                const den = {};
-                moje.forEach(z => { den[z.datum] = (den[z.datum] || 0) + (Number(z.hodiny) || 0); });
-                pracovni.forEach(iso => {
-                    if (iso >= zu.odIso && iso in den && na2(den[iso]) < 8) kratke.push({ datum: iso, hodiny: na1(den[iso]) });
-                });
-            }
+            // jedna logika s hlídkou krátkých dnů (V.kratkeDnyCloveka, Michal 12. 11. 2026)
+            const kratke = hlidany
+                ? V.kratkeDnyCloveka(uid, zu.odIso > r.od ? zu.odIso : r.od, konec)
+                    .map(k => ({ datum: k.datum, hodiny: na1(k.hodiny) }))
+                : [];
 
             // starší odkliknutí bez jména (společný dokument) nese "?"
             const mojePodezrele = podezrele.filter(p => p.uid === uid).map(p => ({

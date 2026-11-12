@@ -80,7 +80,7 @@
             .hookno { padding: 8px; }
         }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=337">
+    <link rel="stylesheet" href="assets/css/app.css?v=338">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -226,6 +226,8 @@
                 <b>Někdo zaškrtnutý</b> = potvrdí jen zaškrtnutí a hlavní správce – ostatním
                 manažerům se místo tlačítka Potvrdit ukáže „Potvrzuje: …“ a databáze jim potvrzení
                 nepustí. Hlavní správce smí potvrdit vždycky.
+                <b>Připraveno k odevzdání</b> nic nepotvrzuje – zaškrtnutým vyskočí Quick TO-DO, když někdo
+                označí milník; nikdo zaškrtnutý = hlavní správce a kdo potvrzuje milníky.
             </p>
             <p class="tiny" id="potvrzJenHlavni" style="margin:0;line-height:1.6;color:var(--warn)" hidden>
                 Mění jen hlavní správce – tady to jen vidíš.
@@ -297,10 +299,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=337"></script>
-<script src="assets/js/ui.js?v=337"></script>
-<script src="assets/js/vykazy.js?v=337"></script>
-<script type="module" src="assets/js/store.js?v=337"></script>
+<script src="assets/js/taxonomy.js?v=338"></script>
+<script src="assets/js/ui.js?v=338"></script>
+<script src="assets/js/vykazy.js?v=338"></script>
+<script type="module" src="assets/js/store.js?v=338"></script>
 
 <script>
 (function () {
@@ -717,7 +719,10 @@
     const manazeriKPotvrzovani = () =>
         V.lide().filter(u => window.KBUI.canAs(u.role, "vykaz.view"));
 
-    function stavDruhu(zaskrtnuto) {
+    function stavDruhu(zaskrtnuto, klic) {
+        if (window.KBUI.DRUHY_POTVRZENI[klic].upozorneni) {
+            return zaskrtnuto ? "upozornění dostanou jen zaškrtnutí" : "upozornění dostane hlavní správce a kdo potvrzuje milníky";
+        }
         return zaskrtnuto ? "potvrzují jen zaškrtnutí a hlavní správce" : "potvrdí kdokoli z manažerů";
     }
 
@@ -745,7 +750,7 @@
             return '<div class="potvrz__druh" data-potvrz-radek="' + esc(klic) + '">' +
                 '<div class="potvrz__nazev"><b>' + esc(druhy[klic].nazev) + "</b>" +
                     '<span class="tiny muted">' + esc(druhy[klic].popis) + "</span>" +
-                    '<span class="potvrz__stav" data-potvrz-stav>' + esc(stavDruhu(zaskrtnuti.length > 0)) + "</span>" +
+                    '<span class="potvrz__stav" data-potvrz-stav>' + esc(stavDruhu(zaskrtnuti.length > 0, klic)) + "</span>" +
                 "</div>" +
                 '<div class="potvrz__lide">' +
                     manazeri.map(u => chip(u.id, V.jmeno(u), false)).join("") +
@@ -780,7 +785,7 @@
         box.closest(".potvrz__clovek").classList.toggle("potvrz__clovek--zap", box.checked);
         const radek = box.closest("[data-potvrz-radek]");
         const zaskrtnuto = !!radek.querySelector("[data-potvrz-druh]:checked");
-        radek.querySelector("[data-potvrz-stav]").textContent = stavDruhu(zaskrtnuto);
+        radek.querySelector("[data-potvrz-stav]").textContent = stavDruhu(zaskrtnuto, radek.dataset.potvrzRadek);
     }
 
     async function ulozPotvrzovani() {

@@ -932,7 +932,15 @@ KB.saveQuickTodo = async (id, data, volby) => {
     /* "milnikTodo" (3. 11. 2026) = „aktualizuj TO-DO u úkolů odevzdaného
        milníku“ (KB.zalozTodoMilniku) – plní se jako úkol (Splněno), jen
        podle druhu a `milnikId` se pozná, ke kterému milníku patří. */
-    if ("druh" in data) zapis.druh = info ? "info" : (data.druh === "milnikTodo" ? "milnikTodo" : "");
+    /* "kratkyDen" (Michal 12. 11. 2026) = hlídka krátkého dne (ui.js): den, kdy má
+       zaměstnanec zapsáno pod 8 h – nese `datum` a `chybi` (hodiny do 8) pro tlačítko
+       „Zapsat Volno“. Jen u tohoto druhu. */
+    if ("druh" in data) zapis.druh = info ? "info"
+        : (data.druh === "milnikTodo" || data.druh === "kratkyDen" ? data.druh : "");
+    if (data.druh === "kratkyDen") {
+        zapis.datum = /^\d{4}-\d{2}-\d{2}$/.test(data.datum || "") ? data.datum : "";
+        zapis.chybi = Math.max(0, Math.min(8, Number(data.chybi) || 0));
+    }
     if ("milnikId" in data) zapis.milnikId = String(data.milnikId || "").slice(0, 80);
     if ("opakovaniDen" in data) zapis.opakovaniDen = Number(data.opakovaniDen) || 0;
     if ("opakovaniKoren" in data) zapis.opakovaniKoren = String(data.opakovaniKoren || "").slice(0, 80);
@@ -2206,6 +2214,27 @@ KB.oznacPripraveno = async (id, ano) => {
     const nazev = m ? [m.cinnost, m.napln].filter(Boolean).join(" – ") : "";
     KB.zapisAktivitu("milnik", (ano ? "označil milník jako připravený k odevzdání"
         : "zrušil u milníku „připraveno k odevzdání“") + (nazev ? " " + nazev : ""));
+    if (!ano) return;                       // zrušení nikomu nic neposílá
+    /* Upozornění (Michal 12. 11. 2026): komu, určuje Nastavení → Potvrzování,
+       řádek „Připraveno k odevzdání" (druhy.pripraveno.lide). Prázdné =
+       hlavní správce + kdo potvrzuje milníky. Odkaz na milník Quick TO-DO
+       neumí (odkazy jen projekt/úkol), proto je cesta v textu. */
+    const ja = KB.currentUid();
+    const p = KB.potvrzovani && KB.potvrzovani.druhy;
+    const urceni = p && p.pripraveno ? p.pripraveno.lide : [];
+    const aktivni = (KB.users || []).filter(u => u.active !== false);
+    const komu = (urceni.length ? urceni
+        : aktivni.filter(u => u.role === "hlavni-spravce").map(u => u.id)
+            .concat(p && p.milniky ? p.milniky.lide : []))
+        .filter((uid, i, a) => uid && uid !== ja && a.indexOf(uid) === i && aktivni.some(u => u.id === uid));
+    if (!komu.length) return;
+    const projekt = m ? (m.zakazka || m.projekt || "") : "";
+    await KB.saveQuickTodo(KB.newQuickId(), {
+        text: "Milník " + (nazev || "bez názvu") + (projekt ? " (" + projekt + ")" : "") +
+            " je připravený k odevzdání: " + (kdo || "?") + " · Milníky" + (projekt ? " → " + projekt : ""),
+        proUids: komu, projekt: projekt,
+        druh: "info", rezim: "kazdy"          // oznámení – bere se na vědomí
+    }).catch(err => console.warn("Upozornění na připravený milník neodešlo:", err));
 };
 
 /**
@@ -5500,7 +5529,8 @@ KB.zamitniDovolenou = async (id, duvod) => {
    i dlaždice „Čeká na tvé rozhodnutí" na nástěnce. Odběr se zakládá
    s ostatními společnými odběry po přihlášení (sledujPotvrzovani). */
 /* POTVRZOVANI-STORE-ZACATEK */
-KB.DRUHY_POTVRZENI = ["nepritomnosti", "ukoly", "milniky", "zpetne"];
+// pripraveno = komu přijde upozornění „milník připravený k odevzdání" (nic se tím nepotvrzuje)
+KB.DRUHY_POTVRZENI = ["nepritomnosti", "ukoly", "milniky", "zpetne", "pripraveno"];
 /** null = dokument ještě nedorazil (platí dřívější stav). */
 KB.potvrzovani = null;
 

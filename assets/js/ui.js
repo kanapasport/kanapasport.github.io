@@ -948,7 +948,10 @@
         nepritomnosti: { nazev: "Nepřítomnosti", popis: "dovolená, volno a neplacené volno" },
         ukoly:         { nazev: "Hotové úkoly",  popis: "úkol, který zpracovatel dokončil" },
         milniky:       { nazev: "Milníky",       popis: "splnění odškrtnuté zpracovatelem" },
-        zpetne:        { nazev: "Zpětný zápis",  popis: "povolení zápisu do uzavřeného týdne" }
+        zpetne:        { nazev: "Zpětný zápis",  popis: "povolení zápisu do uzavřeného týdne" },
+        // jen upozornění, nic se nepotvrzuje (KB.oznacPripraveno, Michal 12. 11. 2026)
+        pripraveno:    { nazev: "Připraveno k odevzdání (milníky)",
+                         popis: "komu vyskočí upozornění, když někdo označí milník", upozorneni: true }
     };
 
     /** UID určených k druhu, jak leží v databázi; [] = nikdo určený není. */
@@ -2067,14 +2070,14 @@
                 /* hlídka smí rozhodnout až nad skutečnými záznamy – emit
                    umí vyvolat i odběr částek dřív, než záznamy dorazí */
                 if (window.KB.vykazyPrisly) {
-                    hlidkaPrislo.vykazy = true; hlidkaVykazu(); hlidkaDopredu();
+                    hlidkaPrislo.vykazy = true; hlidkaVykazu(); hlidkaDopredu(); hlidkaKratkychDnu();
                 }
                 dopocitejCastky(); });
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
             window.KB.on("quicktodo", () => { odznakAplikace.quick = true; renderMujDen(); renderQuick();
-                hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu();
+                hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu(); hlidkaKratkychDnu();
                 hlidkaAkci(); hlidkaUzaverky(); });
             // připomenutí akcí se přepočítá i s příchodem kalendáře
             window.KB.on("kalendar", hlidkaAkci);
@@ -2991,6 +2994,141 @@
         }).catch(err => console.warn("Hlídka výkazů nezapsala vzkaz:", err));
     }
 
+    /* ------------------------------------------ hlídka krátkých dnů ------
+       Michal 12. 11. 2026: zaměstnanec, který má za pracovní den zapsáno víc
+       než 0 a míň než 8 h (práce + absence včetně Volna), dostane do Quick
+       TO-DO vzkaz, že tam nemá volno – zapsat Volno (čerpání přesčasu) za
+       zbytek dne, nebo dopsat výkaz. Dny bez zápisu řeší hlídka výkazů.
+       Stejné podmínky jako uzávěrka (fond, začátek počítání, přesčas veden).
+       Pevné id qt_kratky_<uid>_<datum>: existující = nic, smazaný hlídá
+       localStorage. Den doplněný na ≥ 8 h vzkaz sám označí jako hotový. */
+
+    const kratkeZapsane = new Set();   // co tenhle prohlížeč už zapsal (odběr se vrací se zpožděním)
+    let kratkeOdbery = false;
+    const DEN_S_PREDLOZKOU = ["V neděli", "V pondělí", "V úterý", "Ve středu", "Ve čtvrtek", "V pátek", "V sobotu"];
+
+    function hlidkaKratkychDnu() {
+        if (!hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
+        const K = window.KB, V = window.KBVYK;
+        const uid = K.currentUid && K.currentUid();
+        if (!uid || !V || !V.kratkeDnyCloveka || !UI.can("vykaz.otevrit")) return;
+        if (!kratkeOdbery) {
+            kratkeOdbery = true;
+            K.on("zustatky", hlidkaKratkychDnu);
+            K.on("users", hlidkaKratkychDnu);
+            if (K.watchZustatky) K.watchZustatky();
+        }
+        const ja = UI.me();
+        if (!ja || !V.maFond(ja) || ja.bezHlidky === true || ja.nepracuje === true) return;
+        const zu = (K.zustatky || {})[uid] || {};
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(zu.odIso || "")) || zu.bezPrescasu === true) return;
+
+        const predpona = "qt_kratky_" + uid + "_";
+        const quick = K.quicktodo || [];
+        // den doplněný na 8 h a víc – vzkaz se uzavře sám
+        quick.forEach(q => {
+            if (!q.id || q.id.indexOf(predpona) !== 0 || q.hotovo || !q.datum || kratkeZapsane.has(q.id + "#hotovo")) return;
+            const h = (K.vykazy || []).reduce((s, z) =>
+                s + (z && z.uid === uid && z.datum === q.datum ? Number(z.hodiny) || 0 : 0), 0);
+            if (Math.round(h * 100) / 100 < 8) return;
+            kratkeZapsane.add(q.id + "#hotovo");
+            K.saveQuickTodo(q.id, Object.assign(bezPriloh(q), { hotovo: true, hotovoKdo: "Hlídka výkazů",
+                hotovoMs: Date.now() }), { bezAktivity: true })
+                .catch(err => console.warn("Hlídka krátkých dnů neuzavřela vzkaz:", err));
+        });
+
+        const dnes = V.dnesISO();
+        const vcera = V.posunIso(dnes, -1);
+        const pred14 = V.posunIso(dnes, -14);
+        const od = zu.odIso > pred14 ? zu.odIso : pred14;
+        let smazane = [];
+        try { smazane = JSON.parse(localStorage.getItem("kb-hlidka-kratky") || "[]") || []; } catch (err) { }
+        V.kratkeDnyCloveka(uid, od, vcera).filter(k => k.hodiny > 0).forEach(k => {
+            const id = predpona + k.datum;
+            if (kratkeZapsane.has(id) || smazane.indexOf(id) !== -1 || quick.some(q => q.id === id)) return;
+            kratkeZapsane.add(id);
+            const d = new Date(k.datum + "T12:00:00");
+            K.saveQuickTodo(id, {
+                text: DEN_S_PREDLOZKOU[d.getDay()] + " " + d.getDate() + ". " + (d.getMonth() + 1) +
+                    ". máš zapsáno jen " + V.hod(k.hodiny) + " (chybí " + V.hod(k.chybi) +
+                    "). Zapiš Volno – čerpání přesčasu – za zbytek dne, nebo doplň další výkaz.",
+                proUids: [uid],
+                odKoho: uid,
+                odKohoJmeno: "Hlídka výkazů",
+                druh: "kratkyDen",
+                datum: k.datum,
+                chybi: k.chybi,
+                hlidka: "kratky"
+            }).then(() => {
+                // pojistka pro tenhle prohlížeč: smazaný vzkaz by se jinak založil znovu
+                try {
+                    let seznam = [];
+                    try { seznam = JSON.parse(localStorage.getItem("kb-hlidka-kratky") || "[]") || []; } catch (err) { }
+                    localStorage.setItem("kb-hlidka-kratky", JSON.stringify(seznam.concat([id]).slice(-40)));
+                } catch (err) { }
+            }).catch(err => console.warn("Hlídka krátkých dnů nezapsala vzkaz:", err));
+        });
+    }
+
+    /* Tlačítka vzkazu krátkého dne (Michal 12. 11. 2026). „Zapsat Volno“ =
+       zápis Volna na zbytek dne stejně jako Rychlý zápis (KB.saveMujVykaz +
+       nepotvrzená událost kalendáře `volno` s `vykazId`), jen s hodinami
+       `chybi` – částečné volno jako formulář Výkazů (bez času, hodiny pevně).
+       „Dopíšu výkaz“ = vzkaz hotový a Výkazy (skok na den adresou neumí). */
+    const hodinyText = (h) => window.KBVYK ? window.KBVYK.hod(h) : (Number(h) || 0) + " h";
+    UI.quickKratkyHtml = (q) => '<button type="button" class="btn btn--sm btn--primary" data-kratky-volno="' +
+            esc(q.id) + '">Zapsat Volno (' + esc(hodinyText(q.chybi)) + ")</button>" +
+        '<button type="button" class="btn btn--sm btn--ghost" data-kratky-dopisu="' + esc(q.id) + '">Dopíšu výkaz</button>';
+
+    document.addEventListener("click", async (event) => {
+        const volno = event.target.closest && event.target.closest("[data-kratky-volno]");
+        const dopisu = event.target.closest && event.target.closest("[data-kratky-dopisu]");
+        if (!volno && !dopisu) return;
+        const id = volno ? volno.dataset.kratkyVolno : dopisu.dataset.kratkyDopisu;
+        const q = (window.KB.quicktodo || []).find(x => x.id === id);
+        if (!q || !/^\d{4}-\d{2}-\d{2}$/.test(String(q.datum || ""))) return;
+        if (dopisu) {
+            try { await UI.quickPrepni(q, true); } catch (err) { console.warn(err); }
+            location.href = "vykazy.html";
+            return;
+        }
+        const chybi = Number(q.chybi) || 0;
+        if (!(chybi > 0 && chybi <= 8)) return UI.toast("Vzkaz nenese, kolik hodin chybí – zapiš Volno ve Výkazech.", "warn");
+        // stejné hlídky jako Rychlý zápis a formulář Výkazů: čára uzávěrky a uzavřený týden (úterý 00:00 dalšího týdne)
+        const cara = String((window.KB && window.KB.uzaverkaOd) || "");
+        if (cara && q.datum < cara && !UI.can("vykaz.view")) {
+            return UI.toast("Měsíc je uzavřený – oprava přes Nahlásit chybu ve Výkazech.", "warn");
+        }
+        const lhuta = new Date(q.datum + "T00:00:00");
+        lhuta.setDate(lhuta.getDate() - (lhuta.getDay() + 6) % 7 + 8);
+        if (Date.now() >= lhuta.getTime() && !UI.can("vykaz.view")) {
+            return UI.toast("Týden je už uzavřený – Volno zapíšeš ve Výkazech přes zpětný zápis.", "warn");
+        }
+        volno.disabled = true;
+        try {
+            const jmeno = window.KB_USER || "";
+            const vykazId = window.KB.newVykazId();
+            await window.KB.saveMujVykaz(vykazId, {
+                datum: q.datum, zakazka: "Volno", nazev: "Volno – " + jmeno,
+                osoba: jmeno, absence: true, celyden: false,
+                od: "", do: "", pauza: 0, hodinyPevne: chybi,
+                cinnost: "", firma: "", km: 0, obed: false, zdroj: "panel"
+            });
+            await window.KB.saveUdalost(window.KB.newUdalostId(), {
+                typ: "volno", od: q.datum, do: q.datum, celyDen: false, text: hodinyText(chybi),
+                zdroj: "panel", vykazId: vykazId
+            });
+            await UI.quickPrepni(q, true);
+            UI.toast("Zapsáno Volno " + hodinyText(chybi) + " na " + Number(q.datum.slice(8, 10)) + ". " +
+                Number(q.datum.slice(5, 7)) + ". – potvrdí ho manažer.");
+        } catch (err) {
+            console.error(err);
+            UI.toast("Uložení selhalo.", "error");
+        } finally {
+            volno.disabled = false;
+        }
+    });
+
     /* -------------------------------------------- hlídka uzávěrky ------
        Třetího v měsíci „vyskočí“ hlavnímu správci přehled, co komu za minulý
        měsíc chybí (Michal 12. 11. 2026, Iris). Jen dokud minulý měsíc nemá
@@ -3527,6 +3665,7 @@
                     (q.zadostZpetne && !hotovoMne
                         ? '<a class="btn btn--sm btn--primary" href="vykazy.html#zpetne">Vyřídit ve Výkazech</a>'
                         : "") +
+                    (q.druh === "kratkyDen" && !hotovoMne ? UI.quickKratkyHtml(q) : "") +
                     UI.quickOtevritHtml(q) +
                     (hotovoMne
                         ? '<button type="button" class="btn btn--sm btn--ghost"' +
@@ -3963,6 +4102,8 @@
                    kliknutím povolit den, od dne, nebo odmítnout (22. 9. 2026) */
                 (q.zadostZpetne && jsemAdresat && !hotovoMne
                     ? '<a class="btn btn--primary btn--sm" href="vykazy.html#zpetne">Vyřídit</a>' : "") +
+                // krátký den: Zapsat Volno / Dopíšu výkaz (Michal 12. 11. 2026)
+                (q.druh === "kratkyDen" && jsemAdresat && !hotovoMne ? UI.quickKratkyHtml(q) : "") +
                 /* Beru na vědomí – jen pro adresáta a jen dokud to není
                    splněné. Zpátky se to vezme kliknutím na totéž. Oznámení
                    ho nemá – tam „Beru na vědomí" stojí místo Splněno. */
