@@ -5970,6 +5970,186 @@ KB.smazPostupObrazek = async (zaznamId, imgId) => {
     if (uid === KB.currentUid()) await KB.ulozPostup(datum, { pocet: increment(-1) });
 };
 
+/* ---------------------------------------------------- info k zakázkám ---
+   Poznámky z terénu k zakázkám, i nadiktované z telefonu (Michal 12. 11. 2026, Iris).
+
+     private/infozakazky/zaznamy/{iz_…}  { uid, jmeno, text, projektId, projektNazev,
+                                           autoPrirazeno, lide, odkud, vyrizeno, vyrizenoKdo,
+                                           vyrizenoMs, createdMs, ms, upravilUid, upravilJmeno }
+     private/infozakazky/klice/{otisk}   { uid, jmeno, ms, kdo } – klíč zkratky v telefonu
+
+   `lide` = autor + lidé zakázky: člen čte jedním dotazem array-contains svoje
+   i sdílené (pravidla nejsou filtr), manažer celou kolekci. Klíč zkratky se
+   nikde neukládá, jen jeho otisk SHA-256 – Apps Script podle něj pozná autora. */
+
+const infoCol = () => collection(db, "artifacts", APP_ID, "private", "infozakazky", "zaznamy");
+const infoDoc = (id) => doc(db, "artifacts", APP_ID, "private", "infozakazky", "zaznamy", id);
+const kliceCol = () => collection(db, "artifacts", APP_ID, "private", "infozakazky", "klice");
+const klicDoc = (otisk) => doc(db, "artifacts", APP_ID, "private", "infozakazky", "klice", otisk);
+const INFO_TEXT_MAX = 4000;
+
+KB.infozakazky = [];
+let infoOdber = null;
+
+KB.watchInfozakazky = async () => {
+    if (infoOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || infoOdber) return;
+    if (pockejNaRoli(KB.watchInfozakazky)) return;
+    const dotaz = jsemManazer()
+        ? infoCol()
+        : query(infoCol(), where("lide", "array-contains", auth.currentUser.uid));
+    infoOdber = onSnapshot(dotaz, (snap) => {
+        KB.infozakazky = [];
+        snap.forEach(d => KB.infozakazky.push({ id: d.id, ...d.data() }));
+        emit("infozakazky", KB.infozakazky);
+    }, (err) => console.error("Chyba čtení Info k zakázkám:", err));
+};
+
+KB.newInfoId = () => "iz_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+
+/** Kdo poznámku uvidí: autor + lidé zakázky (z KB.projektyDocs), bez opakování. */
+KB.lideInfo = (projektId, autorUid) => {
+    const p = projektId ? (KB.projektyDocs || []).find(x => x.id === projektId) : null;
+    const ven = autorUid ? [autorUid] : [];
+    ((p && Array.isArray(p.lide)) ? p.lide : []).forEach(u => { if (u && ven.indexOf(u) === -1) ven.push(u); });
+    return ven;
+};
+
+const infoNazevProjektu = (projektId) =>
+    String(((projektId && (KB.projektyDocs || []).find(x => x.id === projektId)) || {}).nazev || "");
+
+/** Nová poznámka z webu. Vrací id. */
+KB.pridejInfo = async ({ text, projektId, autoPrirazeno } = {}) => {
+    if (authReady) await authReady;
+    requireDb();
+    const t = String(text || "").trim().slice(0, INFO_TEXT_MAX);
+    if (!t) throw new Error("Prázdný text poznámky.");
+    const uid = KB.currentUid();
+    const pid = String(projektId || "");
+    const nazev = infoNazevProjektu(pid);
+    const ted = Date.now();
+    const id = KB.newInfoId();
+    await setDoc(infoDoc(id), {
+        uid: uid,
+        jmeno: window.KB_USER || "",
+        text: t,
+        projektId: pid,
+        projektNazev: nazev,
+        autoPrirazeno: !!pid && autoPrirazeno === true,
+        lide: KB.lideInfo(pid, uid),
+        odkud: "web",
+        vyrizeno: false,
+        vyrizenoKdo: "",
+        vyrizenoMs: 0,
+        createdMs: ted,
+        ms: ted
+    });
+    KB.zapisAktivitu("info", "zapsal info k zakázce " + (nazev || "nezařazeno") + ": " + t.slice(0, 120));
+    return id;
+};
+
+/** Ruční přiřazení zakázky ("" = Nezařazeno); lidé se přepočítají, autor zůstává. */
+KB.priradInfo = async (id, projektId) => {
+    if (authReady) await authReady;
+    requireDb();
+    let z = (KB.infozakazky || []).find(x => x.id === id);
+    if (!z) { const s = await getDoc(infoDoc(id)); z = s.exists() ? s.data() : null; }
+    if (!z) throw new Error("Poznámka nenalezena.");
+    const pid = String(projektId || "");
+    // updateDoc, ne merge celého dokumentu – pravidla hlídají, která pole se mění
+    await updateDoc(infoDoc(id), {
+        projektId: pid,
+        projektNazev: infoNazevProjektu(pid),
+        autoPrirazeno: false,
+        lide: KB.lideInfo(pid, z.uid),
+        ms: Date.now()
+    });
+};
+
+/** Úprava textu – pravidla ji pustí jen autorovi (a manažerovi). */
+KB.upravInfoText = async (id, text) => {
+    if (authReady) await authReady;
+    requireDb();
+    const t = String(text || "").trim().slice(0, INFO_TEXT_MAX);
+    if (!t) throw new Error("Prázdný text poznámky.");
+    await updateDoc(infoDoc(id), {
+        text: t,
+        upravilUid: KB.currentUid(),
+        upravilJmeno: window.KB_USER || "",
+        ms: Date.now()
+    });
+};
+
+/** Vyřízeno (ano = true) / vrátit mezi nevyřízené (ano = false). */
+KB.vyridInfo = async (id, ano) => {
+    if (authReady) await authReady;
+    requireDb();
+    const ted = Date.now();
+    await updateDoc(infoDoc(id), {
+        vyrizeno: !!ano,
+        vyrizenoKdo: ano ? (window.KB_USER || "") : "",
+        vyrizenoMs: ano ? ted : 0,
+        ms: ted
+    });
+};
+
+/* Klíč zkratky v telefonu: zkratka iPhonu nemá přihlášení Firebase, tak se
+   Apps Scriptu prokazuje klíčem. Ukáže se jen jednou (vrací ho vydejKlicZkratky),
+   v databázi je jen otisk. Bez zkreslení: 256 je násobek 32 znaků abecedy. */
+const KLIC_ABECEDA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+async function otiskKlice(klic) {
+    const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(klic));
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function smazKliceCloveka(uid) {
+    const snap = await getDocs(query(kliceCol(), where("uid", "==", uid)));
+    const ids = [];
+    snap.forEach(d => ids.push(d.id));
+    for (const id of ids) await deleteDoc(klicDoc(id));
+    return ids.length;
+}
+
+/** Vydá nový klíč (dřívější přestane platit). Vrací klíč – ukázat jen jednou. */
+KB.vydejKlicZkratky = async (uid, jmeno) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!uid || typeof uid !== "string") throw new Error("Chybí člověk.");
+    const bajty = crypto.getRandomValues(new Uint8Array(26));
+    const klic = Array.from(bajty).map(b => KLIC_ABECEDA[b % KLIC_ABECEDA.length]).join("");
+    const otisk = await otiskKlice(klic);
+    await smazKliceCloveka(uid);
+    await setDoc(klicDoc(otisk), { uid: uid, jmeno: String(jmeno || ""), ms: Date.now(), kdo: window.KB_USER || "" });
+    KB.zapisAktivitu("info", "vydal klíč pro zkratku v telefonu: " + String(jmeno || uid));
+    return klic;
+};
+
+/** Zruší klíč člověka. Vrací počet smazaných. */
+KB.zrusKlicZkratky = async (uid) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!uid || typeof uid !== "string") return 0;
+    const n = await smazKliceCloveka(uid);
+    if (n) KB.zapisAktivitu("info", "zrušil klíč pro zkratku v telefonu");
+    return n;
+};
+
+/** Kdo má klíč: { [uid]: { ms, kdo } } (jednorázově, nejnovější vyhrává). */
+KB.nactiKliceZkratky = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(kliceCol());
+    const ven = {};
+    snap.forEach(d => {
+        const k = d.data() || {};
+        if (!k.uid || (ven[k.uid] && ven[k.uid].ms >= (k.ms || 0))) return;
+        ven[k.uid] = { ms: k.ms || 0, kdo: k.kdo || "" };
+    });
+    return ven;
+};
+
 /* -------------------------------------------------------------- plány ---
    Podklady pater (PDF/obrázek) se společnými značkami. Obrázek leží
    v databázi po kouscích jako u tabule – žádné nové úložiště. Značky

@@ -838,6 +838,56 @@ service cloud.firestore {
       }
     }
 
+    // --- info k zakázkám (poznámky z terénu, i z telefonu) ----------------
+    //
+    //   private/infozakazky/zaznamy/{iz_…}  { uid, jmeno, text, projektId,
+    //                                        projektNazev, autoPrirazeno, lide,
+    //                                        odkud, vyrizeno…, createdMs, ms }
+    //   private/infozakazky/klice/{otisk}   otisk klíče zkratky v telefonu
+    //
+    // (Michal 12. 11. 2026, Iris.) Manažer a Apps Script (zkratka v telefonu
+    // zapisuje přes něj) čtou i píšou ze zachytávacího pravidla `private` výš –
+    // tenhle blok jen PŘIDÁVÁ práva členům. Poznámku vidí autor a lidé zakázky
+    // (`lide` = autor + lidé projektu, autor tam zůstává vždy); nezařazenou jen
+    // autor a manažeři. Zakázku přiřadit a vyřídit smí každý, kdo poznámku
+    // vidí; text mění jen autor (a manažer). Klíče (`klice`) nic navíc – vydává
+    // je hlavní správce, čte Apps Script.
+    match /artifacts/firemni-kb-app/private/infozakazky/zaznamy/{id} {
+      // bez pojistky `is list` – jinak dotaz array-contains přes `lide`
+      // Firestore neověří (stejně jako u Quick TO-DO)
+      allow read: if clen() && (resource.data.uid == request.auth.uid
+                                || request.auth.uid in resource.data.lide);
+      allow create: if clen()
+                       && request.resource.data.uid == request.auth.uid
+                       && request.resource.data.lide is list
+                       && request.auth.uid in request.resource.data.lide
+                       && request.resource.data.text is string
+                       && request.resource.data.text.size() >= 1
+                       && request.resource.data.text.size() <= 4000
+                       && request.resource.data.jmeno is string
+                       && request.resource.data.keys().hasOnly(['uid', 'jmeno', 'text', 'projektId',
+                            'projektNazev', 'autoPrirazeno', 'lide', 'odkud', 'vyrizeno', 'vyrizenoKdo',
+                            'vyrizenoMs', 'createdMs', 'ms', 'upravilUid', 'upravilJmeno']);
+      allow update: if clen()
+                       && (resource.data.uid == request.auth.uid
+                           || request.auth.uid in resource.data.lide)
+                       && request.resource.data.uid == resource.data.uid
+                       && request.resource.data.get('createdMs', 0) == resource.data.get('createdMs', 0)
+                       && request.resource.data.lide is list
+                       && resource.data.uid in request.resource.data.lide
+                       && request.resource.data.text is string
+                       && request.resource.data.text.size() <= 4000
+                       && request.resource.data.keys().hasOnly(['uid', 'jmeno', 'text', 'projektId',
+                            'projektNazev', 'autoPrirazeno', 'lide', 'odkud', 'vyrizeno', 'vyrizenoKdo',
+                            'vyrizenoMs', 'createdMs', 'ms', 'upravilUid', 'upravilJmeno'])
+                       // ostatní jen zakázku a vyřízení – cizí text ne
+                       && (resource.data.uid == request.auth.uid
+                           || request.resource.data.diff(resource.data).affectedKeys()
+                                .hasOnly(['projektId', 'projektNazev', 'autoPrirazeno', 'lide',
+                                          'vyrizeno', 'vyrizenoKdo', 'vyrizenoMs', 'ms']));
+      // mazat jen manažer (zachytávací pravidlo `private`)
+    }
+
     // --- tabule -----------------------------------------------------------
     //
     //   private/tabule/seznam/{id}                hlavička: název, kdo ji

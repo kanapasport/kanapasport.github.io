@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Info k zakázkám – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=341">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=341">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* Poznámky z terénu k zakázkám (Michal 12. 11. 2026, Iris) – jeden seznam,
+           nezařazené první, pak nejnovější. Jen styly navíc ke sdíleným třídám. */
+        .iz { max-width: 900px; }
+        .iz-nova { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+        .iz-nova textarea.field { min-height: 110px; resize: vertical; }
+        .iz-akce { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .iz-akce .hledac { flex: 1 1 260px; min-width: 0; }
+        .iz-mik svg { width: 18px; height: 18px; }
+        .iz-mik.je-zapnuty { background: var(--danger-tint); color: var(--danger); border-color: var(--danger); }
+        .iz-filtry { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+        .iz-filtry select.field { width: auto; max-width: 100%; min-width: 0; }
+        .iz-zaskrt { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); font-weight: 700; }
+        .iz-seznam { display: flex; flex-direction: column; gap: 10px; }
+        .iz-karta { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+        .iz-karta--vyrizena { opacity: .66; }
+        .iz-hlava { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+        .iz-hlava .tag { text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+        .iz-nez { background: var(--warn-tint); color: var(--warn); }
+        .iz-hotovo { background: var(--p100-bg); color: var(--p100-fg); }
+        .iz-kdo { margin-left: auto; }
+        .iz-text { font-size: var(--fs-3); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+        /* okno Přiřadit zakázku – stejný tvar jako okna výplat */
+        .iz-okno { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center;
+            padding: 18px; background: rgba(11, 13, 16, .55); }
+        .iz-okno[hidden] { display: none; }
+        .iz-okno__deska { width: 100%; max-width: 480px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .iz-okno__nadpis { font-size: var(--fs-4); font-weight: 900; }
+        @media (max-width: 599.98px) {
+            .iz-akce > .btn, .iz-akce .hledac { flex: 1 1 100%; width: 100%; }
+            .iz-filtry select.field { flex: 1 1 100%; width: 100%; }
+            /* ⋯ zůstane vpravo v prvním řádku, jméno a čas spadne pod štítky */
+            .iz-hlava .nabidka-vic { order: 1; margin-left: auto; }
+            .iz-kdo { order: 2; margin-left: 0; flex-basis: 100%; }
+            .iz-okno { padding: 8px; }
+            .iz-okno__deska { padding: 14px; }
+            .iz-okno .row .btn { flex: 1 1 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
+
+    <div class="iz">
+        <h2 class="nadpis-stranky">Info k zakázkám</h2>
+        <p class="small muted" style="margin-top:3px;line-height:1.6">
+            Poznámky z terénu k zakázkám, i nadiktované z telefonu. Vidí je členové zakázky
+            a manažeři, nezařazené jen autor a manažeři.
+        </p>
+    </div>
+
+    <section class="card iz iz-nova" aria-labelledby="izNovaNadpis">
+        <b id="izNovaNadpis">Nová poznámka</b>
+        <textarea id="izText" class="field" rows="4" maxlength="4000" aria-labelledby="izNovaNadpis"
+            placeholder="Napiš nebo nadiktuj… Začni názvem zakázky (nebo zkratkou či číslem), přiřadí se sama."></textarea>
+        <div class="iz-akce">
+            <button type="button" id="izMikrofon" class="btn iz-mik" hidden aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/>
+                    <path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+                <span id="izMikText">Diktovat</span>
+            </button>
+            <select id="izProjekt" class="field" aria-label="Zakázka">
+                <option value="">Automaticky podle textu (jinak Nezařazeno)</option>
+            </select>
+            <button type="button" id="izUlozit" class="btn btn--primary">Uložit</button>
+        </div>
+        <p id="izNapoveda" class="small muted" style="margin:0" aria-live="polite"></p>
+        <p class="tiny muted" style="margin:0">Na iPhonu stačí i mikrofon na klávesnici.</p>
+    </section>
+
+    <section class="card iz" style="padding:16px 18px">
+        <div class="iz-filtry">
+            <select id="izFiltrZakazka" class="field" aria-label="Filtr zakázky">
+                <option value="">Všechny zakázky</option>
+            </select>
+            <select id="izFiltrClovek" class="field" aria-label="Filtr autora" hidden>
+                <option value="">Všichni lidé</option>
+            </select>
+            <label class="iz-zaskrt"><input type="checkbox" id="izVyrizene"> Ukázat vyřízené</label>
+        </div>
+        <div id="izSeznam" class="iz-seznam">
+            <span class="tiny muted">Načítám…</span>
+        </div>
+    </section>
+
+</main>
+
+<div id="izOkno" class="iz-okno" hidden>
+    <div class="card iz-okno__deska" role="dialog" aria-modal="true" aria-labelledby="izOknoNadpis" tabindex="-1">
+        <b id="izOknoNadpis" class="iz-okno__nadpis">Přiřadit zakázku</b>
+        <p id="izOknoInfo" class="small muted" style="margin:0;line-height:1.5;overflow-wrap:anywhere"></p>
+        <select id="izOknoProjekt" class="field" aria-label="Zakázka"></select>
+        <div class="row" style="gap:8px;justify-content:flex-end">
+            <button type="button" id="izOknoZrus" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="izOknoUloz" class="btn btn--primary">Uložit</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=341"></script>
+<script src="assets/js/doc.js?v=341"></script>
+<script src="assets/js/ui.js?v=341"></script>
+<script src="assets/js/nabidka.js?v=341"></script>
+<script src="assets/js/vykazy.js?v=341"></script>
+<script src="assets/js/infozakazky.js?v=341"></script>
+<script type="module" src="assets/js/store.js?v=341"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const KB = () => window.KB;
+    const UI = () => window.KBUI;
+    const esc = (v) => window.KBUI.esc(v);
+    const NEZ = "__nez";            // hodnota filtru „Nezařazené“
+    const MAX_TEXT = 4000;
+
+    let nacteno = false;            // „Načítám…“ jen do prvních dat
+    let otevrenyId = "";            // poznámka v okně Přiřadit zakázku
+
+    const jmenoUid = (uid) => {
+        const u = (KB().users || []).find(x => x.id === uid);
+        return u ? (((u.first || "") + " " + (u.last || "")).trim() || u.email || "") : "";
+    };
+    const otevreneProjekty = () => (KB().projektyDocs || []).filter(p => p.uzavreno !== true);
+    const popisProjektu = (p) => (p.cislo ? p.cislo + " – " : "") + (p.nazev || "");
+    const poznamky = () => KB().infozakazky || [];
+    const najdi = (id) => poznamky().find(n => n.id === id);
+    const najdiZakazku = (text) => (window.KBINFO && window.KBINFO.najdiZakazku)
+        ? window.KBINFO.najdiZakazku(text, KB().projektyDocs || []) : null;
+    const kdy = (ms) => ms ? new Date(ms).toLocaleString("cs-CZ",
+        { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+
+    /** Roletka projektů: první volba (prázdná hodnota) zůstává, zbytek se přestaví. */
+    function naplnProjekty(select, prvni, navic) {
+        const puvodni = select.value;
+        const seznam = otevreneProjekty().slice();
+        // zakázka, která už je uzavřená, ale poznámka ji má – ať ji jde v okně ponechat
+        if (navic && navic.id && !seznam.some(p => p.id === navic.id)) seznam.push(navic);
+        select.innerHTML = '<option value="">' + esc(prvni) + "</option>" + seznam.map(p =>
+            '<option value="' + esc(p.id) + '">' + esc(popisProjektu(p)) + "</option>").join("");
+        select.value = seznam.some(p => p.id === puvodni) ? puvodni : "";
+    }
+
+    /* ------------------------------------------------- nová poznámka -- */
+
+    let napovedaCasovac = null;
+    function napoveda() {
+        clearTimeout(napovedaCasovac);
+        napovedaCasovac = setTimeout(() => {
+            const el = $("izNapoveda");
+            if ($("izProjekt").value || !$("izText").value.trim()) { el.textContent = ""; return; }
+            const z = najdiZakazku($("izText").value);
+            el.textContent = z ? "Přiřadí se: " + z.nazev : "Nezařazeno – přiřadíš potom";
+        }, 250);
+    }
+
+    let ukladam = false;
+    async function uloz() {
+        if (ukladam) return;
+        const text = $("izText").value.trim();
+        if (!text) { UI().toast("Napiš nebo nadiktuj text poznámky.", "warn"); $("izText").focus(); return; }
+        if (text.length > MAX_TEXT) { UI().toast("Poznámka je delší než " + MAX_TEXT + " znaků.", "warn"); return; }
+        if (typeof KB().pridejInfo !== "function") { UI().toast("Ukládání se ještě nenačetlo – zkus obnovit stránku.", "error"); return; }
+        const rucne = $("izProjekt").value;
+        const auto = rucne ? null : najdiZakazku(text);
+        const projektId = rucne || (auto ? auto.id : "");
+        const p = (KB().projektyDocs || []).find(x => x.id === projektId);
+        ukladam = true;
+        $("izUlozit").disabled = true;
+        try {
+            await KB().pridejInfo({ text: text, projektId: projektId, autoPrirazeno: !rucne && !!auto });
+            $("izText").value = "";
+            $("izNapoveda").textContent = "";
+            UI().toast("Uloženo – " + (projektId ? ((p && p.nazev) || (auto && auto.nazev) || "") : "Nezařazeno"));
+        } catch (err) {
+            console.warn(err);
+            UI().toast("Uložení selhalo – zkus to znovu.", "error");
+        } finally {
+            ukladam = false;
+            $("izUlozit").disabled = false;
+        }
+    }
+
+    /* Diktování v prohlížeči (Chrome, Edge, Safari) – průběžný text rovnou do pole.
+       Kde rozpoznávání řeči chybí, tlačítko se neukáže; zbývá mikrofon klávesnice. */
+    let rec = null;
+    function mikrofon() {
+        const Rozpoznani = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Rozpoznani) return;
+        const tl = $("izMikrofon");
+        tl.hidden = false;
+        const stav = (zapnuto) => {
+            tl.classList.toggle("je-zapnuty", zapnuto);
+            tl.setAttribute("aria-pressed", String(zapnuto));
+            $("izMikText").textContent = zapnuto ? "Poslouchám… (klepni pro konec)" : "Diktovat";
+        };
+        tl.addEventListener("click", () => {
+            if (rec) { rec.stop(); return; }
+            const pole = $("izText");
+            const zaklad = pole.value.replace(/\s+$/, "");
+            let hotove = "";
+            try {
+                rec = new Rozpoznani();
+                rec.lang = "cs-CZ";
+                rec.interimResults = true;
+                rec.continuous = true;
+                rec.onresult = (e) => {
+                    let prubezne = "";
+                    for (let i = e.resultIndex; i < e.results.length; i++) {
+                        const kus = e.results[i][0].transcript;
+                        if (e.results[i].isFinal) hotove += kus; else prubezne += kus;
+                    }
+                    pole.value = ((zaklad ? zaklad + " " : "") + hotove + prubezne).slice(0, MAX_TEXT);
+                    napoveda();
+                };
+                rec.onerror = (e) => {
+                    const zakaz = e && (e.error === "not-allowed" || e.error === "service-not-allowed");
+                    if (e && e.error !== "no-speech" && e.error !== "aborted") {
+                        UI().toast(zakaz ? "Mikrofon není povolený – povol ho v prohlížeči." : "Diktování selhalo – zkus to znovu.", "error");
+                    }
+                };
+                rec.onend = () => { rec = null; stav(false); };
+                rec.start();
+                stav(true);
+            } catch (err) {
+                rec = null;
+                stav(false);
+                UI().toast("Diktování se nespustilo.", "error");
+            }
+        });
+    }
+
+    /* ------------------------------------------------------- seznam -- */
+
+    function naplnFiltry() {
+        const fz = $("izFiltrZakazka");
+        const vybrano = fz.value;
+        const zakazky = {};
+        otevreneProjekty().forEach(p => { zakazky[p.id] = popisProjektu(p); });
+        poznamky().forEach(n => { if (n.projektId && !zakazky[n.projektId]) zakazky[n.projektId] = n.projektNazev || n.projektId; });
+        const ids = Object.keys(zakazky).sort((a, b) => zakazky[a].localeCompare(zakazky[b], "cs"));
+        fz.innerHTML = '<option value="">Všechny zakázky</option><option value="' + NEZ + '">Nezařazené</option>' +
+            ids.map(id => '<option value="' + esc(id) + '">' + esc(zakazky[id]) + "</option>").join("");
+        fz.value = (vybrano === NEZ || zakazky[vybrano]) ? vybrano : "";
+
+        const fc = $("izFiltrClovek");
+        fc.hidden = !UI().isAdmin();
+        if (fc.hidden) { fc.value = ""; return; }
+        const kdo = fc.value;
+        const lide = (KB().users || []).filter(u => u.active !== false)
+            .map(u => ({ id: u.id, j: jmenoUid(u.id) })).filter(u => u.j)
+            .sort((a, b) => a.j.localeCompare(b.j, "cs"));
+        fc.innerHTML = '<option value="">Všichni lidé</option>' +
+            lide.map(u => '<option value="' + esc(u.id) + '">' + esc(u.j) + "</option>").join("");
+        fc.value = lide.some(u => u.id === kdo) ? kdo : "";
+    }
+
+    function vykresli() {
+        if (!nacteno) return;
+        naplnFiltry();
+        const fz = $("izFiltrZakazka").value;
+        const fc = $("izFiltrClovek").value;
+        const vyrizene = $("izVyrizene").checked;
+        const ja = KB().currentUid();
+        const seznam = poznamky().filter(n =>
+            (vyrizene || !n.vyrizeno) &&
+            (!fz || (fz === NEZ ? !n.projektId : n.projektId === fz)) &&
+            (!fc || n.uid === fc));
+        // nejdřív nezařazené nevyřízené (čekají na přiřazení), pak nejnovější změna
+        const nahore = (n) => (!n.projektId && !n.vyrizeno) ? 0 : 1;
+        seznam.sort((a, b) => nahore(a) - nahore(b) || (Number(b.ms) || 0) - (Number(a.ms) || 0));
+        if (!seznam.length) {
+            $("izSeznam").innerHTML = '<p class="small muted" style="margin:0">' +
+                (poznamky().length ? "Filtru nic neodpovídá." : "Zatím tu žádná poznámka není – napiš první nahoře.") + "</p>";
+            return;
+        }
+        $("izSeznam").innerHTML = seznam.map(n => {
+            const kdo = n.jmeno || jmenoUid(n.uid) || "někdo";
+            return '<article class="card iz-karta' + (n.vyrizeno ? " iz-karta--vyrizena" : "") +
+                    '" data-iz="' + esc(n.id) + '"' + (n.uid === ja ? ' data-iz-moje="1"' : "") + ">" +
+                '<div class="iz-hlava">' +
+                    (n.projektId
+                        ? '<span class="tag">' + esc(n.projektNazev || "zakázka") + "</span>" +
+                          (n.autoPrirazeno ? '<span class="tiny muted">automaticky</span>' : "")
+                        : '<span class="tag iz-nez">Nezařazeno</span>') +
+                    (n.vyrizeno ? '<span class="tag iz-hotovo">vyřízeno · ' + esc(n.vyrizenoKdo || "") + "</span>" : "") +
+                    '<span class="tiny muted iz-kdo">' + esc(kdo) + " · " + esc(kdy(n.createdMs || n.ms)) + "</span>" +
+                    (window.KBNabidka ? window.KBNabidka.tlacitko("Další akce: poznámka") : "") +
+                "</div>" +
+                '<div class="iz-text">' + UI().textSOdkazy(n.text || "") + "</div>" +
+            "</article>";
+        }).join("");
+    }
+
+    /* ---------------------------------------------- akce u poznámky -- */
+
+    function otevriPrirazeni(id) {
+        const n = najdi(id);
+        if (!n) return;
+        otevrenyId = id;
+        const sel = $("izOknoProjekt");
+        naplnProjekty(sel, "Nezařazeno",
+            n.projektId ? { id: n.projektId, nazev: n.projektNazev || n.projektId } : null);
+        sel.value = n.projektId || "";
+        $("izOknoInfo").textContent = String(n.text || "").slice(0, 160) + (String(n.text || "").length > 160 ? "…" : "");
+        $("izOkno").hidden = false;
+        UI().naseptavac(sel, { popis: "Piš název, zkratku nebo číslo zakázky…", nazev: "Zakázka" });
+        // fokus na okno, ne do hledání – rozbalený seznam by zakryl Uložit
+        setTimeout(() => $("izOkno").querySelector(".iz-okno__deska").focus(), 30);
+    }
+    function zavriPrirazeni() {
+        $("izOkno").hidden = true;
+        otevrenyId = "";
+    }
+    async function ulozPrirazeni() {
+        const id = otevrenyId;
+        if (!id) return;
+        const projektId = $("izOknoProjekt").value;
+        zavriPrirazeni();
+        try {
+            await KB().priradInfo(id, projektId);
+            const p = (KB().projektyDocs || []).find(x => x.id === projektId);
+            UI().toast(projektId ? "Přiřazeno – " + ((p && p.nazev) || "zakázka") : "Přesunuto mezi nezařazené");
+        } catch (err) {
+            console.warn(err);
+            UI().toast("Přiřazení selhalo.", "error");
+        }
+    }
+
+    async function upravText(id) {
+        const n = najdi(id);
+        if (!n) return;
+        const novy = await UI().zeptej({ nadpis: "Upravit text poznámky", vychozi: n.text || "", viceradku: true,
+            maxDelka: MAX_TEXT, ano: "Uložit",
+            overeni: (v) => v.trim() ? true : "Text nesmí být prázdný." });
+        if (novy === null || novy.trim() === String(n.text || "").trim()) return;
+        try {
+            await KB().upravInfoText(id, novy.trim());
+            UI().toast("Text upraven");
+        } catch (err) {
+            console.warn(err);
+            UI().toast("Úprava selhala – text smí měnit jen autor nebo manažer.", "error");
+        }
+    }
+
+    async function vyrid(id, ano) {
+        try {
+            await KB().vyridInfo(id, ano);
+            UI().toast(ano ? "Vyřízeno" : "Vráceno mezi nevyřízené", "", { zpet: () => KB().vyridInfo(id, !ano) });
+        } catch (err) {
+            console.warn(err);
+            UI().toast("Změna selhala.", "error");
+        }
+    }
+
+    /* Quick TO-DO s odkazem na zakázku; text poznámky jde před odkaz (pole vzkazu má 300 znaků). */
+    function doQuick(id) {
+        const n = najdi(id);
+        if (!n) return;
+        UI().otevriQuickPanel({ odkaz: n.projektId ? { t: "p", id: n.projektId, n: n.projektNazev || n.projektId } : null });
+        const pole = document.querySelector("#kbQuickPanel [data-quick-text]");
+        if (!pole) return;
+        const zbytek = pole.value;
+        const misto = Math.max(0, 300 - zbytek.length - (zbytek ? 1 : 0));
+        const text = String(n.text || "").replace(/\s+/g, " ").trim().slice(0, misto);
+        pole.value = text + (zbytek ? " " + zbytek : "");
+    }
+
+    function pripojNabidku() {
+        if (!window.KBNabidka) return;
+        window.KBNabidka.pripoj((prvek) => {
+            const karta = prvek.closest && prvek.closest("[data-iz]");
+            if (!karta || !$("izSeznam").contains(karta)) return null;
+            const n = najdi(karta.dataset.iz);
+            if (!n) return null;
+            const polozky = [{ text: "Přiřadit zakázku…", ikona: "vlajka", fn: () => otevriPrirazeni(n.id) }];
+            // text mění jen autor (a manažer přes zachytávací pravidlo) – SPEC, pravidla (Michal 12. 11. 2026, Iris)
+            if (n.uid === KB().currentUid() || UI().isAdmin()) {
+                polozky.push({ text: "Upravit text…", ikona: "upravit", fn: () => upravText(n.id) });
+            }
+            polozky.push(n.vyrizeno
+                ? { text: "Vrátit mezi nevyřízené", ikona: "vratit", fn: () => vyrid(n.id, false) }
+                : { text: "Vyřízeno", ikona: "hotovo", fn: () => vyrid(n.id, true) });
+            polozky.push({ text: "Poslat jako Quick TO-DO…", ikona: "zprava", fn: () => doQuick(n.id) });
+            return { nadpis: n.projektNazev || "Nezařazeno", radek: karta, polozky: polozky };
+        });
+    }
+
+    /* ------------------------------------------------------ spuštění -- */
+
+    let sledujiInfo = false;
+    function spust() {
+        if (!KB() || !KB().currentUid || !KB().currentUid()) return;
+        // manažer všechny projekty, ostatní své (širší dotaz by databáze odmítla)
+        if (UI().isAdmin()) KB().watchProjekty(); else KB().watchMojeProjekty();
+        if (!sledujiInfo && typeof KB().watchInfozakazky === "function") {
+            sledujiInfo = true;
+            KB().watchInfozakazky();
+        }
+        vykresli();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        UI().mountNav({ active: "info-zakazky.html" });
+        mikrofon();
+        pripojNabidku();
+
+        $("izText").addEventListener("input", napoveda);
+        $("izText").addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); uloz(); }
+        });
+        $("izProjekt").addEventListener("change", napoveda);
+        $("izUlozit").addEventListener("click", uloz);
+        ["izFiltrZakazka", "izFiltrClovek", "izVyrizene"].forEach(id => $(id).addEventListener("change", vykresli));
+
+        $("izOknoZrus").addEventListener("click", zavriPrirazeni);
+        $("izOknoUloz").addEventListener("click", ulozPrirazeni);
+        $("izOkno").addEventListener("click", (e) => { if (e.target === $("izOkno")) zavriPrirazeni(); });
+        document.addEventListener("keydown", (e) => {
+            if (e.key !== "Escape" || $("izOkno").hidden) return;
+            if (e.target && e.target.closest && e.target.closest("[data-hledac]")) return;   // Esc zavře našeptávač
+            zavriPrirazeni();
+        });
+
+        const prestavProjekty = () => {
+            naplnProjekty($("izProjekt"), "Automaticky podle textu (jinak Nezařazeno)");
+            UI().naseptavac($("izProjekt"), { popis: "Automaticky podle textu (jinak Nezařazeno)", nazev: "Zakázka" });
+            napoveda();
+            vykresli();
+        };
+        prestavProjekty();
+
+        document.addEventListener("kb-role", spust);
+        KB().on("users", spust);
+        KB().on("projekty-docs", prestavProjekty);
+        KB().on("infozakazky", () => { nacteno = true; vykresli(); });
+        spust();
+    });
+})();
+</script>
+</body>
+</html>

@@ -2186,6 +2186,9 @@
         ] },
         { id: "zakazky", nazev: "Zakázky", ikona: "kufr", polozky: [
             { nazev: "Seznam zakázek", ikona: "building", href: "zakazky.html" },
+            // poznámky z terénu, i ze zkratky v telefonu; vidí členové zakázky (Michal 12. 11. 2026, Iris)
+            { nazev: "Info k zakázkám", ikona: "pozn", href: "info-zakazky.html",
+              popis: "Poznámky z terénu k zakázkám – i nadiktované z telefonu" },
             // zakládání projektů je manažerská práce
             { nazev: "Nový projekt", ikona: "plus", href: "sprava.html#novy", need: "zakazky.manage" }
         ] },

@@ -14,10 +14,10 @@
    • Písma, obrázky, manifest webu: stejně (z mezipaměti, ověřit na pozadí).
    • Databáze, přihlášení, Apps Script, ntfy, CDN knihoven – sem nesahá, jdou
      rovnou na síť. Data bez signálu drží Firestore sám (store.js).
-   Ukládá se jen pět terénních stránek (TERENNI). Po instalaci a po každé
-   nové verzi webu se natáhne všech pět (HTML ~80 kB; soubory má většinou
+   Ukládá se jen šest terénních stránek (TERENNI). Po instalaci a po každé
+   nové verzi webu se natáhne všech šest (HTML ~90 kB; soubory má většinou
    už stažené stránka, logo a písma jen poprvé) a soubory starých verzí se
-   smažou. Ostatní stránky bez signálu ukážou rozcestník na těch pět.
+   smažou. Ostatní stránky bez signálu ukážou rozcestník na těch šest.
 
    UPOZORNĚNÍ Z WEBU (22. 10. 2026): tenhle service worker zároveň ukazuje
    upozornění, která posílá Apps Script přes Firebase Cloud Messaging
@@ -32,13 +32,15 @@
      javascript: z podvržené zprávy otevře úvodní stránku.
    ========================================================================== */
 
-const CACHE = "kb-teren-2";      // zvednout JEN při změně tohoto souboru – staré se smažou
+const CACHE = "kb-teren-3";      // zvednout JEN při změně tohoto souboru – staré se smažou
 const TERENNI = {
     "index.html": "Nástěnka",
     "plany.html": "Plány",
     "quicktodo.html": "Quick TO-DO",
     "poznamky.html": "Poznámky",
-    "ukoly.html": "Úkoly"
+    "ukoly.html": "Úkoly",
+    // poznámky z terénu – psát jde i ve sklepě, odešlou se se signálem (Michal 12. 11. 2026, Iris)
+    "info-zakazky.html": "Info k zakázkám"
 };
 const CEKAT_NA_SIT_MS = 5000;
 const KOREN = self.registration.scope;
@@ -46,7 +48,7 @@ const FIREBASE = /^https:\/\/www\.gstatic\.com\/firebasejs\/[\d.]+\/firebase-[a-
 
 self.addEventListener("install", (event) => {
     self.skipWaiting();
-    event.waitUntil(srovnej(null));          // natáhnout všech pět; bez signálu nevadí
+    event.waitUntil(srovnej(null));          // natáhnout všechny terénní; bez signálu nevadí
 });
 
 self.addEventListener("activate", (event) => event.waitUntil(
