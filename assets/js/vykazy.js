@@ -696,6 +696,28 @@
     V.jeVyplatnyTyp = (u) => !!u && !!window.KBUI &&
         (window.KBUI.VYPLATNE_TYPY || []).indexOf(window.KBUI.typUvazku(u)) !== -1;
 
+    /* Mzdy a výplaty (Michal 12. 11. 2026, Iris): výpis pro mzdovou = zaměstnanci,
+       dohodáři a studenti; stránka Výplaty = jen OSVČ (fakturují si). */
+    V.MZDOVE_TYPY = ["zamestnanec", "dpp", "dpc", "student"];
+    /** Patří do výpisu pro mzdovou (HPP, DPP, DPČ, student)? */
+    V.jeMzdovyTyp = (u) => !!u && !!window.KBUI && V.MZDOVE_TYPY.indexOf(window.KBUI.typUvazku(u)) !== -1;
+    /** OSVČ – tabulka měsíce na stránce Výplaty a výzva k faktuře. */
+    V.jeOsvc = (u) => !!u && !!window.KBUI && window.KBUI.typUvazku(u) === "osvc";
+
+    /**
+     * Mzda zaměstnance platná v měsíci: poslední položka historie s od <= mesic.
+     * @param {Object} doc private/mzdy/lide/{uid} = { historie: [{ od: "RRRR-MM", kc, ms, kdo }] }
+     * @returns {{kc: number, od: string}|null}
+     */
+    V.mzdaProMesic = (doc, mesic) => {
+        if (!jeMesic(mesic)) return null;
+        const h = (doc && Array.isArray(doc.historie) ? doc.historie : [])
+            .filter(x => x && jeMesic(x.od) && x.od <= mesic && x.kc !== null && x.kc !== "" && isFinite(Number(x.kc)))
+            .sort((a, b) => a.od < b.od ? -1 : a.od > b.od ? 1 : 0);
+        const p = h[h.length - 1];
+        return p ? { kc: na2(p.kc), od: p.od } : null;
+    };
+
     /** "RRRR-MM" posunutý o n měsíců (i přes rok); "" pro nesmysl. */
     V.posunMesic = (mesic, n) => {
         if (!jeMesic(mesic)) return "";
@@ -776,21 +798,83 @@
      * volby: { uid, mesic, typ, zaklad | zaznamy, prenos | dokumenty, bonusy, proplaceno }
      *   zaklad   – hotový základ (uzavřený měsíc se nepřepočítává z výkazů)
      *   prenos   – číslo; jinak se vezme z `dokumenty` (V.vyplataPrenos)
+     *   typ "zamestnanec" (12. 11. 2026): mzda (Kč) + mzdaOd, jinak z KB.mzdy
+     *     (V.mzdaProMesic); nárok = mzda + bonusy, hodiny = odpracované
+     *     (bez absencí), prace/obedy/km/skoleniPlacene = 0 – HPP nemá sazbu
      */
     V.vyplataMesice = (volby) => {
         const v = volby || {};
-        const zaklad = v.zaklad || V.vyplataZVykazu(v.zaznamy, v.uid, v.mesic);
+        const zam = v.typ === "zamestnanec";
+        let mzda = null;
+        if (zam) {
+            mzda = (v.mzda !== undefined && v.mzda !== null)
+                ? { kc: na2(v.mzda), od: String(v.mzdaOd || "") }
+                : (V.mzdaProMesic(((window.KB || {}).mzdy || {})[v.uid], v.mesic) || { kc: 0, od: "" });
+        }
+        const zaklad = zam
+            ? { hodiny: v.zaklad ? na2(v.zaklad.hodiny) : na2((v.zaznamy || []).reduce((s, z) =>
+                s + ((z && z.uid === v.uid && String(z.datum || "").slice(0, 7) === v.mesic && !zapisAbsence(z))
+                    ? (Number(z.hodiny) || 0) : 0), 0)), prace: 0, obedy: 0, km: 0, skoleniPlacene: 0 }
+            : (v.zaklad || V.vyplataZVykazu(v.zaznamy, v.uid, v.mesic));
         const prenos = v.prenos !== undefined ? na2(v.prenos) : V.vyplataPrenos(v.dokumenty, v.uid, v.mesic).prenos;
         const bonusy = polozkyKc(v.bonusy);
         const proplaceno = polozkyKc(v.proplaceno);
-        const s = V.vyplataSoucty(zaklad, prenos, bonusy, proplaceno);
-        return {
+        // mzda jde do součtu místo práce – narok = mzda + bonusy (V.vyplataSoucty beze změny)
+        const s = V.vyplataSoucty(zam ? { prace: mzda.kc } : zaklad, prenos, bonusy, proplaceno);
+        const o = {
             uid: v.uid || "", mesic: v.mesic || "", typ: v.typ || "",
             hodiny: na2(zaklad.hodiny), prace: na2(zaklad.prace), obedy: na2(zaklad.obedy),
             km: na2(zaklad.km), skoleniPlacene: na2(zaklad.skoleniPlacene),
             bonusy: bonusy, bonusCelkem: s.bonusCelkem,
             narok: s.narok, prenos: s.prenos, kVyplate: s.kVyplate,
             proplaceno: proplaceno, proplacenoCelkem: s.proplacenoCelkem, zbyva: s.zbyva
+        };
+        if (zam) { o.mzda = mzda.kc; o.mzdaOd = mzda.od; }
+        return o;
+    };
+
+    /* Výzva OSVČ k faktuře (Michal 12. 11. 2026, Iris). Text upravuje finance
+       na webu (ciselniky/nastaveni.vyzvaFaktura), posílá Apps Script (Kod.gs,
+       akce vyzvaFaktura) – symboly dosazuje STEJNĚ jako tady: jen čísla bez
+       jednotek (tisíce mezerou, čárka jen u necelých, na 2 místa), {do} = 10. den
+       následujícího měsíce, jméno s „@“ = prázdno. Neznámé symboly zůstanou,
+       chybějící čísla = 0. */
+    V.VYZVA_VYCHOZI = {
+        predmet: "Faktura za {měsíc} – Pasport Kaňa",
+        text: "Ahoj {jméno},\nza {měsíc} ti podle výkazů na webu vychází {částka} Kč ({hodiny} h, z toho obědy" +
+            " a cestovné {obědy+cestovné} Kč; bonus {bonus} Kč).\nPošli prosím fakturu na isu@pasport.eu nejpozději" +
+            " do {do}. Podklady k fakturaci najdeš na webu v Moje výplaty.\n\nDíky, ISU - Pasport Kaňa"
+    };
+    // „40 125“, „1 234,5“ – tisíce mezerou, desetinná čárka jen když nejsou celé (jako Kod.gs)
+    const vyzvaKc = (x) => {
+        const c = String(na2(x)).split(".");
+        return c[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (c[1] ? "," + c[1] : "");
+    };
+    /**
+     * @param {Object} sablona { predmet, text } – prázdné pole = výchozí (V.VYZVA_VYCHOZI)
+     * @param {Object} data dokument výplaty měsíce (mesic, kVyplate, hodiny, obedy, km, bonusCelkem) + jmeno (křestní)
+     * @returns {{predmet: string, text: string}}
+     */
+    V.vyzvaText = (sablona, data) => {
+        const s = sablona || {}, d = data || {};
+        const mesic = String(d.mesic || "");
+        const dalsi = V.posunMesic(mesic, 1);
+        // místo jména e-mail (nebo nic) = prázdno a „Ahoj {jméno},“ → „Ahoj,“
+        const jmeno = String(d.jmeno || "").trim();
+        const symboly = {
+            "{jméno}": jmeno.indexOf("@") === -1 ? jmeno : "",
+            "{měsíc}": V.mesicText(mesic),
+            "{částka}": vyzvaKc(d.kVyplate),
+            "{hodiny}": vyzvaKc(d.hodiny),
+            "{obědy+cestovné}": vyzvaKc((Number(d.obedy) || 0) + (Number(d.km) || 0)),
+            "{bonus}": vyzvaKc(d.bonusCelkem),
+            "{do}": dalsi ? "10. " + Number(dalsi.slice(5, 7)) + ". " + dalsi.slice(0, 4) : ""
+        };
+        const dosad = (t) => Object.keys(symboly).reduce((a, k) => a.split(k).join(symboly[k]),
+            symboly["{jméno}"] ? String(t) : String(t).split(" {jméno}").join(""));
+        return {
+            predmet: dosad(String(s.predmet || "").trim() ? s.predmet : V.VYZVA_VYCHOZI.predmet),
+            text: dosad(String(s.text || "").trim() ? s.text : V.VYZVA_VYCHOZI.text)
         };
     };
 
@@ -2882,10 +2966,11 @@
                 ok: ok[p.klic] ? (ok[p.klic].length ? ok[p.klic].slice() : ["?"]) : [] }));
 
             let vyplata = null, bezDokumentu = false;
-            if (V.jeVyplatnyTyp(u)) {
+            // zaměstnanec (mzda, 12. 11. 2026) jen když dokument měsíce existuje – bez něj „bezDokumentu“ nehlásí
+            if (V.jeVyplatnyTyp(u) || typ === "zamestnanec") {
                 // uložený dokument měsíce – po proplacení se čísla nehýbou s výkazy
                 const dok = V.vyplataDokument(KB.vyplaty, uid, mesic);
-                if (!dok) bezDokumentu = true;
+                if (!dok) bezDokumentu = V.jeVyplatnyTyp(u);
                 else vyplata = { narok: na2(dok.narok), prenos: na2(dok.prenos), kVyplate: na2(dok.kVyplate),
                     proplacenoCelkem: na2(dok.proplacenoCelkem), zbyva: na2(dok.zbyva), uzavreno: !!dok.uzavreno,
                     limit: (dok.typ || typ) === "dpp"

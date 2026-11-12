@@ -2040,6 +2040,12 @@ KB.ulozSplneniMilniku = async (id, patch) => {
     if (authReady) await authReady;
     requireDb();
     const m = (KB.milniky || []).find(x => x.id === id);
+    /* „Vrátit mezi rozdělané" shodí i „připraveno k odevzdání" (Michal 12. 11. 2026);
+       kdo chce stav zachovat (Zpět na stránce), pošle `pripraveno` sám. */
+    if (patch && patch.hotovo === false && m && m.hotovo === true && m.pripraveno === true &&
+        !("pripraveno" in patch)) {
+        patch = Object.assign({}, patch, { pripraveno: false, pripravenoKdo: "", pripravenoMs: 0 });
+    }
     await updateDoc(milnikSeznamDoc(id), Object.assign({}, patch, {
         updatedMs: Date.now(), updatedBy: window.KB_USER || ""
     }));
@@ -2160,6 +2166,8 @@ KB.vratMilnik = async (id, duvod) => {
     await KB.ulozSplneniMilniku(id, {
         hotovo: false, hotovoKdo: "", hotovoMs: 0,
         potvrzeno: false, potvrdil: "", potvrzenoMs: 0,
+        // vrácený milník už připravený k odevzdání není (Michal 12. 11. 2026)
+        pripraveno: false, pripravenoKdo: "", pripravenoMs: 0,
         vraceno: { kdo: kdo, ms: ted, duvod: text }
     });
     const nazev = [m.cinnost, m.napln].filter(Boolean).join(" – ") || "bez názvu";
@@ -2175,6 +2183,29 @@ KB.vratMilnik = async (id, duvod) => {
         }).catch(err => console.warn("Oznámení o vrácení milníku neodešlo:", err));
     }
     KB.ohlasPotvrzeni({ udalost: "zamitnuto", druh: "milniky", id: id, uid: zadatel });
+};
+
+/**
+ * „Připraveno k odevzdání" – stav mezi rozdělaným a Splněno (Michal 12. 11. 2026).
+ * Smí zpracovatel zveřejněného milníku i manažer. Pravidla pustí členovi jen
+ * výslovné `potvrzeno: false` (stejně jako u splnění), proto ho pošle, když
+ * dokument pole nemá nebo má jiné.
+ */
+KB.oznacPripraveno = async (id, ano) => {
+    if (authReady) await authReady;
+    requireDb();
+    const m = (KB.milniky || []).find(x => x.id === id);
+    const kdo = window.KB_USER || "";
+    const ted = Date.now();
+    const zapis = {
+        pripraveno: !!ano, pripravenoKdo: ano ? kdo : "", pripravenoMs: ano ? ted : 0,
+        updatedMs: ted, updatedBy: kdo
+    };
+    if (!jsemManazer() && !(m && m.potvrzeno === false)) zapis.potvrzeno = false;
+    await updateDoc(milnikSeznamDoc(id), zapis);
+    const nazev = m ? [m.cinnost, m.napln].filter(Boolean).join(" – ") : "";
+    KB.zapisAktivitu("milnik", (ano ? "označil milník jako připravený k odevzdání"
+        : "zrušil u milníku „připraveno k odevzdání“") + (nazev ? " " + nazev : ""));
 };
 
 /**
@@ -3587,6 +3618,8 @@ function sledujVykazy(jenSve) {
         KB.rozpocty = (data.rozpocty && typeof data.rozpocty === "object") ? data.rozpocty : {};
         // limit DPP pro stránku Výplaty: { limitHodinRok, hraniceKcMesic } (V.limitDpp)
         KB.dppNastaveni = (data.dpp && typeof data.dpp === "object") ? data.dpp : {};
+        // text výzvy OSVČ k faktuře { predmet, text } – null = výchozí (V.VYZVA_VYCHOZI), 12. 11. 2026
+        KB.vyzvaFaktura = (data.vyzvaFaktura && typeof data.vyzvaFaktura === "object") ? data.vyzvaFaktura : null;
         /* Bez tohohle příznaku by dopočet částek běžel s prázdným
            číselníkem a všem by zapsal nulovou sazbu. */
         KB.sazbyPrisly = true;
@@ -6688,7 +6721,13 @@ KB.ulozZustatek = async (uid, data) => {
          proplaceno: [{ kc, datum, kdo, poznamka, ms }], proplacenoCelkem,
          zbyva,              // kVyplate − proplacenoCelkem
          uzavreno: { ms, kdo } | null, odemknul: { ms, kdo } | null,
-         spocitanoMs, spocitalKdo }
+         spocitanoMs, spocitalKdo,
+         poznamkaUcetni,     // text pro mzdovou účetní ≤ 300 (všichni, 12. 11. 2026)
+         vyzva: { ms, kdo, komu, predmet } }   // výzva OSVČ k faktuře – píše jen Apps Script
+
+     Zaměstnanec (HPP, 12. 11. 2026): typ "zamestnanec", navíc mzda (Kč z historie
+     private/mzdy/lide k měsíci) a mzdaOd; narok = mzda + bonusCelkem; prace, obedy,
+     km, skoleniPlacene = 0; hodiny = odpracované (V.vyplataMesice).
 
    Počítá stránka vyplaty.html (V.vyplataMesice ve vykazy.js). Čte finance
    (hlavní správce, majitel, asistentka), vlastník svoje (dotaz uid == já)
@@ -6749,11 +6788,13 @@ KB.ulozVyplatu = async (uid, mesic, data) => {
             const nove = data(snap.exists() ? snap.data() : null);
             if (!nove) return null;
             const pole = Object.assign({}, nove, { uid: uid, mesic: mesic });
+            if (pole.poznamkaUcetni !== undefined) pole.poznamkaUcetni = String(pole.poznamkaUcetni || "").slice(0, 300);
             tx.set(ref, pole, { merge: true });
             return pole;
         });
     } else if (data && typeof data === "object") {
         ulozeno = Object.assign({}, data, { uid: uid, mesic: mesic });
+        if (ulozeno.poznamkaUcetni !== undefined) ulozeno.poznamkaUcetni = String(ulozeno.poznamkaUcetni || "").slice(0, 300);
         await setDoc(ref, ulozeno, { merge: true });
     }
     if (ulozeno) KB.ohlasVyplatu({ uid: uid, mesic: mesic });
@@ -6782,6 +6823,112 @@ KB.ohlasVyplatu = async (zprava) => {
             body: JSON.stringify({ akce: "vyplata", token: token, uid: uid, mesic: mesic })
         }).catch(err => console.warn("Ohlášení výplaty se neozvalo:", err));
     } catch (err) { console.warn("Ohlášení výplaty se neodeslalo:", err); }
+};
+
+/**
+ * Výzva OSVČ k faktuře (Michal 12. 11. 2026, Iris) – e-mail pošle Apps Script
+ * (akce "vyzvaFaktura"; text z ciselniky/nastaveni.vyzvaFaktura, data z dokumentu
+ * výplaty) a výsledek dopíše do dokumentu výplaty jako `vyzva: { ms, kdo, komu,
+ * predmet }`. Odpověď se nečte. Vrací false, když nebylo kam poslat.
+ */
+KB.posliVyzvuFaktury = async (uid, mesic) => {
+    try {
+        uid = String(uid || "");
+        mesic = String(mesic || "");
+        if (!KB.gsyncUrl || !uid || uid.indexOf("/") !== -1 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(mesic)) return false;
+        await poOdeslani();
+        let token = "";
+        try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript výzvu neodešle */ }
+        fetch(KB.gsyncUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ akce: "vyzvaFaktura", uid: uid, mesic: mesic, token: token })
+        }).catch(err => console.warn("Výzva k faktuře se neozvala:", err));
+        return true;
+    } catch (err) {
+        console.warn("Výzva k faktuře se neodeslala:", err);
+        return false;
+    }
+};
+
+/** Text výzvy k faktuře (finance) → ciselniky/nastaveni.vyzvaFaktura { predmet, text, updatedMs, updatedBy }. */
+KB.ulozVyzvuText = async (sablona) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (FINANCE_ROLE.indexOf(mojeRole()) === -1) throw new Error("Text výzvy mění jen finance.");
+    const s = sablona || {};
+    const pole = { predmet: String(s.predmet || "").slice(0, 200), text: String(s.text || "").slice(0, 5000),
+        updatedMs: Date.now(), updatedBy: window.KB_USER || "" };
+    await setDoc(vykazyMeta(), { vyzvaFaktura: pole }, { merge: true });
+    KB.vyzvaFaktura = pole;
+    KB.zapisAktivitu("vykaz", "upravil text výzvy k faktuře");
+    return pole;
+};
+
+/* ------------------------------------------- mzdy zaměstnanců (finance) ----
+   Michal 12. 11. 2026 (Iris): měsíční mzda HPP s historií od měsíce.
+
+     private/mzdy/lide/{uid}
+       { historie: [{ od: "RRRR-MM", kc, ms, kdo }],   // seřazená podle `od`
+         updatedMs, updatedBy }
+
+   Platí poslední položka s od <= měsíc (V.mzdaProMesic). Čte a píše jen
+   finance (hlavní správce, majitel, asistentka), maže hlavní správce;
+   zaměstnanec svoji mzdu na webu nevidí (firestore.rules). */
+
+const mzdyCol = () => collection(db, "artifacts", APP_ID, "private", "mzdy", "lide");
+const mzdaDoc = (uid) => doc(db, "artifacts", APP_ID, "private", "mzdy", "lide", uid);
+
+KB.mzdy = {};                   // uid → dokument mezd
+KB.mzdyPrisly = false;
+let mzdyOdber = null;
+
+/** Jen finance – ostatním by pravidla odběr stejně odmítla, tak se ani neptá. */
+KB.watchMzdy = async () => {
+    if (mzdyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || mzdyOdber) return;
+    if (pockejNaRoli(KB.watchMzdy)) return;
+    if (mzdyOdber || FINANCE_ROLE.indexOf(mojeRole()) === -1) return;
+    mzdyOdber = onSnapshot(mzdyCol(), (snap) => {
+        KB.mzdy = {};
+        snap.forEach(d => { KB.mzdy[d.id] = d.data(); });
+        KB.mzdyPrisly = true;
+        emit("mzdy", KB.mzdy);
+    }, (err) => {
+        console.error("Chyba čtení mezd:", err);
+        emit("mzdy-chyba", err);
+    });
+};
+
+/**
+ * Mzda od měsíce: přidá položku, nebo nahradí tu se stejným `od`; historie
+ * seřazená podle `od`. Transakcí, ať se dvě úpravy naráz nepřepíšou.
+ * Vrací novou historii.
+ */
+KB.ulozMzdu = async (uid, odMesic, kc) => {
+    if (authReady) await authReady;
+    requireDb();
+    uid = String(uid || "");
+    odMesic = String(odMesic || "");
+    const castka = Math.round(Number(kc) * 100) / 100;
+    if (!uid || uid.indexOf("/") !== -1) throw new Error("Chybí člověk.");
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(odMesic)) throw new Error("Neplatný měsíc „platí od“.");
+    if (kc === null || kc === "" || !isFinite(castka) || castka < 0) throw new Error("Neplatná částka mzdy.");
+    const kdo = window.KB_USER || "";
+    const ref = mzdaDoc(uid);
+    const historie = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        const stara = snap.exists() && Array.isArray((snap.data() || {}).historie) ? snap.data().historie : [];
+        const nova = stara.filter(x => x && x.od !== odMesic)
+            .concat([{ od: odMesic, kc: castka, ms: Date.now(), kdo: kdo }])
+            .sort((a, b) => String(a.od) < String(b.od) ? -1 : String(a.od) > String(b.od) ? 1 : 0);
+        tx.set(ref, { historie: nova, updatedMs: Date.now(), updatedBy: kdo }, { merge: true });
+        return nova;
+    });
+    KB.zapisAktivitu("vykaz", "změnil mzdu (platí od " + odMesic + ")");
+    return historie;
 };
 
 /* ------------------------------------------ uzávěrka měsíce (finance) ----

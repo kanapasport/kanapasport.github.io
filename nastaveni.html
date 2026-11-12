@@ -56,8 +56,31 @@
         @media (max-width: 640px) {
             .potvrz__druh { grid-template-columns: minmax(0, 1fr); }
         }
+
+        /* Mzdy zaměstnanců: řádek na člověka (jméno, mzda, Změnit mzdu…),
+           pod ním rozbalitelná historie. Na telefonu se řádek zalomí. */
+        .mzdy { display: flex; flex-direction: column; gap: 8px; }
+        .mzrad { padding: 8px 12px; border: 1px solid var(--line-soft);
+            border-radius: var(--radius); background: var(--bg-soft); }
+        .mzrad__hlava { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+        .mzrad__jmeno { flex: 1 1 190px; min-width: 0; font-weight: 800; font-size: var(--fs-3); }
+        .mzrad__mzda { flex: 0 1 auto; font-size: var(--fs-3); font-weight: 700; }
+        .mzrad__od { font-size: var(--fs-1); color: var(--muted); font-weight: 400; }
+        .mzrad details { margin-top: 6px; }
+        .mzrad summary { cursor: pointer; font-size: var(--fs-2); color: var(--muted); }
+        .mzhist { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: var(--fs-2); }
+        .mzhist th, .mzhist td { text-align: left; padding: 4px 8px 4px 0; border-top: 1px solid var(--line-soft);
+            vertical-align: top; overflow-wrap: anywhere; }
+        .mzhist td:nth-child(-n+2) { white-space: nowrap; }
+        .mzhist th { font-size: var(--fs-1); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+        .mzokno__mrizka { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .mzokno__chyba { margin: 0; color: var(--danger); font-size: var(--fs-2); font-weight: 700; }
+        @media (max-width: 520px) {
+            .mzokno__mrizka { grid-template-columns: minmax(0, 1fr); }
+            .hookno { padding: 8px; }
+        }
     </style>
-    <link rel="stylesheet" href="assets/css/app.css?v=336">
+    <link rel="stylesheet" href="assets/css/app.css?v=337">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -163,6 +186,29 @@
             </div>
         </section>
 
+        <!-- ============================================ MZDY ZAMĚSTNANCŮ -->
+        <!-- Michal 12. 11. 2026, Iris: měsíční mzda HPP s historií od měsíce.
+             Jen finance (hlavní správce, majitel, asistentka), za stejným zámkem
+             jako sazby. Data: KB.mzdy / KB.ulozMzdu (store.js). -->
+        <section class="card col nastaveni" id="sekce-mzdy" hidden>
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Mzdy zaměstnanců</b>
+                    <span class="small muted">měsíční mzda HPP · platí od měsíce</span>
+                </div>
+                <div class="row" style="gap:8px;align-items:center">
+                    <button type="button" class="btn btn--ghost btn--sm" data-penize-prepni>zobrazit částky</button>
+                    <span class="tag" id="pocetMezd"></span>
+                </div>
+            </div>
+            <div id="mzdy" class="mzdy"></div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Mzda platí od zadaného měsíce do další změny. Změna se stejným měsícem
+                nahradí starou položku. Výpis pro mzdovou bere mzdu platnou v daném měsíci.
+                Zaměstnanec svoji mzdu na webu nevidí.
+            </p>
+        </section>
+
         <!-- ================================================ POTVRZOVÁNÍ -->
         <!-- Kdo co potvrzuje (Michal 3. 11. 2026): za stejným zámkem jako
              sazby, mění jen hlavní správce. Data: KB.potvrzovani (store.js). -->
@@ -230,10 +276,31 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=336"></script>
-<script src="assets/js/ui.js?v=336"></script>
-<script src="assets/js/vykazy.js?v=336"></script>
-<script type="module" src="assets/js/store.js?v=336"></script>
+<!-- ============================================ OKNO ZMĚNIT MZDU -->
+<div id="mzOkno" class="hookno" hidden>
+    <div class="card hookno__deska" role="dialog" aria-modal="true" aria-labelledby="mzNadpis">
+        <div class="hookno__hlava"><span id="mzNadpis">Změnit mzdu</span></div>
+        <div class="hookno__telo col" style="gap:12px">
+            <div class="mzokno__mrizka">
+                <label><span class="label">Platí od měsíce</span>
+                    <input type="month" id="mzOd" class="field" placeholder="RRRR-MM"></label>
+                <label><span class="label">Mzda Kč / měsíc</span>
+                    <input type="text" id="mzKc" class="field" data-penize inputmode="numeric" autocomplete="off"></label>
+            </div>
+            <p id="mzInfo" class="tiny muted" style="margin:0;line-height:1.6"></p>
+            <p id="mzChyba" class="mzokno__chyba" role="alert" hidden></p>
+            <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+                <button type="button" id="mzZrusit" class="btn btn--ghost">Zrušit</button>
+                <button type="button" id="mzUlozit" class="btn btn--primary">Uložit mzdu</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=337"></script>
+<script src="assets/js/ui.js?v=337"></script>
+<script src="assets/js/vykazy.js?v=337"></script>
+<script type="module" src="assets/js/store.js?v=337"></script>
 
 <script>
 (function () {
@@ -332,6 +399,7 @@
     function poZmeneZamku() {
         paintZamek();
         naplnSazby();
+        naplnMzdy();
         if (zamek.videt()) zapniSledovani();
     }
 
@@ -403,6 +471,116 @@
                   skupina.map(radek).join("")
                 : "";
         }).join("") || '<div class="tiny muted">V seznamu zatím nikdo není.</div>';
+    }
+
+    /* ------------------------------------------------ mzdy zaměstnanců ---
+       Michal 12. 11. 2026, Iris: měsíční mzda HPP s historií od měsíce
+       (private/mzdy/lide/{uid}). Jen finance a jen za zámkem – dokud je
+       zamčeno, mzdy ve stránce nejsou vůbec. Kč za tečkami jako jinde. */
+    let mzdyZapnuto = false;
+    let penizeVidet = false;
+    let mzOkno = null;           // uid člověka v otevřeném okně
+
+    const smiMzdy = () => window.KBUI.can("finance.view");
+    const tajne = (html) => '<span class="tajne">' + html + "</span>" +
+        '<span class="tajne__zastup" data-penize-prepni title="Zobrazit peníze">•••</span>';
+    const tentoMesic = () => V.dnesISO().slice(0, 7);
+    const casText = (ms) => Number(ms) ? new Date(Number(ms)).toLocaleString("cs-CZ", { day: "numeric",
+        month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+
+    function pouzijSkryti() {
+        document.body.classList.toggle("penize-videt", penizeVidet);
+        document.querySelectorAll("button[data-penize-prepni]").forEach(b => {
+            b.textContent = penizeVidet ? "skrýt částky" : "zobrazit částky";
+        });
+    }
+
+    function naplnMzdy() {
+        $("sekce-mzdy").hidden = !smiMzdy();
+        if (!smiMzdy() || !zamek || !zamek.videt()) {
+            $("mzdy").innerHTML = "";
+            $("pocetMezd").textContent = "";
+            if (mzOkno) zavriMzdu();      // zamčeno – rozepsaná mzda nesmí zůstat v okně
+            return;
+        }
+        if (!mzdyZapnuto) { mzdyZapnuto = true; window.KB.watchMzdy(); }
+        const mzdy = window.KB.mzdy || {};
+        const mesic = tentoMesic();
+        // zaměstnanci HPP (typ zamestnanec, ne služební účty – ty mají typ servis)
+        const lide = V.lide().filter(V.maFond);
+        $("pocetMezd").textContent = window.KB.mzdyPrisly
+            ? lide.filter(u => (mzdy[u.id] && (mzdy[u.id].historie || []).length)).length + " z " + lide.length + " zadáno"
+            : "načítám…";
+
+        const radek = (u) => {
+            const doc = mzdy[u.id] || null;
+            const historie = (doc && Array.isArray(doc.historie) ? doc.historie : []).slice()
+                .sort((a, b) => String(a.od).localeCompare(String(b.od)));
+            const ted = doc ? V.mzdaProMesic(doc, mesic) : null;
+            const pristi = historie.find(h => String(h.od) > mesic);
+            return '<div class="mzrad" data-mzda-radek="' + esc(u.id) + '">' +
+                '<div class="mzrad__hlava">' +
+                    '<span class="mzrad__jmeno">' + esc(V.jmeno(u)) + "</span>" +
+                    '<span class="mzrad__mzda" data-mzda-ted>' + (ted
+                        ? tajne(esc(V.kc(ted.kc))) + ' <span class="mzrad__od">od ' + esc(ted.od) + "</span>"
+                        : '<span class="muted">nezadáno</span>') +
+                        (pristi ? ' <span class="tag">změna od ' + esc(pristi.od) + "</span>" : "") +
+                    "</span>" +
+                    '<button type="button" class="btn btn--ghost btn--sm" data-mzda-zmenit="' + esc(u.id) + '">Změnit mzdu…</button>' +
+                "</div>" +
+                (historie.length
+                    ? "<details><summary>Historie (" + historie.length + ")</summary>" +
+                        '<table class="mzhist"><thead><tr><th>Od</th><th>Kč</th><th>Kdo</th><th>Kdy</th></tr></thead><tbody>' +
+                        historie.slice().reverse().map(h => "<tr><td>" + esc(h.od) + "</td><td>" + tajne(esc(V.kc(h.kc))) +
+                            "</td><td>" + esc(h.kdo || "") + "</td><td>" + esc(casText(h.ms)) + "</td></tr>").join("") +
+                        "</tbody></table></details>"
+                    : "") +
+            "</div>";
+        };
+        $("mzdy").innerHTML = lide.length
+            ? lide.map(radek).join("")
+            : '<div class="tiny muted">V seznamu zatím žádný zaměstnanec není.</div>';
+        pouzijSkryti();
+    }
+
+    function otevriMzdu(uid) {
+        const u = V.clovek(uid);
+        if (!u || !smiMzdy()) return;
+        mzOkno = uid;
+        const ted = window.KB.mzdy && window.KB.mzdy[uid] ? V.mzdaProMesic(window.KB.mzdy[uid], tentoMesic()) : null;
+        $("mzNadpis").textContent = "Změnit mzdu – " + V.jmeno(u);
+        $("mzOd").value = tentoMesic();
+        window.KBUI.nastavPenize($("mzKc"), ted ? ted.kc : "");
+        $("mzInfo").textContent = "Zadej měsíc, od kterého nová mzda platí. Když pro ten měsíc už mzda zapsaná je, nahradí se.";
+        $("mzChyba").hidden = true;
+        $("mzOkno").hidden = false;
+        $("mzKc").focus();
+        $("mzKc").select();
+    }
+
+    function zavriMzdu() {
+        mzOkno = null;
+        $("mzOkno").hidden = true;
+    }
+
+    async function ulozMzdu() {
+        if (!mzOkno) return;
+        const od = String($("mzOd").value || "").trim();
+        const kc = window.KBUI.penize($("mzKc"));
+        const chyba = (t) => { $("mzChyba").textContent = t; $("mzChyba").hidden = false; };
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(od)) return chyba("Zadej měsíc ve tvaru RRRR-MM.");
+        if (!(kc > 0)) return chyba("Zadej mzdu v Kč (víc než nula).");
+        $("mzUlozit").disabled = true;
+        try {
+            await window.KB.ulozMzdu(mzOkno, od, Math.round(kc));
+            window.KBUI.toast("Mzda uložena.");
+            zavriMzdu();
+        } catch (err) {
+            console.error(err);
+            chyba("Uložení selhalo – mzdy mění jen hlavní správce, majitel a asistentka.");
+        } finally {
+            $("mzUlozit").disabled = false;
+        }
     }
 
     /* -------------------------------------------- dovolená a přesčasy --- */
@@ -647,6 +825,7 @@
         $("sekce-potvrzovani").hidden = false;
         paintZamek();
         naplnSazby();
+        naplnMzdy();
         naplnPotvrzovani();
         naplnZustatky();
         $("sekce-zustatky").hidden = false;
@@ -660,7 +839,7 @@
            platnost a obnovování prací se stránkou jsou v ní). Zámek se dočte sám
            po přihlášení (kb-role). */
         zamek = window.KBUI.zamekCitlive({
-            obsah: ["sekce-sazby", "sekce-potvrzovani"], slot: "zamekSlot",
+            obsah: ["sekce-sazby", "sekce-mzdy", "sekce-potvrzovani"], slot: "zamekSlot",
             nadpis: "Hodinové sazby a potvrzování jsou zamčené",
             bezHeslaSpravce: "Zvol ho níže – do té doby sazby a potvrzování vidíš jen ty.",
             onZmena: poZmeneZamku
@@ -670,6 +849,23 @@
         $("btnPotvrzovaniUloz").addEventListener("click", ulozPotvrzovani);
         $("potvrzovani").addEventListener("change", zmenaPotvrzovani);
         window.KB.on("potvrzovani", naplnPotvrzovani);
+        window.KB.on("mzdy", naplnMzdy);
+        $("mzdy").addEventListener("click", (event) => {
+            const b = event.target.closest("[data-mzda-zmenit]");
+            if (b) otevriMzdu(b.dataset.mzdaZmenit);
+        });
+        $("sekce-mzdy").addEventListener("click", (event) => {
+            if (!event.target.closest("[data-penize-prepni]")) return;
+            penizeVidet = !penizeVidet;
+            pouzijSkryti();
+        });
+        $("mzUlozit").addEventListener("click", ulozMzdu);
+        $("mzZrusit").addEventListener("click", zavriMzdu);
+        $("mzOkno").addEventListener("click", (event) => { if (event.target === $("mzOkno")) zavriMzdu(); });
+        $("mzOkno").addEventListener("keydown", (event) => {
+            if (event.key === "Escape") zavriMzdu();
+            if (event.key === "Enter" && event.target.tagName === "INPUT") { event.preventDefault(); ulozMzdu(); }
+        });
         $("btnZustatkyUloz").addEventListener("click", ulozZustatky);
         $("zustatky").addEventListener("input", () => { upravovano = true; });
         window.KB.on("zustatky", naplnZustatky);

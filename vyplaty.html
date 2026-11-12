@@ -7,19 +7,21 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výplaty – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=336">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=336">
+    <link rel="stylesheet" href="assets/css/app.css?v=337">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=337">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
     <style>
         /* =====================================================================
-           VÝPLATY – DPP, DPČ, OSVČ a studenti (Michal 3. 11. 2026, Iris)
+           VÝPLATY – OSVČ (Michal 3. 11. 2026, Iris; od 12. 11. 2026 jen OSVČ –
+           zaměstnanci, dohodáři a studenti jsou ve Výpisu pro mzdovou)
            Kolik komu za měsíc vychází, kolik se mu proplatilo a kolik zbývá,
-           s přenosem do dalšího měsíce. Finance (hlavní správce, majitel,
-           asistentka) tu zapisují proplacení a bonusy a měsíc zamykají;
-           dohodář / OSVČ / student vidí jen svůj přehled. Peníze za tečkami
-           jako ve výkazech. Jen tokeny z app.css.
+           s přenosem do dalšího měsíce, a výzva k faktuře e-mailem. Finance
+           (hlavní správce, majitel, asistentka) tu zapisují proplacení a bonusy
+           a měsíc zamykají (okna a akce: assets/js/vyplaty-akce.js); dohodář /
+           OSVČ / student vidí jen svůj přehled. Peníze za tečkami jako ve
+           výkazech. Jen tokeny z app.css.
            ===================================================================== */
         main .chip { border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-1); background: var(--surface); }
         main .chip--active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -40,12 +42,6 @@
         .vyf__pole { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-1); color: var(--text-soft);
             font-weight: 700; }
         .vyf__pole .field { width: 110px; min-height: 32px; padding: 3px 8px; font-size: var(--fs-2); }
-
-        /* -------------------------------------------- řádek limitu DPP */
-        .vylimit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 14px;
-            border: 1px solid var(--warn); border-radius: var(--r); background: var(--warn-tint); font-size: var(--fs-2); }
-        .vylimit--danger { border-color: var(--danger); background: var(--danger-tint); }
-        .vylimit__nadpis { font-weight: 900; }
 
         /* ---------------------------------------------------- štítky */
         .vystitek { display: inline-block; max-width: 100%; padding: 0 7px; border-radius: var(--r-pill);
@@ -113,18 +109,13 @@
         /* můj přehled */
         .vymoje { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 
-        /* ------------------------------------------- okno Proplaceno / Bonus */
-        .vyokno { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center;
-            padding: 18px; background: rgba(11, 13, 16, .55); }
-        .vyokno[hidden] { display: none; }
-        .vyokno__deska { width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; padding: 20px;
-            display: flex; flex-direction: column; gap: 12px; }
-        .vyokno__nadpis { font-size: var(--fs-4); font-weight: 900; }
-        .vyokno__pole { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-        .vyokno__pole .label { font-size: var(--fs-1); font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
-            color: var(--muted); }
-        .vyokno__mrizka { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .vyokno__chyba { margin: 0; color: var(--danger); font-size: var(--fs-2); font-weight: 700; }
+        /* okna Proplaceno / Bonus mají styly z vyplaty-akce.js; tady jen okno textu výzvy */
+        .vyokno__deska--siroke { max-width: 640px; }
+        .vzsymboly { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: var(--fs-1); color: var(--muted); }
+        .vzsymboly code { padding: 0 5px; border-radius: var(--r-pill); background: var(--bg-soft); color: var(--text); }
+        .vznahled { padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--r); background: var(--bg-soft);
+            font-size: var(--fs-2); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .vznahled b { display: block; margin-bottom: 6px; }
 
         /* ================================================== telefon */
         @media (max-width: 599.98px) {
@@ -132,9 +123,6 @@
             .vyf__mesic { flex: 1 1 auto; min-width: 0; }
             .vyf__pole { flex: 1 1 100%; justify-content: space-between; }
             .vyf__pole .field { width: 130px; }
-            .vyokno { padding: 8px; }
-            .vyokno__deska { padding: 14px; }
-            .vyokno__mrizka { grid-template-columns: minmax(0, 1fr); }
             /* tabulka = karty (nabidka.css .kt): čísla po dvou vedle sebe */
             table.kt.vyt tr.vyr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px;
                 padding: 10px 12px; }
@@ -221,8 +209,9 @@
             <div class="grow">
                 <h2 class="nadpis-stranky" style="margin:0">Výplaty</h2>
                 <p class="small muted" style="margin:3px 0 0;line-height:1.6">
-                    DPP, DPČ, OSVČ a studenti – kolik komu za měsíc vychází z výkazů, kolik se proplatilo
-                    a kolik zbývá. Klik na řádek ukáže proplacení, bonusy a tlačítka.
+                    OSVČ – kolik komu za měsíc vychází z výkazů, kolik se proplatilo a kolik zbývá, a výzva
+                    k faktuře e-mailem. Klik na řádek ukáže proplacení, bonusy a tlačítka. Zaměstnanci,
+                    dohodáři a studenti jsou ve <a href="mzdy-vypis.html">Výpisu pro mzdovou</a>.
                 </p>
             </div>
             <div class="row row--wrap" style="gap:8px">
@@ -243,17 +232,15 @@
                 <button type="button" id="btnTisk" class="btn btn--primary btn--sm"
                         title="Otevře okno tisku – v něm vyber Uložit jako PDF, nebo tiskárnu">Uložit PDF / tisk</button>
             </div>
-            <div class="vyf__radek" id="dppNast">
-                <span class="vyf__nadpis">Limit DPP</span>
-                <label class="vyf__pole">hodin za rok
-                    <input type="number" id="nLimit" class="field" min="1" step="1" inputmode="numeric"></label>
-                <label class="vyf__pole">hranice odvodů za měsíc (Kč)
-                    <input type="text" id="nHranice" class="field" data-penize inputmode="numeric" placeholder="nenastaveno"></label>
-                <button type="button" id="btnNastUloz" class="btn btn--ghost btn--sm">Uložit limit</button>
+            <!-- výzva OSVČ k faktuře (Michal 12. 11. 2026, Iris) – posílá Apps Script z isu@pasport.eu -->
+            <div class="vyf__radek">
+                <span class="vyf__nadpis">Výzva k faktuře</span>
+                <button type="button" id="btnVyzvaVse" class="btn btn--ghost btn--sm"
+                        title="Pošle e-mail všem OSVČ, kterým za vybraný měsíc výzva ještě neodešla">Poslat všem OSVČ za měsíc</button>
+                <button type="button" id="btnVyzvaText" class="btn btn--ghost btn--sm">Upravit text výzvy…</button>
+                <span id="vyzvaPozn" class="tiny muted" hidden>Výzvy nejdou poslat – na webu není nastavená adresa Apps Scriptu.</span>
             </div>
         </div>
-
-        <div id="limitRadek" class="vylimit" role="status" hidden></div>
 
         <!-- tisková hlavička: na obrazovce schovaná, plní se těsně před tiskem -->
         <header id="tiskHlava" class="vytisk">
@@ -280,11 +267,11 @@
                     a přechází do dalšího měsíce (i přes Nový rok). Když předchozí měsíc spočítaný není, přenos je 0.</li>
                 <li>Otevřený měsíc se při každém zápisu (proplacení, bonus, přepočet) spočítá znovu z výkazů.
                     Uložená čísla vidí člověk ve svém přehledu a Apps Script je zapíše do jeho sešitu.</li>
-                <li><b>Proplacením</b> (nebo tlačítkem Uzavřít měsíc) se měsíc zamkne – zápisy, částky ani bonusy
+                <li><b>Doplacením</b> celé částky (nebo tlačítkem Uzavřít měsíc) se měsíc zamkne – zápisy, částky ani bonusy
                     toho člověka v tom měsíci pak nezmění nikdo kromě hlavního správce, hlídá to databáze.
-                    Odemknout ho může jen hlavní správce.</li>
-                <li><b>Limit DPP</b>: hodiny za kalendářní rok (práce + placené školení) proti limitu a odměna za měsíc
-                    (práce, školení, bonusy – bez obědů a cestovného) proti hranici pro odvody. Od 80 % oranžově, od 100 % červeně.</li>
+                    Částečná platba měsíc nechá otevřený, pokud ho při zápisu nezamkneš. Odemknout ho může jen hlavní správce.</li>
+                <li><b>Výzva k faktuře</b> odejde e-mailem z isu@pasport.eu s částkou k výplatě z uloženého měsíce –
+                    proto jen spočítaným měsícům. Štítek „výzva odeslána“ zapíše skript, až e-mail opravdu pošle.</li>
             </ul>
         </details>
 
@@ -298,33 +285,37 @@
     </div>
 </main>
 
-<!-- ================================================ OKNO PROPLACENO / BONUS -->
-<div id="vyOkno" class="vyokno" hidden>
-    <div class="card vyokno__deska" role="dialog" aria-modal="true" aria-labelledby="oNadpis">
-        <b id="oNadpis" class="vyokno__nadpis">Proplaceno</b>
-        <p id="oInfo" class="small muted" style="margin:0;line-height:1.6"></p>
-        <div class="vyokno__mrizka">
-            <label class="vyokno__pole"><span class="label">Kč</span>
-                <input type="text" id="oKc" class="field" data-penize inputmode="numeric" autocomplete="off"></label>
-            <label class="vyokno__pole" id="oDatumPole"><span class="label">Datum</span>
-                <input type="date" id="oDatum" class="field"></label>
-        </div>
-        <label class="vyokno__pole"><span class="label">Poznámka</span>
-            <input type="text" id="oPozn" class="field" maxlength="200" autocomplete="off"></label>
-        <p id="oZamek" class="tiny muted" style="margin:0;line-height:1.6"></p>
-        <p id="oChyba" class="vyokno__chyba" role="alert" hidden></p>
+<!-- ============ OKNO TEXTU VÝZVY K FAKTUŘE (okno Proplaceno / Bonus dělá vyplaty-akce.js) -->
+<div id="vzOkno" class="vyokno" hidden>
+    <div class="card vyokno__deska vyokno__deska--siroke" role="dialog" aria-modal="true" aria-labelledby="vzNadpis">
+        <b id="vzNadpis" class="vyokno__nadpis">Text výzvy k faktuře</b>
+        <p class="small muted" style="margin:0;line-height:1.6">
+            E-mail posílá ISU – Pasport Kaňa (isu@pasport.eu). Symboly ve složených závorkách se dosadí
+            za každého člověka zvlášť z jeho uloženého měsíce.
+        </p>
+        <label class="vyokno__pole"><span class="label">Předmět</span>
+            <input type="text" id="vzPredmet" class="field" maxlength="200" autocomplete="off"></label>
+        <label class="vyokno__pole"><span class="label">Text</span>
+            <textarea id="vzText" class="field" rows="9" maxlength="5000"></textarea></label>
+        <p id="vzSymboly" class="vzsymboly"></p>
+        <label class="vyokno__pole"><span class="label">Náhled pro</span>
+            <select id="vzKdo" class="field"></select></label>
+        <div id="vzNahled" class="vznahled" aria-live="polite"></div>
+        <p id="vzChyba" class="vyokno__chyba" role="alert" hidden></p>
         <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
-            <button type="button" id="oZrusit" class="btn btn--ghost">Zrušit</button>
-            <button type="button" id="oUlozit" class="btn btn--primary">Uložit</button>
+            <button type="button" id="vzVychozi" class="btn btn--ghost">Výchozí text</button>
+            <button type="button" id="vzZrusit" class="btn btn--ghost">Zrušit</button>
+            <button type="button" id="vzUlozit" class="btn btn--primary">Uložit text</button>
         </div>
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=336"></script>
-<script src="assets/js/ui.js?v=336"></script>
-<script src="assets/js/nabidka.js?v=336"></script>
-<script src="assets/js/vykazy.js?v=336"></script>
-<script type="module" src="assets/js/store.js?v=336"></script>
+<script src="assets/js/taxonomy.js?v=337"></script>
+<script src="assets/js/ui.js?v=337"></script>
+<script src="assets/js/nabidka.js?v=337"></script>
+<script src="assets/js/vykazy.js?v=337"></script>
+<script src="assets/js/vyplaty-akce.js?v=337"></script>
+<script type="module" src="assets/js/store.js?v=337"></script>
 
 <script>
 (function () {
@@ -333,13 +324,12 @@
     const $ = (id) => document.getElementById(id);
     const esc = (value) => window.KBUI.esc(value);
     const V = window.KBVYK;
+    /* Okna, akce, peníze za tečkami a zápis měsíce jsou společné s Výpisem
+       pro mzdovou (Michal 12. 11. 2026, Iris) – assets/js/vyplaty-akce.js. */
+    const A = window.KBVYPLATY;
 
-    const MESICE = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
-        "srpen", "září", "říjen", "listopad", "prosinec"];
-    const jeMesic = (m) => /^\d{4}-\d{2}$/.test(String(m || ""));
-    const mesicText = (m) => jeMesic(m) ? MESICE[Number(m.slice(5, 7)) - 1] + " " + m.slice(0, 4) : "";
-    const tentoMesic = () => V.dnesISO().slice(0, 7);
-    const TYP_KRATCE = { dpp: "DPP", dpc: "DPČ", osvc: "OSVČ", student: "Student" };
+    const mesicText = A.mesicText;
+    const tentoMesic = A.tentoMesic;
     const STAVY = [
         { klic: "otevrene", nazev: "Otevřené" },
         { klic: "uzavrene", nazev: "Uzavřené" },
@@ -354,23 +344,17 @@
         if (STAVY.some(x => x.klic === s)) filtrStav = s;
     } catch (err) { /* soukromý režim */ }
     const rozbalene = new Set();          // uid rozbalených řádků
-    const nacteneMesice = new Set();      // starší měsíce dotažené mimo živé okno výkazů
-    const nacteneRoky = new Set();        // roky dotažené kvůli limitu DPP
-    const nacitam = new Set();
     let sledovani = false;
-    let penizeVidet = false;
-    let okno = null;                      // { druh: "proplaceno" | "bonus", uid, mesic }
-    let pracuji = false;                  // probíhá zápis – nic se nemačká dvakrát
 
-    const finance = () => window.KBUI.can("finance.view");
-    const hlavni = () => window.KBUI.isOwner();
-    const kdo = () => window.KB_USER || "";
-    const typ = (u) => window.KBUI.typUvazku(u);
-    const kratkeMs = (ms) => {
-        const d = new Date(Number(ms) || 0);
-        return Number(ms) ? d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() : "";
-    };
-    const stejne = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
+    const finance = A.finance;
+    const hlavni = A.hlavni;
+    const kdo = A.kdo;
+    const kratkeMs = A.kratkeMs;
+    const kcHtml = A.kcHtml, kcBunka = A.kcBunka, zbyvaBunka = A.zbyvaBunka, hodBunka = A.hodBunka;
+    const dokumenty = A.dokumenty, dokument = A.dokument, clovek = A.clovek, jmeno = A.jmeno;
+    const pripraveno = A.pripraveno;
+    const radek = A.radek;
+    const kratkyDen = (ms) => { const d = new Date(Number(ms) || 0); return d.getDate() + ". " + (d.getMonth() + 1) + "."; };
 
     /* Překreslení jen tam, kde se HTML opravdu změnilo (otisk je zprvu
        null – prázdný obsah má taky otisk ""). */
@@ -381,229 +365,21 @@
         el.innerHTML = html;
     }
 
-    /* ------------------------------------------------ SKRYTÉ PENÍZE ----
-       Kč jsou za tečkami jako ve výkazech: stránka bývá na promítačce.
-       Odkrytí platí pro celou stránku (body.penize-videt), nepamatuje se. */
-    const tajne = (html) => '<span class="tajne">' + html + "</span>" +
-        '<span class="tajne__zastup" data-penize-prepni title="Zobrazit peníze">•••</span>';
-    const kcHtml = (kc) => tajne(esc(V.kc(kc)));
-    const kcBunka = (kc) => Number(kc) ? kcHtml(kc) : '<span class="vynic">—</span>';
-    const zbyvaBunka = (kc) => Number(kc) ? tajne('<span class="' + (Number(kc) < 0 ? "vyminus" : "") + '">' +
-        esc(V.kc(kc)) + "</span>") : '<span class="vynic">0 Kč</span>';
-    const hodBunka = (h) => Number(h) ? esc(V.hod(h)) : '<span class="vynic">—</span>';
-    function pouzijSkryti() {
-        document.body.classList.toggle("penize-videt", penizeVidet);
-        document.querySelectorAll("button[data-penize-prepni]").forEach(b => {
-            b.textContent = penizeVidet ? "skrýt částky" : "zobrazit částky";
-        });
-    }
-
     /* ------------------------------------------------------- data ---- */
 
-    const dokumenty = () => window.KB.vyplaty || [];
-    const dokument = (uid, m) => V.vyplataDokument(dokumenty(), uid, m);
-    const clovek = (uid) => (window.KB.users || []).find(u => u.id === uid) || null;
-    const jmeno = (u, uid) => u ? V.jmeno(u) : (uid || "—");
+    /** Dokument OSVČ? Starší dokument bez typu se pozná podle člověka. */
+    const osvcDok = (d) => d.typ ? d.typ === "osvc" : V.jeOsvc(clovek(d.uid));
 
-    /** Jsou výkazy (i s částkami) pro měsíc v paměti? Bez nich by vyšly nuly. */
-    function pripraveno(m) {
-        if (!window.KB.vykazyPrisly || !window.KB.castkyPrisly || !window.KB.vyplatyPrisly) return false;
-        const od = V.mesicRozsah(m).od;
-        return !window.KB.vykazyOknoOd || od >= window.KB.vykazyOknoOd || nacteneMesice.has(m);
-    }
-
-    /** Starší měsíce (mimo živé okno 4 měsíců) a rok kvůli limitu DPP se dotahují dotazem. */
-    async function dotahni(od, doKdy, klic, hotovo) {
-        if (nacitam.has(klic)) return;
-        nacitam.add(klic);
-        try {
-            await window.KB.nactiVykazyRozsah(od, doKdy);
-            hotovo();
-        } catch (err) {
-            console.warn("Starší výkazy se nenačetly:", err);
-        } finally {
-            nacitam.delete(klic);
-            naplanuj();
-        }
-    }
-    function zajistiMesic(m) {
-        const okno = window.KB.vykazyOknoOd;
-        if (!okno || !jeMesic(m) || nacteneMesice.has(m)) return;
-        const r = V.mesicRozsah(m);
-        if (r.od >= okno) return;
-        dotahni(r.od, r.do, "m" + m, () => nacteneMesice.add(m));
-    }
-    function zajistiRok(rok) {
-        const okno = window.KB.vykazyOknoOd;
-        if (!okno || nacteneRoky.has(rok)) return;
-        const od = rok + "-01-01";
-        if (od >= okno) { nacteneRoky.add(rok); return; }
-        const konec = rok + "-12-31";
-        const doKdy = konec < okno ? konec : V.posunIso(okno, -1);
-        dotahni(od, doKdy, "r" + rok, () => nacteneRoky.add(rok));
-    }
-
-    /** Lidé v tabulce měsíce: aktivní s typem dohoda / OSVČ / student + kdokoli, kdo má dokument. */
+    /** Lidé v tabulce měsíce: aktivní OSVČ + kdokoli, kdo má dokument OSVČ. */
     function lideMesice(m) {
-        const sDokumentem = new Set(dokumenty().filter(d => d.mesic === m).map(d => d.uid));
+        const sDokumentem = new Set(dokumenty().filter(d => d.mesic === m && osvcDok(d)).map(d => d.uid));
         const uids = new Set();
         (window.KB.users || []).forEach(u => {
-            if ((u.active !== false && V.jeVyplatnyTyp(u)) || sDokumentem.has(u.id)) uids.add(u.id);
+            if ((u.active !== false && V.jeOsvc(u)) || sDokumentem.has(u.id)) uids.add(u.id);
         });
         sDokumentem.forEach(uid => uids.add(uid));
-        const PORADI = window.KBUI.PORADI_TYPU;
         return Array.from(uids).map(uid => clovek(uid) || { id: uid, first: "", last: uid })
-            .sort((a, b) => ((PORADI[typ(a)] === undefined ? 9 : PORADI[typ(a)]) -
-                             (PORADI[typ(b)] === undefined ? 9 : PORADI[typ(b)])) ||
-                (a.last || "").localeCompare(b.last || "", "cs") || (a.first || "").localeCompare(b.first || "", "cs"));
-    }
-
-    /** Je před měsícem dokument, ale ne hned ten předchozí? (Přenos by se ztratil.) */
-    const posledniPred = (uid, m) => dokumenty().filter(d => d.uid === uid && jeMesic(d.mesic) && d.mesic < m)
-        .sort((a, b) => b.mesic.localeCompare(a.mesic))[0] || null;
-
-    /** Řádek tabulky: uložený dokument (je-li), živý výpočet z výkazů a co z toho plyne. */
-    function radek(u, m) {
-        const d = dokument(u.id, m);
-        const zaklad = V.vyplataZVykazu(window.KB.vykazy || [], u.id, m);
-        const pren = V.vyplataPrenos(dokumenty(), u.id, m);
-        const zivy = V.vyplataMesice({ uid: u.id, mesic: m, typ: typ(u), zaklad: zaklad, prenos: pren.prenos,
-            bonusy: d ? d.bonusy : [], proplaceno: d ? d.proplaceno : [] });
-        const uzavreno = !!(d && d.uzavreno);
-        const cisla = d || zivy;
-        const zmena = !!d && !uzavreno && pripraveno(m) &&
-            (["hodiny", "prace", "obedy", "km", "skoleniPlacene"].some(k => !stejne(d[k], zaklad[k])) ||
-             !stejne(d.prenos, pren.prenos));
-        const pred = pren.zDokumentu ? null : posledniPred(u.id, m);
-        const typDok = (d && d.typ) || typ(u);
-        const dpp = typDok === "dpp";
-        let limit = null;
-        if (dpp) {
-            const rok = m.slice(0, 4);
-            limit = V.limitDpp(V.hodinyRoku(window.KB.vykazy || [], u.id, rok), V.dppKcMesice(cisla),
-                window.KB.dppNastaveni);
-            limit.nacteno = nacteneRoky.has(rok);
-        }
-        const nic = !d && !zaklad.zapisu && !pren.prenos;
-        return { u: u, d: d, zaklad: zaklad, pren: pren, zivy: zivy, cisla: cisla, uzavreno: uzavreno,
-            zmena: zmena, ztracenyPrenos: pred && !stejne(pred.zbyva, 0) ? pred : null,
-            typ: typDok, limit: limit, nic: nic };
-    }
-
-    /* ------------------------------------------------ zápis měsíce ---- */
-
-    /**
-     * Nová pole dokumentu měsíce. Otevřený měsíc (a výslovný přepočet) se
-     * počítá znovu z výkazů, uzavřený drží uložený základ. Přenos se bere ze
-     * `zbyva` předchozího měsíce (předaný `prenos` má přednost – řetěz).
-     */
-    function novaPole(u, m, stary, zmena, prenos) {
-        const ted = Date.now();
-        const zUlozeneho = !!(stary && stary.uzavreno) && !zmena.prepocet;
-        const zaklad = zUlozeneho
-            ? { hodiny: stary.hodiny, prace: stary.prace, obedy: stary.obedy, km: stary.km,
-                skoleniPlacene: stary.skoleniPlacene }
-            : V.vyplataZVykazu(window.KB.vykazy || [], u.id, m);
-        const bonusy = ((stary && stary.bonusy) || []).concat(zmena.bonus ? [zmena.bonus] : []);
-        const proplaceno = ((stary && stary.proplaceno) || []).concat(zmena.proplaceno ? [zmena.proplaceno] : []);
-        const p = prenos !== undefined ? prenos : V.vyplataPrenos(dokumenty(), u.id, m).prenos;
-        const pole = V.vyplataMesice({ uid: u.id, mesic: m,
-            typ: (zUlozeneho && stary.typ) || typ(u) || "", zaklad: zaklad, prenos: p,
-            bonusy: bonusy, proplaceno: proplaceno });
-        pole.uzavreno = zmena.odemknout ? null
-            : (stary && stary.uzavreno) ? stary.uzavreno
-            : (zmena.uzavrit || zmena.proplaceno) ? { ms: ted, kdo: kdo() } : null;
-        pole.odemknul = zmena.odemknout ? { ms: ted, kdo: kdo() } : ((stary && stary.odemknul) || null);
-        if (!zUlozeneho) { pole.spocitanoMs = ted; pole.spocitalKdo = kdo(); }
-        return pole;
-    }
-
-    /** Uloží měsíc v transakci; uzavřený měsíc mezitím = nic (jen hlavní správce smí dál). */
-    async function zapisMesic(u, m, zmena, prenos) {
-        let uzavrenyMezitim = false;
-        const ulozeno = await window.KB.ulozVyplatu(u.id, m, (stary) => {
-            if (stary && stary.uzavreno && !hlavni() && !zmena.odemknout) { uzavrenyMezitim = true; return null; }
-            return novaPole(u, m, stary, zmena, prenos);
-        });
-        if (uzavrenyMezitim) throw Object.assign(new Error("uzavřeno"), { code: "uzavreno" });
-        return ulozeno;
-    }
-
-    /** Měsíce mezi posledním dokumentem a `m`, které nejsou spočítané – jinak by se přenos ztratil. */
-    async function doplnRetez(u, m) {
-        const pred = posledniPred(u.id, m);
-        if (!pred || pred.mesic === V.posunMesic(m, -1)) return;
-        const prvni = V.posunMesic(pred.mesic, 1);
-        const posledni = V.posunMesic(m, -1);
-        const okno = window.KB.vykazyOknoOd;
-        if (okno && V.mesicRozsah(prvni).od < okno) {
-            await window.KB.nactiVykazyRozsah(V.mesicRozsah(prvni).od, V.mesicRozsah(posledni).do);
-            for (let k = prvni; k <= posledni; k = V.posunMesic(k, 1)) nacteneMesice.add(k);
-        }
-        let zbyva = pred.zbyva;
-        for (let k = prvni, i = 0; k <= posledni && i < 36; k = V.posunMesic(k, 1), i++) {
-            const ulozeno = await zapisMesic(u, k, {}, zbyva);
-            zbyva = ulozeno ? ulozeno.zbyva : zbyva;
-        }
-        return zbyva;
-    }
-
-    /** Přenos dál: pozdější spočítané měsíce dostanou nové „z minula“ (dokud řetěz nepřeruší díra). */
-    async function prenesDal(u, m, zbyva) {
-        const strop = tentoMesic();
-        let k = m;
-        for (let i = 0; i < 36; i++) {
-            const dalsi = V.posunMesic(k, 1);
-            if (dalsi > strop) return;
-            const d = dokument(u.id, dalsi);
-            if (!d || stejne(d.prenos, zbyva)) return;
-            if (d.uzavreno && !hlavni()) {
-                window.KBUI.toast("Přenos do " + mesicText(dalsi) + " se nezměnil – ten měsíc je uzavřený. " +
-                    "Srovná ho hlavní správce (Přepočítat).", "warn");
-                return;
-            }
-            let ulozeno = null;
-            const prenos = zbyva;
-            ulozeno = await window.KB.ulozVyplatu(u.id, dalsi, (stary) => {
-                if (!stary || (stary.uzavreno && !hlavni())) return null;
-                const s = V.vyplataSoucty(stary, prenos, stary.bonusy, stary.proplaceno);
-                return { prenos: s.prenos, kVyplate: s.kVyplate, zbyva: s.zbyva };
-            });
-            if (!ulozeno) return;
-            zbyva = ulozeno.zbyva;
-            k = dalsi;
-        }
-    }
-
-    /** Jedna akce nad měsícem člověka: řetěz před ním, zápis, přenos dál, hláška. */
-    async function provedAkci(uid, m, zmena, hlaska, aktivita) {
-        if (pracuji) return false;
-        const u = clovek(uid) || { id: uid, first: "", last: uid };
-        if (!pripraveno(m)) {
-            window.KBUI.toast("Výkazy se ještě načítají – zkus to za chvilku.", "warn");
-            return false;
-        }
-        pracuji = true;
-        naplanuj();
-        try {
-            const zbyvaPred = await doplnRetez(u, m);
-            const ulozeno = await zapisMesic(u, m, zmena, zbyvaPred);
-            if (ulozeno) await prenesDal(u, m, ulozeno.zbyva);
-            window.KB.zapisAktivitu("vyplata", aktivita + " – " + jmeno(clovek(uid), uid) + ", " + mesicText(m));
-            if (hlaska) window.KBUI.toast(hlaska);
-            return true;
-        } catch (err) {
-            console.error(err);
-            window.KBUI.toast(err && err.code === "uzavreno"
-                ? "Měsíc je mezitím uzavřený – změnit ho může jen hlavní správce."
-                : err && err.code === "permission-denied"
-                    ? "Databáze změnu odmítla – měsíc je uzavřený, nebo na to nemáš právo."
-                    : "Uložení se nepovedlo – zkus to znovu.", "error");
-            return false;
-        } finally {
-            pracuji = false;
-            naplanuj();
-        }
+            .sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs") || (a.first || "").localeCompare(b.first || "", "cs"));
     }
 
     /* ------------------------------------------------- vykreslení ---- */
@@ -626,28 +402,11 @@
     }
 
     function stitkyJmena(r) {
-        const s = ['<span class="vystitek">' + esc(TYP_KRATCE[r.typ] || r.typ || "—") + "</span>"];
-        if (r.limit) {
-            const l = r.limit;
-            const title = "Letos " + V.hod(l.hodiny) + " z " + V.hod(l.limitHodin) + " (" + l.pctHodin + " %)" +
-                (l.hranice ? " · odměna za měsíc " + V.kc(l.kc) + " z hranice " + V.kc(l.hranice) +
-                    " (" + l.pctKc + " %)" : " · hranice pro odvody není nastavená") +
-                (l.nacteno ? "" : " · načítám starší měsíce roku…");
-            s.push('<span class="vystitek' + (l.hodinyUroven ? " vystitek--" + l.hodinyUroven : "") +
-                '" data-dpp-limit="' + esc(l.hodinyUroven || "ok") + '" title="' + esc(title) + '">DPP ' +
-                esc(V.cislo(l.hodiny, l.hodiny % 1 ? 1 : 0)) + "/" + esc(V.cislo(l.limitHodin)) + " h</span>");
-            if (l.kcUroven) {
-                s.push('<span class="vystitek vystitek--' + esc(l.kcUroven) + '" title="' + esc(title) + '">' +
-                    "hranice odvodů " + esc(Math.floor(l.pctKc)) + " %</span>");
-            }
-        }
-        if (["dpp", "dpc"].indexOf(r.typ) !== -1 && r.u) {
-            const m = mesic;
-            if (r.u.dohodaDo && m > String(r.u.dohodaDo).slice(0, 7)) {
-                s.push('<span class="vystitek vystitek--warn">dohoda skončila ' + esc(V.czDatum(r.u.dohodaDo)) + "</span>");
-            } else if (r.u.dohodaOd && m < String(r.u.dohodaOd).slice(0, 7)) {
-                s.push('<span class="vystitek vystitek--warn">dohoda až od ' + esc(V.czDatum(r.u.dohodaOd)) + "</span>");
-            }
+        const s = ['<span class="vystitek">' + esc(A.TYP_KRATCE[r.typ] || r.typ || "—") + "</span>"];
+        if (r.d && r.d.vyzva && r.d.vyzva.ms) {
+            s.push('<span class="vystitek vystitek--ok" data-vyzva title="' + esc("Výzva k faktuře odeslána " +
+                kratkeMs(r.d.vyzva.ms) + (r.d.vyzva.kdo ? " · " + r.d.vyzva.kdo : "")) + '">výzva odeslána ' +
+                esc(kratkyDen(r.d.vyzva.ms)) + "</span>");
         }
         if (!r.uzavreno && r.zaklad.bezSazby) {
             s.push('<span class="vystitek vystitek--warn" title="Zápisy s hodinami, u kterých ještě není sazba ani částka">' +
@@ -665,7 +424,7 @@
         ["hodiny", "Hodiny"], ["prace", "Práce"], ["obedy", "Obědy"], ["km", "Cestovné"],
         ["skoleniPlacene", "Placené školení"], ["bonusCelkem", "Bonus"], ["narok", "Nárok"],
         // nezlomitelná mezera – hlavička se láme, ale „Z“ a „K“ nesmí zůstat samy na řádku
-        ["prenos", "Z minula"], ["kVyplate", "K výplatě"], ["proplacenoCelkem", "Proplaceno"], ["zbyva", "Zbývá"]
+        ["prenos", "Z minula"], ["kVyplate", "K výplatě"], ["proplacenoCelkem", "Proplaceno"], ["zbyva", "Zbývá"]
     ];
 
     function bunka(klic, hodnota, popisek) {
@@ -675,19 +434,15 @@
         return "<td" + trida + ' data-l="' + esc(popisek) + '" data-sl="' + esc(klic) + '">' + html + "</td>";
     }
 
-    /* Akce řádku – tlačítka v detailu i nabídka pravým tlačítkem (Michal 12. 11. 2026). */
+    /* Akce řádku – tlačítka v detailu i nabídka pravým tlačítkem (Michal 12. 11. 2026);
+       společné z vyplaty-akce.js + výzva k faktuře (jen tady). */
     function akceRadku(r) {
-        const smiPsat = finance() && (!r.uzavreno || hlavni());
-        return [
-            { akce: "proplaceno", text: "Proplaceno…", povoleno: smiPsat, ikona: "platba",
-                title: "Zapsat výplatu – uložením se měsíc uzavře" },
-            { akce: "bonus", text: "Bonus…", povoleno: smiPsat, ikona: "plus" },
-            r.uzavreno
-                ? (hlavni() ? { akce: "odemknout", text: "Odemknout měsíc", povoleno: true, ikona: "vratit", nebezpeci: true } : null)
-                : { akce: "uzavrit", text: "Uzavřít měsíc", povoleno: finance(), ikona: "hotovo" },
-            { akce: "prepocitat", text: "Přepočítat", povoleno: smiPsat, ikona: "historie",
-                title: "Spočítat znovu z výkazů a uložit" }
-        ].filter(Boolean);
+        const gs = !!window.KB.gsyncUrl;
+        return A.akceRadku(r, { navic: [{ akce: "vyzva", text: "Poslat výzvu k faktuře", ikona: "zprava",
+            povoleno: finance() && gs && !!r.d,
+            title: !gs ? "Na webu není adresa Apps Scriptu – výzva nejde poslat"
+                : !r.d ? "Nejdřív spočítej výplatu (Přepočítat)" : "E-mail z isu@pasport.eu s částkou k výplatě",
+            fn: () => posliVyzvu(r.u.id) }] });
     }
 
     function detailHtml(r) {
@@ -713,15 +468,10 @@
         if (d && d.uzavreno) info.push(esc("Uzavřeno " + kratkeMs(d.uzavreno.ms) + (d.uzavreno.kdo ? " – " + d.uzavreno.kdo : "")));
         if (d && d.odemknul && d.odemknul.ms) info.push(esc("Odemknuto " + kratkeMs(d.odemknul.ms) +
             (d.odemknul.kdo ? " – " + d.odemknul.kdo : "")));
-        if (r.u.dohodaOd || r.u.dohodaDo) info.push(esc("Dohoda " + (V.czDatum(r.u.dohodaOd) || "…") + " – " +
-            (V.czDatum(r.u.dohodaDo) || "…")));
-        if (r.limit) info.push(esc("Limit DPP: letos " + V.hod(r.limit.hodiny) + " z " + V.hod(r.limit.limitHodin) +
-            " (" + r.limit.pctHodin + " %)" + (r.limit.hranice ? "" : " · hranice odvodů nenastavená")));
+        if (d && d.vyzva && d.vyzva.ms) info.push(esc("Výzva k faktuře odeslána " + kratkeMs(d.vyzva.ms) +
+            (d.vyzva.komu ? " na " + d.vyzva.komu : "") + (d.vyzva.kdo ? " – " + d.vyzva.kdo : "")));
         const infoHtml = info.map(t => "<li>" + t + "</li>").join("");
-        const tl = (a) => '<button type="button" class="btn btn--sm ' +
-            (a.akce === "proplaceno" ? "btn--primary" : "btn--ghost") + '" data-akce="' + a.akce + '" data-uid="' + uid + '"' +
-            (a.povoleno && !pracuji ? "" : " disabled") + (a.title ? ' title="' + esc(a.title) + '"' : "") + ">" + esc(a.text) + "</button>";
-        const akce = akceRadku(r).map(tl).join("");
+        const akce = akceRadku(r).map(a => A.tlacitko(a, r.u.id)).join("");
         return '<tr class="vyd" data-detail="' + uid + '"><td colspan="' + (SLOUPCE.length + 2) + '">' +
             '<div class="vyd__mrizka">' +
                 '<div class="vyd__oddil"><b>Proplaceno · ' + kcHtml(c.proplacenoCelkem) + "</b>" +
@@ -754,7 +504,7 @@
         } else if (!videt.length) {
             nastav($("tabulka"), '<p class="small muted" style="margin:6px 0">' + esc(vse
                 ? "V tomhle výběru nikdo není – přepni na Vše."
-                : "V " + mesicText(mesic) + " nemá nikdo z dohod, OSVČ ani studentů nic k výplatě.") + "</p>");
+                : "V " + mesicText(mesic) + " nemá nikdo z OSVČ nic k výplatě.") + "</p>");
         } else {
             const soucet = {};
             SLOUPCE.forEach(([k]) => { soucet[k] = videt.reduce((s, r) => s + (Number(r.cisla[k]) || 0), 0); });
@@ -781,25 +531,11 @@
         $("tabPozn").textContent = nic.length
             ? "Bez zápisů a bez přenosu v " + mesicText(mesic) + ": " + nic.map(r => jmeno(clovek(r.u.id), r.u.id)).join(", ") + "."
             : "";
-
-        // řádek nahoře: lidé na DPP nad 80 % limitu
-        const nad = radky.filter(r => r.limit && r.limit.uroven);
-        $("limitRadek").hidden = !nad.length;
-        $("limitRadek").classList.toggle("vylimit--danger", nad.some(r => r.limit.uroven === "danger"));
-        nastav($("limitRadek"), nad.length
-            ? '<span class="vylimit__nadpis">Limit DPP</span>' + nad.map(r => {
-                const l = r.limit;
-                return '<span class="vystitek vystitek--' + esc(l.uroven) + '" data-limit-clovek="' + esc(r.u.id) + '">' +
-                    esc(jmeno(clovek(r.u.id), r.u.id) + " " + V.cislo(l.hodiny, l.hodiny % 1 ? 1 : 0) + "/" +
-                        V.cislo(l.limitHodin) + " h (" + Math.floor(l.pctHodin) + " %)" +
-                        (l.kcUroven ? " · hranice odvodů " + Math.floor(l.pctKc) + " %" : "")) + "</span>";
-            }).join("")
-            : "");
     }
 
     function vykresliUzavrene() {
         const rok = mesic.slice(0, 4);
-        const uz = dokumenty().filter(d => d.uzavreno && String(d.mesic || "").slice(0, 4) === rok);
+        const uz = dokumenty().filter(d => d.uzavreno && osvcDok(d) && String(d.mesic || "").slice(0, 4) === rok);
         $("uzNadpis").textContent = "Uzavřené měsíce " + rok;
         if (!uz.length) {
             nastav($("uzavrene"), '<p class="small muted" style="margin:6px 0">V roce ' + esc(rok) + " zatím žádný uzavřený měsíc.</p>");
@@ -827,7 +563,7 @@
         const ted = tentoMesic();
         const mnozina = new Set();
         for (let i = 0; i < 24; i++) mnozina.add(V.posunMesic(ted, -i));
-        dokumenty().forEach(d => { if (jeMesic(d.mesic) && d.mesic <= ted) mnozina.add(d.mesic); });
+        dokumenty().forEach(d => { if (A.jeMesic(d.mesic) && d.mesic <= ted) mnozina.add(d.mesic); });
         mnozina.add(mesic);
         const seznam = Array.from(mnozina).sort().reverse();
         nastav($("fMesic"), seznam.map(m => '<option value="' + esc(m) + '">' + esc(mesicText(m)) + "</option>").join(""));
@@ -837,24 +573,21 @@
             b.classList.toggle("chip--active", b.dataset.stav === filtrStav);
             b.setAttribute("aria-pressed", b.dataset.stav === filtrStav ? "true" : "false");
         });
-        $("btnPrepocitatVse").disabled = pracuji || !pripraveno(mesic);
-    }
-
-    function naplnNastaveni() {
-        const n = window.KB.dppNastaveni || {};
-        const limit = $("nLimit"), hranice = $("nHranice");
-        if (document.activeElement !== limit && !limit.dataset.rucne) limit.value = Number(n.limitHodinRok) > 0 ? n.limitHodinRok : V.DPP_LIMIT_HODIN;
-        if (document.activeElement !== hranice && !hranice.dataset.rucne) window.KBUI.nastavPenize(hranice, n.hraniceKcMesic);
+        $("btnPrepocitatVse").disabled = A.pracuji() || !pripraveno(mesic);
+        const gs = !!window.KB.gsyncUrl;
+        $("btnVyzvaVse").disabled = !gs || A.pracuji() || !pripraveno(mesic);
+        $("btnVyzvaVse").title = gs ? "Pošle e-mail všem OSVČ, kterým za vybraný měsíc výzva ještě neodešla"
+            : "Na webu není nastavená adresa Apps Scriptu – výzvy nejdou poslat";
+        $("vyzvaPozn").hidden = gs;
     }
 
     function vykresliFinance() {
-        zajistiMesic(mesic);
-        if (lideMesice(mesic).some(u => typ(u) === "dpp")) zajistiRok(mesic.slice(0, 4));
+        A.zajistiMesic(mesic);
         naplnMesice();
-        naplnNastaveni();
         vykresliTabulku();
         vykresliUzavrene();
-        pouzijSkryti();
+        if (!$("vzOkno").hidden) vykresliNahled();
+        A.pouzijSkryti();
     }
 
     /* Můj přehled – jen svoje měsíce (dotaz uid == já), bez tlačítek. */
@@ -883,7 +616,7 @@
         // vlastní hodiny DPP za letošní rok (ze spočítaných měsíců)
         const u = window.KBUI.me();
         const rok = tentoMesic().slice(0, 4);
-        if (u && typ(u) === "dpp") {
+        if (u && A.typ(u) === "dpp") {
             const h = moje.filter(d => String(d.mesic).slice(0, 4) === rok).reduce((s, d) => s + (Number(d.hodiny) || 0), 0);
             const l = V.limitDpp(h, 0, {});
             $("mojeLimit").hidden = false;
@@ -893,7 +626,7 @@
         } else {
             $("mojeLimit").hidden = true;
         }
-        pouzijSkryti();
+        A.pouzijSkryti();
     }
 
     function zapniSledovani(fin) {
@@ -922,113 +655,101 @@
         requestAnimationFrame(() => { naplanovano = false; paint(); });
     }
 
-    /* --------------------------------------------- okno Proplaceno / Bonus */
-
-    function otevriOkno(druh, uid) {
-        const u = clovek(uid) || { id: uid, first: "", last: uid };
-        const r = radek(u, mesic);
-        // čerstvý výpočet – otevřený měsíc se při uložení stejně spočítá znovu z výkazů
-        const c = r.uzavreno ? r.cisla : V.vyplataMesice({ uid: uid, mesic: mesic, typ: r.typ, zaklad: r.zaklad,
-            prenos: r.pren.prenos, bonusy: r.d ? r.d.bonusy : [], proplaceno: r.d ? r.d.proplaceno : [] });
-        okno = { druh: druh, uid: uid, mesic: mesic };
-        $("oNadpis").textContent = (druh === "proplaceno" ? "Proplaceno – " : "Bonus – ") + jmeno(clovek(uid), uid) +
-            ", " + mesicText(mesic);
-        $("oInfo").innerHTML = "K výplatě " + kcHtml(c.kVyplate) + " · už proplaceno " + kcHtml(c.proplacenoCelkem) +
-            " · zbývá " + kcHtml(c.zbyva) + (r.zaklad.bezSazby && !r.uzavreno
-                ? '<br><span class="vystitek vystitek--warn">' + esc(V.pocet(r.zaklad.bezSazby, ["zápis", "zápisy", "zápisů"])) +
-                    " bez sazby – částka se ještě nedopočítala</span>" : "");
-        $("oDatumPole").hidden = druh !== "proplaceno";
-        $("oDatum").value = V.dnesISO();
-        window.KBUI.nastavPenize($("oKc"), druh === "proplaceno" ? Math.max(0, Math.round(c.zbyva)) : "");
-        $("oPozn").value = "";
-        $("oZamek").textContent = druh === "proplaceno"
-            ? (r.uzavreno ? "Měsíc je uzavřený – zápis jde jen hlavnímu správci." :
-                "Uložením se měsíc uzavře: zápisy, částky a bonusy toho měsíce pak změní jen hlavní správce.")
-            : (r.uzavreno ? "Měsíc je uzavřený – bonus přidá jen hlavní správce." : "Bonus se přičte k nároku měsíce.");
-        $("oChyba").hidden = true;
-        $("oUlozit").textContent = druh === "proplaceno" ? "Zapsat proplacení" : "Přidat bonus";
-        $("vyOkno").hidden = false;
-        pouzijSkryti();
-        $("oKc").focus();
-        $("oKc").select();
+    /* ------------------------------------------- VÝZVA K FAKTUŘE ----
+       Michal 12. 11. 2026, Iris: e-mail OSVČ pošle Apps Script (akce
+       vyzvaFaktura) a sám dopíše do dokumentu výplaty `vyzva` – odsud se
+       jen ohlásí (KB.posliVyzvuFaktury). Čísla bere skript z uloženého
+       měsíce, proto jen spočítaným měsícům. */
+    function bezAdresy() {
+        if (window.KB.gsyncUrl) return false;
+        window.KBUI.toast("Výzvy nejdou poslat – na webu není nastavená adresa Apps Scriptu.", "warn");
+        return true;
     }
 
-    function zavriOkno() {
-        okno = null;
-        $("vyOkno").hidden = true;
+    async function posliVyzvu(uid) {
+        if (bezAdresy()) return;
+        const d = dokument(uid, mesic);
+        const kdoText = jmeno(clovek(uid), uid);
+        if (!d) return window.KBUI.toast("Nejdřív spočítej výplatu (Přepočítat) – výzva bere čísla z uloženého měsíce.", "warn");
+        if (d.vyzva && d.vyzva.ms && !(await window.KBUI.potvrd({ nadpis: "Poslat výzvu znovu – " + kdoText + "?",
+            text: "Výzva k faktuře za " + mesicText(mesic) + " už odešla " + kratkeMs(d.vyzva.ms) +
+                (d.vyzva.komu ? " na " + d.vyzva.komu : "") + ". Poslat ji ještě jednou?",
+            ano: "Poslat znovu" }))) return;
+        const ok = await window.KB.posliVyzvuFaktury(uid, mesic);
+        if (!ok) return window.KBUI.toast("Výzvu se nepodařilo odeslat – zkus to znovu.", "error");
+        window.KB.zapisAktivitu("vyplata", "poslal výzvu k faktuře – " + kdoText + ", " + mesicText(mesic));
+        window.KBUI.toast("Výzva k faktuře odeslána – " + kdoText + ". Štítek se ukáže, až ji skript zapíše.");
     }
 
-    async function ulozOkno() {
-        if (!okno) return;
-        const kc = window.KBUI.penize($("oKc"));
-        const datum = $("oDatum").value;
-        const poznamka = $("oPozn").value.trim().slice(0, 200);
-        const chyba = (t) => { $("oChyba").textContent = t; $("oChyba").hidden = false; };
-        if (!(kc > 0)) return chyba("Zadej částku v Kč (víc než nula).");
-        if (okno.druh === "proplaceno" && !/^\d{4}-\d{2}-\d{2}$/.test(datum)) return chyba("Zadej datum proplacení.");
-        const { druh, uid, mesic: m } = okno;
-        const polozka = druh === "proplaceno"
-            ? { kc: Math.round(kc * 100) / 100, datum: datum, kdo: kdo(), poznamka: poznamka, ms: Date.now() }
-            : { kc: Math.round(kc * 100) / 100, poznamka: poznamka, kdo: kdo(), ms: Date.now() };
-        $("oUlozit").disabled = true;
-        const ok = await provedAkci(uid, m, druh === "proplaceno" ? { proplaceno: polozka } : { bonus: polozka },
-            druh === "proplaceno" ? "Proplacení zapsáno – měsíc je uzavřený." : "Bonus přidán.",
-            druh === "proplaceno" ? "zapsal proplacení výplaty" : "přidal bonus k výplatě");
-        $("oUlozit").disabled = false;
-        if (ok) zavriOkno();
-    }
-
-    async function akce(druh, uid) {
-        const u = clovek(uid);
-        const kdoText = jmeno(u, uid) + ", " + mesicText(mesic);
-        if (druh === "proplaceno" || druh === "bonus") return otevriOkno(druh, uid);
-        if (druh === "uzavrit") {
-            if (!(await window.KBUI.potvrd({ nadpis: "Uzavřít měsíc – " + kdoText + "?",
-                text: "Měsíc se spočítá z výkazů a zamkne. Zápisy, částky a bonusy toho měsíce pak změní a odemkne jen hlavní správce.",
-                ano: "Uzavřít měsíc" }))) return;
-            return provedAkci(uid, mesic, { uzavrit: true }, "Měsíc je uzavřený.", "uzavřel měsíc výplaty");
+    async function posliVyzvuVsem() {
+        if (bezAdresy() || !pripraveno(mesic)) return;
+        const radky = lideMesice(mesic).map(u => radek(u, mesic)).filter(r => !r.nic);
+        const jmena = (pole) => pole.map(r => jmeno(clovek(r.u.id), r.u.id)).join(", ");
+        const poslat = radky.filter(r => r.d && !(r.d.vyzva && r.d.vyzva.ms));
+        const uz = radky.filter(r => r.d && r.d.vyzva && r.d.vyzva.ms);
+        const bez = radky.filter(r => !r.d);
+        if (!poslat.length) {
+            return window.KBUI.toast("Není komu poslat – " + (uz.length ? "výzva už odešla všem spočítaným" : "nikdo z OSVČ nemá spočítaný měsíc") +
+                (bez.length ? "; nespočítáno: " + jmena(bez) : "") + ".", "warn");
         }
-        if (druh === "odemknout") {
-            if (!hlavni()) return;
-            if (!(await window.KBUI.potvrd({ nadpis: "Odemknout měsíc – " + kdoText + "?",
-                text: "Zápisy, částky a bonusy toho měsíce půjde zase měnit. Zapíše se, kdo a kdy odemknul.",
-                ano: "Odemknout měsíc", nebezpecne: true }))) return;
-            return provedAkci(uid, mesic, { odemknout: true }, "Měsíc je odemknutý.", "odemknul měsíc výplaty");
-        }
-        if (druh === "prepocitat") {
-            const d = dokument(uid, mesic);
-            if (d && d.uzavreno && !(await window.KBUI.potvrd({ nadpis: "Přepočítat uzavřený měsíc – " + kdoText + "?",
-                text: "Čísla se spočítají znovu z dnešních výkazů a můžou se změnit. Měsíc zůstane uzavřený.",
-                ano: "Přepočítat" }))) return;
-            return provedAkci(uid, mesic, { prepocet: true }, "Přepočítáno z výkazů.", "přepočítal výplatu");
-        }
-    }
-
-    async function prepocitatVse() {
-        if (pracuji || !pripraveno(mesic)) return;
-        const radky = lideMesice(mesic).map(u => radek(u, mesic)).filter(r => !r.nic && !r.uzavreno);
-        if (!radky.length) return window.KBUI.toast("Nic otevřeného k přepočtu.");
+        const text = "Výzva k faktuře za " + mesicText(mesic) + " odejde: " + jmena(poslat) + " (" +
+            V.pocet(poslat.length, ["člověk", "lidé", "lidí"]) + ")." +
+            (uz.length ? " Už odesláno, přeskočí se: " + jmena(uz) + "." : "") +
+            (bez.length ? " Nespočítáno, přeskočí se (nejdřív Přepočítat): " + jmena(bez) + "." : "");
+        if (!(await window.KBUI.potvrd({ nadpis: "Poslat výzvu všem OSVČ za " + mesicText(mesic) + "?", text: text,
+            ano: "Poslat " + poslat.length + "×" }))) return;
         let n = 0;
-        for (const r of radky) {
-            // provedAkci si hlídá `pracuji` – tady se volá jedna po druhé
-            if (await provedAkci(r.u.id, mesic, { prepocet: true }, "", "přepočítal výplatu")) n++;
+        for (const r of poslat) {
+            if (await window.KB.posliVyzvuFaktury(r.u.id, mesic)) n++;
         }
-        window.KBUI.toast("Přepočítáno " + V.pocet(n, ["člověk", "lidé", "lidí"]) + " z výkazů.");
+        window.KB.zapisAktivitu("vyplata", "poslal výzvu k faktuře " + V.pocet(n, ["člověku", "lidem", "lidem"]) + " – " + mesicText(mesic));
+        window.KBUI.toast("Výzva odeslána " + V.pocet(n, ["člověku", "lidem", "lidem"]) + " – štítky se ukážou, až je skript zapíše.",
+            n === poslat.length ? undefined : "warn");
     }
 
-    async function ulozNastaveni() {
-        const limit = Number($("nLimit").value);
-        const hranice = window.KBUI.penize($("nHranice"));
-        if (!(limit > 0)) return window.KBUI.toast("Limit hodin musí být kladné číslo.", "warn");
+    /* --- okno textu výzvy (finance) – předmět, text, symboly a náhled s daty vybraného člověka */
+    const SYMBOLY = ["{jméno}", "{měsíc}", "{částka}", "{hodiny}", "{obědy+cestovné}", "{bonus}", "{do}"];
+    function sablona() {
+        const s = window.KB.vyzvaFaktura || {};
+        return { predmet: String(s.predmet || "").trim() ? s.predmet : V.VYZVA_VYCHOZI.predmet,
+            text: String(s.text || "").trim() ? s.text : V.VYZVA_VYCHOZI.text };
+    }
+    function otevriText() {
+        const s = sablona();
+        $("vzPredmet").value = s.predmet;
+        $("vzText").value = s.text;
+        $("vzSymboly").innerHTML = "Symboly: " + SYMBOLY.map(x => "<code>" + esc(x) + "</code>").join(" ");
+        const lide = lideMesice(mesic).map(u => radek(u, mesic)).filter(r => !r.nic);
+        $("vzKdo").innerHTML = lide.length
+            ? lide.map(r => '<option value="' + esc(r.u.id) + '">' + esc(jmeno(clovek(r.u.id), r.u.id) + " – " + mesicText(mesic)) + "</option>").join("")
+            : '<option value="">Ukázka (nikdo z OSVČ nemá v ' + esc(mesicText(mesic)) + " nic)</option>";
+        $("vzChyba").hidden = true;
+        $("vzOkno").hidden = false;
+        vykresliNahled();
+        $("vzPredmet").focus();
+    }
+    function vykresliNahled() {
+        const uid = $("vzKdo").value;
+        const u = clovek(uid);
+        const c = uid ? radek(u || { id: uid, first: "", last: uid }, mesic).cisla : { mesic: mesic };
+        const v = V.vyzvaText({ predmet: $("vzPredmet").value, text: $("vzText").value },
+            Object.assign({}, c, { mesic: mesic, jmeno: u ? (u.first || V.jmeno(u)) : "Jméno" }));
+        $("vzNahled").innerHTML = "<b>" + esc(v.predmet) + "</b>" + esc(v.text);
+    }
+    async function ulozText() {
+        const predmet = $("vzPredmet").value.trim(), text = $("vzText").value.trim();
+        if (!predmet || !text) { $("vzChyba").textContent = "Předmět i text musí být vyplněné."; $("vzChyba").hidden = false; return; }
+        $("vzUlozit").disabled = true;
         try {
-            await window.KB.saveVykazNastaveni({ dpp: { limitHodinRok: limit, hraniceKcMesic: hranice > 0 ? hranice : null } });
-            delete $("nLimit").dataset.rucne;
-            delete $("nHranice").dataset.rucne;
-            window.KBUI.toast("Limit DPP uložený.");
+            await window.KB.ulozVyzvuText({ predmet: predmet, text: text });
+            $("vzOkno").hidden = true;
+            window.KBUI.toast("Text výzvy uložený.");
         } catch (err) {
             console.error(err);
-            window.KBUI.toast("Limit se neuložil.", "error");
+            $("vzChyba").textContent = "Text se neuložil – zkus to znovu.";
+            $("vzChyba").hidden = false;
         }
+        $("vzUlozit").disabled = false;
     }
 
     /* ----------------------------------------------------------- tisk ----
@@ -1064,6 +785,7 @@
         // opona: peníze lidí až po hesle k citlivým sekcím (jako Celkový přehled);
         // vlastní přehled dohodáře za heslem není – jsou to jen jeho čísla
         window.KBUI.zamekCitlive({ obsah: ["obsah"], need: "finance.view" });
+        A.init({ naplanuj: naplanuj });
 
         $("fStav").innerHTML = STAVY.map(s => '<button type="button" class="chip" data-stav="' + esc(s.klic) + '">' +
             esc(s.nazev) + "</button>").join("");
@@ -1079,8 +801,20 @@
         $("btnDalsi").addEventListener("click", () => {
             if (mesic < tentoMesic()) { mesic = V.posunMesic(mesic, 1); rozbalene.clear(); naplanuj(); }
         });
-        $("btnPrepocitatVse").addEventListener("click", prepocitatVse);
-        $("btnNastUloz").addEventListener("click", ulozNastaveni);
+        $("btnPrepocitatVse").addEventListener("click", () =>
+            A.prepocitatVse(lideMesice(mesic).map(u => radek(u, mesic)), mesic));
+        $("btnVyzvaVse").addEventListener("click", posliVyzvuVsem);
+        $("btnVyzvaText").addEventListener("click", otevriText);
+        $("vzZrusit").addEventListener("click", () => { $("vzOkno").hidden = true; });
+        $("vzUlozit").addEventListener("click", ulozText);
+        $("vzVychozi").addEventListener("click", () => {
+            $("vzPredmet").value = V.VYZVA_VYCHOZI.predmet;
+            $("vzText").value = V.VYZVA_VYCHOZI.text;
+            vykresliNahled();
+        });
+        ["vzPredmet", "vzText"].forEach(id => $(id).addEventListener("input", vykresliNahled));
+        $("vzKdo").addEventListener("change", vykresliNahled);
+        $("vzOkno").addEventListener("click", (event) => { if (event.target === $("vzOkno")) $("vzOkno").hidden = true; });
         $("btnTisk").addEventListener("click", () => {
             tiskHlava();                    // čas „Vytvořeno“ = chvíle tisku
             window.print();
@@ -1094,18 +828,15 @@
             document.title = "Výplaty – " + mesicText(mesic);
         });
         window.addEventListener("afterprint", () => { document.title = titulek; });
-        ["nLimit", "nHranice"].forEach(id => $(id).addEventListener("input", () => { $(id).dataset.rucne = "1"; }));
 
         // řádek = rozbalit / sbalit detail; tlačítka akcí v detailu
         document.addEventListener("click", (event) => {
-            if (!event.target.closest) return;
-            if (event.target.closest("[data-penize-prepni]")) {
-                penizeVidet = !penizeVidet;
-                pouzijSkryti();
-                return;
+            if (!event.target.closest || event.target.closest("[data-penize-prepni]")) return;
+            const b = event.target.closest("#tab [data-akce]");
+            if (b && !b.disabled) {
+                if (b.dataset.akce === "vyzva") return void posliVyzvu(b.dataset.uid);
+                return void A.akce(b.dataset.akce, b.dataset.uid, mesic);
             }
-            const b = event.target.closest("[data-akce]");
-            if (b && !b.disabled) return void akce(b.dataset.akce, b.dataset.uid);
             const tr = event.target.closest("#tab tr.vyr[data-uid]");
             if (!tr) return;
             const uid = tr.dataset.uid;
@@ -1113,34 +844,24 @@
             naplanuj();
         });
         document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape" && okno) { event.preventDefault(); return zavriOkno(); }
-            if (okno && event.key === "Enter" && event.target.closest && event.target.closest("#vyOkno input")) {
-                event.preventDefault();
-                return void ulozOkno();
-            }
+            if (event.key === "Escape" && !$("vzOkno").hidden) { event.preventDefault(); $("vzOkno").hidden = true; return; }
+            if (A.oknoOtevrene()) return;               // Esc / Enter okna obslouží vyplaty-akce.js
             const tr = event.target.closest && event.target.closest("#tab tr.vyr[data-uid]");
             if (tr && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); tr.click(); }
         });
         // pravé tlačítko / dlouhý stisk na řádku člověka (i na jeho detailu) = stejné akce jako v detailu
         // (Michal 12. 11. 2026); jen správa výplat, přehled dohodáře nabídku nemá
-        window.KBNabidka.pripoj((cil) => {
+        A.pripojNabidku((cil) => {
             const tr = cil.closest("#tab tr.vyr[data-uid], #tab tr.vyd[data-detail]");
-            if (!tr || !finance() || pracuji) return null;
+            if (!tr) return null;
             const uid = tr.dataset.uid || tr.dataset.detail;
             const r = radek(clovek(uid) || { id: uid, first: "", last: uid }, mesic);
-            return {
-                nadpis: jmeno(clovek(uid), uid) + " · " + mesicText(mesic),
-                radek: $("tab").querySelector('tr.vyr[data-uid="' + CSS.escape(uid) + '"]') || tr,
-                polozky: akceRadku(r).filter(a => a.povoleno).map(a => ({
-                    text: a.text, ikona: a.ikona, nebezpeci: a.nebezpeci, fn: () => akce(a.akce, uid) }))
-            };
+            return { uid: uid, mesic: mesic, navic: akceRadku(r).filter(a => a.akce === "vyzva"),
+                radek: $("tab").querySelector('tr.vyr[data-uid="' + CSS.escape(uid) + '"]') || tr };
         });
-        $("oZrusit").addEventListener("click", zavriOkno);
-        $("oUlozit").addEventListener("click", ulozOkno);
-        $("vyOkno").addEventListener("click", (event) => { if (event.target === $("vyOkno")) zavriOkno(); });
 
         document.addEventListener("kb-role", naplanuj);
-        ["vyplaty", "vykazy", "vykazy-meta", "users"].forEach(ud => window.KB.on(ud, naplanuj));
+        ["vyplaty", "vykazy", "vykazy-meta", "users", "gsync-url"].forEach(ud => window.KB.on(ud, naplanuj));
         paint();
     });
 })();

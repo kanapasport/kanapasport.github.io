@@ -452,10 +452,23 @@ service cloud.firestore {
       allow read: if finance() || rozesilac()
                      || (clen() && resource.data.uid == request.auth.uid);
       allow create: if finance() && vyplataTvar(id);
-      allow update: if finance() && vyplataTvar(id)
+      allow update: if (finance() && vyplataTvar(id)
                        && request.resource.data.uid == resource.data.uid
                        && request.resource.data.mesic == resource.data.mesic
-                       && (resource.data.get('uzavreno', null) == null || hlavniSpravce());
+                       && (resource.data.get('uzavreno', null) == null || hlavniSpravce()))
+                    // rozesílací účet zapíše jen odeslanou výzvu OSVČ k faktuře (12. 11. 2026)
+                    || (rozesilac() && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['vyzva', 'updatedMs', 'updatedBy']));
+      allow delete: if hlavniSpravce();
+    }
+
+    /* --- mzdy zaměstnanců – Michal 12. 11. 2026 (Iris) ------------------
+       private/mzdy/lide/{uid}: { historie: [{ od, kc, ms, kdo }], updated* }
+       (tvar ve store.js u KB.ulozMzdu). Čte a píše jen finance, maže hlavní
+       správce; vlastník svoji mzdu na webu nevidí (jako sazby). Zachytávací
+       pravidlo pro `private` sem manažera nepouští (`mzdy` je tam vyjmutá). */
+    match /artifacts/firemni-kb-app/private/mzdy/lide/{uid} {
+      allow read, create, update: if finance();
       allow delete: if hlavniSpravce();
     }
 
@@ -571,13 +584,13 @@ service cloud.firestore {
     // projekty, fotky BPH, vybavení, zálohu webu…
     match /artifacts/firemni-kb-app/private/{kolekce}/{document=**} {
       allow read: if (spravce() || robot())
-                     && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'uzaverky', 'aktivity']);
+                     && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'uzaverky', 'aktivity', 'mzdy']);
       allow delete: if (spravce() || robot())
                        && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'vykazy', 'uzaverky',
-                                        'aktivity']);
+                                        'aktivity', 'mzdy']);
       allow create, update: if (spravce() || robot())
                        && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky', 'vyplaty', 'vykazy',
-                                        'uzaverky', 'aktivity']);
+                                        'uzaverky', 'aktivity', 'mzdy']);
     }
     // ostatní pod `private/vykazy` (číselníky, zůstatky, kontrola týdnů, stavy
     // zápisu do Tabulek, přehledy…) zakládá, mění a maže manažer jako dřív;
@@ -699,7 +712,9 @@ service cloud.firestore {
          odškrtne. Text, termín ani přiřazení mu pravidla nepustí a
          potvrzení si nechá manažer. `potvrzeno` musí výslovně zůstat
          false (od 3. 11. 2026): splněný milník BEZ pole web bere jako
-         starý potvrzený, takže smazáním pole by se člen potvrdil sám. */
+         starý potvrzený, takže smazáním pole by se člen potvrdil sám.
+         `pripraveno*` = „připraveno k odevzdání“ (KB.oznacPripraveno,
+         Michal 12. 11. 2026) – i tady člen posílá `potvrzeno: false`. */
       allow update: if (spravce()
                         && (!milnikPotvrzeny(request.resource.data) || milnikPotvrzeny(resource.data)
                             || smiPotvrdit('milniky'))
@@ -711,6 +726,7 @@ service cloud.firestore {
                        && request.resource.data.diff(resource.data).affectedKeys()
                             .hasOnly(['hotovo', 'hotovoKdo', 'hotovoMs',
                                       'potvrzeno', 'potvrdil', 'potvrzenoMs',
+                                      'pripraveno', 'pripravenoKdo', 'pripravenoMs',
                                       'updatedMs', 'updatedBy'])
                        && request.resource.data.get('potvrzeno', true) == false);
     }

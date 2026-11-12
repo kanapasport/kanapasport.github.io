@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=336">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=336">
+    <link rel="stylesheet" href="assets/css/app.css?v=337">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=337">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -173,6 +173,9 @@
         .milrad--pozde { background: #fdecec; border-color: #f5c2c2; }
         .milrad--pozde .milrad__datum { color: #b91c1c; }
         .milrad--pozde .milrad__datum span { color: #b91c1c; }
+        /* připraveno k odevzdání – jemně zelený jako na stránce Milníky (Michal 12. 11. 2026);
+           stojí za „po termínu": podbarvení zelené, červené datum zůstává */
+        .milrad--pripraveno { background: var(--ok-tint); border-color: var(--ok); border-left-width: 4px; }
 
         /* Quick TO-DO: vzkaz s fajfkou vlevo; hotové řádky blednou, ať oči
            táhnou jen ty, co ještě čekají. */
@@ -395,6 +398,7 @@
         .milpil--posun { background: var(--p75-bg); color: var(--p75-fg); cursor: help; }
         .milpil--dovolena { background: var(--warn-tint); color: var(--warn); border-color: var(--warn); cursor: help; }
         .milrad__nazev .milpil { margin-right: 4px; }
+        .milpil--pripraveno { background: var(--ok); color: #fff; border-color: var(--ok); cursor: help; }
         /* Nabídka milníku: vzhled .nabidka (nabidka.css), navíc řádek s datem */
         .milnab { min-width: 250px; }
         .milnab__termin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 4px 10px 8px; }
@@ -798,12 +802,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=336"></script>
-<script src="assets/js/doc.js?v=336"></script>
-<script src="assets/js/ui.js?v=336"></script>
-<script src="assets/js/nabidka.js?v=336"></script>
-<script src="assets/js/vykazy.js?v=336"></script>
-<script type="module" src="assets/js/store.js?v=336"></script>
+<script src="assets/js/taxonomy.js?v=337"></script>
+<script src="assets/js/doc.js?v=337"></script>
+<script src="assets/js/ui.js?v=337"></script>
+<script src="assets/js/nabidka.js?v=337"></script>
+<script src="assets/js/vykazy.js?v=337"></script>
+<script type="module" src="assets/js/store.js?v=337"></script>
 
 <script>
 (function () {
@@ -2211,12 +2215,12 @@
 
             const muj = uid && (m.owners || []).indexOf(uid) !== -1;
             // manažer má u řádku nabídku (pravé tlačítko, „⋯") – milnikRadekHtml
-            return milnikRadekHtml(m, (pozde ? " milrad--pozde" : (muj ? " milrad--muj" : "")) +
+            return milnikRadekHtml(m, tridaPripraveno(m, pozde, muj) +
                     (kdo || novy ? " dl-radek" : ""), bublina,
                 '<span class="milrad__datum">' + esc(videt ? czDatum(m.datum) : "—") +
                     '<span>' + esc(kdy) + "</span></span>" +
                 '<span class="grow" style="min-width:0">' +
-                    '<span class="milrad__nazev">' + vedl(novy) + esc(m.cinnost || "Bez názvu") + "</span>" +
+                    '<span class="milrad__nazev">' + stitekPripraveno(m) + vedl(novy) + esc(m.cinnost || "Bez názvu") + "</span>" +
                     (meta ? '<span class="milrad__meta">' + meta + "</span>" : "") +
                 "</span>", !!(kdo || novy));
         }).join("") || '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
@@ -2970,6 +2974,17 @@
 
     /** Termín milníku jen u zveřejněného – i manažerovi, jako stránka Milníky (3. 11. 2026). */
     const milnikTerminVidet = (m) => !!m.datum && m.zverejneno !== false;
+    /** „Připraveno k odevzdání" (jen nesplněný) – štítek s kdo/kdy v bublině, jako stránka Milníky (Michal 12. 11. 2026). */
+    const jePripraveny = (m) => !!m && m.pripraveno === true && !m.hotovo;
+    const stitekPripraveno = (m) => jePripraveny(m)
+        ? '<span class="milpil milpil--pripraveno" data-pripraveno title="' + esc("Připraveno k odevzdání" +
+            (m.pripravenoKdo ? " – " + m.pripravenoKdo : "") +
+            (Number(m.pripravenoMs) > 0 ? ", " + new Date(Number(m.pripravenoMs)).toLocaleString("cs-CZ",
+                { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "")) +
+          '">připraveno k odevzdání</span> '
+        : "";
+    const tridaPripraveno = (m, pozde, muj) => (pozde ? " milrad--pozde" : (muj && !jePripraveny(m) ? " milrad--muj" : "")) +
+        (jePripraveny(m) ? " milrad--pripraveno" : "");
 
     /** Řádek milníku: odkaz na Milníky, manažer má navíc „⋯" a nabídku na pravé tlačítko.
         info = řádek má vedlejší údaje (na dotyku ve 3 a 4 sloupcích „ⓘ"). */
@@ -3462,7 +3477,7 @@
             const kdy = !videt ? "" : ceka ? "čeká na potvrzení" : pozde ? "po termínu"
                 : zbyva === 0 ? "dnes" : zbyva === 1 ? "zítra" : "za " + V.pocet(zbyva, ["den", "dny", "dní"]);
             // „posunuto" a „v dovolené" jsou vedlejší údaje (ve 3 a 4 sloupcích pod myší)
-            const stitky = (ceka ? '<span class="milpil milpil--ceka">čeká na potvrzení</span>' : "") + vedl(
+            const stitky = (ceka ? '<span class="milpil milpil--ceka">čeká na potvrzení</span>' : "") + stitekPripraveno(m) + vedl(
                 (videt && m.terminPuvodni && m.terminPuvodni !== m.datum
                     ? '<span class="milpil milpil--posun" title="' + esc("původní termín " + czDatum(m.terminPuvodni)) +
                       '">posunuto</span>' : "") +
@@ -3472,7 +3487,7 @@
             const bublina = ["Otevřít milníky", m.zakazka, skupinaText(m),
                 videt ? "" : "nezveřejněný termín – ukáže ho stránka Milníky"].filter(Boolean).join(" · ");
             // zpracovatelé jsou vedlejší údaj – řádek ho má vždycky
-            return milnikRadekHtml(m, (pozde ? " milrad--pozde" : (muj ? " milrad--muj" : "")) + " dl-radek", bublina,
+            return milnikRadekHtml(m, tridaPripraveno(m, pozde, muj) + " dl-radek", bublina,
                 '<span class="milrad__datum">' + esc(videt ? denKratce(m.datum) : "—") +
                     "<span>" + esc(kdy) + "</span></span>" +
                 '<span class="grow" style="min-width:0">' +

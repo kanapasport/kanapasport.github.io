@@ -6,8 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1d556d">
     <title>Milníky – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=336">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=336">
+    <link rel="stylesheet" href="assets/css/app.css?v=337">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=337">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -175,6 +175,9 @@
         /* termín se liší od původního (terminPuvodni) – původní datum v bublině */
         .milpil--posun { background: var(--p75-bg); color: var(--p75-fg); cursor: help; }
         .milpil--posun::before { border-radius: 1px; }
+        /* připraveno k odevzdání – mezi rozdělaným a Splněno (Michal 12. 11. 2026):
+           plná zelená, ať se liší od světlého „splněno"; řádek jemně zelený */
+        .milpil--pripraveno { background: var(--ok); color: #fff; border-color: var(--ok); cursor: help; }
 
         /* typ milníku: tečka v barvě typu + slovo */
         .mtyp {
@@ -279,6 +282,8 @@
         .mt tbody tr:last-child > td { border-bottom: 0; }
         .mt tbody tr:hover > td { background: var(--bg-soft); }
         .mt tr.mr--muj > td { background: var(--accent-tint); }
+        .mt tr.mr--pripraveno > td { background: var(--ok-tint); }
+        .mt tr.mr--pripraveno td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
         .mt tr.mr--skryty > td { background: var(--bg-soft); }
         .mt tr.mr--skryty > td.mt__napln .mnapln { color: var(--text-soft); }
         .mt tr.je-vybrany > td { background: var(--accent-tint); }
@@ -343,6 +348,7 @@
         .milniky__cinnost .mtyp, .milniky__cinnost .milpil { margin: 2px 4px 0 0; }
         .milnik--hotovo .milcin { text-decoration: line-through; opacity: .75; }
         .milniky tr.milnik--muj > td { background: var(--accent-tint); }
+        .milniky tr.milnik--pripraveno > td { background: var(--ok-tint); }
         /* milník z odkazu (?id=, upozornění / nástěnka) – zvýrazněný řádek */
         tr.m-cil > td { background: var(--warn-tint) !important; }
         tr.m-cil > td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
@@ -426,6 +432,7 @@
             table.kt.mt tr.mr--tech { border-left: 4px solid var(--mil-tech); }
             table.kt.mt tr.mr--skryty { background-color: var(--bg-soft); border-style: dashed; }
             table.kt.mt tr.mr--muj { background-color: var(--accent-tint); }
+            table.kt.mt tr.mr--pripraveno { background-color: var(--ok-tint); border-left: 4px solid var(--ok); }
 
             /* harmonogram: řádky jsou karty (nabidka.css), skupina je nadpis */
             .milniky td, .milniky td:first-child, .milniky td:last-child,
@@ -436,6 +443,7 @@
             table.kt.milniky tr.mtr--stav { border-left: 4px solid var(--mil-stav); }
             table.kt.milniky tr.mtr--tech { border-left: 4px solid var(--mil-tech); }
             table.kt.milniky tr.milnik--muj { background-color: var(--accent-tint); }
+            table.kt.milniky tr.milnik--pripraveno { background-color: var(--ok-tint); border-left: 4px solid var(--ok); }
             table.kt.milniky tr.milnik--skryty { background-color: var(--bg-soft); border-style: dashed; }
             .milniky__cinnost { min-width: 0; }
         }
@@ -687,13 +695,13 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=336"></script>
-<script src="assets/js/doc.js?v=336"></script>
-<script src="assets/js/ui.js?v=336"></script>
-<script src="assets/js/nabidka.js?v=336"></script>
+<script src="assets/js/taxonomy.js?v=337"></script>
+<script src="assets/js/doc.js?v=337"></script>
+<script src="assets/js/ui.js?v=337"></script>
+<script src="assets/js/nabidka.js?v=337"></script>
 <!-- kvůli V.lide() a V.technologie() ve formuláři milníku -->
-<script src="assets/js/vykazy.js?v=336"></script>
-<script type="module" src="assets/js/store.js?v=336"></script>
+<script src="assets/js/vykazy.js?v=337"></script>
+<script type="module" src="assets/js/store.js?v=337"></script>
 
 <script>
 (function () {
@@ -859,6 +867,16 @@
 
     const MILNIK = ["milník", "milníky", "milníků"];
     const NEZVEREJNENY = ["nezveřejněný", "nezveřejněné", "nezveřejněných"];
+    // „připraveno k odevzdání" – jen u nesplněného (Michal 12. 11. 2026)
+    const PRIPRAVENY = ["připravený", "připravené", "připravených"];
+    const jePripraveny = (m) => !!m && m.pripraveno === true && !m.hotovo;
+    const stitekPripraveno = (m) => jePripraveny(m)
+        ? '<span class="milpil milpil--pripraveno" data-pripraveno title="' + esc("Připraveno k odevzdání" +
+            (m.pripravenoKdo ? " – " + m.pripravenoKdo : "") +
+            (Number(m.pripravenoMs) > 0 ? ", " + new Date(Number(m.pripravenoMs)).toLocaleString("cs-CZ",
+                { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "")) +
+          '">připraveno k odevzdání</span>'
+        : "";
     const DEN_TVARY = ["den", "dny", "dnů"];
     const UKOL = ["úkol", "úkoly", "úkolů"];
 
@@ -1295,10 +1313,11 @@
         const souhrn = new Map();
         vsechny.forEach(m => {
             const n = skupinaName(m);
-            if (!souhrn.has(n)) souhrn.set(n, { celkem: 0, hotovych: 0, skrytych: 0, poradi: Infinity });
+            if (!souhrn.has(n)) souhrn.set(n, { celkem: 0, hotovych: 0, skrytych: 0, pripravenych: 0, poradi: Infinity });
             const s = souhrn.get(n);
             s.celkem += 1;
             if (m.hotovo) s.hotovych += 1;
+            if (jePripraveny(m)) s.pripravenych += 1;
             if (m.zverejneno === false) s.skrytych += 1;
             s.poradi = Math.min(s.poradi, Number(m.poradi) || 0);
         });
@@ -1341,6 +1360,7 @@
                     ' kt-predel"><td colspan="' + esc(sloupcu) + '"><div class="mskup">' +
                     "<b>" + esc(nazev) + "</b>" +
                     "<span>" + esc(kolik + " · " + s.hotovych + " splněno" +
+                        (s.pripravenych ? " · " + pocet(s.pripravenych, PRIPRAVENY) : "") +
                         (s.skrytych ? " · " + pocet(s.skrytych, NEZVEREJNENY) : "")) + "</span>" +
                     hromadne +
                 "</div></td></tr>";
@@ -1356,6 +1376,7 @@
                 const typ = typMilniku(item);
                 return '<tr class="' + t.trida + " mtr--" + esc(typ) + (muj && !item.hotovo ? " milnik--muj" : "") +
                         (skryty ? " milnik--skryty" : "") + (sloupecVyberu ? " kt-vybiratelny" : "") +
+                        (jePripraveny(item) ? " milnik--pripraveno" : "") +
                         // splněný mezi nadcházejícími (přepínač) – ztlumený
                         (pohled === "nadchazejici" && jeSplneny(item) ? " milnik--ztlumeny" : "") +
                         (posledni ? " mtr--posledni" : "") + (item.id === CIL_MID ? " m-cil" : "") +
@@ -1374,6 +1395,7 @@
                                 : '<span class="milpil">' +
                                     (item.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>")
                             : "") +
+                        stitekPripraveno(item) +
                         (skryty ? '<span class="milpil milpil--skryty">nezveřejněno</span>' : "") +
                         (!item.hotovo && item.vraceno ? window.KBUI.vracenoStitek(item.vraceno) : "") +
                         (muzeMenit && ukolMilniku(item)
@@ -1474,6 +1496,7 @@
         return [
             jeNovy(m) ? '<span class="milpil milpil--novy">nový</span>' : "",
             stitekPosunu(m),
+            stitekPripraveno(m),
             ceka ? '<span class="milpil milpil--ceka">čeká na potvrzení</span>' : "",
             // potvrzený manažerem „potvrzeno", starší bez pole „splněno"
             splneno ? '<span class="milpil">' + (m.potvrzeno === true ? "potvrzeno" : "splněno") + "</span>" : "",
@@ -1518,6 +1541,7 @@
         return "mr--" + typMilniku(m) + t.stav +
             (k.jeMuj(m) && !m.hotovo ? " mr--muj" : "") +
             (m.zverejneno === false ? " mr--skryty" : "") +
+            (jePripraveny(m) ? " mr--pripraveno" : "") +
             (m.hotovo ? " mr--hotovo" : "") + (ceka ? " mr--ceka" : "") +
             (m.id === CIL_MID ? " m-cil" : "") +
             // splněný ukázaný přepínačem mezi rozdělanými – ztlumený
@@ -1649,7 +1673,9 @@
                 return n ? pocet(n, TYPY_MILNIKU[t].tvary) : "";
             }).filter(Boolean);
             const hotovych = ukazatSplnene ? radky.length - nesplnenych(radky) : 0;
+            const pripravenych = radky.filter(jePripraveny).length;
             return pocet(radky.length, MILNIK) + (typy.length > 1 ? " · " + typy.join(", ") : "") +
+                (pripravenych ? " · " + pocet(pripravenych, PRIPRAVENY) : "") +
                 (hotovych ? " · " + hotovych + " splněno" : "");
         };
 
@@ -2220,6 +2246,9 @@
             potvrdil: manazer ? byl.potvrdil || "" : "",
             potvrzenoMs: manazer ? byl.potvrzenoMs || 0 : 0
         };
+        // Zpět nesmí shodit „připraveno k odevzdání" (Michal 12. 11. 2026)
+        if (byl.pripraveno === true) Object.assign(predtim, { pripraveno: true,
+            pripravenoKdo: byl.pripravenoKdo || "", pripravenoMs: Number(byl.pripravenoMs) || 0 });
         await uloz(window.KB.ulozSplneniMilniku(id, zmena), hlaska,
             () => window.KB.ulozSplneniMilniku(id, predtim));
     }
@@ -2463,6 +2492,14 @@
                 window.KBUI.toast("Potvrzení selhalo.", "error"); });
     }
 
+    /** Připraveno k odevzdání / Zrušit připraveno (Michal 12. 11. 2026). */
+    function prepniPripraveno(m) {
+        const ano = m.pripraveno !== true;
+        uloz(window.KB.oznacPripraveno(m.id, ano),
+            ano ? "Milník je připravený k odevzdání." : "Milník už není označený jako připravený.",
+            () => window.KB.oznacPripraveno(m.id, !ano));
+    }
+
     /* Zveřejnění. Termín se zpřístupní jen zpracovatelům milníku –
        kolega uvidí, že milník je, ne kdy se odevzdává. */
     function prepniZverejneni(id, btn) {
@@ -2504,6 +2541,12 @@
                 (manazer || muj) && (!m.hotovo || smimVratit(m)) && {
                     text: m.hotovo ? "Vrátit mezi rozdělané" : "Splněno", ikona: m.hotovo ? "vratit" : "hotovo",
                     fn: () => { if (smimOdskrtnout(m)) prepniHotovo(m.id); } },
+                /* připraveno k odevzdání: zpracovatel na svém zveřejněném, manažer na kterémkoli
+                   nesplněném (Michal 12. 11. 2026) */
+                !m.hotovo && (manazer || (muj && !skryty)) && {
+                    text: m.pripraveno === true ? "Zrušit připraveno" : "Připraveno k odevzdání",
+                    ikona: m.pripraveno === true ? "vratit" : "vlajka",
+                    fn: () => prepniPripraveno(m) },
                 manazer && m.hotovo && m.potvrzeno === false && window.KBUI.smimPotvrdit("milniky") && {
                     text: "Potvrdit splnění", ikona: "potvrdit", fn: () => potvrdJeden(m.id) },
                 manazer && m.hotovo && m.potvrzeno === false && window.KBUI.smimPotvrdit("milniky") && {
