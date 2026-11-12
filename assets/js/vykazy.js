@@ -189,6 +189,12 @@
         "Nemoc": "nemoc", "Doktor": "doktor", "Školení": "skoleni" };
     /* Které druhy potvrzuje manažer – stejně jako nástěnka (POTVRZOVANE v index.html). */
     const MZDY_POTVRZUJE = { dovolena: true, volno: true, neplacene: true };
+    /* Potvrzený je den, který leží v potvrzené události téhož člověka a druhu.
+       Zamítnutá žádost (stav, který se chystá) nepotvrzuje nic. Sdílí výpis
+       pro mzdovou i uzávěrka měsíce. */
+    const denPotvrzen = (kalendar, uid, typ, datum) => (kalendar || []).some(k => k && k.uid === uid &&
+        k.typ === typ && k.potvrzeno === true && k.stav !== "zamitnuto" && k.zamitnuto !== true &&
+        String(k.od || "") <= datum && datum <= String(k.do || k.od || ""));
     /* Pro mzdovou účetní: „Volno“ je na webu náhradní volno (čerpá přesčas). */
     const MZDY_POPISEK = { "Volno": "Náhradní volno" };
     const MZDY_VARIANTY = ["", "placene", "nepotvrzeno"];
@@ -233,11 +239,7 @@
         const zamestnanci = new Map();
         (o.lide || []).forEach(u => { if (u && u.id && V.jeZamestnanecHpp(u)) zamestnanci.set(u.id, u); });
         const kalendar = (o.kalendar || []).filter(k => k && zamestnanci.has(k.uid));
-        /* Potvrzený je den, který leží v potvrzené události téhož člověka a druhu.
-           Zamítnutá žádost (stav, který se chystá) nepotvrzuje nic. */
-        const potvrzeny = (uid, typ, datum) => kalendar.some(k => k.uid === uid && k.typ === typ &&
-            k.potvrzeno === true && k.stav !== "zamitnuto" && k.zamitnuto !== true &&
-            String(k.od || "") <= datum && datum <= String(k.do || k.od || ""));
+        const potvrzeny = (uid, typ, datum) => denPotvrzen(kalendar, uid, typ, datum);
 
         // uid → (druh|varianta) → { druh, varianta, cele: Set(iso), castecne: { iso: hodiny } }
         const sber = new Map();
@@ -586,10 +588,14 @@
         return V.pracovniDnyIso(zacatek, doIso).filter(d => !ma[d]);
     };
 
-    V.zustatek = (uid) => {
+    /* `doIso` (nepovinné): stav k tomu dni VČETNĚ – zápisy i fond do něj.
+       Uzávěrka měsíce potřebuje přesčas k poslednímu dni měsíce, ne k dnešku
+       (Michal 12. 11. 2026, Iris). Bez něj jako dřív. */
+    V.zustatek = (uid, doIso) => {
         const z = (window.KB.zustatky || {})[uid] || {};
         const od = z.odIso || "";
-        const dnes = V.dnesISO();
+        const k = /^\d{4}-\d{2}-\d{2}$/.test(String(doIso || "")) ? String(doIso) : "";
+        const dnes = k || V.dnesISO();
         const nastaveno = !!od;
 
         const moje = (window.KB.vykazy || []).filter(v =>
@@ -624,7 +630,7 @@
         /* Fond běží jen do včerejška – dnešní den se do fondu přičte až zítra,
            dnešní zápisy se ale počítají hned. Jinak každé ráno svítilo o 8 h
            méně, dokud člověk den nezapsal (Michal 9. 11. 2026). */
-        const fond = V.fondHodin(od, V.posunIso(dnes, -1));
+        const fond = V.fondHodin(od, k || V.posunIso(dnes, -1));
         const prescas = (Number(z.prescasPred) || 0) + prace + absenceHodin - fond;
 
         /* Kdo za celé období nemá ani jeden zápis, tomu přesčas spočítat
@@ -642,7 +648,7 @@
            proč je v mínusu, a dopíše je (Michal 26. 10. 2026). Před oknem
            dat manažera by každý den vypadal prázdný – ty se nehlásí. */
         const chybi = nastaveno && z.bezPrescasu !== true
-            ? V.chybejiciDny(uid, V.posunIso(dnes, -1), okno > od ? okno : "")
+            ? V.chybejiciDny(uid, k || V.posunIso(dnes, -1), okno > od ? okno : "")
             : [];
         return {
             nastaveno: nastaveno,
@@ -656,6 +662,7 @@
             bezPrescasu: z.bezPrescasu === true,
             fond: fond,
             prace: Math.round(prace * 10) / 10,
+            absenceHodin: Math.round(absenceHodin * 10) / 10,
             neuplne: nastaveno && !!okno && od < okno,
             chybi: chybi
         };
@@ -2750,5 +2757,279 @@
         const PORADI = { hodiny: 0, prekryv: 1, svatek: 2, absence: 3, hotovy: 4, vypomoc: 5 };
         return out.sort((a, b) => b.datum.localeCompare(a.datum) ||
             String(a.uid).localeCompare(String(b.uid)) || PORADI[a.druh] - PORADI[b.druh]);
+    };
+
+    /* ============================================ UZÁVĚRKA MĚSÍCE ======
+       Michal 12. 11. 2026 (Iris): před uzavřením měsíce si finance připraví
+       výpis – snímek měsíce (stránka uzaverka.html, dokument
+       private/uzaverky/mesice/{RRRR-MM}): hodiny po lidech a zakázkách,
+       nepřítomnosti a co z nich není potvrzené, přesčas zaměstnanců
+       k poslednímu dni měsíce, chybějící a krátké dny, podezřelé zápisy i
+       s tím, kdo je odklikl, výplaty dohod / OSVČ / studentů a čerpání
+       rozpočtů. Po uzavření se živá data porovnávají se snímkem
+       (V.uzaverkaRozdily). Počítá se ze stejných V.* jako zbytek webu, ať
+       čísla sedí s Výkazy, Výplatami i nástěnkou. Hlídá
+       NASTROJE\web\testy\test_uzaverka.js. */
+
+    const na1 = (x) => Math.round((Number(x) || 0) * 10) / 10;
+
+    /**
+     * Snímek měsíce podle datového modelu uzávěrky (bez stav, kontrola,
+     * uzavreno, odemknul, sesity a updated* – ty píše stránka a store).
+     * @param {string} mesic "RRRR-MM"
+     * @param {Object} d { zaznamy (KB.vykazy), lide (KB.users), zustatky (KB.zustatky),
+     *   kalendar (KB.kalendar), vyplaty (KB.vyplaty), kontrolaOk (KB.kontrolaOk),
+     *   nastaveni: { rozpocty (KB.rozpocty), dpp (KB.dppNastaveni) }, dnes (ISO, nepovinné),
+     *   vytvoril, vytvorilUid, ms (nepovinné) } – co chybí, bere se z window.KB
+     * @returns {Object|null} null pro nesmyslný měsíc
+     */
+    V.uzaverkaMesice = (mesic, d) => {
+        const r = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(mesic || "")) ? V.mesicRozsah(mesic) : { od: "" };
+        if (!r.od) return null;
+        const o = d || {};
+        const n = o.nastaveni || {};
+        /* Zůstatek, chybějící dny, lidé i podezřelé zápisy čtou window.KB.
+           Na dobu výpočtu (synchronní, nic jiného mezitím neběží) se jim
+           podstrčí data z `d`, ať snímek stojí jen na tom, co stránka předala;
+           zbytek KB (úkoly, okno výkazů) zůstává vidět. */
+        const puvodni = window.KB || {};
+        const kb = Object.create(puvodni);
+        const podstrc = { vykazy: o.zaznamy, users: o.lide, zustatky: o.zustatky, kalendar: o.kalendar,
+            vyplaty: o.vyplaty, kontrolaOk: o.kontrolaOk, rozpocty: n.rozpocty, dppNastaveni: n.dpp };
+        Object.keys(podstrc).forEach(k => { if (podstrc[k] !== undefined) kb[k] = podstrc[k]; });
+        window.KB = kb;
+        try { return snimekMesice(mesic, r, o, kb); } finally { window.KB = puvodni; }
+    };
+
+    function snimekMesice(mesic, r, o, KB) {
+        const dnes = jeIso(o.dnes) ? o.dnes : V.dnesISO();
+        // běžící měsíc jen do včerejška – dnešek se ještě dopisuje (jako fond u přesčasu)
+        const konec = r.do < dnes ? r.do : V.posunIso(dnes, -1);
+        const vsechny = KB.vykazy || [];
+        const vMesici = vsechny.filter(z => z && z.uid && String(z.datum || "") >= r.od && String(z.datum || "") <= r.do);
+        const doKonceMesice = vsechny.filter(z => z && String(z.datum || "") <= r.do);
+        const pracovni = V.pracovniDnyIso(r.od, konec);
+        const ok = KB.kontrolaOk || {};
+        const podezrele = V.podezreleZapisy(vsechny, { dnes: r.do, dni: Number(r.do.slice(8, 10)) })
+            .filter(p => p.datum >= r.od && p.datum <= r.do);
+
+        // kdo už ve firmě není, ale v měsíci pracoval, do uzávěrky patří
+        const lide = V.lide();
+        const sZapisem = new Set(vMesici.map(z => z.uid));
+        (KB.users || []).forEach(u => {
+            if (u && u.active === false && sZapisem.has(u.id) && !window.KBUI.jeSluzebni(u)) lide.push(u);
+        });
+
+        const vysledek = lide.map(u => {
+            const uid = u.id;
+            const typ = window.KBUI.typUvazku(u);
+            const moje = vMesici.filter(z => z.uid === uid);
+            const prace = moje.filter(jePrace);
+
+            const zak = new Map();
+            prace.forEach(z => {
+                const k = String(z.zakazka || "").trim() || "Nezařazeno";
+                zak.set(k, (zak.get(k) || 0) + (Number(z.hodiny) || 0));
+            });
+            const zakazky = Array.from(zak, ([nazev, h]) => ({ nazev: nazev, hodiny: na1(h) }))
+                .sort((a, b) => b.hodiny - a.hodiny || a.nazev.localeCompare(b.nazev, "cs"));
+
+            // nepotvrzené = stejně jako výpis pro mzdovou (dovolená, volno, neplacené volno)
+            const abs = new Map();
+            moje.filter(zapisAbsence).forEach(z => {
+                const druh = String(z.zakazka || "").trim();
+                const a = abs.get(druh) || { druh: druh, dny: new Set(), hodiny: 0, nepotvrzeno: new Set() };
+                a.dny.add(z.datum);
+                a.hodiny += Number(z.hodiny) || 0;
+                const typK = MZDY_TYP_KALENDARE[druh];
+                if (typK && MZDY_POTVRZUJE[typK] && !denPotvrzen(KB.kalendar, uid, typK, z.datum)) a.nepotvrzeno.add(z.datum);
+                abs.set(druh, a);
+            });
+            const absence = Array.from(abs.values())
+                .sort((a, b) => V.ABSENCE.indexOf(a.druh) - V.ABSENCE.indexOf(b.druh))
+                .map(a => ({ druh: a.druh, dny: Array.from(a.dny).sort(), hodiny: na1(a.hodiny),
+                    nepotvrzeno: Array.from(a.nepotvrzeno).sort() }));
+
+            const zu = (KB.zustatky || {})[uid] || {};
+            let prescas = null;
+            if (V.prescasVeden(uid) && jeIso(zu.odIso) && zu.odIso <= konec) {
+                const s = V.zustatek(uid, konec);
+                // bez jediného zápisu by vyšel mínus celého fondu (jako pomlčka v dlaždici)
+                if (!s.bezZapisu) prescas = { konec: s.prescas, fond: s.fond, prace: s.prace,
+                    absence: s.absenceHodin, pred: Number(zu.prescasPred) || 0 };
+            }
+
+            /* Chybějící a krátké dny jen tomu, koho hlídá i Apps Script
+               (zaměstnanec s přesčasem a začátkem počítání, ne „nepracuje“ ani
+               odešlý; V.chybejiciDny se zadaným `od` začátek počítání nehlídá).
+               Do krátkého dne se počítají všechny hodiny dne včetně Volna –
+               celý den náhradního volna není krátký den, jen čerpá přesčas. */
+            const hlidany = V.maFond(u) && jeIso(zu.odIso) && zu.bezPrescasu !== true &&
+                u.nepracuje !== true && u.active !== false;
+            const chybi = hlidany ? V.chybejiciDny(uid, konec, r.od) : [];
+            const kratke = [];
+            if (hlidany) {
+                const den = {};
+                moje.forEach(z => { den[z.datum] = (den[z.datum] || 0) + (Number(z.hodiny) || 0); });
+                pracovni.forEach(iso => {
+                    if (iso >= zu.odIso && iso in den && na2(den[iso]) < 8) kratke.push({ datum: iso, hodiny: na1(den[iso]) });
+                });
+            }
+
+            // starší odkliknutí bez jména (společný dokument) nese "?"
+            const mojePodezrele = podezrele.filter(p => p.uid === uid).map(p => ({
+                klic: p.klic, datum: p.datum, druh: p.druh, text: p.duvod,
+                ok: ok[p.klic] ? (ok[p.klic].length ? ok[p.klic].slice() : ["?"]) : [] }));
+
+            let vyplata = null, bezDokumentu = false;
+            if (V.jeVyplatnyTyp(u)) {
+                // uložený dokument měsíce – po proplacení se čísla nehýbou s výkazy
+                const dok = V.vyplataDokument(KB.vyplaty, uid, mesic);
+                if (!dok) bezDokumentu = true;
+                else vyplata = { narok: na2(dok.narok), prenos: na2(dok.prenos), kVyplate: na2(dok.kVyplate),
+                    proplacenoCelkem: na2(dok.proplacenoCelkem), zbyva: na2(dok.zbyva), uzavreno: !!dok.uzavreno,
+                    limit: (dok.typ || typ) === "dpp"
+                        ? V.limitDpp(V.hodinyRoku(doKonceMesice, uid, mesic.slice(0, 4)), V.dppKcMesice(dok), KB.dppNastaveni)
+                        : null };
+            }
+
+            const c = { uid: uid, jmeno: V.jmeno(u), typ: typ,
+                hodiny: na1(prace.reduce((s, z) => s + (Number(z.hodiny) || 0), 0)),
+                zakazky: zakazky, absence: absence, prescas: prescas, chybi: chybi, kratke: kratke,
+                podezrele: mojePodezrele, vyplata: vyplata };
+            if (bezDokumentu) c.bezDokumentu = true;
+            if (u.nepracuje === true) c.nepracuje = true;
+            return c;
+        });
+
+        /* Rozpočty: zakázky s prací v měsíci; čerpání celkem ke konci měsíce
+           stejným výpočtem jako Ekonomika (V.ekonomikaZakazky) – jen práce,
+           bez externích nákladů a faktur (ty se tu nenačítají). */
+        const zakMesic = new Map();
+        vMesici.filter(jePrace).forEach(z => {
+            const k = String(z.zakazka || "").trim();
+            if (!k) return;
+            const a = zakMesic.get(k) || { h: 0, kc: 0 };
+            a.h += Number(z.hodiny) || 0;
+            a.kc += Number(z.castka) || 0;
+            zakMesic.set(k, a);
+        });
+        const rozpocty = Array.from(zakMesic, ([zakazka, a]) => {
+            const e = V.ekonomikaZakazky(zakazka, { vykazy: doKonceMesice, faktury: null, dnes: r.do });
+            return { zakazka: zakazka, hodiny: na1(a.h), kc: Math.round(a.kc), rozpocetKc: e.rozpocet,
+                pct: e.cerpaniPct === null ? null : na1(e.cerpaniPct) };
+        }).sort((a, b) => b.hodiny - a.hodiny || a.zakazka.localeCompare(b.zakazka, "cs"));
+
+        const soucet = (f) => vysledek.reduce((s, c) => s + f(c), 0);
+        return {
+            mesic: mesic, od: r.od, do: r.do,
+            vytvorenoMs: Number(o.ms) || Date.now(), vytvoril: String(o.vytvoril || ""),
+            vytvorilUid: String(o.vytvorilUid || ""),
+            lide: vysledek,
+            rozpocty: rozpocty,
+            souhrn: {
+                lidi: vysledek.length,
+                hodiny: na1(soucet(c => c.hodiny)),
+                chybiCelkem: soucet(c => c.chybi.length),
+                nepotvrzenoCelkem: soucet(c => c.absence.reduce((s, a) => s + a.nepotvrzeno.length, 0)),
+                podezrelychCelkem: soucet(c => c.podezrele.length),
+                kratkychCelkem: soucet(c => c.kratke.length)
+            }
+        };
+    }
+
+    /**
+     * Co se změnilo po uzávěrce: snímek × nový V.uzaverkaMesice z živých dat.
+     * Hodiny práce, dny absencí, chybějící dny, výplata „zbývá“, nové podezřelé.
+     * @returns {{uid, jmeno, text}[]} jedna položka = jedna změna; prázdné = nic
+     */
+    V.uzaverkaRozdily = (snimek, zivy) => {
+        const out = [];
+        const pred = new Map(((snimek && snimek.lide) || []).map(c => [c.uid, c]));
+        const ted = new Map(((zivy && zivy.lide) || []).map(c => [c.uid, c]));
+        const nekdo = (c) => !!c && (c.hodiny > 0 || (c.absence || []).length > 0);
+        const dnyText = (dny) => dny.map(d => Number(d.slice(8, 10)) + ". " + Number(d.slice(5, 7)) + ".").join(", ");
+        const zmenaDnu = (pred, ted) => {
+            const p = new Set(pred), t = new Set(ted);
+            const plus = Array.from(t).filter(x => !p.has(x)).sort();
+            const minus = Array.from(p).filter(x => !t.has(x)).sort();
+            const casti = [];
+            if (plus.length) casti.push("přibylo " + dnyText(plus));
+            if (minus.length) casti.push("ubylo " + dnyText(minus));
+            return casti.join(", ");
+        };
+        const dnyDruhu = (c) => {
+            const m = new Map();
+            (c.absence || []).forEach(a => m.set(a.druh, new Set(a.dny || [])));
+            return m;
+        };
+        new Set([...pred.keys(), ...ted.keys()]).forEach(uid => {
+            const s = pred.get(uid), z = ted.get(uid);
+            const pridej = (text) => out.push({ uid: uid, jmeno: (z || s).jmeno || uid, text: text });
+            // nový člověk bez práce ani odešlý bez zápisů nejsou změna měsíce
+            if (!s) { if (nekdo(z)) pridej("nově v měsíci: " + V.hod(z.hodiny) + " práce"); return; }
+            if (!z) { if (nekdo(s)) pridej("zápisy měsíce zmizely (bylo " + V.hod(s.hodiny) + " práce)"); return; }
+
+            if (na1(s.hodiny) !== na1(z.hodiny)) pridej("hodiny práce " + V.hod(s.hodiny) + " → " + V.hod(z.hodiny));
+
+            const ap = dnyDruhu(s), az = dnyDruhu(z);
+            new Set([...ap.keys(), ...az.keys()]).forEach(druh => {
+                const text = zmenaDnu(ap.get(druh) || [], az.get(druh) || []);
+                if (text) pridej(V.nazevAbsence(druh) + ": " + text);
+            });
+
+            const chybi = zmenaDnu(s.chybi || [], z.chybi || []);
+            if (chybi) pridej("dny bez výkazu: " + chybi);
+
+            const zb1 = s.vyplata ? na2(s.vyplata.zbyva) : null, zb2 = z.vyplata ? na2(z.vyplata.zbyva) : null;
+            if (zb1 !== zb2) pridej("výplata zbývá " + (zb1 === null ? "—" : V.kc(zb1)) + " → " + (zb2 === null ? "—" : V.kc(zb2)));
+
+            const znam = new Set((s.podezrele || []).map(p => p.klic));
+            (z.podezrele || []).filter(p => !znam.has(p.klic)).forEach(p =>
+                pridej("nový podezřelý zápis " + V.czDatum(p.datum) + ": " + p.text));
+        });
+        return out;
+    };
+
+    /** „Jan Novák“ → „J. Novák“ (příjmení celé, křestní zkráceně). */
+    const kratkeJmeno = (jmeno) => {
+        const casti = String(jmeno || "").trim().split(/\s+/);
+        return casti.length > 1 ? casti[0].charAt(0) + ". " + casti.slice(1).join(" ") : casti.join(" ");
+    };
+    const NEPOTVRZENO_TEXT = { "Dovolená": "nepotvrzená dovolená", "Volno": "nepotvrzené náhradní volno",
+        "Neplacené volno": "nepotvrzené neplacené volno" };
+    const UZAVERKA_TEXT_MAX = 300;
+
+    /**
+     * Text Quick TO-DO „komu co chybí“ (hlídka 3. v měsíci) – nejvýš 300 znaků;
+     * kdo se nevejde, schová se do „a další N“. Kdo nic nemá, v textu není.
+     */
+    V.uzaverkaChybiText = (snimek) => {
+        const s = snimek || {};
+        const zacatek = "Uzávěrka za " + (V.mesicText(s.mesic) || s.mesic || "?");
+        const tvaryDne = ["den", "dny", "dní"];
+        const polozky = [];
+        (s.lide || []).forEach(c => {
+            const co = [];
+            if ((c.chybi || []).length) co.push(V.pocet(c.chybi.length, tvaryDne) + " bez výkazu");
+            if ((c.kratke || []).length) co.push(V.pocet(c.kratke.length, tvaryDne) + " pod 8 h");
+            (c.absence || []).forEach(a => {
+                const n = (a.nepotvrzeno || []).length;
+                if (n) co.push((NEPOTVRZENO_TEXT[a.druh] || "nepotvrzeno: " + a.druh) + " (" + V.pocet(n, tvaryDne) + ")");
+            });
+            if (co.length) polozky.push(kratkeJmeno(c.jmeno) + " " + co.join(", "));
+        });
+        if (!polozky.length) return zacatek + ": výkazy kompletní, nic nechybí.";
+        let text = zacatek + " – komu co chybí: " + polozky[0];
+        for (let i = 1; i < polozky.length; i++) {
+            const zbyva = polozky.length - i - 1;
+            const dalsi = text + "; " + polozky[i];
+            // místo na „; a další N“ musí zbýt, dokud ještě někdo zbývá
+            if ((dalsi + (zbyva ? "; a další " + zbyva : "")).length > UZAVERKA_TEXT_MAX) {
+                return (text + "; a další " + (polozky.length - i)).slice(0, UZAVERKA_TEXT_MAX);
+            }
+            text = dalsi;
+        }
+        return text.slice(0, UZAVERKA_TEXT_MAX);
     };
 })();

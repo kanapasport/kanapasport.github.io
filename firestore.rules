@@ -174,11 +174,25 @@ service cloud.firestore {
         || get(vyplataCesta(d.uid, d.datum[0:7])).data.get('uzavreno', null) == null;
     }
 
+    /* ČÁRA PLATÍ I PRO MANAŽERA (Michal 12. 11. 2026, Iris – uzávěrka
+       měsíce). Uzavřený měsíc (datum před `uzaverkaOd()`) nezaloží, nezmění
+       ani nesmaže ani manažer – jinak by přestal sedět snímek uzávěrky,
+       podle kterého se počítaly mzdy a výplaty. Obchvat má jen hlavní
+       správce (ten smí i čáru vrátit = měsíc odemknout). Zápis bez data se
+       čárou neřídí, stejně jako v mesicOtevreny – ať manažer smí uklidit
+       i rozbitý dokument. Stojí to jedno čtení `meta/uzaverka` navíc. */
+    function poCare(d) {
+      return !(d.get('datum', '') is string) || d.get('datum', '') == ''
+        || d.get('datum', '') >= uzaverkaOd();
+    }
+
     match /artifacts/firemni-kb-app/private/vykazy/zaznamy/{id} {
       // svoje vidí každý, cizí jen správce
       allow read:   if spravce() || (clen() && resource.data.uid == request.auth.uid);
       // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš
-      allow create: if hlavniSpravce() || (mesicOtevreny(request.resource.data) && (spravce() || (clen()
+      // od 12. 11. 2026 drží čáru i manažer (poCare výš), obchází ji jen hlavní správce
+      allow create: if hlavniSpravce() || (mesicOtevreny(request.resource.data) && ((spravce()
+                       && poCare(request.resource.data)) || (clen()
                        && request.resource.data.uid == request.auth.uid
                        && request.resource.data.datum >= uzaverkaOd())));
       /* Vlastník smí opravit svůj zápis, ale nesmí ho přepsat na někoho
@@ -186,7 +200,7 @@ service cloud.firestore {
          `zdroj: "panel"`, kterým se odemyká mazání. Z uzavřeného měsíce
          ani do něj nic nepřesune ani manažer. */
       allow update: if hlavniSpravce() || (mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data)
-                    && (spravce() || (clen()
+                    && ((spravce() && poCare(resource.data) && poCare(request.resource.data)) || (clen()
                        && resource.data.uid == request.auth.uid
                        && request.resource.data.uid == request.auth.uid
                        && resource.data.datum >= uzaverkaOd()
@@ -197,7 +211,8 @@ service cloud.firestore {
          4. 9. 2026); tvrdou hranicí v databázi je uzávěrka – co je jednou
          uzavřené, nesmaže ani vlastník. Dřív to šlo jen u záznamů
          z Rychlého zápisu (`zdroj: "panel"`). */
-      allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && (spravce() || (clen()
+      allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && ((spravce()
+                       && poCare(resource.data)) || (clen()
                        && resource.data.uid == request.auth.uid
                        && resource.data.datum >= uzaverkaOd())));
     }
@@ -209,14 +224,18 @@ service cloud.firestore {
     match /artifacts/firemni-kb-app/private/vykazy/castky/{id} {
       allow read:  if spravce() || (fakturujeSi()
                       && resource.data.uid == request.auth.uid);
-      // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš
-      allow create: if hlavniSpravce() || (spravce() && mesicOtevreny(request.resource.data));
+      // v uzavřeném (proplaceném) měsíci jen hlavní správce – mesicOtevreny výš;
+      // od 12. 11. 2026 i před čárou uzávěrky jen hlavní správce – poCare výš
+      allow create: if hlavniSpravce() || (spravce() && mesicOtevreny(request.resource.data)
+                       && poCare(request.resource.data));
       allow update: if hlavniSpravce() || (spravce()
-                       && mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data));
+                       && mesicOtevreny(resource.data) && mesicOtevreny(request.resource.data)
+                       && poCare(resource.data) && poCare(request.resource.data));
       /* Když si člověk smaže svůj zápis, musí s ním zmizet i jeho částka –
          jinak by v databázi zůstala peněžní věta bez zápisu. Zapisovat
          částky pořád smí jen manažer (4. 9. 2026). */
-      allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && (spravce() || (clen()
+      allow delete: if hlavniSpravce() || (mesicOtevreny(resource.data) && ((spravce()
+                       && poCare(resource.data)) || (clen()
                        && resource.data.get('uid', '') == request.auth.uid
                        && resource.data.get('datum', '') >= uzaverkaOd())));
     }
@@ -375,6 +394,27 @@ service cloud.firestore {
       allow delete: if hlavniSpravce();
     }
 
+    /* --- uzávěrka měsíce – Michal 12. 11. 2026 (Iris) ---------------------
+       private/uzaverky/mesice/{RRRR-MM}: snímek měsíce pro uzávěrku (hodiny,
+       nepřítomnosti, přesčasy, výplaty, rozpočty – tvar ve store.js u
+       KB.ulozUzaverkuMesice). Nese peníze lidí i zakázek → čte a píše jen
+       finance; rozesílací účet Apps Scriptu čte a mění JEN výsledek
+       porovnání sešitů (`sesity`) – dokument nezaloží ani nesmaže. Že pole
+       `mesic` sedí s id, hlídá zápis. Uzavřený snímek (`stav` uzavreno)
+       mění – a tím odemyká – jen hlavní správce; mazat taky jen on.
+       Zachytávací pravidlo pro `private` sem manažera nepouští (kolekce
+       `uzaverky` je tam vyjmutá). Žádné get() navíc. */
+    match /artifacts/firemni-kb-app/private/uzaverky/mesice/{mesic} {
+      allow read: if finance() || rozesilac();
+      allow create: if finance() && mesic.matches('[0-9]{4}-[0-9]{2}')
+                       && request.resource.data.get('mesic', '') == mesic;
+      allow update: if (finance() && request.resource.data.get('mesic', '') == mesic
+                        && (resource.data.get('stav', '') != 'uzavreno' || hlavniSpravce()))
+                    || (rozesilac() && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['sesity', 'updatedMs', 'updatedBy']));
+      allow delete: if hlavniSpravce();
+    }
+
     /* Zůstatky dovolené a přesčasů. SVŮJ vidí každý – je to jeho nárok
        a má si ho hlídat; cizí a zápis jen manažer (spodní pravidlo pro
        `private`). Michal 3. 9. 2026. */
@@ -438,7 +478,8 @@ service cloud.firestore {
 
     // všechno ostatní v `private` (číselníky se sazbami, rozpočty, finance
     // projektů, zakládání úkolů…) jen správce – kromě faktur, pokladny
-    // a výplat, které mají vlastní přísnější pravidlo výš (pravidla se
+    // a výplat (od 12. 11. 2026 i uzávěrek měsíců), které mají vlastní
+    // přísnější pravidlo výš (pravidla se
     // sčítají, proto se tu musí vynechat výslovně). Od 3. 11. 2026 navíc:
     // nastavení potvrzování mění jen hlavní správce a úkoly a milníky
     // (`seznam`) zakládá a mění manažer přes vlastní pravidla s hlídáním
@@ -446,10 +487,11 @@ service cloud.firestore {
     // Totéž výkazy: zápisy a částky hlídají zámek proplaceného měsíce
     // (mesicOtevreny), zbytek `private/vykazy` má pravidlo hned pod tímhle.
     match /artifacts/firemni-kb-app/private/{kolekce}/{document=**} {
-      allow read: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty']);
-      allow delete: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'vykazy']);
+      allow read: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'uzaverky']);
+      allow delete: if spravce() && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'vyplaty', 'vykazy', 'uzaverky']);
       allow create, update: if spravce()
-                       && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky', 'vyplaty', 'vykazy']);
+                       && !(kolekce in ['faktury', 'pokladna', 'potvrzovani', 'ukoly', 'milniky', 'vyplaty', 'vykazy',
+                                        'uzaverky']);
     }
     // ostatní pod `private/vykazy` (číselníky, zůstatky, kontrola týdnů, stavy
     // zápisu do Tabulek, přehledy…) zakládá, mění a maže manažer jako dřív
@@ -496,7 +538,13 @@ service cloud.firestore {
       // v private/milniky a starý dokument už nic nečte ani nepíše.
       // `meta/zpetne` (povolení zpětného zápisu, i jeho zrušení) od 3. 11.
       // 2026 jen ten, kdo smí potvrzovat druh `zpetne`.
-      allow write: if spravce() && (docId != 'zpetne' || smiPotvrdit('zpetne'));
+      // `meta/uzaverka` (čára) od 12. 11. 2026 (Michal, Iris): správce ji smí
+      // jen posunout dopředu (uzavřít další měsíc); zpátky – odemknout měsíc –
+      // jen hlavní správce. Jinak by si manažer uzavřený měsíc otevřel sám.
+      allow write: if spravce() && (docId != 'zpetne' || smiPotvrdit('zpetne'))
+                      && (docId != 'uzaverka' || hlavniSpravce()
+                          || request.resource.data.get('odIso', '')
+                             >= (resource == null ? '' : resource.data.get('odIso', '')));
     }
 
     /* --- milníky (harmonogram odevzdání) ---------------------------------

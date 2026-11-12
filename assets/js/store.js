@@ -3368,6 +3368,9 @@ KB.doplnCastky = async () => {
            a ve Výplatách chybělo (3. 11. 2026). */
         const jeAbsence = z.absence === true && z.absencePlacena !== true;
         if (Date.now() - Number(z.updatedMs || 0) < DOPOCET_PRODLEVA_MS) continue;   // čerstvá změna – počká
+        /* Před čárou uzávěrky zapíše částku jen hlavní správce (pravidla od 12. 11.
+           2026) – jinak by odmítnuté zápisy zabraly dávku a novější by nedošly. */
+        if (KB.uzaverkaOd && String(z.datum || "") < KB.uzaverkaOd && mojeRole() !== "hlavni-spravce") continue;
         /* Platí sazba člověka z Nastavení; když má projekt nastavenou
            vlastní sazbu pro toho člověka, vyhrává ta (Michal 2. 9. 2026). */
         const proj = ((KB.rozpocty || {})[z.zakazka] || {}).sazby || {};
@@ -3705,17 +3708,28 @@ const gsyncCol = () => collection(db, "artifacts", APP_ID, "private", "vykazy", 
 KB.gsync = [];              // stavy zápisů do tabulek (jen manažeři)
 KB.gsyncUrl = "";           // adresa Apps Scriptu z meta/gsync
 
-KB.posliDoSheets = (id) => {
+/* `akce` nepovinně: bez ní zápis řádku jako dřív ({ id }); s ní (od 12. 11.
+   2026 jen "smazat" – smazaný zápis zmizí i ze sešitu, Michal v Iris) jde
+   i ID token přihlášeného, protože mazání skript pustí jen manažerovi nebo
+   vlastníkovi sešitu a sám si ověří, že zápis v databázi opravdu není. */
+KB.posliDoSheets = (id, akce) => {
     if (!KB.gsyncUrl || !id) return;
     /* text/plain schválně: prohlížeč tak požadavek pošle rovnou, bez
        předletu, který Apps Script neumí odbavit. Odpověď nečteme –
        výsledek si skript zapíše zpátky do databáze. */
-    poOdeslani().then(() => fetch(KB.gsyncUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ id: id })
-    })).catch(err => console.warn("Zápis do Tabulek se neozval:", err));
+    poOdeslani().then(async () => {
+        const telo = { id: id };
+        if (akce) {
+            telo.akce = String(akce);
+            try { telo.token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript nic nesmaže */ }
+        }
+        return fetch(KB.gsyncUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(telo)
+        });
+    }).catch(err => console.warn("Zápis do Tabulek se neozval:", err));
 };
 
 /**
@@ -3758,9 +3772,10 @@ KB.uzaverkaOd = "";
 /**
  * Uzávěrka výkazů. `odIso` je první den, který zůstává otevřený
  * („2026-10-01" = září je uzavřené); prázdný řetězec čáru zruší.
- * Zapisuje jen manažer (pravidla pro meta). Uzavřený měsíc pak opravuje
- * jen manažer – zaměstnanec ani se zpětným povolením (pravidla to
- * nepustí), jemu zbývá „Nahlásit chybu".
+ * Zapisuje manažer (pravidla pro meta) – dopředu; zpátky (odemknout
+ * měsíc) jen hlavní správce. Uzavřený měsíc pak opravuje jen hlavní
+ * správce (od 12. 11. 2026, Iris) – zaměstnanec ani se zpětným povolením,
+ * manažer taky ne; zbývá „Nahlásit chybu" a stránka Uzávěrka měsíce.
  */
 KB.ulozUzaverku = async (odIso, popis) => {
     if (authReady) await authReady;
@@ -3883,6 +3898,8 @@ KB.deleteVykaz = async (id) => {
     await deleteDoc(castkaDoc(id)).catch(() => {});
     KB.zapisAktivitu("vykaz", "smazal výkaz " + (z ? (z.datum || "") + " – " +
         (z.osoba || "") + " (" + (z.nazev || "") + ")" : id));
+    // smazaný zápis i ze sešitu – jinak tam řádek zůstane navždy (Michal 12. 11. 2026, Iris)
+    KB.posliDoSheets(id, "smazat");
 };
 
 /**
@@ -6739,6 +6756,177 @@ KB.ohlasVyplatu = async (zprava) => {
             body: JSON.stringify({ akce: "vyplata", token: token, uid: uid, mesic: mesic })
         }).catch(err => console.warn("Ohlášení výplaty se neozvalo:", err));
     } catch (err) { console.warn("Ohlášení výplaty se neodeslalo:", err); }
+};
+
+/* ------------------------------------------ uzávěrka měsíce (finance) ----
+   Snímek měsíce pro uzávěrku (Michal 12. 11. 2026, Iris): hodiny po lidech
+   a zakázkách, nepřítomnosti, přesčas, chybějící a krátké dny, podezřelé
+   zápisy, výplaty, rozpočty, rozdíly web × sešit. Počítá V.uzaverkaMesice
+   (vykazy.js), ukazuje stránka uzaverka.html.
+
+     private/uzaverky/mesice/{RRRR-MM}
+       { mesic, od, do, stav: pripraveno | ke_kontrole | zkontrolovano | uzavreno,
+         vytvorenoMs, vytvoril, vytvorilUid, lide: […], rozpocty: […], souhrn,
+         sesity (plní jen Apps Script – porovnání sešitů), kontrola, uzavreno,
+         odemknul, updatedMs, updatedBy }
+
+   Nese peníze → čte a píše jen finance (hlavní správce, majitel, asistentka);
+   rozesílací účet Apps Scriptu čte a mění jen `sesity`. Uzavřený snímek
+   mění (a tím odemyká) jen hlavní správce – firestore.rules. */
+
+const uzaverkyCol = () => collection(db, "artifacts", APP_ID, "private", "uzaverky", "mesice");
+const uzaverkaMesiceDoc = (mesic) => doc(db, "artifacts", APP_ID, "private", "uzaverky", "mesice", mesic);
+
+KB.uzaverky = {};               // "RRRR-MM" → dokument snímku
+KB.uzaverkyPrisly = false;
+let uzaverkyOdber = null;
+
+function mojeRole() {
+    const ja = (KB.users || []).find(u => u.id === ((auth && auth.currentUser) || {}).uid);
+    return ja && ja.active !== false ? String(ja.role || "") : "";
+}
+
+/** "2026-10" → "2026-11-01" (první den následujícího měsíce = čára po uzavření). */
+function prvniDenDalsihoMesice(mesic) {
+    const r = Number(mesic.slice(0, 4)), m = Number(mesic.slice(5, 7));
+    return m === 12 ? (r + 1) + "-01-01" : r + "-" + String(m + 1).padStart(2, "0") + "-01";
+}
+
+function platnyMesicUzaverky(mesic) {
+    mesic = String(mesic || "");
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mesic)) throw new Error("Neplatný měsíc uzávěrky.");
+    return mesic;
+}
+
+/** Jen finance – ostatním by pravidla odběr stejně odmítla, tak se ani neptá. */
+KB.watchUzaverky = async () => {
+    if (uzaverkyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || uzaverkyOdber) return;
+    if (pockejNaRoli(KB.watchUzaverky)) return;
+    if (uzaverkyOdber || FINANCE_ROLE.indexOf(mojeRole()) === -1) return;
+    uzaverkyOdber = onSnapshot(uzaverkyCol(), (snap) => {
+        KB.uzaverky = {};
+        snap.forEach(d => { KB.uzaverky[d.id] = Object.assign({ id: d.id }, d.data()); });
+        KB.uzaverkyPrisly = true;
+        emit("uzaverky", KB.uzaverky);
+    }, (err) => {
+        console.error("Chyba čtení uzávěrek:", err);
+        emit("uzaverky-chyba", err);
+    });
+};
+
+/**
+ * Uloží snímek měsíce slučováním (pole jako `lide` se přepíšou celá).
+ * `mesic` jde vždy i do dokumentu – pravidla hlídají, že sedí s id.
+ * Vrací uložená pole.
+ */
+KB.ulozUzaverkuMesice = async (mesic, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    mesic = platnyMesicUzaverky(mesic);
+    const pole = Object.assign({}, data || {}, {
+        mesic: mesic,
+        updatedMs: Date.now(),
+        updatedBy: window.KB_USER || ""
+    });
+    await setDoc(uzaverkaMesiceDoc(mesic), pole, { merge: true });
+    return pole;
+};
+
+/**
+ * Uzavření měsíce (finance, po kontrole): (1) čára uzávěrky na první den
+ * následujícího měsíce – jen dopředu, už posunutou dál nevrací; (2) výplaty
+ * toho měsíce, které ještě uzavřené nejsou, se uzavřou (transakcí, ať se
+ * nepřepíše souběžné proplacení); (3) snímek dostane stav „uzavreno“.
+ * Pořadí schválně: čára dřív než snímek – kdyby se snímek nepovedl, zůstane
+ * měsíc zamčený a jde to zopakovat. Vrací { cara, vyplat }.
+ */
+KB.uzavriMesic = async (mesic) => {
+    if (authReady) await authReady;
+    requireDb();
+    mesic = platnyMesicUzaverky(mesic);
+    if (FINANCE_ROLE.indexOf(mojeRole()) === -1) throw new Error("Měsíc uzavírá jen finance.");
+    const kdo = window.KB_USER || "";
+    const uid = KB.currentUid();
+    const cara = prvniDenDalsihoMesice(mesic);
+
+    const meta = await getDoc(metaDoc("uzaverka"));
+    const ted = meta.exists() ? String((meta.data() || {}).odIso || "") : "";
+    if (!(ted && ted >= cara)) {
+        await KB.ulozUzaverku(cara, "uzavřel měsíc " + mesic + " – čára uzávěrky od " + cara);
+    }
+
+    // čte se z databáze, ne z KB.vyplaty – odběr výplat nemusí na stránce běžet
+    const vyplaty = await getDocs(query(vyplatyCol(), where("mesic", "==", mesic)));
+    let vyplat = 0;
+    for (const d of vyplaty.docs) {
+        const v = d.data() || {};
+        if (v.uzavreno || !v.uid) continue;
+        const ulozeno = await KB.ulozVyplatu(v.uid, mesic, (stary) =>
+            (stary && !stary.uzavreno) ? { uzavreno: { ms: Date.now(), kdo: kdo } } : null);
+        if (ulozeno) vyplat++;
+    }
+
+    await KB.ulozUzaverkuMesice(mesic, { stav: "uzavreno", uzavreno: { kdo: kdo, uid: uid, ms: Date.now() } });
+    KB.zapisAktivitu("vykaz", "uzavřel měsíc " + mesic + " (uzávěrka; uzavřené výplaty: " + vyplat + ")");
+    return { cara: cara, vyplat: vyplat };
+};
+
+/**
+ * Odemčení uzavřeného měsíce – jen hlavní správce. Čára se vrací na první
+ * den toho měsíce JEN tehdy, když stojí přesně za ním (jinak je mezitím
+ * uzavřený i pozdější měsíc a vrátit ji by odemklo i ten). Snímek dostane
+ * stav „zkontrolovano“ (bez kontroly „pripraveno“) a `odemknul`. Výplaty
+ * se NEodemykají – ty odemyká hlavní správce na stránce Výplaty po jedné.
+ * Snímek se mění dřív než čára: kdyby ho pravidla odmítla, čára zůstane.
+ */
+KB.odemkniMesic = async (mesic) => {
+    if (authReady) await authReady;
+    requireDb();
+    mesic = platnyMesicUzaverky(mesic);
+    if (mojeRole() !== "hlavni-spravce") throw new Error("Odemknout měsíc smí jen hlavní správce.");
+    const snimek = await getDoc(uzaverkaMesiceDoc(mesic));
+    const data = snimek.exists() ? (snimek.data() || {}) : {};
+    await KB.ulozUzaverkuMesice(mesic, {
+        stav: data.kontrola ? "zkontrolovano" : "pripraveno",
+        odemknul: { kdo: window.KB_USER || "", uid: KB.currentUid(), ms: Date.now() }
+    });
+    const meta = await getDoc(metaDoc("uzaverka"));
+    const ted = meta.exists() ? String((meta.data() || {}).odIso || "") : "";
+    let cara = ted;
+    if (ted === prvniDenDalsihoMesice(mesic)) {
+        cara = mesic + "-01";
+        await KB.ulozUzaverku(cara, "odemkl měsíc " + mesic + " – čára uzávěrky zpět na " + cara);
+    }
+    KB.zapisAktivitu("vykaz", "odemkl uzávěrku měsíce " + mesic);
+    return { cara: cara };
+};
+
+/**
+ * Porovnání osobních sešitů s webem za měsíc – udělá ho Apps Script
+ * (porovnejMesic v Kod.gs) a výsledek zapíše do `sesity` snímku; odpověď
+ * se nečte. Stejná cesta jako KB.ohlasVyplatu: { akce: "porovnat", mesic,
+ * token }, skript pustí jen finance. Vrací false, když nebylo kam poslat.
+ */
+KB.porovnejSesity = async (mesic) => {
+    try {
+        mesic = platnyMesicUzaverky(mesic);
+        if (!KB.gsyncUrl) return false;
+        await poOdeslani();
+        let token = "";
+        try { token = await auth.currentUser.getIdToken(); } catch (err) { /* bez tokenu skript neporovná */ }
+        fetch(KB.gsyncUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ akce: "porovnat", mesic: mesic, token: token })
+        }).catch(err => console.warn("Porovnání sešitů se neozvalo:", err));
+        return true;
+    } catch (err) {
+        console.warn("Porovnání sešitů se neodeslalo:", err);
+        return false;
+    }
 };
 
 /* ------------------------------------------- kontrola týdne (manažer) ----

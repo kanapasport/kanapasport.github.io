@@ -343,15 +343,19 @@
 
     /**
      * Co by zápis neuložilo – stejné podmínky jako ulozDen() ve výkazech.
-     * k = { manazer, uzaverkaOd, rezie, mamUkolyProjektu }. Vrací "" nebo hlášku.
+     * k = { manazer, hlavni, uzaverkaOd, rezie, mamUkolyProjektu }. Vrací "" nebo hlášku.
      */
     function kontrolaZapisu(p, k) {
         if (!p.zakazka) return "Vyber úkol nebo zakázku.";
         const a = minuty(p.od), b = minuty(p.do);
         if (a === null || b === null) return "Doplň čas od–do (třeba 8 nebo 8:30).";
         if (b <= a) return "Konec musí být po začátku – práci přes půlnoc zapiš ve výkazech.";
-        if (!k.manazer && k.uzaverkaOd && String(p.datum) < k.uzaverkaOd) {
-            return "Měsíc je uzavřený – oprava přes Nahlásit chybu.";
+        /* Čáru uzávěrky obchází jen hlavní správce – manažera databáze pod ni
+           už nepustí (12. 11. 2026, Iris), tak mu to řekneme dřív a lidsky. */
+        if (!k.hlavni && k.uzaverkaOd && String(p.datum) < k.uzaverkaOd) {
+            return k.manazer
+                ? "Měsíc je uzavřený – otevře ho jen hlavní správce (Výplaty a mzdy → Uzávěrka měsíce)."
+                : "Měsíc je uzavřený – oprava přes Nahlásit chybu.";
         }
         if (!k.rezie && !p.cinnost) return "Vyber druh vypracování.";
         if (!k.rezie && !p.ukolId && k.mamUkolyProjektu) {
@@ -1561,6 +1565,7 @@
         const manazer = ui.can("vykaz.view");
         const chyba = kontrolaZapisu(p, {
             manazer: manazer,
+            hlavni: !!(ui.isOwner && ui.isOwner()),
             uzaverkaOd: /^\d{4}-\d{2}-\d{2}$/.test(String(kb.uzaverkaOd || "")) ? kb.uzaverkaOd : "",
             rezie: volba.typ === "rezie",
             mamUkolyProjektu: mamUkolyProjektu(p.zakazka)

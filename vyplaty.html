@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výplaty – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=333">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=333">
+    <link rel="stylesheet" href="assets/css/app.css?v=334">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=334">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -147,6 +147,41 @@
             .vyd__mrizka { grid-template-columns: minmax(0, 1fr); }
             .vyd__akce .btn { flex: 1 1 calc(50% - 8px); justify-content: center; }
         }
+
+        /* ------------------------------------------------------- TISK ----
+           Michal 12. 11. 2026, Iris: PDF i u Výplat – jako Výpis pro mzdovou.
+           Na papír jen tabulka měsíce s tiskovou hlavičkou (firma, měsíc, kdo
+           a kdy). Bez pásu, hlavičky webu, ovládání, legendy, uzavřených
+           měsíců, oken a zámku. Peníze odkryté jen v tisku (třídou tady),
+           tečky na obrazovce zůstanou. A4 na výšku (app.css má okraj 0). */
+        .vytisk { display: none; }
+        @media print {
+            @page { size: A4 portrait; margin: 12mm 10mm 14mm; }
+            html, body { background: #fff !important; }
+            body { padding: 0 !important; margin: 0 !important; }
+            body > *:not(main) { display: none !important; }
+            main.wrap { padding: 0 !important; max-width: none !important; display: block !important; }
+            main > *:not(#obsah), #obsah > *:not(#tiskHlava):not(#tabKarta) { display: none !important; }
+            .vytisk { display: block; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
+            .vytisk__firma { font-size: 10pt; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+            .vytisk__nadpis { font-size: 16pt; font-weight: 900; line-height: 1.25; margin: 3px 0 2px; }
+            .vytisk__meta { font-size: 9pt; }
+            #obsah .tajne { display: inline !important; }
+            #obsah .tajne__zastup, #tabKarta button, #tabKarta .vyd__akce { display: none !important; }
+            #tabKarta, #tabKarta *, .vytisk, .vytisk * { color: #000 !important; background: transparent !important;
+                box-shadow: none !important; }
+            #tabKarta { border: 0 !important; border-radius: 0; padding: 0 !important; }
+            #tabKarta .vyt__obal { overflow: visible; }
+            /* všech dvanáct číselných sloupců i Stav se musí vejít na šířku A4 */
+            table.vyt { font-size: 7.5pt; }
+            .vyt th, .vyt td { padding: 3px 2px; border-bottom-color: #bbb; }
+            .vyt th { font-size: 6.5pt; letter-spacing: 0; }
+            .vyt th:first-child, .vyt td:first-child { padding-left: 0; }
+            .vyt td.vyt__stav, .vyt th.vyt__stav, .vyt td.kt-hlavni { min-width: 0; }
+            .vyt tr.vyr > td:first-child { box-shadow: none !important; }
+            .vyt tr.vyr, .vyt tr.vyd { break-inside: avoid; page-break-inside: avoid; }
+            .vystitek { border-color: #777 !important; font-size: 6.5pt; padding: 0 4px; }
+        }
     </style>
 </head>
 <body>
@@ -205,6 +240,8 @@
                 <span class="vyf__mezera"></span>
                 <button type="button" id="btnPrepocitatVse" class="btn btn--ghost btn--sm"
                         title="Spočítá z výkazů všechny otevřené měsíce v tabulce a uloží je (uzavřené nechá být)">Přepočítat otevřené</button>
+                <button type="button" id="btnTisk" class="btn btn--primary btn--sm"
+                        title="Otevře okno tisku – v něm vyber Uložit jako PDF, nebo tiskárnu">Uložit PDF / tisk</button>
             </div>
             <div class="vyf__radek" id="dppNast">
                 <span class="vyf__nadpis">Limit DPP</span>
@@ -218,7 +255,14 @@
 
         <div id="limitRadek" class="vylimit" role="status" hidden></div>
 
-        <section class="card vyk" aria-labelledby="tabNadpis">
+        <!-- tisková hlavička: na obrazovce schovaná, plní se těsně před tiskem -->
+        <header id="tiskHlava" class="vytisk">
+            <div id="tiskFirma" class="vytisk__firma"></div>
+            <h1 id="tiskNadpis" class="vytisk__nadpis"></h1>
+            <div id="tiskMeta" class="vytisk__meta"></div>
+        </header>
+
+        <section id="tabKarta" class="card vyk" aria-labelledby="tabNadpis">
             <div class="spread">
                 <b id="tabNadpis" class="vyk__nadpis">Měsíc</b>
                 <span id="tabSouhrn" class="tiny muted"></span>
@@ -276,11 +320,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=333"></script>
-<script src="assets/js/ui.js?v=333"></script>
-<script src="assets/js/nabidka.js?v=333"></script>
-<script src="assets/js/vykazy.js?v=333"></script>
-<script type="module" src="assets/js/store.js?v=333"></script>
+<script src="assets/js/taxonomy.js?v=334"></script>
+<script src="assets/js/ui.js?v=334"></script>
+<script src="assets/js/nabidka.js?v=334"></script>
+<script src="assets/js/vykazy.js?v=334"></script>
+<script type="module" src="assets/js/store.js?v=334"></script>
 
 <script>
 (function () {
@@ -860,7 +904,7 @@
         $("obsah").hidden = !fin;
         $("moje").hidden = !moje;
         if (fin || moje) zapniSledovani(fin);
-        if (fin) vykresliFinance();
+        if (fin) { nactiFirmu(); vykresliFinance(); }
         if (moje) vykresliMoje();
     }
 
@@ -980,6 +1024,31 @@
         }
     }
 
+    /* ----------------------------------------------------------- tisk ----
+       Michal 12. 11. 2026, Iris: firma z „Naše údaje“ jako ve Výpisu pro
+       mzdovou; bez nich (nebo bez práv) stačí značka webu. */
+    const FIRMA_ZALOHA = "Pasport Kaňa";
+    let firma = "";
+    let firmaNactena = false;
+    async function nactiFirmu() {
+        if (firmaNactena || !finance() || !window.KB.loadFakturaNastaveni) return;
+        firmaNactena = true;
+        try {
+            const n = await window.KB.loadFakturaNastaveni();
+            firma = String((n && n.nazev) || "").trim();
+        } catch (err) {
+            firma = "";
+        }
+    }
+    function tiskHlava() {
+        const d = new Date();
+        const vyber = filtrStav === "vse" ? "" : " · jen " + (STAVY.find(s => s.klic === filtrStav) || {}).nazev.toLowerCase();
+        $("tiskFirma").textContent = firma || FIRMA_ZALOHA;
+        $("tiskNadpis").textContent = "Výplaty – " + mesicText(mesic);
+        $("tiskMeta").textContent = "Vytvořeno " + d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear() + " " +
+            d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0") + (kdo() ? " · " + kdo() : "") + vyber;
+    }
+
     /* ---------------------------------------------------------- start */
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -1005,6 +1074,19 @@
         });
         $("btnPrepocitatVse").addEventListener("click", prepocitatVse);
         $("btnNastUloz").addEventListener("click", ulozNastaveni);
+        $("btnTisk").addEventListener("click", () => {
+            tiskHlava();                    // čas „Vytvořeno“ = chvíle tisku
+            window.print();
+        });
+        /* Název PDF při „Uložit jako PDF“ se bere z titulku stránky. Tisk
+           z nabídky prohlížeče (Ctrl+P) jde tudy taky. */
+        const titulek = document.title;
+        window.addEventListener("beforeprint", () => {
+            if (!finance()) return;
+            tiskHlava();
+            document.title = "Výplaty – " + mesicText(mesic);
+        });
+        window.addEventListener("afterprint", () => { document.title = titulek; });
         ["nLimit", "nHranice"].forEach(id => $(id).addEventListener("input", () => { $(id).dataset.rucne = "1"; }));
 
         // řádek = rozbalit / sbalit detail; tlačítka akcí v detailu

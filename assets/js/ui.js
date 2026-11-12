@@ -1812,11 +1812,12 @@
     ];
     /* Výplaty a výpis pro mzdovou účetní patří k sobě – jedna položka pásu
        „Výplaty a mzdy“, dvě záložky (Michal 12. 11. 2026). Obě za heslem
-       k citlivým sekcím. Dohodář otevírá vyplaty.html jako „Moje výplaty“ –
+       k citlivým sekcím. Třetí je Uzávěrka měsíce (Michal 12. 11. 2026, Iris). Dohodář otevírá vyplaty.html jako „Moje výplaty“ –
        záložky nevidí (need) a prázdná podlišta se schová v paintUser. */
     UI.PODLISTA_MZDY = [
         { title: "VÝPLATY", href: "vyplaty.html", need: "finance.view", zamek: true },
-        { title: "VÝPIS PRO MZDOVOU", href: "mzdy-vypis.html", need: "finance.view", zamek: true }
+        { title: "VÝPIS PRO MZDOVOU", href: "mzdy-vypis.html", need: "finance.view", zamek: true },
+        { title: "UZÁVĚRKA MĚSÍCE", href: "uzaverka.html", need: "finance.view", zamek: true }
     ];
     /* FAKTURY byly v podliště projektů – od 22. 9. 2026 jsou v levém pásu
        vedle Pokladny (přání Michala: mimo projekty, jen manažeři a asistentka). */
@@ -2074,7 +2075,7 @@
                po jeho zavření a otevření. */
             window.KB.on("quicktodo", () => { odznakAplikace.quick = true; renderMujDen(); renderQuick();
                 hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu();
-                hlidkaAkci(); });
+                hlidkaAkci(); hlidkaUzaverky(); });
             // připomenutí akcí se přepočítá i s příchodem kalendáře
             window.KB.on("kalendar", hlidkaAkci);
             window.KB.on("users", () => { pozadejOData(); renderMujDen(); renderQuick(); });
@@ -2192,7 +2193,7 @@
             { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" },
             // výplaty a výpis pro mzdovou jako jedna položka se dvěma záložkami (Michal 12. 11. 2026)
             { nazev: "Výplaty a mzdy", ikona: "vyplata", href: "vyplaty.html", need: "finance.view",
-              popis: "Výplaty DPP, DPČ, OSVČ a studentů a výpis nepřítomností zaměstnanců pro mzdovou účetní" },
+              popis: "Výplaty DPP, DPČ, OSVČ a studentů, výpis nepřítomností zaměstnanců pro mzdovou účetní a uzávěrka měsíce" },
             { nazev: "Moje výplaty", ikona: "vyplata", href: "vyplaty.html", gate: "data-jen-vyplaty",
               popis: "Kolik ti za měsíc vychází, kolik se proplatilo a kolik zbývá" }
         ] },
@@ -2988,6 +2989,73 @@
         }).then(() => {
             try { localStorage.setItem("kb-hlidka", id); } catch (err) { }
         }).catch(err => console.warn("Hlídka výkazů nezapsala vzkaz:", err));
+    }
+
+    /* -------------------------------------------- hlídka uzávěrky ------
+       Třetího v měsíci „vyskočí“ hlavnímu správci přehled, co komu za minulý
+       měsíc chybí (Michal 12. 11. 2026, Iris). Jen dokud minulý měsíc nemá
+       výpis poslaný ke kontrole (KB.uzaverky). Vzkaz má pevné id
+       qt_uzaverka_<RRRR-MM>: existující = nic, takže vznikne jednou – ani
+       odškrtnutý se znovu neotvírá; smazaný hlídá localStorage jako u
+       hlídky výkazů. Data (všechny výkazy, výplaty, odkliknuté podezřelé)
+       se zapínají až po levných kontrolách, ne na každé stránce. */
+
+    let uzaverkaHlidka = "";        // "" | "data" (čeká na data) | "hotovo"
+
+    function hlidkaUzaverky() {
+        if (uzaverkaHlidka === "hotovo" || !hlidkaPrislo.quick || !UI.isOwner()) return;
+        const V = window.KBVYK;
+        const K = window.KB;
+        if (!V || !V.uzaverkaMesice || !K.watchUzaverky) return;     // stránka bez vykazy.js
+        const dnes = new Date();
+        if (dnes.getDate() < 3) return;
+        const ted = dnes.getFullYear() + "-" + String(dnes.getMonth() + 1).padStart(2, "0");
+        const mesic = V.posunMesic(ted, -1);
+        const id = "qt_uzaverka_" + mesic;
+        let smazany = false;
+        try { smazany = localStorage.getItem("kb-hlidka-uzaverka") === id; } catch (err) { }
+        if (smazany || (K.quicktodo || []).some(q => q.id === id)) { uzaverkaHlidka = "hotovo"; return; }
+
+        if (!uzaverkaHlidka) {
+            uzaverkaHlidka = "data";
+            ["uzaverky", "vykazy", "vyplaty", "kontrola-ok", "vykazy-meta", "zustatky"]
+                .forEach(u => K.on(u, hlidkaUzaverky));
+            K.watchUzaverky();
+        }
+        if (!K.uzaverkyPrisly) return;
+        const s = (K.uzaverky || {})[mesic];
+        if (s && ["ke_kontrole", "zkontrolovano", "uzavreno"].indexOf(s.stav) !== -1) { uzaverkaHlidka = "hotovo"; return; }
+
+        K.watchVykazy();
+        K.watchVyplaty();
+        K.watchKontrolaOk();
+        K.watchZustatky();
+        K.watchProjekty();
+        K.watchUkoly();
+        if (!K.vykazyPrisly || !K.sazbyPrisly || !K.vyplatyPrisly || !K.kontrolaOkPrislo || !(K.users || []).length) return;
+
+        uzaverkaHlidka = "hotovo";      // rozhodnuto – druhé kolo by zapsalo znovu
+        const snimek = V.uzaverkaMesice(mesic, {
+            zaznamy: K.vykazy || [], lide: K.users || [], zustatky: K.zustatky || {},
+            kalendar: K.kalendar || [], vyplaty: K.vyplaty || [], kontrolaOk: K.kontrolaOk || {},
+            nastaveni: { sazby: K.sazby || {}, rozpocty: K.rozpocty || {}, dpp: K.dppNastaveni || {} },
+            projekty: K.projektyDocs || [], dnes: V.dnesISO()
+        });
+        const uid = K.currentUid();
+        /* Quick TO-DO umí odkaz jen na projekt nebo úkol – cesta na stránku
+           je proto v textu (KB.saveQuickTodo text zkrátí na 300 znaků). */
+        const text = V.uzaverkaChybiText(snimek);
+        const cesta = " Výplaty a mzdy → Uzávěrka měsíce (uzaverka.html?mesic=" + mesic + ")";
+        K.saveQuickTodo(id, {
+            text: text.length + cesta.length <= 300 ? text + cesta : text,
+            proUids: [uid],
+            odKoho: uid,
+            odKohoJmeno: "Hlídka uzávěrky",
+            druh: "info",
+            hlidka: "uzaverka"
+        }).then(() => {
+            try { localStorage.setItem("kb-hlidka-uzaverka", id); } catch (err) { }
+        }).catch(err => console.warn("Hlídka uzávěrky nezapsala vzkaz:", err));
     }
 
     /* --------------------------------------- dopočet částek k výkazům ---

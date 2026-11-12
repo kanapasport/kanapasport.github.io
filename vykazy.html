@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=333">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=333">
+    <link rel="stylesheet" href="assets/css/app.css?v=334">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=334">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -633,11 +633,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=333"></script>
-<script src="assets/js/ui.js?v=333"></script>
-<script src="assets/js/nabidka.js?v=333"></script>
-<script src="assets/js/vykazy.js?v=333"></script>
-<script type="module" src="assets/js/store.js?v=333"></script>
+<script src="assets/js/taxonomy.js?v=334"></script>
+<script src="assets/js/ui.js?v=334"></script>
+<script src="assets/js/nabidka.js?v=334"></script>
+<script src="assets/js/vykazy.js?v=334"></script>
+<script type="module" src="assets/js/store.js?v=334"></script>
 
 <script>
 (function () {
@@ -1582,7 +1582,7 @@
         /* Uzavřený měsíc je tvrdší než týdenní lhůta: neodemkne ho zpětný
            zápis ani projekt bez lhůty, takže se místo odkazu na žádost
            ukáže jen cesta přes manažera (uzávěrka, 20. 10. 2026). */
-        const mesicZavreny = !!datum && !manazer && podCarou(datum);
+        const mesicZavreny = !!datum && zamcenoCarou(datum);   // i manažer (12. 11. 2026)
         const zavreno = !!datum && !manazer && !mesicZavreny &&
             !mamZpetnePovoleni(datum) && poLhute(datum) && !bezUzaverky(zakazka);
         pole.hidden = !zavreno;
@@ -1614,7 +1614,7 @@
                       "požádej o zpětný zápis</button>.</span>" +
                   /* Uzavřený měsíc zpětný zápis neodemkne – žádost by nikam nevedla. */
                   '<span class="hobox__pozor tiny" data-lhuta-mesic hidden style="display:block;margin-top:3px">' +
-                      esc(MESIC_ZAVRENO) + "</span></div>" +
+                      esc(mesicZavreno()) + "</span></div>" +
               '<div class="polozka__datum datumdo"><label class="label">Do dne (nepovinné)</label>' +
                   '<input type="date" class="field" data-f="datumDo" value="' + esc(d.datumDo || "") + '"></div>'
             : "";
@@ -2390,6 +2390,13 @@
        Dokud datová vrstva uzávěrku nezná, je `KB.uzaverkaOd` prázdné
        a všechno zůstává jako dřív. */
     const MESIC_ZAVRENO = "Měsíc je uzavřený – oprava přes Nahlásit chybu.";
+    /* Čáru obchází jen hlavní správce – manažera (spravce, majitel,
+       asistentka) databáze pod ni už nepustí, jinak by přestal sedět snímek
+       uzávěrky pro mzdy (12. 11. 2026, Iris). Týdenní lhůta se ho netýká dál. */
+    const MESIC_ZAVRENO_MANAZER = "Měsíc je uzavřený – otevře ho jen hlavní správce (Výplaty a mzdy → Uzávěrka měsíce).";
+    const smiPodCaru = () => !!(window.KBUI.isOwner && window.KBUI.isOwner());
+    /** Hláška k uzavřenému měsíci podle toho, kdo ji čte. */
+    const mesicZavreno = () => window.KBUI.can("vykaz.view") ? MESIC_ZAVRENO_MANAZER : MESIC_ZAVRENO;
 
     /** První otevřený den („2026-10-01"), nebo "" když žádná čára neplatí. */
     function uzaverkaOd() {
@@ -2402,6 +2409,9 @@
         const cara = uzaverkaOd();
         return !!cara && String(datum || "") < cara;
     }
+
+    /** Zamyká čára den `datum` přihlášenému? (Hlavnímu správci nikdy.) */
+    const zamcenoCarou = (datum) => !smiPodCaru() && podCarou(datum);
 
     const isoDne = (d) => d.getFullYear() + "-" +
         String(d.getMonth() + 1).padStart(2, "0") + "-" +
@@ -2706,7 +2716,8 @@
                            tlačítek jen poznámka, odmítnout jde dál. */
                         (podCarou(d)
                             ? '<span class="tiny" style="color:var(--warn);font-weight:700">' +
-                                  "měsíc je uzavřený – zapiš za něj sám</span>"
+                                  (smiPodCaru() ? "měsíc je uzavřený – zapiš za něj sám"
+                                                : "měsíc je uzavřený – zapíše jen hlavní správce") + "</span>"
                             : '<button type="button" class="btn btn--sm btn--primary" data-zp-vyrid="den" data-id="' +
                                   id + '">Povolit jen ' + den + "</button>" +
                               '<button type="button" class="btn btn--sm btn--ghost" data-zp-vyrid="od" data-id="' +
@@ -3024,7 +3035,8 @@
             ? "Uzavřít " + mesicNazev($("uzMesic").value) + "…" : "Uzavřít měsíc…";
         vykresliKontrolu();
 
-        $("uzOtevritBox").hidden = !cara;
+        // vrátit čáru (odemknout měsíc) smí jen hlavní správce (pravidla databáze, 12. 11. 2026, Iris)
+        $("uzOtevritBox").hidden = !cara || !smiPodCaru();
         $("uzZpet").innerHTML = cara
             ? moznostiOtevreni(cara).map(m =>
                   '<option value="' + esc(m.od) + '">' + esc(m.popis) + "</option>").join("") +
@@ -3042,8 +3054,8 @@
         const doText = V.czDatum(predchoziDen(noveOd));
         const k = uzKontrola;
         let otazka = "Uzavřít " + mesicNazev(klic) + "?\n\nZaměstnanci pak do " + doText +
-            " včetně nic nezapíšou, neopraví ani nesmažou – ani se zpětným zápisem." +
-            " Opravy bude dělat jen manažer (Nahlásit chybu).";
+            " včetně nic nezapíšou, neopraví ani nesmažou – ani se zpětným zápisem, ani manažeři." +
+            " Opravy bude dělat jen hlavní správce (Nahlásit chybu).";
         if (k && k.chybi.length) {
             otazka += "\n\nPozor – chybějící zápis: " + V.pocet(k.chybi.length, ["člověk", "lidé", "lidí"]) + ".";
         }
@@ -3066,7 +3078,7 @@
     async function otevritZpet() {
         const cara = uzaverkaOd();
         const volba = $("uzZpet").value;
-        if (!cara || !volba) return;
+        if (!cara || !volba || !smiPodCaru()) return;
         if (typeof window.KB.ulozUzaverku !== "function") {
             return window.KBUI.toast("Uložit uzávěrku web zatím neumí.", "error");
         }
@@ -3111,12 +3123,13 @@
      * (Michal 22. 9. 2026).
      */
     function smimUpravit(z) {
-        if (window.KBUI.can("vykaz.view")) return true;       // manažer kdykoli
-        if (!z) return false;
         /* Uzavřený měsíc zamyká i dnešní zápis a dovolenou zapsanou dopředu –
            databáze by změnu stejně odmítla. Místo Upravit pak naskočí
-           Nahlásit chybu (uzávěrka, 20. 10. 2026). */
-        if (podCarou(z.datum)) return false;
+           Nahlásit chybu (uzávěrka, 20. 10. 2026). Od 12. 11. 2026 (Iris)
+           i manažerovi – obchází to jen hlavní správce. */
+        if (z && zamcenoCarou(z.datum)) return false;
+        if (window.KBUI.can("vykaz.view")) return true;       // manažer jinak kdykoli
+        if (!z) return false;
         const uid = (window.KB.currentUid && window.KB.currentUid()) || "";
         if (z.uid === uid && (z.datum || "") > V.dnesISO()) return true;
         const vznik = new Date(Number(z.createdMs) || 0);
@@ -3140,6 +3153,7 @@
      * nedovolila. Michal 1. 9. 2026.)
      */
     function smimSmazat(z) {
+        if (z && zamcenoCarou(z.datum)) return false;         // čára i pro manažera (12. 11. 2026)
         if (window.KBUI.can("vykaz.view")) return true;
         return !!z && z.uid === window.KB.currentUid() && smimUpravit(z);
     }
@@ -3222,7 +3236,7 @@
         /* Uzavřený měsíc nepustí nic – ani zpětný zápis, ani projekt bez
            lhůty; pravidla databáze drží čáru natvrdo. Kontroluje se každý
            den rozsahu (vícedenní absence), i když rozhoduje ten první. */
-        if (!window.KBUI.can("vykaz.view")) {
+        if (!smiPodCaru()) {                    // od 12. 11. 2026 i manažer (Iris)
             let denPodCarou = "";
             const vUzavrenem = polozky.find(p => {
                 const dny = [p.datum].concat(p.absence ? pracovniDny(p.datum, p.datumDo) : []);
@@ -3231,7 +3245,7 @@
             });
             if (vUzavrenem) {
                 window.KBUI.toast(vUzavrenem._popis + " (" + V.czDatum(denPodCarou) + "): " +
-                    MESIC_ZAVRENO, "warn");
+                    mesicZavreno(), "warn");
                 return 0;
             }
         }
@@ -3325,11 +3339,11 @@
     }
 
     /** Proč se na den nic nenavrhuje; "" = navrhuje se. Stejné hlídky jako
-        `ulozZapisy` (manažera lhůta ani uzávěrka nezastaví), navíc budoucnost. */
+        `ulozZapisy` (manažera lhůta nezastaví, uzávěrka od 12. 11. 2026 ano), navíc budoucnost. */
     function navrhZamek(den) {
         if (den > V.dnesISO()) return "budoucí den";
+        if (zamcenoCarou(den)) return "uzavřený měsíc";
         if (window.KBUI.can("vykaz.view")) return "";
-        if (podCarou(den)) return "uzavřený měsíc";
         if (poLhute(den) && !mamZpetnePovoleni(den)) return "uzavřený týden";
         return "";
     }
@@ -3659,16 +3673,18 @@
     /**
      * Proč přihlášený nesmí do mřížky zapsat den `datum` na projekt
      * `zakazka`; "" = smí. Stejná pravidla jako formulář (`ulozZapisy`):
-     * manažera lhůta ani uzávěrka nezastaví; ostatní zastaví uzavřený
-     * měsíc vždycky a uzavřený týden, když nemají zpětný zápis a projekt
-     * uzávěrku má. Navíc budoucí dny se tu nepíšou nikomu.
+     * uzavřený měsíc zastaví každého kromě hlavního správce (od 12. 11. 2026,
+     * Iris, i manažera); manažera lhůta nezastaví, ostatní uzavřený týden,
+     * když nemají zpětný zápis a projekt uzávěrku má. Budoucí dny nikomu.
      */
     function tyZamek(datum, zakazka) {
         if (datum > V.dnesISO()) return "Budoucí den – hodiny se píšou, až je odpracuješ.";
-        if (window.KBUI.can("vykaz.view")) return "";
-        if (podCarou(datum)) {
-            return "Měsíc je uzavřený (uzávěrka do " + uzavrenoDo() + ") – oprava přes Nahlásit chybu.";
+        if (zamcenoCarou(datum)) {
+            return "Měsíc je uzavřený (uzávěrka do " + uzavrenoDo() + ") – " +
+                (window.KBUI.can("vykaz.view") ? "otevře ho jen hlavní správce (Výplaty a mzdy → Uzávěrka měsíce)."
+                                               : "oprava přes Nahlásit chybu.");
         }
+        if (window.KBUI.can("vykaz.view")) return "";
         if (poLhute(datum) && !mamZpetnePovoleni(datum) && !bezUzaverky(zakazka)) {
             return "Týden je uzavřený – zapisuje se do pondělí půlnoci týdne následujícího." +
                 " Požádej o zpětný zápis.";
@@ -4617,7 +4633,7 @@
             " · " + esc(V.hod(Number(z.hodiny) || 0)) +
             (podCarou(z.datum)
                 ? '<br><span style="color:var(--warn);font-weight:700">Měsíc je uzavřený (uzávěrka do ' +
-                  esc(uzavrenoDo()) + ") – opravu udělá manažer.</span>"
+                  esc(uzavrenoDo()) + ") – opravu udělá hlavní správce.</span>"
                 : "");
         $("opText").value = "";
         $("opravaOverlay").hidden = false;
@@ -4712,11 +4728,11 @@
         const jmeno = u ? V.jmeno(u) : (puvodni.osoba || "");
         const datum = $("eDatum").value;
 
+        // uzavřený měsíc: ani opravit starý den, ani do něj zápis přesunout (i manažer, 12. 11. 2026)
+        if (zamcenoCarou(puvodni.datum) || zamcenoCarou(datum)) {
+            return window.KBUI.toast(mesicZavreno(), "warn");
+        }
         if (!window.KBUI.can("vykaz.view")) {
-            // uzavřený měsíc: ani opravit starý den, ani do něj zápis přesunout
-            if (podCarou(puvodni.datum) || podCarou(datum)) {
-                return window.KBUI.toast(MESIC_ZAVRENO, "warn");
-            }
             if (!smimUpravit(puvodni)) {
                 return window.KBUI.toast("Záznam už je po uzávěrce – změnu" +
                     " domluv s manažerem.", "warn");
@@ -4946,7 +4962,7 @@
         if (!z) return;
         /* Okno mohlo zůstat otevřené, zatímco manažer měsíc uzavřel. */
         if (!smimSmazat(z)) {
-            return window.KBUI.toast(podCarou(z.datum) ? MESIC_ZAVRENO
+            return window.KBUI.toast(podCarou(z.datum) ? mesicZavreno()
                 : "Tenhle záznam už smazat nejde – domluv to s manažerem.", "warn");
         }
         if (!(await window.KBUI.potvrd({ nadpis: "Smazat záznam „" + (z.nazev || "") + "“ ze dne " +
@@ -5396,7 +5412,8 @@
             if (podCarou(datum)) {
                 return window.KBUI.toast(V.czDatum(datum) + " je v uzavřeném měsíci (uzavřeno do " +
                     uzavrenoDo() + ") – zpětný zápis ho neodemkne. Vyber den od " +
-                    V.czDatum(uzaverkaOd()) + ", výkaz zapiš sám, nebo měsíc otevři v Uzávěrce.", "warn");
+                    V.czDatum(uzaverkaOd()) + (smiPodCaru() ? ", výkaz zapiš sám, nebo měsíc otevři v Uzávěrce."
+                                          : ". Zapsat nebo otevřít ho smí jen hlavní správce."), "warn");
             }
             $("zpPovol").disabled = true;
             try {
