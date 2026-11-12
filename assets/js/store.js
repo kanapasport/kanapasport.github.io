@@ -2235,6 +2235,7 @@ KB.oznacPripraveno = async (id, ano) => {
         proUids: komu, projekt: projekt,
         druh: "info", rezim: "kazdy"          // oznámení – bere se na vědomí
     }).catch(err => console.warn("Upozornění na připravený milník neodešlo:", err));
+    KB.ohlasPotvrzeni({ udalost: "pripraveno", druh: "milniky", id: id, uid: ja });   // push hned
 };
 
 /**
@@ -5381,7 +5382,7 @@ KB.potvrdDovolenou = async (id) => {
    volajícího), u potvrzeno / zamítnuto pošle žadateli. Odkazy v upozornění:
    kalendar.html?udalost=, ukoly.html?otevri=, milniky.html?id=.
    Bez čekání na odpověď – uložení nikdy neblokuje, chyby jen do konzole. */
-const UDALOSTI_POTVRZENI = ["ceka", "potvrzeno", "zamitnuto"];
+const UDALOSTI_POTVRZENI = ["ceka", "potvrzeno", "zamitnuto", "pripraveno"];
 const DRUHY_OHLASU = ["nepritomnosti", "ukoly", "milniky"];
 KB.ohlasPotvrzeni = async (volby) => {
     try {
