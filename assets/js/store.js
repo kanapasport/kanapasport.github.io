@@ -6312,11 +6312,35 @@ KB.ulozPlanSoubor = async (meta, dataUrl, hlaseni) => {
         dlazScale: Number(meta.dlazScale) || 0,
         dlazT: Number(meta.dlazT) || 0,
         dlazdic: dlazdice.length,
+        // karta v seznamu – jen malý JPEG z canvasu, nic jiného (jde do <img src>)
+        miniatura: miniaturaPlanu(meta.miniatura),
         ms: Date.now(),
         kdo: window.KB_USER || ""
     });
     KB.zapisAktivitu("navod", "nahrál plán " + (meta.nazev || ""));
     return id;
+};
+
+const miniaturaPlanu = (url) =>
+    (typeof url === "string" && /^data:image\/jpeg;base64,/.test(url) && url.length < 120000) ? url : "";
+
+/** Miniatura dodatečně (plán nahraný dřív, než karty měly obrázek). Pravidla
+    ji pustí jen manažerovi – člen u hlavičky mění jen paletu a hladiny. */
+KB.ulozPlanMiniaturu = async (planId, url) => {
+    if (authReady) await authReady;
+    requireDb();
+    const m = miniaturaPlanu(url);
+    if (m) await updateDoc(planDoc(planId), { miniatura: m });
+};
+
+/** Přejmenování plánu nebo složky (manažer – hlídají pravidla). */
+KB.prejmenujPlan = async (druh, id, nazev) => {
+    if (authReady) await authReady;
+    requireDb();
+    const n = String(nazev || "").trim();
+    if (!n) return;
+    await updateDoc(druh === "plan" ? planDoc(id) : planySlozkaDoc(id),
+        { nazev: n.slice(0, druh === "plan" ? 120 : 80) });
 };
 
 /** Jedna detailní dlaždice – stahuje se, až když je vidět. */

@@ -53,7 +53,8 @@
         .plpolozka__meta { font-size: var(--fs-1); color: var(--muted); }
 
         /* --------------------------------------------------------- prohlížeč */
-        .prohl { position: fixed; inset: 0; z-index: 150; background: rgba(11, 13, 16, .88);
+        /* neprůhledné – na telefonu přes poloprůhledné pozadí prosvítal seznam */
+        .prohl { position: fixed; inset: 0; z-index: 150; background: #15191e;
             display: flex; flex-direction: column; }
         .prohl__horni { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
             padding: 10px 14px; background: var(--accent-dark); color: #fff; }
@@ -305,6 +306,67 @@
 
         .nahravam { position: absolute; inset: 0; display: flex; align-items: center;
             justify-content: center; color: #fff; font-weight: 700; }
+
+        /* ----------------------------------- ovládání jako mapa (13. 11.) --
+           Posun prostředním tlačítkem nebo s mezerníkem jde v každém režimu,
+           stejně jako v Onyxu a Prizmě. */
+        .prohl__plocha--posun-drzi, .prohl__plocha--posun-drzi * { cursor: grabbing !important; }
+        .prohl__plocha--mezernik { cursor: grab !important; }
+        .zoompct { min-width: 52px; text-align: center; font-size: var(--fs-1); font-weight: 800;
+            align-self: center; opacity: .85; }
+        kbd { font: inherit; font-size: .85em; font-weight: 800; padding: 0 4px; border-radius: 4px;
+            background: rgba(255,255,255,.18); }
+
+        /* mapka v rohu: celý plán a rámeček toho, co je vidět */
+        .mapka { position: absolute; right: 12px; bottom: 12px; z-index: 40;
+            background: #fff; border: 2px solid #fff; border-radius: var(--r);
+            box-shadow: 0 2px 10px rgba(0,0,0,.45); cursor: pointer; touch-action: none;
+            line-height: 0; }
+        .mapka canvas { display: block; max-width: 190px; max-height: 150px; }
+        .mapka__ram { position: absolute; border: 2px solid #c8102e;
+            background: rgba(200,16,46,.12); pointer-events: none; }
+
+        /* nabídka pravým tlačítkem (a ⋯ na kartách) */
+        .plmenu { position: fixed; z-index: 400; min-width: 190px; max-width: 280px;
+            background: var(--surface); color: var(--text); border: 1px solid var(--line);
+            border-radius: var(--r); box-shadow: 0 8px 28px rgba(0,0,0,.28); padding: 5px;
+            font-size: var(--fs-2); }
+        .plmenu button { display: flex; align-items: center; gap: 9px; width: 100%;
+            border: 0; background: none; font: inherit; color: inherit; text-align: left;
+            padding: 7px 10px; border-radius: var(--r-sm); cursor: pointer; }
+        .plmenu button:hover, .plmenu button:focus-visible { background: var(--bg-soft); outline: none; }
+        .plmenu button.plmenu--pozor { color: var(--danger, #c8102e); }
+        .plmenu hr { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 2px; }
+        .plmenu__tecka { width: 12px; height: 12px; border-radius: 50%; flex: none;
+            border: 1px solid rgba(0,0,0,.25); }
+        .plmenu__klav { margin-left: auto; color: var(--muted); font-size: var(--fs-1); }
+
+        /* karty plánů s miniaturou */
+        .plpolozka__nahled { height: 120px; margin: -13px -15px 6px; border-radius:
+            var(--radius-lg) var(--radius-lg) 0 0; background: var(--bg-soft) center / contain no-repeat;
+            border-bottom: 1px solid var(--line-soft); display: flex; align-items: center;
+            justify-content: center; color: var(--muted); font-size: 34px; overflow: hidden; }
+        .plpolozka__nahled img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .plvic { border: 0; background: none; font: inherit; font-size: var(--fs-3); font-weight: 900;
+            color: var(--muted); cursor: pointer; line-height: 1; padding: 0 4px; border-radius: var(--r-sm); }
+        .plvic:hover { background: var(--bg-soft); color: var(--text); }
+        .plpretah { border: 2px dashed var(--line); border-radius: var(--radius-lg); padding: 10px 14px;
+            color: var(--muted); font-size: var(--fs-2); text-align: center; }
+        body.pl-pretahuje .plpretah { border-color: var(--accent); background: var(--accent-tint);
+            color: var(--accent); }
+
+        /* telefon: režimy dole jako lišta, terče pro prst */
+        @media (max-width: 767px) {
+            #rezimy { position: fixed; left: 8px; right: 8px; z-index: 160;
+                bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+                background: var(--accent-dark); padding: 5px; justify-content: space-between;
+                box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+            #rezimy button { flex: 1; padding: 10px 4px; font-size: var(--fs-1); }
+            .prohl__pocty { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+            .mapka { bottom: 8px; right: 8px; }
+            .mapka canvas { max-width: 120px; max-height: 100px; }
+            .rezim__klav, .prohl__napoveda { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -330,6 +392,7 @@
     </div>
 
     <div class="drobky" id="drobky"></div>
+    <div class="plpretah" id="pretah">Přetáhni sem PDF nebo obrázek plánu (nebo tlačítko Nahrát plán).</div>
     <div id="seznam" class="col" style="gap:10px"></div>
 
 </main>
@@ -339,11 +402,12 @@
     <div class="prohl__horni">
         <span class="prohl__nazev" id="prNazev"></span>
         <div class="rezim" id="rezimy">
-            <button type="button" data-rezim="posun" class="je-aktivni">Posun</button>
-            <button type="button" data-rezim="znacka">Značka</button>
-            <button type="button" data-rezim="obdelnik" title="Obtáhni místnost obdélníkem">Obdélník</button>
-            <button type="button" data-rezim="stav" title="Ťuknutím na značku měníš barvu">Změna stavu</button>
-            <button type="button" data-rezim="vyber">Výběr / mazání</button>
+            <button type="button" data-rezim="posun" class="je-aktivni"
+                title="Posun plánu (Esc). Posouvat jde v každém režimu prostředním tlačítkem nebo s mezerníkem.">Posun</button>
+            <button type="button" data-rezim="znacka" title="Ťuknutím přidáš značku (klávesa Z)">Značka</button>
+            <button type="button" data-rezim="obdelnik" title="Obtáhni místnost obdélníkem (klávesa O)">Obdélník</button>
+            <button type="button" data-rezim="stav" title="Ťuknutím na značku měníš barvu (klávesa S)">Změna stavu</button>
+            <button type="button" data-rezim="vyber" title="Výběr obdélníkem, Shift přidává (klávesa V)">Výběr / mazání</button>
         </div>
         <!-- co bude nová značka: barva (stav), velikost a text do kolečka -->
         <div class="nastroje" id="nastrojeZnacky" hidden>
@@ -381,9 +445,10 @@
                     title="Ukazovat texty ve značkách">T</button>
             <button type="button" class="zoombtn" data-zobr="pruh"
                     title="Ukazovat značky průhledné (vypnuto = plná barva)">◍</button>
-            <button type="button" class="zoombtn" id="btnZoomMin" title="Oddálit">−</button>
-            <button type="button" class="zoombtn" id="btnZoomReset" title="Na celou obrazovku">⤢</button>
-            <button type="button" class="zoombtn" id="btnZoomPlus" title="Přiblížit">+</button>
+            <span class="zoompct" id="zoomPct" title="Přiblížení – 100 % = celý plán v okně"></span>
+            <button type="button" class="zoombtn" id="btnZoomMin" title="Oddálit (−)">−</button>
+            <button type="button" class="zoombtn" id="btnZoomReset" title="Celý plán (0)">⤢</button>
+            <button type="button" class="zoombtn" id="btnZoomPlus" title="Přiblížit (+)">+</button>
         </div>
         <button type="button" class="btn btn--sm btn--primary" id="btnZavritProhl">Zavřít</button>
     </div>
@@ -421,6 +486,9 @@
             <div id="znackyVrstva"></div>
         </div>
         <div class="nahravam" id="nahravam" hidden>Načítám plán…</div>
+        <div class="mapka" id="mapka" hidden title="Celý plán – klikni nebo táhni, kam se podívat">
+            <canvas id="mapkaPlatno"></canvas><div class="mapka__ram" id="mapkaRam"></div>
+        </div>
     </div>
     <div class="palokno" id="oknoPaleta" hidden>
         <div class="palokno__telo">
@@ -495,6 +563,8 @@
     <div class="prohl__pocty" id="pocty"></div>
 </div>
 
+<div class="plmenu" id="plMenu" role="menu" hidden></div>
+
 <script src="assets/js/taxonomy.js?v=348"></script>
 <script src="assets/js/ui.js?v=348"></script>
 <script src="assets/js/vykazy.js?v=348"></script>
@@ -506,6 +576,43 @@
 
     const $ = (id) => document.getElementById(id);
     const esc = (v) => window.KBUI.esc(v);
+
+    /* -------------------------------------------- nabídka (⋯ a pravé tl.) --
+       Jedna malá nabídka pro celou stránku: pravé tlačítko v plánu i ⋯ na
+       kartách. Položka = { text, akce, tecka (hex), klav, pozor } nebo "-"
+       (oddělovač). Zavře ji klik jinam, Esc nebo výběr položky. */
+    let menuAkce = [];
+    function ukazMenu(x, y, polozky) {
+        const m = $("plMenu");
+        menuAkce = [];
+        m.innerHTML = polozky.filter(Boolean).map(p => {
+            if (p === "-") return "<hr>";
+            menuAkce.push(p.akce);
+            return '<button type="button" role="menuitem" data-menu-i="' + (menuAkce.length - 1) + '"' +
+                (p.pozor ? ' class="plmenu--pozor"' : "") + ">" +
+                (p.tecka ? '<span class="plmenu__tecka" style="background:' +
+                    window.KBUI.barva(p.tecka, "#888") + '"></span>' : "") +
+                "<span>" + esc(p.text) + "</span>" +
+                (p.klav ? '<span class="plmenu__klav">' + esc(p.klav) + "</span>" : "") + "</button>";
+        }).join("");
+        m.hidden = false;
+        // nesmí utéct z okna – u pravého okraje se otevře doleva, dole nahoru
+        const r = m.getBoundingClientRect();
+        m.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px";
+        m.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
+    }
+    const zavriMenu = () => { if (!$("plMenu").hidden) { $("plMenu").hidden = true; return true; } return false; };
+    document.addEventListener("pointerdown", (e) => {
+        if (!$("plMenu").hidden && !e.target.closest("#plMenu")) zavriMenu();
+    }, true);
+    window.addEventListener("blur", zavriMenu);
+    document.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-menu-i]");
+        if (!b) return;
+        const akce = menuAkce[Number(b.dataset.menuI)];
+        zavriMenu();
+        if (typeof akce === "function") akce();
+    });
 
     /* ------------------------------------------------------ složky ------ */
 
@@ -545,18 +652,23 @@
             .sort((a, b) => (otevrene[b.id] || b.ms || 0) - (otevrene[a.id] || a.ms || 0))
             .slice(0, 10);
 
+        /* Mazání a přejmenování schované v ⋯ (rešerše 19. 10., design #37) –
+           červené „smazat" přímo na kartě se dalo trefit omylem. */
         const slozkaHtml = (s) =>
             '<div class="plpolozka plpolozka--slozka" data-slozka="' + esc(s.id) + '">' +
                 '<div class="plpolozka__typ"><span>Složka</span>' +
-                    (smiMazat ? '<button type="button" class="linkbtn" data-smaz-slozku="' +
-                        esc(s.id) + '" style="color:var(--danger)">smazat</button>' : "") + "</div>" +
+                    (smiMazat ? '<button type="button" class="plvic" title="Další akce" data-menu-slozka="' +
+                        esc(s.id) + '">⋯</button>' : "") + "</div>" +
                 '<div class="plpolozka__nazev">' + esc(s.nazev) + "</div>" +
             "</div>";
         const planHtml = (f) =>
             '<div class="plpolozka" data-plan="' + esc(f.id) + '">' +
+                '<div class="plpolozka__nahled">' + (window.KBUI.bezpecnyObrazek(f.miniatura)
+                    ? '<img alt="" loading="lazy" src="' + window.KBUI.bezpecnyObrazek(f.miniatura) + '">'
+                    : "▦") + "</div>" +
                 '<div class="plpolozka__typ"><span>Plán</span>' +
-                    (smiMazat ? '<button type="button" class="linkbtn" data-smaz-plan="' +
-                        esc(f.id) + '" style="color:var(--danger)">smazat</button>' : "") + "</div>" +
+                    '<button type="button" class="plvic" title="Další akce" data-menu-plan="' +
+                        esc(f.id) + '">⋯</button></div>' +
                 '<div class="plpolozka__nazev">' + esc(f.nazev) + "</div>" +
                 '<div class="plpolozka__meta">' + esc(f.kdo || "") + " · " +
                     esc(new Date(f.ms || 0).toLocaleDateString("cs-CZ")) + "</div>" +
@@ -579,6 +691,7 @@
     const NAHLED_MAX = 2600;        // delší strana náhledu
     const DLAZDICE_PX = 1024;       // hrana jedné dlaždice detailu
     const DETAIL_MAX_PX = 100e6;    // strop plochy detailu (~12200×8200)
+    const MINIATURA_PX = 320;       // delší strana miniatury na kartě
 
     function zmensiNa(canvas, maxDelsi) {
         const k = Math.min(1, maxDelsi / Math.max(canvas.width, canvas.height));
@@ -614,6 +727,8 @@
         const nahled = zmensiNa(detail, NAHLED_MAX);
         const ven = {
             dataUrl: nahled.toDataURL("image/jpeg", 0.85),
+            // malý obrázek na kartu v seznamu (~15 kB), ať se seznam nestahuje celé plány
+            miniatura: zmensiNa(nahled, MINIATURA_PX).toDataURL("image/jpeg", 0.7),
             sirka: nahled.width, vyska: nahled.height,
             dlazdice: [], dlazScale: 0, dlazT: DLAZDICE_PX
         };
@@ -706,6 +821,7 @@
                 nazev: nazev || soubor.name, slozka: slozka,
                 sirka: vysledek.sirka, vyska: vysledek.vyska,
                 dlazdice: vysledek.dlazdice,
+                miniatura: vysledek.miniatura,
                 dlazScale: vysledek.dlazScale,
                 dlazT: vysledek.dlazT
             }, vysledek.dataUrl, (text) => window.KBUI.toast(text));
@@ -860,7 +976,66 @@
            při přiblížení narostlo se značkou do obřích rozměrů */
         $("vrstva").style.setProperty("--pz", String(1 / zoom));
         naplanujDlazdice();
+        $("zoomPct").textContent = Math.round(zoom / (minZoom || zoom || 1) * 100) + " %";
+        srovnejMapku();
     }
+
+    /* ------------------------------------------------- mapka v rohu ----
+       Celý plán v malém a červený rámeček toho, co je zrovna vidět (jako
+       v Onyxu). Ukáže se, až když je plán přiblížený – na celém plánu by
+       jen zakrývala roh. Klik nebo tažení v ní posune pohled. */
+    function nakresliMapku() {
+        const img = $("obrazek"), c = $("mapkaPlatno");
+        const w = img.naturalWidth, h = img.naturalHeight;
+        if (!w || !h) return;
+        const k = Math.min(380 / w, 300 / h, 1);      // ostrá i na displeji s 2× pixely
+        c.width = Math.max(1, Math.round(w * k));
+        c.height = Math.max(1, Math.round(h * k));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    }
+    function srovnejMapku() {
+        const w = $("obrazek").naturalWidth, h = $("obrazek").naturalHeight;
+        const videt = !!otevreny && !!w && zoom > minZoom * 1.15;
+        $("mapka").hidden = !videt;
+        if (!videt) return;
+        const plocha = $("plocha").getBoundingClientRect();
+        const c = $("mapkaPlatno").getBoundingClientRect();
+        if (!c.width) return;
+        const k = c.width / w;
+        const x0 = Math.max(0, -posX / zoom), y0 = Math.max(0, -posY / zoom);
+        const x1 = Math.min(w, (plocha.width - posX) / zoom), y1 = Math.min(h, (plocha.height - posY) / zoom);
+        const ram = $("mapkaRam").style;
+        ram.left = (2 + x0 * k) + "px";       // 2 px = rámeček mapky
+        ram.top = (2 + y0 * k) + "px";
+        ram.width = Math.max(4, (x1 - x0) * k) + "px";
+        ram.height = Math.max(4, (y1 - y0) * k) + "px";
+    }
+    /** Střed pohledu na místo pod ukazatelem v mapce. */
+    function mapkaSkok(e) {
+        const c = $("mapkaPlatno").getBoundingClientRect();
+        const w = $("obrazek").naturalWidth;
+        if (!c.width || !w) return;
+        const k = c.width / w;
+        const px = Math.min(w, Math.max(0, (e.clientX - c.left) / k));
+        const py = Math.min($("obrazek").naturalHeight, Math.max(0, (e.clientY - c.top) / k));
+        const plocha = $("plocha").getBoundingClientRect();
+        posX = plocha.width / 2 - px * zoom;
+        posY = plocha.height / 2 - py * zoom;
+        poloz();
+    }
+    let mapkaTah = false;
+    $("mapka").addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        mapkaTah = true;
+        try { $("mapka").setPointerCapture(e.pointerId); } catch (err) { /* rychlý klik */ }
+        mapkaSkok(e);
+    });
+    $("mapka").addEventListener("pointermove", (e) => { if (mapkaTah) mapkaSkok(e); });
+    const mapkaKonec = () => { mapkaTah = false; };
+    $("mapka").addEventListener("pointerup", mapkaKonec);
+    $("mapka").addEventListener("pointercancel", mapkaKonec);
+    $("mapka").addEventListener("click", (e) => e.stopPropagation());
 
     /* ---------------------------------------- detailní dlaždice ---------
        Náhled je schválně menší (rychlé otevření). Jakmile se člověk
@@ -976,6 +1151,17 @@
             if (!dataUrl) throw new Error("Obrázek plánu není k dispozici.");
             $("obrazek").src = dataUrl;
             await new Promise((ok, chyba) => { $("obrazek").onload = ok; $("obrazek").onerror = chyba; });
+            nakresliMapku();
+            /* Plán z doby před miniaturami dostane kartu s obrázkem, jakmile
+               ho otevře manažer (členovi by hlavičku pravidla nepustila). */
+            if (!plan.miniatura && window.KBUI.can("vykaz.view")) {
+                const c = document.createElement("canvas");
+                const k = Math.min(1, MINIATURA_PX / Math.max($("obrazek").naturalWidth, $("obrazek").naturalHeight));
+                c.width = Math.max(1, Math.round($("obrazek").naturalWidth * k));
+                c.height = Math.max(1, Math.round($("obrazek").naturalHeight * k));
+                c.getContext("2d").drawImage($("obrazek"), 0, 0, c.width, c.height);
+                window.KB.ulozPlanMiniaturu(id, c.toDataURL("image/jpeg", 0.7)).catch(() => {});
+            }
             // na začátku se plán vejde celý do okna
             srovnejNaOkno();
             poloz();
@@ -1179,15 +1365,17 @@
                 esc(b.p || "barva " + (i + 1)) + ": <b>" + pocty[i] + "</b></span>").join("") +
             (hlSkryte.size ? '<span style="opacity:.75">(' + hlSkryte.size +
                 " vypnutých hladin)</span>" : "") +
-            '<span style="margin-left:auto;opacity:.75">Značka: ťukni do plánu ·' +
-                " obdélník: táhni přes místnost · poznámka dvojklikem ·" +
-                " pravý klik / podržení prstu = upravit ·" +
-                " kopie klávesou C · výběr obdélníkem, Shift přidává</span>";
+            '<span class="prohl__napoveda" style="margin-left:auto;opacity:.75">' +
+                "Posun: prostřední tlačítko nebo mezerník · kolečko = přiblížení ·" +
+                " pravé tlačítko = nabídka · dvojklik na značku = poznámka ·" +
+                " klávesy <kbd>Z</kbd> značka <kbd>O</kbd> obdélník <kbd>S</kbd> stav" +
+                " <kbd>V</kbd> výběr <kbd>C</kbd> kopie <kbd>Esc</kbd> zpět</span>";
     }
 
     /* posun + zoom: myš i dotyk přes pointer events */
     let tahnu = null;
     const ukazatele = new Map();
+    let mezernik = false;        // podržený mezerník = posun levým tlačítkem
 
     /* Ovládání přímo na značce (pravý klik / podržení prstu): × smazat,
        ✥ přetáhnout jinam, + a − velikost. */
@@ -1199,6 +1387,18 @@
     let dlouhyStiskStart = null;
 
     $("plocha").addEventListener("pointerdown", (e) => {
+        if (e.target.closest("#mapka")) return;          // mapka má vlastní ovládání
+        /* Posun jako v mapě a v Onyxu: PROSTŘEDNÍ tlačítko nebo levé
+           s podrženým MEZERNÍKEM – v každém režimu, bez přepínání na Posun
+           (výběr Michala 13. 11. 2026, varianta A). */
+        if (e.pointerType === "mouse" && (e.button === 1 || (e.button === 0 && mezernik))) {
+            e.preventDefault();                        // prostřední by jinak rozjelo automatické rolování
+            ukazatele.clear();
+            tahnu = { x: e.clientX - posX, y: e.clientY - posY, sx: e.clientX, sy: e.clientY };
+            $("plocha").classList.add("prohl__plocha--posun-drzi");
+            try { $("plocha").setPointerCapture(e.pointerId); } catch (err) { /* rychlý klik */ }
+            return;
+        }
         /* Pravé tlačítko otevírá nabídku na značce – kdyby rozjelo posun,
            plán by se po zavření nabídky lepil na kurzor. */
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -1291,7 +1491,7 @@
             return;
         }
         if (rezim === "posun" && ukazatele.size === 1) {
-            tahnu = { x: e.clientX - posX, y: e.clientY - posY };
+            tahnu = { x: e.clientX - posX, y: e.clientY - posY, sx: e.clientX, sy: e.clientY };
             try { $("plocha").setPointerCapture(e.pointerId); } catch (err) { /* rychlý dotyk */ }
         }
     });
@@ -1451,6 +1651,14 @@
             }
             return;
         }
+        /* Po posunu nesmí puštění tlačítka „ťuknout" – s mezerníkem v režimu
+           Značka by jinak na konci posunu vznikla značka. */
+        if (tahnu && !tahnu.pinch && typeof e.clientX === "number" &&
+                Math.hypot(e.clientX - tahnu.sx, e.clientY - tahnu.sy) > 4) {
+            poTahu = true;
+            setTimeout(() => { poTahu = false; }, 250);
+        }
+        $("plocha").classList.remove("prohl__plocha--posun-drzi");
         tahnu = null;
         if (kresba) {
             const k = kresba;
@@ -1490,27 +1698,80 @@
        posun plánu pak vypadá rozbitě. Tady se to zatrhne úplně. */
     $("plocha").addEventListener("dragstart", (e) => e.preventDefault());
 
-    $("plocha").addEventListener("wheel", (e) => {
-        e.preventDefault();
-        const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    /** Přiblížení o k-násobek k bodu (clientX/Y) – kolečko, dvojklik, nabídka. */
+    function zoomKe(cx, cy, k) {
         const novy = Math.min(6, Math.max(minZoom, zoom * k));
         // zoom ke kurzoru, ať neuteče místo, na které se člověk dívá
         const r = $("plocha").getBoundingClientRect();
-        const mx = e.clientX - r.left, my = e.clientY - r.top;
+        const mx = cx - r.left, my = cy - r.top;
         posX = mx - (mx - posX) * (novy / zoom);
         posY = my - (my - posY) * (novy / zoom);
         zoom = novy;
         poloz();
+    }
+    const zoomStred = (k) => {
+        const r = $("plocha").getBoundingClientRect();
+        zoomKe(r.left + r.width / 2, r.top + r.height / 2, k);
+    };
+
+    $("plocha").addEventListener("wheel", (e) => {
+        e.preventDefault();
+        zoomKe(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15);
     }, { passive: false });
 
-    /* pravé tlačítko na značce = její ovládání (na dotyku podržení prstu) */
+    /* Pravé tlačítko: na značce její ovládání (× ✥ + − barva) a vedle
+       nabídka s dalšími akcemi; na prázdném místě nabídka „co sem".
+       Na dotyku značku otevírá podržení prstu jako dřív. */
     $("plocha").addEventListener("contextmenu", (e) => {
-        const znacka = e.target.closest("[data-znacka]");
-        if (!znacka) return;
+        if (e.target.closest("#mapka")) return void e.preventDefault();
         e.preventDefault();
-        aktivniZnacka = znacka.dataset.znacka === aktivniZnacka ? "" : znacka.dataset.znacka;
-        vykresliZnacky();
+        const znacka = e.target.closest("[data-znacka]");
+        const cx = e.clientX, cy = e.clientY;
+        if (znacka) {
+            const z = (window.KB.znackyPlanu || []).find(x => x.id === znacka.dataset.znacka);
+            if (!z) return;
+            aktivniZnacka = z.id;
+            vykresliZnacky();
+            const smi = z.uid === window.KB.currentUid() || window.KBUI.can("vykaz.view");
+            ukazMenu(cx + 6, cy + 6, [
+                { text: z.tvar === "obdelnik" ? "Popisek…" : "Poznámka…", akce: () => upravText(z.id) },
+                { text: "Kopie", klav: "C", akce: () => kopirujVybrane([z]) },
+                "-"
+            ].concat(paleta().map((b, i) => ({
+                text: (b.p || "barva " + (i + 1)) + (i === (Number(z.stav) || 0) ? "  ✓" : ""),
+                tecka: b.b,
+                akce: () => window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { stav: i }))
+                    .catch(() => window.KBUI.toast("Změna se neuložila.", "error"))
+            }))).concat(smi ? ["-", { text: "Smazat značku", pozor: true, akce: async () => {
+                aktivniZnacka = "";
+                await window.KB.smazZnacku(otevreny, z.id)
+                    .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+            } }] : []));
+            return;
+        }
+        if (aktivniZnacka) { aktivniZnacka = ""; vykresliZnacky(); }
+        ukazMenu(cx + 6, cy + 6, [
+            { text: "Značka sem", klav: "Z", akce: () => zalozZnacku(cx, cy) },
+            { text: "Obdélník sem", klav: "O", akce: () => {
+                const r = $("obrazek").getBoundingClientRect();
+                zalozObdelnik({ x0: (cx - r.left) / zoom, y0: (cy - r.top) / zoom });
+            } },
+            "-",
+            { text: "Přiblížit sem", akce: () => zoomKe(cx, cy, 2) },
+            { text: "Celý plán", klav: "0", akce: () => { srovnejNaOkno(); poloz(); } }
+        ]);
     });
+
+    /** Nová kolečková značka v bodě obrazovky podle voleb nahoře. */
+    async function zalozZnacku(cx, cy) {
+        const r = $("obrazek").getBoundingClientRect();
+        const x = (cx - r.left) / r.width;
+        const y = (cy - r.top) / r.height;
+        if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return;
+        await window.KB.ulozZnacku(otevreny, novyId(),
+            { x: x, y: y, stav: nova.stav, vel: nova.vel, text: nova.text,
+              pruh: nova.pruh, hl: hlAktivni });
+    }
 
     /* značky: přidání podle voleb nahoře, přepnutí stavu, výběr */
     $("plocha").addEventListener("click", async (e) => {
@@ -1598,14 +1859,7 @@
             return;
         }
         if (rezim !== "znacka") return;
-
-        const r = $("obrazek").getBoundingClientRect();
-        const x = (e.clientX - r.left) / r.width;
-        const y = (e.clientY - r.top) / r.height;
-        if (x < 0 || x > 1 || y < 0 || y > 1) return;
-        await window.KB.ulozZnacku(otevreny, novyId(),
-            { x: x, y: y, stav: nova.stav, vel: nova.vel, text: nova.text,
-              pruh: nova.pruh, hl: hlAktivni });
+        await zalozZnacku(e.clientX, e.clientY);
     });
 
     /* ------------------------------------------------------ obdélník ----
@@ -1770,9 +2024,20 @@
     }
 
     $("plocha").addEventListener("dblclick", async (e) => {
+        if (!otevreny || e.target.closest("#mapka, [data-zn-akce]")) return;
         const znacka = e.target.closest("[data-znacka]");
-        if (!znacka || !otevreny) return;
-        const z = (window.KB.znackyPlanu || []).find(x => x.id === znacka.dataset.znacka);
+        /* dvojklik do prázdna přiblíží jako v mapě – jen tam, kde ťuknutí
+           nic nezakládá (v režimu Značka by přibyly dvě tečky) */
+        if (!znacka) {
+            if (rezim === "posun" || rezim === "vyber") zoomKe(e.clientX, e.clientY, 2);
+            return;
+        }
+        upravText(znacka.dataset.znacka);
+    });
+
+    /** Poznámka kolečka / popisek obdélníku – dvojklik i nabídka. */
+    async function upravText(id) {
+        const z = (window.KB.znackyPlanu || []).find(x => x.id === id);
         if (!z) return;
         /* U obdélníku je popisek to hlavní – kreslí se přes místnost právě
            proto, aby se dala pojmenovat. Do kolečka se vejdou tři znaky,
@@ -1788,7 +2053,7 @@
             text: "Prázdná poznámku smaže.", vychozi: z.pozn || "", ano: "Uložit" });
         if (pozn === null) return;
         await window.KB.ulozZnacku(otevreny, z.id, Object.assign({}, z, { pozn: pozn }));
-    });
+    }
 
     /* -------------------------------------------------------------- start */
 
@@ -1809,22 +2074,78 @@
             if ($("soubor").files[0]) nahraj($("soubor").files[0]);
             $("soubor").value = "";
         });
-
-        $("seznam").addEventListener("click", async (e) => {
-            const smazS = e.target.closest("[data-smaz-slozku]");
-            if (smazS) {
-                if (!(await window.KBUI.potvrd({ nadpis: "Smazat složku?", ano: "Smazat",
-                    nebezpecne: true }))) return;
-                await window.KB.smazSlozkuPlanu(smazS.dataset.smazSlozku)
-                    .catch(err => window.KBUI.toast(err.message || "Smazání selhalo.", "error"));
-                return;
+        /* Nahrání přetažením – soubor z Průzkumníka pustit kamkoli na stránku
+           se seznamem (v otevřeném plánu ne, tam se kreslí). */
+        let pretahHloubka = 0;
+        const nesouSoubor = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf("Files") !== -1;
+        document.addEventListener("dragenter", (e) => {
+            if (otevreny || !nesouSoubor(e)) return;
+            pretahHloubka++;
+            document.body.classList.add("pl-pretahuje");
+        });
+        document.addEventListener("dragleave", () => {
+            if (pretahHloubka && --pretahHloubka === 0) document.body.classList.remove("pl-pretahuje");
+        });
+        document.addEventListener("dragover", (e) => {
+            if (!otevreny && nesouSoubor(e)) e.preventDefault();
+        });
+        document.addEventListener("drop", (e) => {
+            if (otevreny || !nesouSoubor(e)) return;
+            e.preventDefault();
+            pretahHloubka = 0;
+            document.body.classList.remove("pl-pretahuje");
+            const f = e.dataTransfer.files[0];
+            if (!f) return;
+            if (!/^(application\/pdf|image\/)/.test(f.type)) {
+                return window.KBUI.toast("Nahrát jde PDF nebo obrázek (JPG, PNG).", "warn");
             }
-            const smazP = e.target.closest("[data-smaz-plan]");
-            if (smazP) {
-                if (!(await window.KBUI.potvrd({ nadpis: "Smazat plán i se všemi značkami?", ano: "Smazat",
-                    nebezpecne: true }))) return;
-                await window.KB.smazPlan(smazP.dataset.smazPlan)
-                    .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+            nahraj(f);
+        });
+
+        async function smazSlozku(id) {
+            if (!(await window.KBUI.potvrd({ nadpis: "Smazat složku?", ano: "Smazat",
+                nebezpecne: true }))) return;
+            await window.KB.smazSlozkuPlanu(id)
+                .catch(err => window.KBUI.toast(err.message || "Smazání selhalo.", "error"));
+        }
+        async function smazPlanS(id) {
+            if (!(await window.KBUI.potvrd({ nadpis: "Smazat plán i se všemi značkami?", ano: "Smazat",
+                nebezpecne: true }))) return;
+            await window.KB.smazPlan(id)
+                .catch(() => window.KBUI.toast("Smazání selhalo.", "error"));
+        }
+        async function prejmenuj(druh, id) {
+            const vse = druh === "plan" ? window.KB.planySoubory : window.KB.planySlozky;
+            const x = (vse || []).find(f => f.id === id);
+            if (!x) return;
+            const nazev = await window.KBUI.zeptej({ nadpis: druh === "plan" ? "Nový název plánu" : "Nový název složky",
+                vychozi: x.nazev || "", ano: "Přejmenovat" });
+            if (!nazev || nazev === x.nazev) return;
+            await window.KB.prejmenujPlan(druh, id, nazev)
+                .catch(() => window.KBUI.toast("Přejmenování selhalo.", "error"));
+        }
+        $("seznam").addEventListener("click", async (e) => {
+            const vic = e.target.closest("[data-menu-plan], [data-menu-slozka]");
+            if (vic) {
+                const r = vic.getBoundingClientRect();
+                const manazer = window.KBUI.can("vykaz.view");
+                if (vic.dataset.menuPlan) {
+                    const id = vic.dataset.menuPlan;
+                    ukazMenu(r.left, r.bottom + 4, [
+                        { text: "Otevřít", akce: () => otevri(id) },
+                        manazer && { text: "Přejmenovat…", akce: () => prejmenuj("plan", id) },
+                        manazer && "-",
+                        manazer && { text: "Smazat plán…", pozor: true, akce: () => smazPlanS(id) }
+                    ]);
+                } else {
+                    const id = vic.dataset.menuSlozka;
+                    ukazMenu(r.left, r.bottom + 4, [
+                        { text: "Otevřít", akce: () => { slozka = id; vykresliSeznam(); } },
+                        manazer && { text: "Přejmenovat…", akce: () => prejmenuj("slozka", id) },
+                        manazer && "-",
+                        manazer && { text: "Smazat složku…", pozor: true, akce: () => smazSlozku(id) }
+                    ]);
+                }
                 return;
             }
             const doSlozky = e.target.closest("[data-slozka]");
@@ -2006,6 +2327,7 @@
                 /* Escape uklízí po krocích a plán zavírá až nakonec. Dřív
                    vyskočil z plánu i uprostřed úprav obdélníku a člověk
                    se musel proklikat zpátky (Michal 2. 9. 2026). */
+                if (zavriMenu()) return;
                 if (vPoli) return void e.target.blur();
                 if (!$("oknoHladiny").hidden) return void ($("oknoHladiny").hidden = true);
                 if (!$("oknoPaleta").hidden) return void ($("oknoPaleta").hidden = true);
@@ -2016,6 +2338,29 @@
                 return;
             }
             if (vPoli) return;               // psaní do políčka nezakládá kopie
+            if (e.ctrlKey || e.metaKey || e.altKey) {
+                // Ctrl+C zůstává kopií značky (níž), ostatní zkratky prohlížeči
+                if (!(e.key === "c" || e.key === "C")) return;
+            } else if (e.key === " " || e.code === "Space") {
+                /* mezerník + levé tlačítko = posun v každém režimu */
+                e.preventDefault();
+                if (!mezernik) {
+                    mezernik = true;
+                    $("plocha").classList.add("prohl__plocha--mezernik");
+                }
+                return;
+            } else {
+                /* Režimy a přiblížení z klávesnice – písmena jako v nápovědě
+                   u tlačítek. Na `e.code`, ať fungují i s českou klávesnicí. */
+                const REZIM_KLAVESA = { KeyZ: "znacka", KeyO: "obdelnik", KeyS: "stav", KeyV: "vyber" };
+                if (REZIM_KLAVESA[e.code] && !e.repeat) {
+                    e.preventDefault();
+                    return void prepniRezim(rezim === REZIM_KLAVESA[e.code] ? "posun" : REZIM_KLAVESA[e.code]);
+                }
+                if (e.key === "+" || e.code === "NumpadAdd") { e.preventDefault(); return void zoomStred(1.25); }
+                if (e.key === "-" || e.code === "NumpadSubtract") { e.preventDefault(); return void zoomStred(1 / 1.25); }
+                if (e.key === "0" || e.code === "Numpad0") { e.preventDefault(); srovnejNaOkno(); return void poloz(); }
+            }
             if (e.key === "c" || e.key === "C") {
                 /* Kopie na „C" i na Ctrl+C (Michal 2. 9. 2026).
                    `e.repeat`: podržená klávesa chodí opakovaně a bez tohohle
@@ -2028,8 +2373,15 @@
                 kopirujVybrane();
             }
         });
-        $("btnZoomPlus").addEventListener("click", () => { zoom = Math.min(6, zoom * 1.25); poloz(); });
-        $("btnZoomMin").addEventListener("click", () => { zoom = Math.max(minZoom, zoom / 1.25); poloz(); });
+        const pustMezernik = () => {
+            mezernik = false;
+            $("plocha").classList.remove("prohl__plocha--mezernik");
+        };
+        document.addEventListener("keyup", (e) => { if (e.key === " " || e.code === "Space") pustMezernik(); });
+        window.addEventListener("blur", pustMezernik);
+        // tlačítka přibližují ke středu okna (dřív k levému hornímu rohu plánu)
+        $("btnZoomPlus").addEventListener("click", () => zoomStred(1.25));
+        $("btnZoomMin").addEventListener("click", () => zoomStred(1 / 1.25));
         // ⤢ vrátí plán na celou stránku (dřív skákal na 100 %, u velkých
         // výkresů tedy doprostřed detailu)
         $("btnZoomReset").addEventListener("click", () => {
