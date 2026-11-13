@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=342">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=342">
+    <link rel="stylesheet" href="assets/css/app.css?v=343">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=343">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -546,6 +546,15 @@
                 .kontrola__odkaz > :last-child, .akt__text) {
                 display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         }
+        /* Částky faktur (Michal 13. 11. 2026): odkrývají se jen samy za sebe a jen při odemčeném
+           zámku k citlivým sekcím – „zobrazit“ u milníků (body.penize-videt) na ně nesahá. */
+        body.penize-videt [data-faktury-tajne] .tajne { display: none; }
+        body.penize-videt [data-faktury-tajne] .tajne__zastup { display: inline; }
+        body [data-faktury-tajne].faktury-videt .tajne { display: inline; }
+        body [data-faktury-tajne].faktury-videt .tajne__zastup { display: none; }
+        /* karta zámku v okně „Částky faktur“: bez rámečku karty v kartě, pole přes celou šířku */
+        #oknoZamekFaktur .zamek { border: 0; box-shadow: none; padding: 0 !important; }
+        #oknoZamekFaktur .zamek__mrizka { grid-template-columns: minmax(0, 1fr); max-width: none; }
     </style>
 </head>
 <body>
@@ -655,19 +664,19 @@
                 <div id="dovoleneSeznam" class="nastenka__telo col" style="gap:6px"></div>
             </div>
             <!-- faktury (dotazník 22. 9. 2026): co zaplatit do týdne a co nově přibylo -->
-            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyPlatby" data-need="finance.view" hidden>
+            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyPlatby" data-need="finance.view" data-faktury-tajne hidden>
                 <div class="nastenka__hlava" data-otevri="faktury.html?filtr=kzaplaceni" title="Otevřít faktury k zaplacení">
                     <b>Faktury k zaplacení — do týdne</b>
                     <!-- součet se ukáže až na klik, jako u výkazů -->
-                    <span class="nastenka__prep"><button type="button" class="chip" data-penize-prepni>zobrazit</button></span>
+                    <span class="nastenka__prep"><button type="button" class="chip" data-faktury-prepni>zobrazit</button></span>
                 </div>
                 <div id="fakturyPlatbySeznam" class="nastenka__telo col" style="gap:6px"></div>
                 <div class="nastenka__pata" id="fakturyPlatbyPata"></div>
             </div>
-            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyNove" data-need="finance.view" hidden>
+            <div class="card nastenka__karta nastenka__karta--man" id="wFakturyNove" data-need="finance.view" data-faktury-tajne hidden>
                 <div class="nastenka__hlava" data-otevri="faktury.html" title="Otevřít faktury">
                     <b>Nové faktury</b>
-                    <span class="nastenka__prep"><button type="button" class="chip" data-penize-prepni>zobrazit</button></span>
+                    <span class="nastenka__prep"><button type="button" class="chip" data-faktury-prepni>zobrazit</button></span>
                 </div>
                 <div id="fakturyNoveSeznam" class="nastenka__telo col" style="gap:6px"></div>
             </div>
@@ -806,12 +815,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=342"></script>
-<script src="assets/js/doc.js?v=342"></script>
-<script src="assets/js/ui.js?v=342"></script>
-<script src="assets/js/nabidka.js?v=342"></script>
-<script src="assets/js/vykazy.js?v=342"></script>
-<script type="module" src="assets/js/store.js?v=342"></script>
+<script src="assets/js/taxonomy.js?v=343"></script>
+<script src="assets/js/doc.js?v=343"></script>
+<script src="assets/js/ui.js?v=343"></script>
+<script src="assets/js/nabidka.js?v=343"></script>
+<script src="assets/js/vykazy.js?v=343"></script>
+<script type="module" src="assets/js/store.js?v=343"></script>
 
 <script>
 (function () {
@@ -2316,10 +2325,11 @@
         : (Number(f.castkaCelkem) || 0).toLocaleString("cs-CZ",
             { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + f.mena;
     /* Částka faktury za tečkami – odkrývá ji stejné „zobrazit / skrýt“ jako součty
-       (Michal 4. 11. 2026: skrýt i jednotlivé faktury). Tečky v řádku nepřepínají,
-       řádek je odkaz na fakturu. */
-    const tajnaCastka = (text) => '<span class="tajne">' + esc(text) + '</span>' +
-        '<span class="tajne__zastup" title="Částka je skrytá – zobrazit tlačítkem v hlavičce">•••</span>';
+       (Michal 4. 11. 2026: skrýt i jednotlivé faktury). Od 13. 11. 2026 tečky odkrývají
+       taky (jen při odemčeném zámku, jinak okno s heslem); zbytek řádku je dál odkaz. */
+    const TECKY_FAKTUR = '<span class="tajne__zastup" data-faktury-prepni ' +
+        'title="Částka je skrytá – zobrazí se po hesle k citlivým sekcím">•••</span>';
+    const tajnaCastka = (text) => '<span class="tajne">' + esc(text) + '</span>' + TECKY_FAKTUR;
     /** Celkem v Kč pro součty – cizí měna jen s kurzem. */
     const fakturaKc = (f) => (!f.mena || f.mena === "CZK") ? (Number(f.castkaCelkem) || 0)
         : (Number(f.kurz) ? (Number(f.castkaCelkem) || 0) * Number(f.kurz) : 0);
@@ -2386,7 +2396,7 @@
             const poSplatnosti = kPlaceni.filter(f => f.splatnost < dnes).length;
             pata.innerHTML = kPlaceni.length
                 ? '<span class="tiny muted">Celkem k zaplacení <b><span class="tajne">' + esc(V.kc(soucet)) +
-                  '</span><span class="tajne__zastup">•••</span></b>' +
+                  '</span>' + TECKY_FAKTUR + '</b>' +
                   (poSplatnosti ? " · po splatnosti " + esc(String(poSplatnosti)) : "") + "</span>"
                 : "";
         }
@@ -2394,7 +2404,8 @@
     }
 
     /* Součty i částky jednotlivých faktur jsou za tečkami, dokud si je manažer
-       neodkryje (stejně jako sazby u výkazů; jednotlivé od 4. 11. 2026). */
+       neodkryje (stejně jako sazby u výkazů; jednotlivé od 4. 11. 2026). Od 13. 11. 2026
+       přepíná body.penize-videt jen milníky – faktury mají vlastní odkrytí za zámkem níž. */
     let penizeFakturVidet = false;
     function pouzijSkrytiFaktur() {
         document.body.classList.toggle("penize-videt", penizeFakturVidet);
@@ -2402,11 +2413,74 @@
         document.querySelectorAll("button[data-penize-prepni]").forEach(b => {
             b.textContent = penizeFakturVidet ? "skrýt" : "zobrazit";
         });
+        pouzijSkrytiFakturDlazdic();
     }
     document.addEventListener("click", (event) => {
         if (!event.target.closest("[data-penize-prepni]")) return;
         penizeFakturVidet = !penizeFakturVidet;
         pouzijSkrytiFaktur();
+    });
+
+    /* Částky faktur jen při odemčeném zámku k citlivým sekcím (Michal 13. 11. 2026:
+       „faktury jsou citlivá data … ani na ty tečky/ceny“). Dlaždice faktur mají vlastní
+       odkrytí (data-faktury-prepni), nezávislé na milnících. Zamčeno → klik otevře malé
+       okno s kartou zámku (KBUI.zamekCitlive – stejné heslo a odemčení jako na Fakturách),
+       po odemčení se částky odkryjí. Vyprší-li odemčení (3 min bez práce), tečky se vrátí.
+       Zámek se zakládá až prvním klikem – kdo na tečky nesáhne, databáze se neptá. */
+    let fakturyVidet = false;
+    let zamekFaktur = null;
+    const zamekFakturVidet = () => !!(zamekFaktur && zamekFaktur.videt());
+    function pouzijSkrytiFakturDlazdic() {
+        if (!zamekFakturVidet()) fakturyVidet = false;
+        document.querySelectorAll("[data-faktury-tajne]").forEach(el => el.classList.toggle("faktury-videt", fakturyVidet));
+        document.querySelectorAll("button[data-faktury-prepni]").forEach(b => {
+            b.textContent = fakturyVidet ? "skrýt" : "zobrazit";
+        });
+    }
+    function oknoZamkuFaktur() {
+        let okno = document.getElementById("oknoZamekFaktur");
+        if (okno) return okno;
+        okno = document.createElement("div");
+        okno.id = "oknoZamekFaktur";
+        okno.className = "hookno no-print";
+        okno.hidden = true;
+        okno.setAttribute("role", "dialog");
+        okno.setAttribute("aria-modal", "true");
+        okno.innerHTML =
+            '<div class="hookno__deska card" style="max-width:520px">' +
+                '<div class="hookno__hlava"><span>Částky faktur</span>' +
+                    '<button type="button" class="linkbtn linkbtn--tmavy" data-zfak-zavri>Zavřít</button></div>' +
+                '<div class="hookno__telo" id="zamekFakturSlot"></div>' +
+            "</div>";
+        document.body.appendChild(okno);
+        okno.addEventListener("click", (event) => {
+            if (event.target === okno || event.target.closest("[data-zfak-zavri]")) okno.hidden = true;
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") okno.hidden = true;
+        });
+        zamekFaktur = window.KBUI.zamekCitlive({
+            obsah: [], slot: "zamekFakturSlot", need: "finance.view",
+            nadpis: "Částky faktur jsou za heslem",
+            popis: "Zadej heslo k citlivým sekcím – stejné jako u Faktur a Výplat. Odemčení platí tři " +
+                "minuty od poslední práce a přenese se i na stránky Faktur a Pokladny.",
+            onZmena: () => {
+                // odemčeno v okně (nebo dočtené z databáze) → částky ven a okno pryč
+                if (zamekFakturVidet() && !okno.hidden) { okno.hidden = true; fakturyVidet = true; }
+                pouzijSkrytiFakturDlazdic();
+            }
+        });
+        return okno;
+    }
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest("[data-faktury-prepni]")) return;
+        event.preventDefault();   // tečky v řádku jsou uvnitř odkazu na fakturu
+        if (fakturyVidet) { fakturyVidet = false; pouzijSkrytiFakturDlazdic(); return; }
+        const okno = oknoZamkuFaktur();
+        if (zamekFakturVidet()) { fakturyVidet = true; pouzijSkrytiFakturDlazdic(); return; }
+        okno.hidden = false;
+        const pole = okno.querySelector("[data-zamek-heslo]");
+        if (pole && !pole.closest("[hidden]")) pole.focus();
     });
 
     function renderFakturyNove() {
@@ -2426,7 +2500,7 @@
                     '<span class="kontrola__datum" style="color:#9a3412">Ke kontrole</span>' +
                     "<span><b>" + esc(V.pocet(cekaji.length, ["doklad", "doklady", "dokladů"])) + "</b>" +
                         ' z inboxu · <span class="tajne">' + esc(V.kc(cekaji.reduce((x, f) => x + fakturaKc(f), 0))) +
-                        '</span><span class="tajne__zastup">•••</span></span>' +
+                        '</span>' + TECKY_FAKTUR + '</span>' +
                 "</a></div>";
         }
         html += zarazene.length
@@ -2516,7 +2590,7 @@
         uhradaId = f.id;
         const okno = oknoUhrady();
         okno.querySelector("[data-uhr-co]").innerHTML = "<b>" + esc(fakturaNazev(f)) + "</b><br>" +
-            esc(fakturaCastka(f)) + " · splatnost " + esc(czDatum(f.splatnost));
+            (fakturyVidet ? esc(fakturaCastka(f)) : "•••") + " · splatnost " + esc(czDatum(f.splatnost));
         okno.querySelector("[data-uhr-datum]").value = V.dnesISO();
         okno.hidden = false;
         okno.querySelector("[data-uhr-datum]").focus();

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury po měsících – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=342">
+    <link rel="stylesheet" href="assets/css/app.css?v=343">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -146,10 +146,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=342"></script>
-<script src="assets/js/ui.js?v=342"></script>
-<script src="assets/js/vykazy.js?v=342"></script>
-<script type="module" src="assets/js/store.js?v=342"></script>
+<script src="assets/js/taxonomy.js?v=343"></script>
+<script src="assets/js/ui.js?v=343"></script>
+<script src="assets/js/vykazy.js?v=343"></script>
+<script type="module" src="assets/js/store.js?v=343"></script>
 
 <script>
 (function () {
@@ -167,10 +167,12 @@
         "Licence", "Pracovní oblečení", "Restaurace", "Školení"];
     const ADMIN = "Administrativní činnost";
     const DRUHY = { faktura: "Faktura", uctenka: "Účtenka", zalohova: "Zálohová faktura", dobropis: "Dobropis", jine: "Doklad" };
+    // obě záložky za heslem k citlivým sekcím (Michal 13. 11. 2026), jako Výplaty
     const PODLISTA_FAKTURY = [
-        { title: "FAKTURY", href: "faktury.html", need: "finance.view" },
-        { title: "MĚSÍCE", href: "faktury-prehled.html", need: "finance.view" }
+        { title: "FAKTURY", href: "faktury.html", need: "finance.view", zamek: true },
+        { title: "MĚSÍCE", href: "faktury-prehled.html", need: "finance.view", zamek: true }
     ];
+    let zamek = null;             // opona KBUI.zamekCitlive – data se čtou až po odemčení
 
     let rok = new Date().getFullYear();
     let filtrTyp = "";
@@ -410,7 +412,7 @@
         const smi = window.KBUI.can("finance.view");
         $("stop").hidden = smi;
         $("obsah").hidden = !smi;
-        if (!smi) return;
+        if (!smi || !zamek || !zamek.videt()) return;
         if (!spusteno) {
             spusteno = true;
             window.KB.watchFaktury();
@@ -423,6 +425,11 @@
     document.addEventListener("DOMContentLoaded", () => {
         window.KBUI.mountNav({ active: "faktury.html", subbar: true });
         window.KBUI.paintSubbar(PODLISTA_FAKTURY, "faktury-prehled.html");
+        // opona jako na Fakturách (Michal 13. 11. 2026) – i rám s dokladem
+        zamek = window.KBUI.zamekCitlive({ obsah: ["obsah", "oknoRam"], need: "finance.view",
+            popis: "Jsou tu faktury a peníze firmy. Odemčení platí tři minuty od poslední práce " +
+                "a přenese se na Faktury, Pokladnu, tisk faktury i částky na nástěnce.",
+            onZmena: () => vykresli() });
         // aktuální měsíc rozbalený, dokud si člověk nevybere jinak
         if (!otevrene.size) otevrene.add(V.dnesISO().slice(0, 7));
 

@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=342">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=342">
+    <link rel="stylesheet" href="assets/css/app.css?v=343">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=343">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -615,11 +615,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=342"></script>
-<script src="assets/js/ui.js?v=342"></script>
-<script src="assets/js/nabidka.js?v=342"></script>
-<script src="assets/js/vykazy.js?v=342"></script>
-<script type="module" src="assets/js/store.js?v=342"></script>
+<script src="assets/js/taxonomy.js?v=343"></script>
+<script src="assets/js/ui.js?v=343"></script>
+<script src="assets/js/nabidka.js?v=343"></script>
+<script src="assets/js/vykazy.js?v=343"></script>
+<script type="module" src="assets/js/store.js?v=343"></script>
 <script>
 (function () {
     "use strict";
@@ -2407,16 +2407,18 @@
 
     /* -------------------------------------------------------------- start */
 
+    // obě záložky za heslem k citlivým sekcím (Michal 13. 11. 2026), jako Výplaty
     const PODLISTA_FAKTURY = [
-        { title: "FAKTURY", href: "faktury.html", need: "finance.view" },
-        { title: "MĚSÍCE", href: "faktury-prehled.html", need: "finance.view" }
+        { title: "FAKTURY", href: "faktury.html", need: "finance.view", zamek: true },
+        { title: "MĚSÍCE", href: "faktury-prehled.html", need: "finance.view", zamek: true }
     ];
+    let zamek = null;             // opona KBUI.zamekCitlive – data se čtou až po odemčení
 
     function vykresli() {
         const smi = window.KBUI.can("finance.view");
         $("stop").hidden = smi;
         $("obsah").hidden = !smi;
-        if (!smi) return;
+        if (!smi || !zamek || !zamek.videt()) return;
 
         // odběry se startují až tady – zaměstnanci by dotaz spadl na právech
         if (!spusteno) {
@@ -2494,6 +2496,22 @@
         // faktury jsou v levém pásu vedle Pokladny; podlišta spojuje nástěnku a Měsíce
         window.KBUI.mountNav({ active: "faktury.html", subbar: true });
         window.KBUI.paintSubbar(PODLISTA_FAKTURY, "faktury.html");
+        /* Opona (Michal 13. 11. 2026: „faktury jsou citlivá data … vždy za heslem“): obsah
+           i všechna okna až po hesle k citlivým sekcím; odemčení z jiné stránky v záložce
+           platí (sessionStorage). V rámu na Měsících (?okno=1) je main schovaný – karta jde nahoru. */
+        if (vRamu) {
+            const ram = document.createElement("div");
+            ram.id = "zamekRam";
+            ram.style.cssText = "padding:18px";
+            document.body.insertBefore(ram, document.body.firstChild);
+        }
+        zamek = window.KBUI.zamekCitlive({
+            obsah: ["obsah", "oknoDoklad", "oknoUhrazeno", "oknoNahled", "oknoQr", "zpetLista"],
+            slot: vRamu ? "zamekRam" : "", need: "finance.view",
+            popis: "Jsou tu faktury a peníze firmy. Odemčení platí tři minuty od poslední práce " +
+                "a přenese se na Měsíce, Pokladnu, tisk faktury i částky na nástěnce.",
+            onZmena: () => vykresli()
+        });
         if (odkaz.get("id")) vybrana = odkaz.get("id");
         skocitNa = { kontrola: "kontrola", kzaplaceni: "kzaplaceni" }[odkaz.get("filtr")] || "";
         otevritQrPoNacteni = odkaz.get("qr") === "1";

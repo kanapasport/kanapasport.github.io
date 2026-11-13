@@ -77,10 +77,24 @@
            z .listok by ho přebil – pod hláškou by visel prázdný bílý list. */
         .listok[hidden] { display: none; }
 
+        /* Karta zámku k citlivým sekcím (KBUI.zamekCitlive, Michal 13. 11. 2026) – stránka je
+           bez app.css, proto vlastní vzhled ve stylu hlášky #zprava. */
+        #zamekSlot { --accent: #c8102e; }
+        #zamekSlot .zamek:not([hidden]) { display: flex; flex-direction: column; max-width: 460px;
+            width: calc(100% - 24px); margin: 60px auto; background: #fff; border-radius: 10px;
+            font-size: 14px; line-height: 1.5; box-shadow: 0 2px 14px rgba(0,0,0,.15); }
+        #zamekSlot [data-zamek-form]:not([hidden]) { display: flex; flex-direction: column; gap: 12px; }
+        #zamekSlot .label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+        #zamekSlot .field { font: inherit; padding: 8px 10px; border: 1px solid #bbb; border-radius: 6px; }
+        #zamekSlot .btn { font: inherit; font-weight: 700; padding: 8px 20px; border-radius: 8px;
+            border: 1px solid #c8102e; background: #c8102e; color: #fff; cursor: pointer; }
+        #zamekSlot .muted { color: #666; }
+        #zamekSlot .tiny { font-size: 12px; }
+
         @media print {
             body { background: #fff; }
             .listok { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
-            .listky, #zprava { display: none; }
+            .listky, #zprava, #zamekSlot { display: none; }
         }
         @page { size: A4 portrait; margin: 14mm; }
     </style>
@@ -92,12 +106,13 @@
     <button type="button" onclick="window.close()">Zavřít</button>
 </div>
 
+<div id="zamekSlot"></div>
 <div id="zprava">Načítám fakturu…</div>
 <div id="list" class="listok" hidden></div>
 
-<script src="assets/js/ui.js?v=342"></script>
-<script src="assets/js/vykazy.js?v=342"></script>
-<script type="module" src="assets/js/store.js?v=342"></script>
+<script src="assets/js/ui.js?v=343"></script>
+<script src="assets/js/vykazy.js?v=343"></script>
+<script type="module" src="assets/js/store.js?v=343"></script>
 
 <script>
 (function () {
@@ -252,6 +267,7 @@
         (window.KB.users || []).length);
 
     let spusteno = false;
+    let zamek = null;     // opona KBUI.zamekCitlive – faktura se čte až po odemčení
 
     function nacti() {
         if (spusteno) return;
@@ -278,7 +294,12 @@
             return zprava("<b>Nejsi přihlášený.</b><br>" +
                 '<span style="color:#666">Přihlas se na webu a otevři fakturu znovu ze stránky Faktury.</span>');
         }
-        if (window.KBUI.can("finance.view")) return nacti();
+        if (window.KBUI.can("finance.view")) {
+            // zamčeno: jen karta s heslem, „Načítám…“ až po odemčení
+            const zamceno = !zamek || !zamek.videt();
+            document.getElementById("zprava").hidden = zamceno;
+            return zamceno ? undefined : nacti();
+        }
         if (roleZnama()) bezPrava();   // role z databáze je jistá a právo nemá
     }
 
@@ -301,8 +322,16 @@
             document.getElementById("zprava").textContent = "V adrese chybí id faktury.";
             return;
         }
+        /* Opona (Michal 13. 11. 2026): tisk faktury je za heslem k citlivým sekcím jako Faktury.
+           Kdo přišel z odemčených Faktur, heslo znovu nezadává – nová záložka otevřená
+           tlačítkem Tisk si sessionStorage s odemčením přebírá. */
+        zamek = window.KBUI.zamekCitlive({ obsah: ["list"], slot: "zamekSlot", need: "finance.view",
+            popis: "Je tu faktura s částkami. Odemčení platí tři minuty od poslední práce " +
+                "a přenese se na Faktury, Měsíce, Pokladnu i částky na nástěnce.",
+            onZmena: rozhodni });
         // pojistka: když se do 8 s nic nerozhodne (spojení, smazaná faktura…)
         setTimeout(() => {
+            if (!zamek.videt()) return;    // čeká se na heslo, ne na databázi
             if (document.getElementById("zprava").textContent.indexOf("Načítám") !== 0) return;
             zprava("Fakturu se nepodařilo načíst. Otevři ji znovu ze stránky Faktury " +
                 "a zkontroluj, že jsi přihlášený.");
