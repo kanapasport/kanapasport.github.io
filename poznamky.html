@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Chat – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=347">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=347">
+    <link rel="stylesheet" href="assets/css/app.css?v=348">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=348">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -461,12 +461,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=347"></script>
-<script src="assets/js/doc.js?v=347"></script>
-<script src="assets/js/ui.js?v=347"></script>
-<script src="assets/js/nabidka.js?v=347"></script>
-<script src="assets/js/vykazy.js?v=347"></script>
-<script type="module" src="assets/js/store.js?v=347"></script>
+<script src="assets/js/taxonomy.js?v=348"></script>
+<script src="assets/js/doc.js?v=348"></script>
+<script src="assets/js/ui.js?v=348"></script>
+<script src="assets/js/nabidka.js?v=348"></script>
+<script src="assets/js/vykazy.js?v=348"></script>
+<script type="module" src="assets/js/store.js?v=348"></script>
 
 <script>
 (function () {
@@ -685,6 +685,11 @@
     /* Fotky zprávy: jedna = větší náhled, víc = mřížka (nejvýš 4 dlaždice,
        pátá a další schované pod „+N“). Plné obrázky do HTML nejdou – dosadí je
        doplnFotky(), jinak by desítky velkých data URL zpomalily každé překreslení. */
+    /* Kolik obrázků zpráva má. Náhled se počítá jako jeden – stará poznámka
+       podkolekci obrázků nemá a `obrazku` u ní chybí. */
+    const pocetObrazku = (z) =>
+        Math.max(Number(z && z.obrazku) || 0, window.KBUI.bezpecnyObrazek(z && z.nahled) ? 1 : 0);
+
     function fotoHtml(z) {
         const id = esc(z.id);
         const nahled = window.KBUI.bezpecnyObrazek(z.nahled);
@@ -778,11 +783,13 @@
 
     /* Ikonky v pravém horním rohu bubliny: kopírovat (i staré odpovědi),
        odpovědět (jen kdo smí psát), přeposlat. Stejné akce jsou i v nabídce ⋯.
-       `sNabidkou` = bublina bez patičky (uvnitř skupiny) – „⋯" je tu mezi ikonkami. */
-    function rychleAkceHtml(odpoved, k, sNabidkou) {
+       `sNabidkou` = bublina bez patičky (uvnitř skupiny) – „⋯" je tu mezi ikonkami.
+       `sObrazky` = zpráva má fotky, kopírují se i ony (popisek to říká). */
+    function rychleAkceHtml(odpoved, k, sNabidkou, sObrazky) {
         const tl = (akce, popis, ikona) => '<button type="button" class="kz__akce" data-akce="' + akce + '"' +
             ' title="' + popis + '" aria-label="' + popis + '">' + window.KBNabidka.ikona(ikona) + "</button>";
-        return '<span class="kz__rychle">' + tl("kopirovat", "Kopírovat text", "kopirovat") +
+        return '<span class="kz__rychle">' +
+            tl("kopirovat", sObrazky ? "Kopírovat i s obrázky" : "Kopírovat text", "kopirovat") +
             (odpoved ? "" :
                 (k && !k.jenCteni ? tl("odpovedet", "Odpovědět", "odpovedet") : "") +
                 tl("preposlat", "Přeposlat", "preposlat")) +
@@ -813,7 +820,7 @@
             '<div class="kz__bublina"' + (posledni ? "" : ' title="' + esc(celyCas(p.cas)) + '"') + ">" +
                 '<div class="kz__hlava">' +
                     (!moje && !navazuje ? '<div class="kz__autor">' + esc(jmeno(p.autor, p.jmeno)) + "</div>" : "") +
-                    rychleAkceHtml(odpoved, k, !posledni) +
+                    rychleAkceHtml(odpoved, k, !posledni, !odpoved && !!pocetObrazku(z)) +
                 "</div>" +
                 (odpoved ? '<div class="kz__odkaz">↪ k poznámce „' +
                     esc(String(z.text || "obrázek").replace(/\s+/g, " ").slice(0, 60)) + "“</div>" : "") +
@@ -1203,11 +1210,44 @@
         setTimeout(() => el.classList.remove("kz--blik"), 1700);
     }
 
-    /* Kopírování: zpráva jen s obrázkem text nemá – řekne se to. */
+    /* Kopírování: zpráva bez textu i bez obrázku nemá co dát – řekne se to.
+       (Stará odpověď v komentáři obrázky nikdy nemá, kopíruje se jen text.) */
     function kopirujText(text) {
         const t = String(text || "").trim();
         if (!t) { toast("Zpráva je jen obrázek – text ke zkopírování nemá.", "warn"); return; }
         window.KBNabidka.kopiruj(t, "Zkopírováno.");
+    }
+
+    /** Obrázky zprávy ke kopírování: z mezipaměti, jinak z podkolekce jako lupa. */
+    function obrazkyProKopii(z) {
+        if (obrazkyCache.has(z.id)) return Promise.resolve(obrazkyCache.get(z.id));
+        if (Number(z.obrazku) > 0) return nactiFotky(z.id);
+        const nahled = window.KBUI.bezpecnyObrazek(z.nahled);
+        return Promise.resolve(nahled ? [nahled] : []);
+    }
+
+    /* Kopírování zprávy s obrázky (Michal 13. 11. 2026): text jde do schránky
+       jako text i jako HTML s fotkami, u jediné fotky navíc jako PNG – vloží se
+       tak i do Malování nebo Wordu. Kopíruje se text ZPRÁVY, ne citace, kterou
+       bublina ukazuje nad ním. `kopiruji` drží jedno kopírování v jednu chvíli,
+       ať dvojklik na ikonku nehlásí hotovo dvakrát. */
+    let kopiruji = false;
+    async function kopirujZpravu(z) {
+        if (!z || kopiruji) return;
+        if (!pocetObrazku(z)) { kopirujText(z.text); return; }
+        kopiruji = true;
+        try {
+            const obrazky = await obrazkyProKopii(z);
+            if (!obrazky.length) { kopirujText(z.text); return; }
+            const text = String(z.text || "").trim();
+            await window.KBNabidka.kopirujSObrazky(text, obrazky, text
+                ? "Zkopírováno i s obrázky."
+                : (obrazky.length === 1 ? "Obrázek zkopírován." : "Obrázky zkopírovány."));
+        } catch (err) {
+            console.error(err);
+            toast("Obrázky se nenačetly – kopíruje se jen text.", "warn");
+            kopirujText(z.text);
+        } finally { kopiruji = false; }
     }
 
     function prizpusobVysku() {
@@ -1418,7 +1458,7 @@
         const ucastnik = !!k && !k.jenCteni;
         const smiStitek = autor || ucastnik || (Array.isArray(z.sdileni) && z.sdileni.indexOf(ja) !== -1);
         const stav = (z.stav === 0 || z.stav === 1) ? Number(z.stav) : null;
-        const obrazek = Number(z.obrazku) > 0 || !!window.KBUI.bezpecnyObrazek(z.nahled);
+        const obrazku = pocetObrazku(z);
         return {
             // i s časem – ve skupině ho bublina bez patičky na telefonu jinak neukáže
             nadpis: (autor ? "Moje zpráva" : "Zpráva od " + jmeno(z.uid, z.jmeno)) +
@@ -1427,9 +1467,11 @@
             polozky: [
                 z.text && { text: "Kopírovat text", ikona: "kopirovat",
                     fn: () => window.KBNabidka.kopiruj(z.text, "Text zprávy zkopírován.") },
+                obrazku && { text: obrazku === 1 ? "Kopírovat i s obrázkem" : "Kopírovat i s obrázky",
+                    ikona: "kopirovat", fn: () => kopirujZpravu(z) },
                 ucastnik && k.id === otevrena && { text: "Odpovědět", ikona: "odpovedet", fn: () => odpovez(z) },
                 { text: "Přeposlat…", ikona: "preposlat", fn: () => otevriPrep(z) },
-                obrazek && { text: "Zvětšit obrázek", ikona: "lupa", fn: () => lupa(z.id, 0) },
+                obrazku && { text: "Zvětšit obrázek", ikona: "lupa", fn: () => lupa(z.id, 0) },
                 smiStitek && stav !== 0 && { text: "Štítek: řeší se", ikona: "vlajka", fn: () => nastavStav(z, 0) },
                 smiStitek && stav !== 1 && { text: "Štítek: splněno", ikona: "hotovo", fn: () => nastavStav(z, 1) },
                 smiStitek && stav !== null && { text: "Bez štítku", ikona: "skryt", fn: () => nastavStav(z, null) },
@@ -1453,7 +1495,7 @@
         const el = tlacitko.closest("[data-zprava]");
         const z = el ? najdiZpravu(el.getAttribute("data-zprava")) : null;
         if (!z) return;
-        if (druh === "kopirovat") kopirujText(z.text);
+        if (druh === "kopirovat") kopirujZpravu(z);
         else if (druh === "odpovedet") odpovez(z);
         else if (druh === "preposlat") otevriPrep(z);
     }

@@ -112,6 +112,73 @@
             : Promise.resolve(zaloha())).then(hotovo);
     };
 
+    /* Obrázek do schránky: web vyrábí JPEG z canvasu (UI.zmensiObrazek), ale
+       jako `image/jpeg` ho Chrome do schránky nedá – spolehlivě bere jen
+       `image/png`. Data URL se proto překreslí přes canvas na PNG. Rozbitý
+       obrázek, nepovolená adresa i chybějící canvas → null (kopíruje se text). */
+    const obrazekOk = (url) => (window.KBUI && window.KBUI.bezpecnyObrazek)
+        ? window.KBUI.bezpecnyObrazek(url)
+        : (/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(String(url == null ? "" : url))
+            ? String(url) : "");
+
+    function naPng(dataUrl) {
+        return new Promise((hotovo) => {
+            if (typeof Image !== "function") { hotovo(null); return; }
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const plato = document.createElement("canvas");
+                    plato.width = img.naturalWidth || img.width;
+                    plato.height = img.naturalHeight || img.height;
+                    if (!plato.width || !plato.height || !plato.toBlob) { hotovo(null); return; }
+                    plato.getContext("2d").drawImage(img, 0, 0);
+                    plato.toBlob((b) => hotovo(b || null), "image/png");
+                } catch (e) { hotovo(null); }
+            };
+            img.onerror = () => hotovo(null);        // nedopsaná nebo podvržená data URL
+            img.src = dataUrl;
+        });
+    }
+
+    /** Text jako HTML odstavce (prázdný řádek = nový odstavec, jeden = zlom). */
+    const odstavce = (t) => t.split(/\n{2,}/).filter((o) => o.trim())
+        .map((o) => "<p>" + esc(o).replace(/\n/g, "<br>") + "</p>").join("");
+
+    /**
+     * Zkopíruje text I OBRÁZKY (pole data URL). Do schránky jde víc formátů
+     * naráz: `text/html` (odstavce textu + <img src="data:…">), `text/plain`
+     * (holý text, u zprávy bez textu aspoň „(2 obrázky)“) a u JEDINÉHO obrázku
+     * ještě `image/png` – tam, kam HTML neprojde (Malování, Word), se tak vloží
+     * aspoň ten obrázek. Když schránka obrázky nevezme (starý prohlížeč,
+     * odepřené právo, výjimka), zkopíruje se aspoň text a hláška to řekne na
+     * rovinu. Vrací Promise: true = ve schránce jsou i obrázky, false = jen
+     * text (nebo nic) – podle toho se nikdy neslibuje, co se nepovedlo.
+     */
+    N.kopirujSObrazky = (text, obrazky, hlaska) => {
+        const t = String(text == null ? "" : text).trim();
+        const obr = (Array.isArray(obrazky) ? obrazky : []).map(obrazekOk).filter(Boolean);
+        // žádný použitelný obrázek (prázdné pole i podvržená data URL) = jen text
+        if (!obr.length) return N.kopiruj(t, hlaska).then(() => false);
+        const holy = t || "(" + pocetText(obr.length, ["obrázek", "obrázky", "obrázků"]) + ")";
+        const jenText = () => N.kopiruj(holy, "Zkopírován jen text, obrázky schránka nevzala.").then(() => false);
+        if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) return jenText();
+        // Bloby se dopočítají DŘÍV, než se zavolá write – ClipboardItem tak
+        // dostane hotové hodnoty a nezáleží na tom, jak která verze Chromu
+        // snáší Promise uvnitř položky schránky.
+        return (obr.length === 1 ? naPng(obr[0]) : Promise.resolve(null)).then((png) => {
+            const casti = {
+                "text/html": new Blob(["<div>" + odstavce(t) +
+                    obr.map((d) => '<img src="' + esc(d) + '" alt="">').join("") + "</div>"], { type: "text/html" }),
+                "text/plain": new Blob([holy], { type: "text/plain" })
+            };
+            if (png) casti["image/png"] = png;
+            return navigator.clipboard.write([new window.ClipboardItem(casti)]);
+        }).then(() => {
+            toast(hlaska || "Zkopírováno i s obrázky.");
+            return true;
+        }, () => jenText());
+    };
+
     /* ======================================================== NABÍDKA ==== */
 
     const zdroje = [];
