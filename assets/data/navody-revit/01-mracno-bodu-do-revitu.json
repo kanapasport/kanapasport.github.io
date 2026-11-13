@@ -1,0 +1,64 @@
+{
+  "title": "Mračno bodů ze skenu FARO do Revitu (SCENE → ReCap → Revit)",
+  "desc": "Máme laserový sken budovy z FARO (SCENE, E57) a potřebujeme ho vidět v Revitu spolu s modelem – ve 3D i v půdorysu – a porovnat, kde model nesedí na skutečnost. Mračno se v Revitu ukazuje posunuté, nebo jsou ve stěnách „schody“ z řad bodů.",
+  "version": "v1.0",
+  "cat": "programy",
+  "subcat": "revit-mracno",
+  "steps": [
+    {
+      "title": "Jak to celé funguje",
+      "content": "Cesta je vždycky **SCENE → E57 → ReCap → RCP → Revit**. Revit sám E57 neotevře, umí jen formát ReCapu (`.rcp`).\n\nAby mračno sedlo na model **samo, bez posouvání**, musí platit dvě věci:\n- sken je ve SCENE napojený do **S-JTSK / Bpv** (přes geodetické body – ve SCENE je vidíš ve složce **References**, např. 8001, 8003…),\n- Revit model má nastavené **sdílené souřadnice** v S-JTSK.\n\nPak se nic netransformuje – ani v ReCapu, ani v Revitu. Každé „nastavení souřadnic“ po cestě necháváš prázdné.\n\nPočítej s časem: export ze SCENE i indexace v ReCapu u skenu s miliardou bodů trvají desítky minut.",
+      "code": ""
+    },
+    {
+      "title": "1. Export ze SCENE – správná volba (jinak budou schody)",
+      "content": "Ve stromu **Structure** klikni pravým tlačítkem na složku **Scans** (celou, ne jen jeden sken) a zvol:\n\n**Export → Scans → Scans** [obr 1]\n\n⚠️ **Nepoužívej** „Export Scan Points“ ani formát **LAS**:\n- **Export Scan Points → E57** uloží body přímo v S-JTSK v nízké přesnosti. Čísla jako −601 373 m se zaokrouhlí na mřížku **1,6 cm × 3,1 cm** a každá šikmá stěna je pak v CADu i v Revitu jako **schody z řad bodů**.\n- **LAS** ze SCENE při velkých souřadnicích přeteče – všechny body mají stejné X a Y, soubor je nepoužitelný.\n\n„Export → Scans → Scans“ uloží každý sken zvlášť: body v malých lokálních číslech (přesnost 0,1 mm) a polohu skenu v S-JTSK zvlášť v plné přesnosti. ReCap to pak spojí sám.",
+      "code": ""
+    },
+    {
+      "title": "2. Nastavení exportu",
+      "content": "V okně **Export Scan Points** nastav: [obr 1]\n\n- **Format:** E57 Files (*.e57)\n- **File Name:** ulož na **lokální disk** (D:), ne na síť – ReCap to pak čte rychleji\n- **Export each scan into a separate file:** **odškrtnout** (jeden soubor)\n- **Full scan, Min 0 / Max 700 m:** nechat\n- **Subsample Rows 1 / Columns 1:** nechat (plná hustota, ředí se až v ReCapu)\n- **Color and Grey:** **zaškrtnout** – jinak nejsou barvy\n- **Color Panorama Image:** nechat vypnuté\n- **Exclude points without 3D coordinates:** **zaškrtnout** – menší soubor\n- **Normals:** nechat vypnuté\n\nPanoramata pro 3Dsurvey si případně vyexportuj zvlášť – do Revitu nejsou potřeba.",
+      "code": ""
+    },
+    {
+      "title": "3. ReCap – import a nastavení skenu",
+      "content": "1. Spusť **Autodesk ReCap Pro** → **Nový projekt** → pojmenuj ho (např. `Stavba_patro_datum`) → **Importovat** → vyber E57.\n2. Před importem projdi tři záložky nahoře:\n\n**filtrování** – nechat, jak je (0–120 m, intenzita 0–100 %). [obr 1]\n\n**obrázek e57** – **import obrázku vypnout**. Jinak ReCap z každého panoramatu (klidně stovky) udělá samostatný sken a projekt nafoukne. [obr 2]\n\n**rozšířené** [obr 3]\n- **Redukce 5 mm** (detaily – zásuvky, lišty) nebo **10 mm** (plynulejší Revit). Pod 5 mm nejdi: šum skeneru je kolem 5 mm, přibude jen šum a čtyřnásobek bodů.\n- Souřadnicový systém **aktuální `<None>`, cíl `<None>`** – nic nepřevádět!\n- Osa nahoru **Z**.\n\n3. Klikni na **importovat soubory**.",
+      "code": ""
+    },
+    {
+      "title": "4. ReCap – indexace a PŘESKOČIT registraci",
+      "content": "Po načtení uvidíš kolečka se skeny (mobilní mračna `…color` a statické skeny `…SFC01…`). Víc skenů je v pořádku – všechny skončí v jednom `.rcp` a Revit je načte jako jedno mračno.\n\n⚠️ Vpravo dole je modré tlačítko **automaticky registrovat skeny** – **NEKLIKAT**. Skeny jsou už registrované ve SCENE a napojené do S-JTSK; automatická registrace by je přepočítala k jednomu skenu a georeference by se mohla posunout.\n\nKlikni na **šipku nad tlačítkem** a zvol **přeskočit registraci**. [obr 1]\n\nPak běží **indexace** (lišta dole, ozubená kolečka = zpracovává se, hodiny = čeká). Počkej na **100 %** a teprve pak klikni na **spustit projekt**. [obr 2]\n\nPo otevření projekt **ulož** (menu vlevo nahoře → Uložit). Vznikne soubor `.rcp` a vedle něj složka se soubory `.rcs` – tu nemaž ani nepřesouvej, `.rcp` na ni jen odkazuje.",
+      "code": ""
+    },
+    {
+      "title": "5. Revit – vložení mračna",
+      "content": "1. Otevři model a přepni se do **3D pohledu**.\n2. Karta **Vložit** → panel **Propojit** → **Mračno bodů**. [obr 1]\n3. Vyber `.rcp` a dole v poli **Umístění** zvol **Automaticky – podle sdílených souřadnic**.\n4. **Otevřít**.\n\nMračno sedne samo na model. Když ho nevidíš: **ZF** (přiblížit vše) a ve **VV → karta Mračna bodů** zkontroluj, že je zapnuté.\n\n**Výměna za nový export** (např. po opravě v SCENE): **Spravovat → Spravovat propojení → karta Mračna bodů** → vyber staré → **Znovu načíst z…** → nový `.rcp`. Nastavení pohledů zůstane.",
+      "code": ""
+    },
+    {
+      "title": "6. Ořezání na výřez – kvádr řezu",
+      "content": "Aby bylo vidět jen jedno patro nebo jedna místnost, ořízni 3D pohled kvádrem řezu – ořízne model i mračno zároveň.\n\n**Rychle podle prvků:** označ pár stěn v místě, které tě zajímá (Ctrl přidává), a stiskni **BX** (karta Upravit → **Kvádr výběru**).\n\n**Ručně:**\n1. Klikni do prázdna, ve **Vlastnostech** → skupina **Rozsahy** zaškrtni **Kvádr řezu**.\n2. Klikni na hranu kvádru a **táhni modré šipky**.\n3. Výšku (jen jedno podlaží) nastavíš nejlíp z boku – na ViewCube **PŘEDNÍ**, pak **HORNÍ** pro půdorys.\n\nTipy:\n- Čáry kvádru schováš ve **VV → Kategorie anotací → Kvádry řezu** (ořez zůstane).\n- Víc výřezů = **Duplikovat pohled** (pravým na 3D pohled v Prohlížeči projektu) a v každém jiný kvádr.",
+      "code": "BX = kvádr řezu kolem vybraných prvků"
+    },
+    {
+      "title": "7. Aby bylo líp vidět – barvy a průhlednost",
+      "content": "**Barva mračna:** **VV → karta Mračna bodů** → zaškrtni přepsání barev → **Režim barev**:\n- **Jedna barva** (např. červená) – nejlíp je vidět, kde mračno vystupuje ze zdí,\n- **Normály** – stěny/podlahy/stropy každá jinou barvou, ideální na kontrolu stěn,\n- **Výška** – na podlahy a výškové rozdíly,\n- **Intenzita** – černobílá, podobná fotce.\n\n**Průhledný model:** klikni na stěnu → **VH** (Přepsat grafiku v pohledu) → **Přepsat podle kategorie** → **Průhlednost 60–70 %**, případně světlá barva povrchu. [obr 1]\n- podle kategorie = všechny stěny v pohledu,\n- podle prvku = jen vybrané (na zvýraznění jedné podezřelé stěny).\n\nTotéž udělej pro **nosníky** – některé stěny bývají v modelu zadané jako nosník.\n\nPro celý model naráz: **GD** (Možnosti grafického zobrazení) → Průhlednost. Nebo styl zobrazení **Drátový model**.\n\n**Skrýt, co překáží:** vyber → **HH** (skrýt), **HI** (izolovat), **HR** (vrátit vše). Ve VV vypni třeba terén nebo nábytek.",
+      "code": "VV = viditelnost/zobrazení · VH = přepsat grafiku · GD = grafické zobrazení · HH / HI / HR = skrýt / izolovat / vrátit"
+    },
+    {
+      "title": "8. Kontrola stěn v půdorysu – řez mračnem",
+      "content": "Nejpřehlednější kontrola, jestli stěny v modelu sedí:\n\n1. Otevři **půdorys** podlaží a **zduplikuj** ho (pravým → Duplikovat pohled).\n2. **Vlastnosti → Rozsah pohledu → Upravit**:\n   - **Rovina řezu: 1400 mm**\n   - **Spodní hrana: 1200 mm**, **Hloubka pohledu: 1200 mm**\n3. V půdorysu zůstane jen 20cm pás mračna ve výšce stěn a přes něj řez modelem.\n\nKde je pás bodů mimo čáru stěny, model nesedí. Ve výšce 1,2–1,4 m nepřekáží nábytek ani okna.",
+      "code": ""
+    },
+    {
+      "title": "Pasti, na které jsme narazili",
+      "content": "- **Schody / řady bodů** ve stěnách (CAD i Revit) → export přes Export Scan Points. Znovu exportovat přes **Export → Scans → Scans** (krok 1).\n- **LAS ze SCENE** je při S-JTSK rozbitý (všechny body na jednom místě) → nepoužívat.\n- **Automatická registrace v ReCapu** může posunout georeferenci → vždy **přeskočit registraci**.\n- **Mračno o stovky km vedle** → v Revitu chybí sdílené souřadnice, nebo bylo vloženo „střed ke středu“ místo „podle sdílených souřadnic“.\n- **Sedí půdorys, nesedí výška** → zkontroluj výšku Bpv bodu průzkumu v Revitu (±0,000).\n- **Vnější líc suterénních zdí** skener nevidí (je v zemině) – nejde o chybu modelu.\n- **Stěna jako nosník:** v jednom z našich modelů byla obvodová stěna haly zadaná jako nosník, ne stěna – při filtrování podle kategorie Stěny „chybí“.\n- **DXF z AI** otevři v AutoCADu normálně; název hladiny nesmí obsahovat čárku (AutoCAD pak odmítne celý soubor).",
+      "code": ""
+    },
+    {
+      "title": "Řez do AutoCADu a porovnání s modelem",
+      "content": "Když potřebuješ řez stěn jako **DXF v S-JTSK** (body skenu ve výšce 1,2–1,4 m) nebo barevné porovnání modelu se skenem (co sedí do 3 cm, co ne), umí ho vyrobit Claude přímo z E57 a IFC exportu z Revitu.\n\nVzor a skripty: `D:\\PASPORT_DATA\\SPORTOVKA\\SKENY` – `POZNATKY.md`, složka `nastroje`, náhledy v `obrazky`.\n\nIFC z Revitu exportuj se **sdílenými souřadnicemi** (Soubor → Export → IFC) – pak se nic nepřevádí.",
+      "code": "D:\\PASPORT_DATA\\SPORTOVKA\\SKENY"
+    }
+  ]
+}

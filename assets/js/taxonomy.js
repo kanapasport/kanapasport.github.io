@@ -67,6 +67,10 @@ window.KB_CATEGORIES = [
                     { id: 'skript-ftp',        title: 'FeatureToPolygon Upgrade' },
                     { id: 'skript-kopie',      title: 'Kopie polygonů' },
                     { id: 'skript-symbolika',  title: 'Hromadná symbolika' },
+                    { id: 'skript-body-revize',   title: 'Body v polygonu – revize' },
+                    { id: 'skript-polohovy-kod',  title: 'Kopie polohového kódu z místností' },
+                    { id: 'skript-export-dwg',    title: 'Export do DWG' },
+                    { id: 'skript-scena3d',       title: '3D scéna' },
                     { id: 'skript-ai',         title: 'Jak si nechat skript napsat od AI' }
                 ]
             },
@@ -74,7 +78,9 @@ window.KB_CATEGORIES = [
                 id: 'skripty-stavba', title: 'STAVBA', children: [
                     { id: 'skript-mistnosti', title: 'Generování místností' },
                     { id: 'skript-dvere',     title: 'Dveře – automatizace' },
-                    { id: 'skript-plocha',    title: 'Zápis plochy a obvodu' }
+                    { id: 'skript-okna',      title: 'Okna – polohové kódy' },
+                    { id: 'skript-plocha',    title: 'Zápis plochy a obvodu' },
+                    { id: 'skript-podhledy',  title: 'Report podhledů' }
                 ]
             },
             {
@@ -116,7 +122,8 @@ window.KB_CATEGORIES = [
             {
                 id: 'revit', title: 'Revit', children: [
                     { id: 'revit-export', title: 'Export do ArcGIS' },
-                    { id: 'revit-zaklady', title: 'Základy ovládání' }
+                    { id: 'revit-zaklady', title: 'Základy ovládání' },
+                    { id: 'revit-mracno',  title: 'Mračno bodů ze skenu' }
                 ]
             },
             { id: 'archicad', title: 'ArchiCAD' },
@@ -140,17 +147,20 @@ window.KB_CATEGORIES = [
                     { id: 'autocad-instalace', title: 'Instalace a licence' },
                     { id: 'autocad-balicek',   title: 'Balíček nastavení' },
                     { id: 'autocad-prostor',   title: 'Pracovní prostor a palety' },
-                    { id: 'autocad-mys',       title: 'Myš a pravé tlačítko' }
+                    { id: 'autocad-mys',       title: 'Myš a pravé tlačítko' },
+                    { id: 'autocad-zwcad',     title: 'ZWCAD místo AutoCADu' }
                 ]
             },
             {
                 id: 'autocad-ovladani', title: 'OVLÁDÁNÍ', children: [
                     { id: 'autocad-zkratky', title: 'Klávesové zkratky' },
-                    { id: 'autocad-lispy',   title: 'LISPy a doplňky' }
+                    { id: 'autocad-lispy',   title: 'LISPy a doplňky' },
+                    { id: 'autocad-kresleni', title: 'Kreslení pasportu (J, JK, JT…)' }
                 ]
             },
             {
                 id: 'autocad-vykres', title: 'PRÁCE S VÝKRESEM', children: [
+                    { id: 'autocad-pasport-vlastnosti', title: 'Vlastnosti a tabulka pasportu' },
                     { id: 'autocad-xref',     title: 'Externí reference' },
                     { id: 'autocad-priprava', title: 'Příprava dat pro ArcGIS' }
                 ]
@@ -178,6 +188,23 @@ window.KB_CATEGORIES = [
             { id: 'zpravy',  title: 'TVORBA ZPRÁV' },
             { id: 'vykresy', title: 'TVORBA VÝKRESŮ' },
             { id: 'vizual',  title: 'VIZUÁL VÝKRESŮ' }
+        ]
+    },
+    /* Práce s Claudem (13. 11. 2026, Michal): zavádění u kolegů – firemní
+       Team, balíček FIREMNI_CLAUDE na P:, Iris. Hlavní návod = jak zadávat. */
+    {
+        id: 'claude',
+        barva: '#5b3f8c',
+        title: 'CLAUDE (AI)',
+        sub: 'Jak s Claudem pracovat, skilly a firemní nástroje',
+        icon: 'sparkles',
+        main: 'claude-zadavani',
+        children: [
+            { id: 'claude-start',     title: 'Začínáme' },
+            { id: 'claude-zadavani',  title: 'Jak s Claudem mluvit' },
+            { id: 'claude-skilly',    title: 'Skilly a firemní nástroje' },
+            { id: 'claude-iris',      title: 'Iris – otázky a výběr návrhů' },
+            { id: 'claude-limity',    title: 'Limity a šetření' }
         ]
     }
 ];
