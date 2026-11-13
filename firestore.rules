@@ -828,6 +828,18 @@ service cloud.firestore {
                                       && request.resource.data.get('uid', '') == request.auth.uid));
       allow delete: if clen() && resource.data.get('uid', '') == request.auth.uid;
     }
+    /* Fotky ke značce (od 13. 11. 2026, varianta C – značka jako záznam z terénu):
+       vidí a přidává, kdo vidí plán; fotka pod svým uid, jen JPEG text do ~0,9 MB;
+       smaže autor fotky (manažer přes `delete` u celých plánů výš). */
+    match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/znacky/{zid}/fotky/{fid} {
+      allow read:   if planVidiId(planId);
+      allow create: if clen() && planVidiId(planId)
+                       && request.resource.data.uid == request.auth.uid
+                       && request.resource.data.data is string
+                       && request.resource.data.data.size() < 900000
+                       && request.resource.data.keys().hasOnly(['data', 'ms', 'kdo', 'uid']);
+      allow delete: if clen() && resource.data.uid == request.auth.uid;
+    }
 
     /* --- fotky v BPH (přehled po místnostech a technologiích) ------------
        Podklad pro plánování focení: u které místnosti a technologie kolik

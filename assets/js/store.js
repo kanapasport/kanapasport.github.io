@@ -7733,7 +7733,11 @@ KB.smazPlan = async (id) => {
     if (authReady) await authReady;
     requireDb();
     const znacky = await getDocs(planZnacky(id));
-    for (const d of znacky.docs) await deleteDoc(d.ref);
+    for (const d of znacky.docs) {
+        const fotky = await getDocs(planFotky(id, d.id));
+        for (const f of fotky.docs) await deleteDoc(f.ref);
+        await deleteDoc(d.ref);
+    }
     const kousky = await getDocs(planKousky(id));
     for (const d of kousky.docs) await deleteDoc(d.ref);
     const dlazdice = await getDocs(planDlazdiceCol(id));
@@ -7787,16 +7791,72 @@ KB.ulozZnacku = async (planId, zid, data) => {
         text: tvar
             ? String(data.text || "").slice(0, 40)
             : String(data.text || "").slice(0, 3).toUpperCase(),
-        pozn: String(data.pozn || "").slice(0, 200),
+        pozn: String(data.pozn || "").slice(0, 500),
+        /* Značka jako záznam z terénu (Michal 13. 11. 2026, Iris, varianta C):
+           technologie a místnost jako text (technologie z os zakázky), počet
+           fotek (fotky samy v podkolekci `fotky`) a krátká historie změn –
+           kdo, kdy, co; drží se posledních 20. `data.co` = popis právě
+           dělané změny, do dokumentu se nepíše. */
+        tech: String(data.tech || "").slice(0, 30),
+        mistnost: String(data.mistnost || "").slice(0, 40),
+        fotek: Math.max(0, Math.min(20, Number(data.fotek) || 0)),
+        hist: historieZnacky(data),
         kdo: data.kdo || window.KB_USER || "",
         uid: data.uid || KB.currentUid(),
         ms: data.ms || Date.now()
     }, { merge: true });
 };
 
+function historieZnacky(data) {
+    const stara = (Array.isArray(data.hist) ? data.hist : [])
+        .filter(h => h && typeof h === "object")
+        .map(h => ({ kdo: String(h.kdo || "").slice(0, 60), ms: Number(h.ms) || 0, co: String(h.co || "").slice(0, 80) }));
+    if (data.co) stara.push({ kdo: window.KB_USER || "", ms: Date.now(), co: String(data.co).slice(0, 80) });
+    return stara.slice(-20);
+}
+
+const planFotky = (id, zid) => collection(db, "artifacts", APP_ID, "private", "plany", "soubory", id, "znacky", zid, "fotky");
+const planFotka = (id, zid, fid) => doc(db, "artifacts", APP_ID, "private", "plany", "soubory", id, "znacky", zid, "fotky", fid);
+
+/** Fotky jedné značky (stahují se až při otevření její karty). */
+KB.nactiFotkyZnacky = async (planId, zid) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDocs(planFotky(planId, zid));
+    const ven = [];
+    snap.forEach(d => ven.push({ id: d.id, ...d.data() }));
+    return ven.sort((a, b) => (a.ms || 0) - (b.ms || 0));
+};
+
+/** Přidá fotku (data URL JPEG z UI.compressImage) a zvedne počet u značky. */
+KB.pridejFotkuZnacky = async (planId, z, dataUrl) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!/^data:image\/jpeg;base64,/.test(String(dataUrl)) || dataUrl.length > 900000) {
+        throw new Error("Fotka je moc velká nebo není JPEG.");
+    }
+    const fid = "f_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(planFotka(planId, z.id, fid), {
+        data: dataUrl, ms: Date.now(), kdo: window.KB_USER || "", uid: KB.currentUid()
+    });
+    await KB.ulozZnacku(planId, z.id, Object.assign({}, z, { fotek: (Number(z.fotek) || 0) + 1, co: "přidal fotku" }));
+    return fid;
+};
+
+KB.smazFotkuZnacky = async (planId, z, fid) => {
+    if (authReady) await authReady;
+    requireDb();
+    await deleteDoc(planFotka(planId, z.id, fid));
+    await KB.ulozZnacku(planId, z.id, Object.assign({}, z,
+        { fotek: Math.max(0, (Number(z.fotek) || 0) - 1), co: "smazal fotku" }));
+};
+
 KB.smazZnacku = async (planId, zid) => {
     if (authReady) await authReady;
     requireDb();
+    // fotky se smažou první – bez značky by k nim už nikdo nenašel cestu
+    const fotky = await getDocs(planFotky(planId, zid)).catch(() => null);
+    if (fotky) for (const d of fotky.docs) await deleteDoc(d.ref).catch(() => {});
     await deleteDoc(planZnacka(planId, zid));
 };
 
