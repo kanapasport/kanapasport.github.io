@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Info k zakázkám – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=346">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=346">
+    <link rel="stylesheet" href="assets/css/app.css?v=347">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=347">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -40,6 +40,16 @@
         .iz-okno[hidden] { display: none; }
         .iz-okno__deska { width: 100%; max-width: 480px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         .iz-okno__nadpis { font-size: var(--fs-4); font-weight: 900; }
+        /* okno Nastavit telefon (Michal 13. 11. 2026) – tři kroky pod sebou, na telefonu se roluje */
+        .iz-okno__deska--telefon { max-height: 92vh; overflow-y: auto; }
+        .iz-krok { display: flex; flex-direction: column; gap: 8px; }
+        .iz-krok > .btn { width: 100%; }
+        /* pevný čtverec jako QR u upozornění – SVG z knihovny se do něj roztáhne */
+        .iz-qr { align-self: center; width: 200px; height: 200px; flex: none; padding: 6px;
+            background: #fff; border-radius: var(--r-sm); }
+        .iz-qr svg, .iz-qr img, .iz-qr canvas { display: block; width: 100%; height: 100%; }
+        .iz-klic { font-family: ui-monospace, Consolas, monospace; font-size: var(--fs-4);
+            letter-spacing: .06em; word-break: break-all; }
         @media (max-width: 599.98px) {
             .iz-akce > .btn, .iz-akce .hledac { flex: 1 1 100%; width: 100%; }
             .iz-filtry select.field { flex: 1 1 100%; width: 100%; }
@@ -59,7 +69,10 @@
 <main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:16px">
 
     <div class="iz">
-        <h2 class="nadpis-stranky">Info k zakázkám</h2>
+        <div class="spread">
+            <h2 class="nadpis-stranky">Info k zakázkám</h2>
+            <button type="button" id="izTelefon" class="btn">Nastavit telefon…</button>
+        </div>
         <p class="small muted" style="margin-top:3px;line-height:1.6">
             Poznámky z terénu k zakázkám, i nadiktované z telefonu. Vidí je členové zakázky
             a manažeři, nezařazené jen autor a manažeři.
@@ -115,13 +128,71 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=346"></script>
-<script src="assets/js/doc.js?v=346"></script>
-<script src="assets/js/ui.js?v=346"></script>
-<script src="assets/js/nabidka.js?v=346"></script>
-<script src="assets/js/vykazy.js?v=346"></script>
-<script src="assets/js/infozakazky.js?v=346"></script>
-<script type="module" src="assets/js/store.js?v=346"></script>
+<!-- OKNO NASTAVIT TELEFON (Michal 13. 11. 2026) – vlastní zkratku iPhonu podepsat nejde,
+     proto se sdílí jedna hotová odkazem na iCloud a klíč si do ní každý vloží sám při
+     přidání. Odkaz ani klíč nepatří do zdroje – odkaz leží v databázi, klíč se tvoří tady. -->
+<div id="izTelOkno" class="iz-okno" hidden>
+    <div class="card iz-okno__deska iz-okno__deska--telefon" role="dialog" aria-modal="true"
+        aria-labelledby="izTelNadpis" tabindex="-1">
+        <b id="izTelNadpis" class="iz-okno__nadpis">Diktování z telefonu</b>
+        <p class="small muted" style="margin:0;line-height:1.5">
+            Jednorázové nastavení: zkratka v iPhonu pošle nadiktovanou poznámku rovnou sem.
+        </p>
+
+        <div class="iz-krok">
+            <b>1. Přidej si zkratku</b>
+            <a id="izTelOdkaz" class="btn btn--primary" href="#" target="_blank" rel="noopener" hidden>Přidat zkratku</a>
+            <div id="izTelQr" class="iz-qr" hidden></div>
+            <p id="izTelQrPopis" class="tiny muted" style="margin:0;text-align:center" hidden>
+                Sedíš u počítače? Naskenuj QR kód telefonem.
+            </p>
+            <p id="izTelBezOdkazu" class="small muted" style="margin:0" hidden>
+                Odkaz na zkratku zatím není nastavený – řekni hlavnímu správci.
+            </p>
+        </div>
+
+        <div class="iz-krok">
+            <b>2. Vytvoř si klíč</b>
+            <p id="izTelKlicStav" class="tiny muted" style="margin:0" hidden></p>
+            <button type="button" id="izTelKlicBtn" class="btn btn--primary">Vytvořit klíč</button>
+            <code id="izTelKlic" class="pwd iz-klic" hidden></code>
+            <p id="izTelKlicPozn" class="tiny muted" style="margin:0;line-height:1.6" hidden>
+                Ukáže se jen teď. Vlož ho do zkratky při přidání (otázka „Tvůj klíč z webu“).
+                Když ho ztratíš, vytvoř si nový – starý tím přestane platit.
+            </p>
+        </div>
+
+        <div class="iz-krok">
+            <b>3. Vyzkoušej</b>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Spusť zkratku, řekni třeba „BPH, chybí klika u dveří 1.14“.
+                Do pár vteřin je poznámka tady.
+            </p>
+        </div>
+
+        <div id="izTelSpravce" class="iz-krok" hidden>
+            <span class="label">Odkaz na zkratku (iCloud)</span>
+            <div class="row" style="gap:8px;flex-wrap:wrap">
+                <input type="url" id="izTelUrl" class="field grow" inputmode="url"
+                    placeholder="https://www.icloud.com/shortcuts/…" aria-label="Odkaz na zkratku (iCloud)">
+                <button type="button" id="izTelUrlUloz" class="btn btn--ghost btn--sm">Uložit</button>
+            </div>
+            <p class="tiny muted" style="margin:0">Prázdné pole a Uložit = odkaz zrušit.</p>
+        </div>
+
+        <div class="row" style="gap:8px;justify-content:flex-end">
+            <button type="button" id="izTelZavri" class="btn btn--ghost">Zavřít</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=347"></script>
+<script src="assets/js/doc.js?v=347"></script>
+<script src="assets/js/ui.js?v=347"></script>
+<script src="assets/js/nabidka.js?v=347"></script>
+<script src="assets/js/vykazy.js?v=347"></script>
+<script src="assets/js/infozakazky.js?v=347"></script>
+<script type="module" src="assets/js/store.js?v=347"></script>
 
 <script>
 (function () {
@@ -406,6 +477,137 @@
         });
     }
 
+    /* -------------------------------------------- nastavit telefon -- */
+    /* Zkratka se jen přidává odkazem na iCloud (vlastní podepsat nejde) a klíč
+       si do ní každý vloží sám při přidání (Michal 13. 11. 2026). */
+
+    const ICLOUD_ZKRATKA = /^https:\/\/www\.icloud\.com\/shortcuts\/[A-Za-z0-9]{8,64}\/?$/;
+    let mujKlic = null;             // { ms, kdo } z databáze, nebo null – klíč sám tu není
+
+    /* QR se stejnou adresou jako tlačítko – na přenos z počítače do telefonu.
+       Knihovna qrcode-generator z cdnjs se načte až při otevření okna (jako u faktur). */
+    let qrKnihovna = null;
+    function nactiQrKnihovnu() {
+        if (window.qrcode) return Promise.resolve();
+        if (qrKnihovna) return qrKnihovna;
+        qrKnihovna = new Promise((resolve, reject) => {
+            const sc = document.createElement("script");
+            sc.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+            sc.onload = resolve;
+            sc.onerror = () => { qrKnihovna = null; reject(new Error("qrcode-generator se nenačetl")); };
+            document.head.appendChild(sc);
+        });
+        return qrKnihovna;
+    }
+
+    async function kresliQr(url) {
+        const box = $("izTelQr");
+        box.innerHTML = "";
+        box.hidden = true;
+        $("izTelQrPopis").hidden = true;
+        if (!url) return;
+        try {
+            await nactiQrKnihovnu();
+            // mezitím se okno zavřelo nebo se odkaz změnil
+            if ($("izTelOkno").hidden || (KB().zkratkaUrl || "") !== url) return;
+            const q = window.qrcode(0, "M");
+            q.addData(url);
+            q.make();
+            box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+            box.hidden = false;
+            $("izTelQrPopis").hidden = false;
+        } catch (err) {
+            console.warn(err);          // knihovna z CDN nedojela – zbude tlačítko s odkazem
+        }
+    }
+
+    function vykresliTelefon() {
+        const url = (KB() && KB().zkratkaUrl) || "";
+        const odkaz = $("izTelOdkaz");
+        odkaz.hidden = !url;
+        if (url) odkaz.href = url;
+        $("izTelBezOdkazu").hidden = !!url;
+        $("izTelSpravce").hidden = !UI().isOwner();
+        const pole = $("izTelUrl");
+        if (!$("izTelSpravce").hidden && document.activeElement !== pole) pole.value = url;
+        if (!$("izTelOkno").hidden) kresliQr(url);
+    }
+
+    async function zjistiKlic() {
+        if (typeof KB().mamKlicZkratky !== "function") return;
+        try {
+            mujKlic = await KB().mamKlicZkratky();
+        } catch (err) {
+            console.warn(err);
+            mujKlic = null;
+        }
+        $("izTelKlicStav").hidden = !mujKlic;
+        if (mujKlic) {
+            $("izTelKlicStav").textContent = "Klíč máš vydaný " +
+                new Date(mujKlic.ms || 0).toLocaleDateString("cs-CZ", { day: "numeric", month: "numeric", year: "numeric" });
+        }
+        $("izTelKlicBtn").textContent = mujKlic ? "Vytvořit nový klíč" : "Vytvořit klíč";
+    }
+
+    async function novyKlic() {
+        if (typeof KB().vytvorMujKlicZkratky !== "function") {
+            UI().toast("Vytváření klíče se ještě nenačetlo – zkus obnovit stránku.", "error");
+            return;
+        }
+        if (mujKlic && !(await UI().potvrd({ nadpis: "Vytvořit nový klíč?",
+            text: "Dřívější klíč tím přestane platit – ve zkratce v telefonu bude potřeba vložit nový.",
+            ano: "Vytvořit nový" }))) return;
+        const tl = $("izTelKlicBtn");
+        tl.disabled = true;
+        try {
+            const klic = await KB().vytvorMujKlicZkratky();
+            $("izTelKlic").textContent = klic;
+            $("izTelKlic").hidden = false;
+            $("izTelKlicPozn").hidden = false;
+            if (window.KBNabidka) window.KBNabidka.kopiruj(klic, "Klíč je ve schránce");
+            await zjistiKlic();
+        } catch (err) {
+            console.warn(err);
+            UI().toast("Klíč se nepodařilo vytvořit – zkus to znovu.", "error");
+        } finally {
+            tl.disabled = false;
+        }
+    }
+
+    async function ulozZkratkuUrl() {
+        const url = $("izTelUrl").value.trim();
+        // tvar hlídá i store.js a pravidla – tady jen proto, ať je hláška hned a srozumitelná
+        if (url && !ICLOUD_ZKRATKA.test(url)) {
+            UI().toast("Odkaz musí být sdílená zkratka z iCloudu (https://www.icloud.com/shortcuts/…).", "warn");
+            return;
+        }
+        const tl = $("izTelUrlUloz");
+        tl.disabled = true;
+        try {
+            await KB().ulozZkratkuUrl(url);
+            UI().toast(url ? "Odkaz na zkratku uložen." : "Odkaz na zkratku zrušen.");
+        } catch (err) {
+            console.warn(err);
+            UI().toast("Uložení selhalo – odkaz smí nastavit jen hlavní správce.", "error");
+        } finally {
+            tl.disabled = false;
+        }
+    }
+
+    function otevriTelefon() {
+        $("izTelOkno").hidden = false;
+        vykresliTelefon();
+        zjistiKlic();
+        setTimeout(() => $("izTelOkno").querySelector(".iz-okno__deska").focus(), 30);
+    }
+    function zavriTelefon() {
+        $("izTelOkno").hidden = true;
+        // klíč se ukáže jen jednou – po zavření okna nesmí zůstat na stránce
+        $("izTelKlic").textContent = "";
+        $("izTelKlic").hidden = true;
+        $("izTelKlicPozn").hidden = true;
+    }
+
     /* ------------------------------------------------------ spuštění -- */
 
     let sledujiInfo = false;
@@ -436,8 +638,17 @@
         $("izOknoZrus").addEventListener("click", zavriPrirazeni);
         $("izOknoUloz").addEventListener("click", ulozPrirazeni);
         $("izOkno").addEventListener("click", (e) => { if (e.target === $("izOkno")) zavriPrirazeni(); });
+
+        $("izTelefon").addEventListener("click", otevriTelefon);
+        $("izTelZavri").addEventListener("click", zavriTelefon);
+        $("izTelOkno").addEventListener("click", (e) => { if (e.target === $("izTelOkno")) zavriTelefon(); });
+        $("izTelKlicBtn").addEventListener("click", novyKlic);
+        $("izTelUrlUloz").addEventListener("click", ulozZkratkuUrl);
+
         document.addEventListener("keydown", (e) => {
-            if (e.key !== "Escape" || $("izOkno").hidden) return;
+            if (e.key !== "Escape") return;
+            if (!$("izTelOkno").hidden) { zavriTelefon(); return; }
+            if ($("izOkno").hidden) return;
             if (e.target && e.target.closest && e.target.closest("[data-hledac]")) return;   // Esc zavře našeptávač
             zavriPrirazeni();
         });
@@ -451,7 +662,9 @@
         prestavProjekty();
 
         document.addEventListener("kb-role", spust);
+        document.addEventListener("kb-role", vykresliTelefon);     // pole na odkaz jen hlavnímu správci
         KB().on("users", spust);
+        KB().on("zkratka-url", vykresliTelefon);
         KB().on("projekty-docs", prestavProjekty);
         KB().on("infozakazky", () => { nacteno = true; vykresli(); });
         spust();

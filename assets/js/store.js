@@ -566,6 +566,16 @@ try {
             emit("gsync-url", KB.gsyncUrl);
         }, () => { /* adresa nemusí být nastavená – zápis se pak jen nespustí */ }));
 
+        /* Odkaz na sdílenou zkratku do iPhonu (okno Nastavit telefon u Info
+           k zakázkám). Jen sdílený odkaz na iCloud – web podle něj posílá
+           lidi z webu dál a vykresluje QR (Michal 13. 11. 2026). */
+        odbery.push(onSnapshot(metaDoc("zkratka"), (snap) => {
+            const url = String((snap.exists() ? (snap.data() || {}).url : "") || "");
+            KB.zkratkaUrl = ZKRATKA_URL_TVAR.test(url) ? url : "";
+            if (url && !KB.zkratkaUrl) console.warn("meta/zkratka: adresa není sdílená zkratka z iCloudu – odkaz se neukáže");
+            emit("zkratka-url", KB.zkratkaUrl);
+        }, () => { /* odkaz nemusí být nastavený – okno pak řekne, ať se člověk ozve správci */ }));
+
         KB.watchMilniky();
 
         // kdo co potvrzuje (Nastavení → Potvrzování) – tlačítka Potvrdit na stránkách
@@ -6136,6 +6146,50 @@ KB.zrusKlicZkratky = async (uid) => {
     const n = await smazKliceCloveka(uid);
     if (n) KB.zapisAktivitu("info", "zrušil klíč pro zkratku v telefonu");
     return n;
+};
+
+/* Nastavit telefon (Michal 13. 11. 2026): vlastní zkratku iPhonu podepsat
+   nejde, takže se sdílí jedna hotová odkazem na iCloud a klíč si do ní každý
+   vloží sám při přidání. Adresa leží v `public/data/meta/zkratka`
+   { url, ms, kdo } – čte ji každý člen, zapisuje jen hlavní správce. */
+const ZKRATKA_URL_TVAR = /^https:\/\/www\.icloud\.com\/shortcuts\/[A-Za-z0-9]{8,64}\/?$/;
+KB.zkratkaUrl = "";             // odkaz na sdílenou zkratku z meta/zkratka ("" = nenastavený)
+
+/** Uloží odkaz na zkratku; prázdný řetězec ho zruší. Pustí jen hlavního správce (pravidla). */
+KB.ulozZkratkuUrl = async (url) => {
+    if (authReady) await authReady;
+    requireDb();
+    const u = String(url || "").trim();
+    if (u && !ZKRATKA_URL_TVAR.test(u)) throw new Error("Odkaz musí být sdílená zkratka z iCloudu.");
+    await setDoc(metaDoc("zkratka"), {
+        url: u,
+        ms: Date.now(),
+        kdo: window.KB_USER || ""
+    }, { merge: true });
+};
+
+/** Vlastní klíč – vydá si ho každý sám pro sebe. Vrací klíč, ukázat jen jednou. */
+KB.vytvorMujKlicZkratky = async () => {
+    if (authReady) await authReady;
+    const uid = KB.currentUid();
+    if (!uid) throw new Error("Nejsi přihlášený.");
+    // stejný zápis jako u hlavního správce, jen pro sebe (`kdo` je taky on)
+    return KB.vydejKlicZkratky(uid, window.KB_USER || "");
+};
+
+/** Můj klíč: { ms, kdo } | null. Jeden dotaz – člen přečte jen svoje klíče. */
+KB.mamKlicZkratky = async () => {
+    if (authReady) await authReady;
+    requireDb();
+    const uid = KB.currentUid();
+    if (!uid) return null;
+    const snap = await getDocs(query(kliceCol(), where("uid", "==", uid)));
+    let ven = null;
+    snap.forEach(d => {
+        const k = d.data() || {};
+        if (!ven || (k.ms || 0) > ven.ms) ven = { ms: k.ms || 0, kdo: k.kdo || "" };
+    });
+    return ven;
 };
 
 /** Kdo má klíč: { [uid]: { ms, kdo } } (jednorázově, nejnovější vyhrává). */

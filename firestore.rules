@@ -668,6 +668,10 @@ service cloud.firestore {
       // přihlášeného) od 12. 11. 2026 jen hlavní správce a jen adresa skriptu
       // Googlu (nebo prázdná) – dřív ji přepsal každý správce na svůj server
       // (audit 10. 11. 2026 A1-04, Michal, Iris).
+      // `meta/zkratka` (odkaz na sdílenou zkratku do iPhonu, okno Nastavit
+      // telefon) od 13. 11. 2026 stejně: jen hlavní správce a jen sdílený
+      // odkaz na iCloud (nebo prázdný = odkaz zrušit). Web podle něj posílá
+      // lidi na cizí stránku, tak ať tam nikdo nenastrčí svou.
       allow write: if spravce() && (docId != 'zpetne' || smiPotvrdit('zpetne'))
                       && (docId != 'uzaverka' || hlavniSpravce()
                           || request.resource.data.get('odIso', '')
@@ -675,7 +679,11 @@ service cloud.firestore {
                       && (docId != 'gsync' || (hlavniSpravce() && (request.resource == null
                           || request.resource.data.get('url', '') == ''
                           || request.resource.data.get('url', '')
-                               .matches('^https://script[.]google[.]com/macros/s/[A-Za-z0-9_-]+/exec$'))));
+                               .matches('^https://script[.]google[.]com/macros/s/[A-Za-z0-9_-]+/exec$'))))
+                      && (docId != 'zkratka' || (hlavniSpravce() && (request.resource == null
+                          || request.resource.data.get('url', '') == ''
+                          || request.resource.data.get('url', '')
+                               .matches('^https://www[.]icloud[.]com/shortcuts/[A-Za-z0-9]{8,64}/?$'))));
       // robot: Apps Script píše stav rozesílky (`upozorneni`), nástroj na PC
       // firmy z Pohody do `zakazky` – nic jiného z `meta` (12. 11. 2026, A3-06)
       allow create, update: if robot() && docId in ['upozorneni', 'zakazky'];
@@ -886,6 +894,25 @@ service cloud.firestore {
                                 .hasOnly(['projektId', 'projektNazev', 'autoPrirazeno', 'lide',
                                           'vyrizeno', 'vyrizenoKdo', 'vyrizenoMs', 'ms']));
       // mazat jen manažer (zachytávací pravidlo `private`)
+    }
+
+    /* Klíč zkratky v telefonu. Od 13. 11. 2026 (Michal) si ho v okně Nastavit
+       telefon vydá i každý sám pro sebe – do té doby ho vydával jen hlavní
+       správce a žádný blok tu nebyl. Člen vidí a smaže jen SVŮJ klíč (nový se
+       vydává po smazání dřívějších, dotazem `where uid ==` – pravidla nejsou
+       filtr) a založí jen klíč se svým uid v předepsaném tvaru. Měnit se klíč
+       nedá, vydává se nový. Manažer a Apps Script (čte podle otisku autora
+       poznámky) mají dál vše ze zachytávacího pravidla `private` výš, takže
+       vydávání klíčů v Uživatelích se tím nemění. Klíč samotný v databázi
+       není, jen jeho otisk SHA-256 = id dokumentu. */
+    match /artifacts/firemni-kb-app/private/infozakazky/klice/{otisk} {
+      allow read, delete: if clen() && resource.data.uid == request.auth.uid;
+      allow create: if clen()
+                       && request.resource.data.uid == request.auth.uid
+                       && request.resource.data.jmeno is string
+                       && request.resource.data.kdo is string
+                       && request.resource.data.keys().hasOnly(['uid', 'jmeno', 'ms', 'kdo']);
+      // update nikdo navíc – klíč se nemění, vydá se nový
     }
 
     // --- tabule -----------------------------------------------------------
