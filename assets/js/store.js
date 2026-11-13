@@ -6406,6 +6406,16 @@ KB.prejmenujPlan = async (druh, id, nazev) => {
         { nazev: n.slice(0, druh === "plan" ? 120 : 80) });
 };
 
+/** Vrstva plánu z PC nástroje (`vrstvy/mistnosti` = obrysy místností z GDB
+    a převod do S-JTSK, NASTROJE\web\plany_z_gdb). Vrací objekt, nebo null. */
+KB.nactiPlanVrstvu = async (planId, druh) => {
+    if (authReady) await authReady;
+    requireDb();
+    const snap = await getDoc(doc(db, "artifacts", APP_ID, "private", "plany", "soubory", planId, "vrstvy", druh));
+    if (!snap.exists()) return null;
+    try { return JSON.parse((snap.data() || {}).data || "null"); } catch (err) { return null; }
+};
+
 /** Jedna detailní dlaždice – stahuje se, až když je vidět. */
 KB.nactiPlanDlazdici = async (planId, klic) => {
     if (authReady) await authReady;

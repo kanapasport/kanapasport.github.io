@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=353">
+    <link rel="stylesheet" href="assets/css/app.css?v=354">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -370,6 +370,7 @@
         .zarpole .field { font-weight: 400; color: var(--text); }
         .zarradek { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+        .mistnostivrstva { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
         .prstav { display: flex; gap: 10px; flex-wrap: wrap; font-size: var(--fs-1); font-weight: 700; opacity: .9; }
         .prstav span { white-space: nowrap; }
         .prstav__bez { background: #c8102e; border-radius: var(--r-pill); padding: 1px 8px; }
@@ -523,6 +524,8 @@
         <div class="prohl__zoom" id="zobrazeni">
             <button type="button" class="zoombtn" data-zobr="text"
                     title="Ukazovat texty ve značkách">T</button>
+            <button type="button" class="zoombtn" id="btnMistnosti" hidden
+                    title="Místnosti z GDB – obrysy a obarvení podle Fotek BPH (červená = zatím žádná fotka)">▦</button>
             <button type="button" class="zoombtn" data-zobr="pruh"
                     title="Ukazovat značky průhledné (vypnuto = plná barva)">◍</button>
             <span class="zoompct" id="zoomPct" title="Přiblížení – 100 % = celý plán v okně"></span>
@@ -570,12 +573,15 @@
         </div>
         <button type="button" class="btn btn--sm btn--ghost" id="pzExport"
                 title="Vyfiltrované značky do souboru pro Excel">Export do Excelu (CSV)</button>
+        <button type="button" class="btn btn--sm btn--ghost" id="pzExportGis" hidden
+                title="Vyfiltrované značky jako body v S-JTSK (EPSG 5514) – v ArcGIS nástroj JSON To Features">Export pro GIS (GeoJSON)</button>
         <div id="pzSeznam" class="plpanel__seznam"></div>
     </aside>
     <div class="prohl__plocha" id="plocha">
         <div class="prohl__vrstva" id="vrstva">
             <img id="obrazek" alt="">
             <div id="dlazdiceVrstva"></div>
+            <svg id="mistnostiVrstva" class="mistnostivrstva" xmlns="http://www.w3.org/2000/svg"></svg>
             <div id="znackyVrstva"></div>
         </div>
         <div class="nahravam" id="nahravam" hidden>Načítám plán…</div>
@@ -694,10 +700,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=353"></script>
-<script src="assets/js/ui.js?v=353"></script>
-<script src="assets/js/vykazy.js?v=353"></script>
-<script type="module" src="assets/js/store.js?v=353"></script>
+<script src="assets/js/taxonomy.js?v=354"></script>
+<script src="assets/js/ui.js?v=354"></script>
+<script src="assets/js/vykazy.js?v=354"></script>
+<script type="module" src="assets/js/store.js?v=354"></script>
 
 <script>
 (function () {
@@ -1263,6 +1269,7 @@
         $("vrstva").style.setProperty("--pz", String(1 / zoom));
         naplanujDlazdice();
         $("zoomPct").textContent = Math.round(zoom / (minZoom || zoom || 1) * 100) + " %";
+        if (zobrazMistnosti || mistnostOtevrena) vykresliMistnosti();
         srovnejMapku();
     }
 
@@ -1415,6 +1422,12 @@
         planPripraven = false;
         znameZnacky = null;
         znackyZeZarizeni = false;
+        vrstvaM = null;
+        mistnostOtevrena = null;
+        zobrazMistnosti = false;
+        $("btnMistnosti").hidden = true;
+        $("btnMistnosti").classList.remove("je-aktivni");
+        $("mistnostiVrstva").innerHTML = "";
         blika.clear();
         aktivniZnacka = "";
         vybrane.clear();
@@ -1473,6 +1486,7 @@
             vykresliZnacky();
             zkusOtevritZnacku();
             setTimeout(() => zkusZnackyZeZarizeni(id), 1500);
+            nactiVrstvuMistnosti(id);
         } catch (err) {
             console.error(err);
             window.KBUI.toast(navigator.onLine === false
@@ -1529,6 +1543,7 @@
     }
 
     function zavri() {
+        mistnostOtevrena = null;
         skonciPritomnost(otevreny);
         zavriKartu();
         $("panelZnacky").hidden = true;
@@ -1682,6 +1697,7 @@
         vykresliVyberListu();
         vykresliPanelTvaru();
         vykresliKartu();
+        if (mistnostOtevrena && !kartaId) vykresliKartuMistnosti();
         vykresliPanelZnacek();
         zkusOtevritZnacku();
 
@@ -2104,9 +2120,10 @@
         const x = (cx - r.left) / r.width;
         const y = (cy - r.top) / r.height;
         if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return;
+        const m = mistnostNa(x, y);           // plán z GDB – místnost se vyplní sama
         await window.KB.ulozZnacku(otevreny, novyId(),
             { x: x, y: y, stav: nova.stav, vel: nova.vel, text: nova.text,
-              pruh: nova.pruh, hl: hlAktivni, co: "založil" });
+              pruh: nova.pruh, hl: hlAktivni, mistnost: m ? (m.c || m.k) : "", co: "založil" });
     }
 
     /* značky: přidání podle voleb nahoře, přepnutí stavu, výběr */
@@ -2187,6 +2204,12 @@
             }
         }
         if (znacka) return;      // v posunu a značce ťuknutí na značku nic nedělá
+        if (rezim === "posun" && vrstvaM) {
+            const ro = $("obrazek").getBoundingClientRect();
+            const m = mistnostNa((e.clientX - ro.left) / ro.width, (e.clientY - ro.top) / ro.height);
+            if (m) return void otevriMistnost(m);
+            if (zavriMistnost()) return;
+        }
         if (rezim === "vyber") {
             // klik do prázdna ruší výběr (se Shiftem ho nechává)
             if (!e.shiftKey && !e.ctrlKey && !e.metaKey && vybrane.size) {
@@ -2219,7 +2242,8 @@
             uhel: 0, stav: nova.stav, text: nova.text, hl: hlAktivni,
             /* Nový obdélník si bere průhlednost z hladiny (`0`), ať se dá
                celá hladina zprůhlednit jedním tahem. */
-            pruh: 0, co: "založil"
+            pruh: 0, co: "založil",
+            mistnost: (mistnostNa(x, y) || {}).c || (mistnostNa(x, y) || {}).k || ""
         });
         // rovnou aktivní, ať jsou po ruce úchyty na otočení a rozměr
         aktivniZnacka = id;
@@ -2394,6 +2418,7 @@
 
     async function otevriKartu(id) {
         if (!znackaPodleId(id)) return;
+        if (mistnostOtevrena) { mistnostOtevrena = null; vykresliMistnosti(); }
         kartaId = id;
         $("karta").hidden = false;
         vykresliKartu(true);
@@ -2626,6 +2651,7 @@
         $("pzTech").value = techy.indexOf(vybTech) !== -1 ? vybTech : "";
         const vse = pzFiltrovane().sort((a, b) => (b.ms || 0) - (a.ms || 0));
         $("pzPocet").textContent = vse.length + " z " + znackyKZobrazeni().length;
+        $("pzExportGis").hidden = !(vrstvaM && vrstvaM.prevod);
         $("pzSeznam").innerHTML = vse.map(z =>
             '<button type="button" class="pzradek' + (z.id === kartaId ? " je-aktivni" : "") + '" data-pz="' + esc(z.id) + '">' +
                 '<span class="pzradek__tecka" style="background:' + barvaZnacky(z) + '"></span>' +
@@ -2748,6 +2774,10 @@
                 }
             }
             if (otevreny === id) await kesUloz(id, "znacky", JSON.stringify(window.KB.znackyPlanu || []));
+            if (plan.mistnostiVrstva) {
+                const v = await window.KB.nactiPlanVrstvu(id, "mistnosti").catch(() => null);
+                if (v) await kesUloz(id, "mistnosti", JSON.stringify(v));
+            }
             const mapa = stazene();
             mapa[id] = { ms: Date.now(), dlazdic: dlazdic, nazev: plan.nazev || "" };
             ulozStazene(mapa);
@@ -2848,6 +2878,179 @@
             if (z.uid && z.uid !== ja) blika.set(z.id, Date.now() + 2500);
         });
     }
+
+    /* ------------------------------- místnosti z GDB (etapa D) --------
+       Plán nahraný nástrojem NASTROJE\web\plany_z_gdb nese vrstvu místností
+       (obrysy v souřadnicích plánu 0–1, kód, číslo, název) a převod do S-JTSK.
+       Klik do místnosti v režimu Posun ukáže její kartu (značky v ní, fotky
+       z Fotek BPH), nová značka si místnost vyplní sama a značky jdou
+       vyexportovat do GIS. Tlačítko ▦ zapne obrysy a obarvení podle fotek. */
+    let vrstvaM = null;                   // { mistnosti: [{k, c, n, u, b: [[x,y]…]}], prevod }
+    let mistnostOtevrena = null;
+    let zobrazMistnosti = false;
+    let fotkyBph = null;                  // přehled Fotek BPH (načte se při prvním zapnutí ▦ / kartě místnosti)
+    let fotkyBphNacita = null;
+
+    function bodVMistnosti(x, y, b) {
+        let uvnitr = false;
+        for (let i = 0, j = b.length - 1; i < b.length; j = i++) {
+            const [xi, yi] = b[i], [xj, yj] = b[j];
+            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) uvnitr = !uvnitr;
+        }
+        return uvnitr;
+    }
+    const mistnostNa = (x, y) => vrstvaM ? (vrstvaM.mistnosti || []).find(m => bodVMistnosti(x, y, m.b || [])) || null : null;
+    const nazevMistnosti = (m) => [m.c || m.k, m.n].filter(Boolean).join(" – ");
+
+    async function nactiVrstvuMistnosti(id) {
+        vrstvaM = null;
+        mistnostOtevrena = null;
+        const plan = (window.KB.planySoubory || []).find(f => f.id === id) || {};
+        if (!plan.mistnostiVrstva) return vykresliMistnosti();
+        let v = null;
+        if (jeStazeny(id)) { try { v = JSON.parse(await kesCti(id, "mistnosti") || "null"); } catch (err) { v = null; } }
+        if (!v) {
+            v = await window.KB.nactiPlanVrstvu(id, "mistnosti").catch(() => null);
+            if (v && jeStazeny(id)) kesUloz(id, "mistnosti", JSON.stringify(v));
+        }
+        if (otevreny !== id) return;
+        vrstvaM = v && Array.isArray(v.mistnosti) ? v : null;
+        $("btnMistnosti").hidden = !vrstvaM;
+        vykresliMistnosti();
+    }
+
+    async function nactiFotkyBph() {
+        if (fotkyBph || !window.KB.nactiFotkyBph) return fotkyBph;
+        if (!fotkyBphNacita) fotkyBphNacita = window.KB.nactiFotkyBph().catch(() => null);
+        fotkyBph = await fotkyBphNacita;
+        return fotkyBph;
+    }
+    /** Fotky místnosti z přehledu Fotky BPH: { celkem, tech: [[technologie, počet]] } nebo null. */
+    function fotkyMistnosti(m) {
+        const r = fotkyBph && Array.isArray(fotkyBph.mistnosti)
+            ? fotkyBph.mistnosti.find(x => x.k && (x.k === m.k || x.k === m.c)) : null;
+        if (!r) return null;
+        const tech = Object.entries(r.m || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+        return { celkem: tech.reduce((s, [, n]) => s + n, 0), tech: tech };
+    }
+
+    function vykresliMistnosti() {
+        const svg = $("mistnostiVrstva");
+        const w = $("obrazek").naturalWidth || 1, h = $("obrazek").naturalHeight || 1;
+        if (!vrstvaM || (!zobrazMistnosti && !mistnostOtevrena)) { svg.innerHTML = ""; return; }
+        svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+        svg.setAttribute("width", w);
+        svg.setAttribute("height", h);
+        svg.innerHTML = (vrstvaM.mistnosti || []).map(m => {
+            const vybrana = mistnostOtevrena && mistnostOtevrena.k === m.k && mistnostOtevrena.c === m.c;
+            if (!zobrazMistnosti && !vybrana) return "";
+            let barva = "none";
+            if (zobrazMistnosti && fotkyBph) {
+                const f = fotkyMistnosti(m);
+                barva = f && f.celkem ? "rgba(22,156,83,.18)" : "rgba(200,16,46,.2)";   // díra ve focení červeně
+            }
+            return '<polygon points="' + (m.b || []).map(([x, y]) => (x * w).toFixed(1) + "," + (y * h).toFixed(1)).join(" ") +
+                '" fill="' + (vybrana ? "rgba(64,160,255,.22)" : barva) + '" stroke="' +
+                (vybrana ? "#1d6fd6" : "rgba(29,85,109,.55)") + '" stroke-width="' + (vybrana ? 3 : 1.2) / zoom + '"></polygon>';
+        }).join("");
+    }
+
+    async function otevriMistnost(m) {
+        zavriKartu();
+        mistnostOtevrena = m;
+        vykresliMistnosti();
+        vykresliKartuMistnosti();
+        await nactiFotkyBph();
+        if (mistnostOtevrena === m) { vykresliKartuMistnosti(); vykresliMistnosti(); }
+    }
+    function vykresliKartuMistnosti() {
+        const m = mistnostOtevrena;
+        if (!m) return;
+        const v = znackyKZobrazeni().filter(z => bodVMistnosti(Number(z.x) || 0, Number(z.y) || 0, m.b || []));
+        const f = fotkyMistnosti(m);
+        const k = $("karta");
+        k.hidden = false;
+        k.innerHTML =
+            '<div class="plpanel__hlava"><b>' + esc(nazevMistnosti(m) || "Místnost") + "</b>" +
+                '<button type="button" class="plpanel__x" data-m-akce="zavrit" title="Zavřít (Esc)">×</button></div>' +
+            '<div class="tiny muted">' + esc([m.k, m.u].filter(Boolean).join(" · ")) + "</div>" +
+            '<div class="kpole">Značky v místnosti (' + v.length + ")</div>" +
+            '<div class="plpanel__seznam">' + (v.map(z =>
+                '<button type="button" class="pzradek" data-pz="' + esc(z.id) + '">' +
+                    '<span class="pzradek__tecka" style="background:' + barvaZnacky(z) + '"></span>' +
+                    '<span class="pzradek__hlava">' + esc(z.text || (z.tvar === "obdelnik" ? "Obdélník" : "Značka")) + "</span>" +
+                    '<span class="pzradek__meta">' + esc([palPopis(z.stav), z.tech, z.pozn].filter(Boolean).join(" · ").slice(0, 120)) + "</span>" +
+                "</button>").join("") || '<span class="tiny muted">Zatím žádná.</span>') + "</div>" +
+            '<div class="kpole">Fotky v BPH</div>' +
+            '<div class="tiny">' + (fotkyBph === null && fotkyBphNacita ? "načítám…"
+                : f ? esc(f.celkem + " fotek – " + f.tech.map(([t, n]) => t + " " + n).join(", "))
+                : "žádné fotky (nebo místnost v přehledu Fotky BPH není)") + "</div>" +
+            '<div class="kakce"><button type="button" class="btn btn--sm btn--ghost" data-m-akce="znacka">Značka doprostřed</button>' +
+                '<a class="btn btn--sm btn--ghost" href="fotky-bph.html" target="_blank" rel="noopener">Fotky BPH</a></div>';
+    }
+    $("karta").addEventListener("click", async (e) => {
+        if (!mistnostOtevrena || kartaId) return;
+        const r = e.target.closest("[data-pz]");
+        if (r) {
+            const z = znackaPodleId(r.dataset.pz);
+            mistnostOtevrena = null;
+            vykresliMistnosti();
+            if (z) { otevriKartu(z.id); najedNaZnacku(z); }
+            return;
+        }
+        const a = (e.target.closest("[data-m-akce]") || {}).dataset;
+        if (!a) return;
+        if (a.mAkce === "zavrit") return zavriMistnost();
+        if (a.mAkce === "znacka") {
+            // těžiště obrysu – u místnosti tvaru L může padnout ven, pak první roh posunutý dovnitř
+            const b = mistnostOtevrena.b || [];
+            let x = b.reduce((s, p) => s + p[0], 0) / (b.length || 1), y = b.reduce((s, p) => s + p[1], 0) / (b.length || 1);
+            if (!bodVMistnosti(x, y, b) && b.length) { x = (b[0][0] * 9 + x) / 10; y = (b[0][1] * 9 + y) / 10; }
+            const r2 = $("obrazek").getBoundingClientRect();
+            await zalozZnacku(r2.left + x * r2.width, r2.top + y * r2.height);
+        }
+    });
+    function zavriMistnost() {
+        if (!mistnostOtevrena) return false;
+        mistnostOtevrena = null;
+        if (!kartaId) { $("karta").hidden = true; $("karta").innerHTML = ""; }
+        vykresliMistnosti();
+        return true;
+    }
+    $("btnMistnosti").addEventListener("click", async () => {
+        zobrazMistnosti = !zobrazMistnosti;
+        $("btnMistnosti").classList.toggle("je-aktivni", zobrazMistnosti);
+        vykresliMistnosti();
+        if (zobrazMistnosti && !fotkyBph) {
+            await nactiFotkyBph();
+            if (!fotkyBph) window.KBUI.toast("Přehled Fotky BPH není – místnosti jsou bez obarvení.", "warn");
+            vykresliMistnosti();
+        }
+    });
+
+    /** Export značek do GIS – GeoJSON v S-JTSK (EPSG 5514), v ArcGIS „JSON To Features“. */
+    $("pzExportGis").addEventListener("click", () => {
+        const p = vrstvaM && vrstvaM.prevod;
+        if (!p) return;
+        const plan = planOtevreny();
+        const prvky = pzFiltrovane().map(z => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [
+                Math.round((p.x0 + (Number(z.x) || 0) * p.sx) * 1000) / 1000,
+                Math.round((p.y0 - (Number(z.y) || 0) * p.sy) * 1000) / 1000] },
+            properties: { plan: plan.nazev || "", budova: plan.budova || "", patro: plan.patro || "",
+                text: z.text || "", barva: palPopis(z.stav), tech: z.tech || "", mistnost: z.mistnost || "",
+                pozn: z.pozn || "", fotek: Number(z.fotek) || 0, kdo: z.kdo || "",
+                kdy: z.ms ? new Date(z.ms).toISOString() : "", id: z.id }
+        }));
+        const gj = { type: "FeatureCollection", crs: { type: "name", properties: { name: "EPSG:5514" } }, features: prvky };
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(gj, null, 1)], { type: "application/geo+json" }));
+        a.download = "znacky_" + String(plan.nazev || "plan").replace(/[^\wÀ-ſ-]+/g, "_") + ".geojson";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    });
 
     /* -------------------------------------------------------------- start */
 
@@ -3174,6 +3377,7 @@
                 if (vPoli) return void e.target.blur();
                 if (!$("oknoFoto").hidden) return void ($("oknoFoto").hidden = true);
                 if (kartaId) return void zavriKartu();
+                if (zavriMistnost()) return;
                 if (!$("oknoHladiny").hidden) return void ($("oknoHladiny").hidden = true);
                 if (!$("oknoPaleta").hidden) return void ($("oknoPaleta").hidden = true);
                 if (aktivniZnacka) { aktivniZnacka = ""; return void vykresliZnacky(); }
