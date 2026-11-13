@@ -6236,22 +6236,76 @@ KB.znackyPlanu = [];            // značky právě otevřeného plánu
 
 let planyOdbery = [];
 
+/* Plán patří k zakázce (Michal 13. 11. 2026, Iris, varianta B): hlavička nese
+   `projektId, projektNazev, budova, patro, lide, uid`. `lide` = autor + lidé
+   zakázky (stejně jako Info k zakázkám, KB.lideInfo) – člen čte jen plány, kde
+   je v `lide`, a plány bez zakázky (`projektId == ""`); manažer všechno.
+   Pravidla nejsou filtr, proto má člen dva dotazy a slévají se podle id. */
 KB.watchPlany = async () => {
     if (planyOdbery.length) return;
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser || planyOdbery.length) return;
+    if (pockejNaRoli(KB.watchPlany)) return;
     planyOdbery.push(onSnapshot(planySlozkyCol(), (snap) => {
         KB.planySlozky = [];
         snap.forEach(d => KB.planySlozky.push({ id: d.id, ...d.data() }));
         KB.planySlozky.sort((a, b) => (a.nazev || "").localeCompare(b.nazev || "", "cs"));
         emit("plany", null);
     }, (err) => console.error("Chyba čtení složek plánů:", err)));
-    planyOdbery.push(onSnapshot(planyCol(), (snap) => {
-        KB.planySoubory = [];
-        snap.forEach(d => KB.planySoubory.push({ id: d.id, ...d.data() }));
+    const dotazy = jsemManazer() ? [planyCol()] : [
+        query(planyCol(), where("lide", "array-contains", auth.currentUser.uid)),
+        query(planyCol(), where("projektId", "==", ""))
+    ];
+    const casti = dotazy.map(() => []);
+    dotazy.forEach((dotaz, i) => planyOdbery.push(onSnapshot(dotaz, (snap) => {
+        casti[i] = [];
+        snap.forEach(d => casti[i].push({ id: d.id, ...d.data() }));
+        const podleId = new Map();
+        casti.forEach(c => c.forEach(f => podleId.set(f.id, f)));
+        KB.planySoubory = Array.from(podleId.values());
         KB.planySoubory.sort((a, b) => (b.ms || 0) - (a.ms || 0));
         emit("plany", null);
-    }, (err) => console.error("Chyba čtení plánů:", err)));
+    }, (err) => console.error("Chyba čtení plánů:", err))));
+};
+
+/** Zakázka, budova a patro plánu (+ kdo ho vidí). Mění manažer – hlídají pravidla. */
+KB.ulozPlanZarazeni = async (planId, z) => {
+    if (authReady) await authReady;
+    requireDb();
+    const plan = (KB.planySoubory || []).find(f => f.id === planId) || {};
+    const pid = String((z && z.projektId) || "");
+    const zmena = {
+        projektId: pid,
+        projektNazev: infoNazevProjektu(pid),
+        budova: String((z && z.budova) || "").trim().slice(0, 40),
+        patro: String((z && z.patro) || "").trim().slice(0, 40),
+        lide: pid ? KB.lideInfo(pid, plan.uid || "") : []
+    };
+    if (z && z.nazev) zmena.nazev = String(z.nazev).trim().slice(0, 120);
+    await updateDoc(planDoc(planId), zmena);
+};
+
+/** Srovná `lide` plánů s lidmi jejich zakázek (po změně party v projektu).
+    Volá manažerská stránka Plánů; zapisuje jen to, co se opravdu liší. */
+KB.srovnejLidiPlanu = async () => {
+    if (!jsemManazer()) return 0;
+    let n = 0;
+    for (const f of (KB.planySoubory || [])) {
+        /* plán z doby před zakázkami nemá pole vůbec – člen se ptá na
+           `projektId == ""`, a to pole bez hodnoty nenajde */
+        if (!("projektId" in f)) {
+            await updateDoc(planDoc(f.id), { projektId: "", lide: [] });
+            n++;
+            continue;
+        }
+        if (!f.projektId || !(KB.projektyDocs || []).some(p => p.id === f.projektId)) continue;
+        const maji = KB.lideInfo(f.projektId, f.uid || "");
+        const ted = Array.isArray(f.lide) ? f.lide : [];
+        if (maji.length === ted.length && maji.every(u => ted.indexOf(u) !== -1)) continue;
+        await updateDoc(planDoc(f.id), { lide: maji });
+        n++;
+    }
+    return n;
 };
 
 KB.ulozSlozkuPlanu = async (nazev, rodic) => {
@@ -6303,9 +6357,18 @@ KB.ulozPlanSoubor = async (meta, dataUrl, hlaseni) => {
         await setDoc(planDlazdice(id, d.klic), { data: d.data, w: d.w, h: d.h });
         if (hlaseni) hlaseni("Ukládám detail " + (i + 1) + "/" + dlazdice.length + "…");
     }
+    const pid = String(meta.projektId || "");
+    const uid = KB.currentUid();
     await setDoc(planDoc(id), {
         nazev: String(meta.nazev || "Plán").slice(0, 120),
-        slozka: meta.slozka || "",
+        slozka: pid ? "" : (meta.slozka || ""),
+        // zakázka, budova, patro – podle nich se plán řadí a kdo ho vidí
+        projektId: pid,
+        projektNazev: infoNazevProjektu(pid),
+        budova: String(meta.budova || "").trim().slice(0, 40),
+        patro: String(meta.patro || "").trim().slice(0, 40),
+        lide: pid ? KB.lideInfo(pid, uid) : [],
+        uid: uid,
         sirka: Number(meta.sirka) || 0,
         vyska: Number(meta.vyska) || 0,
         kousku: kousku,

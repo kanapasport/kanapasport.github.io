@@ -773,25 +773,41 @@ service cloud.firestore {
     function planCesta(pid) {
       return /databases/$(database)/documents/artifacts/firemni-kb-app/private/plany/soubory/$(pid);
     }
+    /* Od 13. 11. 2026 (Michal, Iris, varianta B; audit 19. 10. zjištění 12)
+       patří plán k zakázce: hlavička nese `projektId` a `lide` (autor + lidé
+       zakázky, jako Info k zakázkám). Člen čte plán, když je v `lide`, nebo
+       když plán zakázku nemá (`projektId == ""` – obecné a starší plány);
+       manažer všechno. Totéž platí pro obrázek, dlaždice a značky plánu. */
+    function planVidi(d) {
+      return spravce()
+        || (clen() && (d.get('projektId', '') == '' || request.auth.uid in d.get('lide', [])));
+    }
+    function planVidiId(pid) {
+      return planVidi(get(planCesta(pid)).data);
+    }
     match /artifacts/firemni-kb-app/private/plany/{dokument=**} {
-      allow read:           if clen();
       // `write` zahrnuje i mazání – jedno kliknutí by smazalo odznačkovanou
       // práci celé party, proto mazání jen manažer (Michal 1. 9. 2026)
       allow delete:         if spravce();
     }
     match /artifacts/firemni-kb-app/private/plany/slozky/{id} {
+      allow read:   if clen();
       allow create: if clen();
     }
     match /artifacts/firemni-kb-app/private/plany/soubory/{planId} {
-      allow create: if clen();
+      allow read:   if planVidi(resource.data);
+      // plán k zakázce zakládá člen jen tak, aby ho sám viděl
+      allow create: if clen() && planVidi(request.resource.data);
       allow update: if clen() && request.resource.data.diff(resource.data).affectedKeys()
                                    .hasOnly(['paleta', 'hladiny']);
     }
     // obrázek plánu – jen při nahrávání, dokud plán nemá hlavičku
     match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/kousky/{n} {
+      allow read:   if planVidiId(planId);
       allow create: if clen() && !exists(planCesta(planId));
     }
     match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/dlazdice/{klic} {
+      allow read:   if planVidiId(planId);
       allow create: if clen() && !exists(planCesta(planId));
     }
 
@@ -805,8 +821,9 @@ service cloud.firestore {
        tak přivlastnil a smazal. Stará značka bez uid dostane autora toho,
        kdo ji upraví (web to tak dělá). */
     match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/znacky/{zid} {
-      allow create: if clen() && request.resource.data.get('uid', '') == request.auth.uid;
-      allow update: if clen() && (request.resource.data.get('uid', '') == resource.data.get('uid', '')
+      allow read:   if planVidiId(planId);
+      allow create: if clen() && planVidiId(planId) && request.resource.data.get('uid', '') == request.auth.uid;
+      allow update: if clen() && planVidiId(planId) && (request.resource.data.get('uid', '') == resource.data.get('uid', '')
                                   || (resource.data.get('uid', '') == ''
                                       && request.resource.data.get('uid', '') == request.auth.uid));
       allow delete: if clen() && resource.data.get('uid', '') == request.auth.uid;

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=350">
+    <link rel="stylesheet" href="assets/css/app.css?v=351">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -355,6 +355,21 @@
         body.pl-pretahuje .plpretah { border-color: var(--accent); background: var(--accent-tint);
             color: var(--accent); }
 
+        /* zakázky v seznamu (etapa B) */
+        .plfiltr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .plfiltr .hledac, .plfiltr select { min-width: 260px; max-width: 420px; flex: 1 1 260px; }
+        .plzak { display: flex; flex-direction: column; gap: 8px; }
+        .plzak__nadpis { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+            font-size: var(--fs-3); font-weight: 900; padding-bottom: 4px;
+            border-bottom: 1px solid var(--line-soft); margin-top: 8px; }
+        .plzak__pocet { font-size: var(--fs-1); color: var(--muted); font-weight: 700; }
+        .plbudova { font-size: var(--fs-1); font-weight: 900; letter-spacing: .08em;
+            text-transform: uppercase; color: var(--accent); margin-top: 2px; }
+        .zarpole { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-1);
+            font-weight: 800; color: var(--muted); margin-top: 10px; }
+        .zarpole .field { font-weight: 400; color: var(--text); }
+        .zarradek { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
         /* telefon: režimy dole jako lišta, terče pro prst */
         @media (max-width: 767px) {
             #rezimy { position: fixed; left: 8px; right: 8px; z-index: 160;
@@ -391,6 +406,9 @@
         </div>
     </div>
 
+    <div class="plfiltr">
+        <select id="filtrZak" class="field" title="Ukázat plány jedné zakázky"></select>
+    </div>
     <div class="drobky" id="drobky"></div>
     <div class="plpretah" id="pretah">Přetáhni sem PDF nebo obrázek plánu (nebo tlačítko Nahrát plán).</div>
     <div id="seznam" class="col" style="gap:10px"></div>
@@ -565,10 +583,34 @@
 
 <div class="plmenu" id="plMenu" role="menu" hidden></div>
 
-<script src="assets/js/taxonomy.js?v=350"></script>
-<script src="assets/js/ui.js?v=350"></script>
-<script src="assets/js/vykazy.js?v=350"></script>
-<script type="module" src="assets/js/store.js?v=350"></script>
+<!-- zakázka, budova, patro – při nahrání i úpravě (etapa B, 13. 11. 2026) -->
+<div class="palokno" id="oknoZar" hidden>
+    <div class="palokno__telo" role="dialog" aria-modal="true" aria-labelledby="zarNadpis">
+        <b id="zarNadpis" style="font-size:var(--fs-3)">Nahrát plán</b>
+        <p class="tiny muted" id="zarSoubor" style="margin:4px 0 0;overflow-wrap:anywhere"></p>
+        <label class="zarpole">Zakázka
+            <select id="zarProjekt" class="field"></select></label>
+        <div class="zarradek">
+            <label class="zarpole">Budova
+                <input id="zarBudova" class="field" list="zarBudovy" maxlength="40" placeholder="např. G61"></label>
+            <label class="zarpole">Patro
+                <input id="zarPatro" class="field" list="zarPatra" maxlength="40" placeholder="např. 2NP"></label>
+        </div>
+        <datalist id="zarBudovy"></datalist><datalist id="zarPatra"></datalist>
+        <label class="zarpole">Název plánu
+            <input id="zarNazev" class="field" maxlength="120" placeholder="složí se z budovy a patra"></label>
+        <p class="tiny muted" id="zarKdo" style="margin:10px 0 0;line-height:1.5"></p>
+        <div class="row" style="gap:8px;justify-content:flex-end;margin-top:14px">
+            <button type="button" class="btn btn--sm btn--ghost" id="zarZrusit">Zrušit</button>
+            <button type="button" class="btn btn--sm btn--primary" id="zarOk">Nahrát</button>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=351"></script>
+<script src="assets/js/ui.js?v=351"></script>
+<script src="assets/js/vykazy.js?v=351"></script>
+<script type="module" src="assets/js/store.js?v=351"></script>
 
 <script>
 (function () {
@@ -630,27 +672,65 @@
         return ven;
     }
 
+    /* ------------------------------------------------ zakázky (etapa B) --
+       Plán patří k zakázce, budově a patru (Michal 13. 11. 2026, Iris). Seznam
+       se proto skládá sám: zakázka → budova → plány pater. Ruční složky zůstaly
+       jen pro plány bez zakázky (z doby před tím). */
+    const projekty = () => (window.KB.projektyDocs || []);
+    const popisProjektu = (p) => (p.cislo ? p.cislo + " – " : "") + (p.nazev || "");
+    const projektPlanu = (f) => projekty().find(p => p.id === f.projektId) || null;
+    const nazevZakazky = (f) => {
+        const p = projektPlanu(f);
+        return p ? popisProjektu(p) : (f.projektNazev || "Zakázka");
+    };
+    const osy = (p) => (p && window.V && window.V.osyProjektu) ? window.V.osyProjektu(p)
+        : { budovy: [], patra: [], patraBudov: {} };
+    /** Řazení pater: podle os zakázky (jak jdou v budgetu), jinak přirozeně. */
+    function poradiPlanu(a, b) {
+        const ba = a.budova || "", bb = b.budova || "";
+        if (ba !== bb) return ba.localeCompare(bb, "cs", { numeric: true });
+        const o = osy(projektPlanu(a));
+        const pat = (o.patraBudov && o.patraBudov[ba]) || o.patra || [];
+        const ia = pat.indexOf(a.patro || ""), ib = pat.indexOf(b.patro || "");
+        if (ia !== ib) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+        return (a.nazev || "").localeCompare(b.nazev || "", "cs", { numeric: true });
+    }
+    const pocetPlanu = (n) => n + (n === 1 ? " plán" : n >= 2 && n <= 4 ? " plány" : " plánů");
+
+    let filtrZak = "";          // id zakázky, "-" = bez zakázky, "" = všechno
+
+    function naplnFiltr() {
+        const sel = $("filtrZak");
+        const sPlany = new Map();
+        (window.KB.planySoubory || []).forEach(f => {
+            if (f.projektId) sPlany.set(f.projektId, nazevZakazky(f));
+        });
+        const volby = Array.from(sPlany.entries())
+            .sort((a, b) => a[1].localeCompare(b[1], "cs", { numeric: true }));
+        // zakázka z odkazu (?zak=), která zatím plán nemá – ať jde vidět „zatím nic"
+        if (filtrZak && filtrZak !== "-" && !sPlany.has(filtrZak)) {
+            const p = projekty().find(x => x.id === filtrZak);
+            if (p) volby.unshift([p.id, popisProjektu(p)]);
+        }
+        sel.innerHTML = '<option value="">Všechny zakázky</option>' +
+            volby.map(([id, n]) => '<option value="' + esc(id) + '">' + esc(n) + "</option>").join("") +
+            '<option value="-">Bez zakázky</option>';
+        sel.value = filtrZak;
+        if (sel.value !== filtrZak) sel.value = "";
+        window.KBUI.naseptavac(sel, { popis: "Všechny zakázky – piš název nebo číslo…", nazev: "Zakázka" });
+    }
+
     function vykresliSeznam() {
-        $("drobky").innerHTML =
-            '<button type="button" data-jdi="">Plány</button>' +
-            cesta(slozka).map(s =>
-                '<span>›</span><button type="button" data-jdi="' + esc(s.id) + '">' +
-                esc(s.nazev) + "</button>").join("");
+        naplnFiltr();
+        $("drobky").innerHTML = slozka
+            ? '<button type="button" data-jdi="">Plány</button>' +
+                cesta(slozka).map(s =>
+                    '<span>›</span><button type="button" data-jdi="' + esc(s.id) + '">' +
+                    esc(s.nazev) + "</button>").join("")
+            : "";
 
-        const slozky = (window.KB.planySlozky || []).filter(s => (s.rodic || "") === slozka);
         const smiMazat = window.KBUI.can("vykaz.view");
-
-        /* Dole se ukazují NAPOSLEDY OTEVŘENÉ plány (nejvýš dvě řady), ať se
-           všechno vejde na obrazovku – v kořeni napříč vším, ve složce jen
-           její. Kdy kdo co otevřel si pamatuje prohlížeč. */
-        const otevrene = (() => {
-            try { return JSON.parse(localStorage.getItem("kb-plany-otevrene")) || {}; }
-            catch (err) { return {}; }
-        })();
-        const soubory = (window.KB.planySoubory || [])
-            .filter(f => slozka ? (f.slozka || "") === slozka : true)
-            .sort((a, b) => (otevrene[b.id] || b.ms || 0) - (otevrene[a.id] || a.ms || 0))
-            .slice(0, 10);
+        const vse = window.KB.planySoubory || [];
 
         /* Mazání a přejmenování schované v ⋯ (rešerše 19. 10., design #37) –
            červené „smazat" přímo na kartě se dalo trefit omylem. */
@@ -661,26 +741,143 @@
                         esc(s.id) + '">⋯</button>' : "") + "</div>" +
                 '<div class="plpolozka__nazev">' + esc(s.nazev) + "</div>" +
             "</div>";
-        const planHtml = (f) =>
+        const planHtml = (f, sZakazkou) =>
             '<div class="plpolozka" data-plan="' + esc(f.id) + '">' +
                 '<div class="plpolozka__nahled">' + (window.KBUI.bezpecnyObrazek(f.miniatura)
                     ? '<img alt="" loading="lazy" src="' + window.KBUI.bezpecnyObrazek(f.miniatura) + '">'
                     : "▦") + "</div>" +
-                '<div class="plpolozka__typ"><span>Plán</span>' +
+                '<div class="plpolozka__typ"><span>' +
+                    esc([f.budova, f.patro].filter(Boolean).join(" · ") || "Plán") + "</span>" +
                     '<button type="button" class="plvic" title="Další akce" data-menu-plan="' +
                         esc(f.id) + '">⋯</button></div>' +
                 '<div class="plpolozka__nazev">' + esc(f.nazev) + "</div>" +
-                '<div class="plpolozka__meta">' + esc(f.kdo || "") + " · " +
+                '<div class="plpolozka__meta">' +
+                    (sZakazkou && f.projektId ? esc(nazevZakazky(f)) + " · " : "") +
+                    esc(f.kdo || "") + " · " +
                     esc(new Date(f.ms || 0).toLocaleDateString("cs-CZ")) + "</div>" +
             "</div>";
+        const mrizka = (karty, prazdne) => '<div class="plgrid">' + (karty ||
+            '<span class="tiny muted">' + esc(prazdne || "") + "</span>") + "</div>";
 
-        $("seznam").innerHTML =
-            '<div class="plsekce">Složky</div>' +
-            '<div class="plgrid">' + (slozky.map(slozkaHtml).join("") ||
-                '<span class="tiny muted">Žádné složky – založ první tlačítkem nahoře.</span>') + "</div>" +
-            '<div class="plsekce">' + (slozka ? "Plány ve složce" : "Naposledy otevřené plány") + "</div>" +
-            '<div class="plgrid">' + (soubory.map(planHtml).join("") ||
-                '<span class="tiny muted">Zatím žádné plány.</span>') + "</div>";
+        /* Ruční složka (plány bez zakázky z doby před zakázkami). */
+        if (slozka) {
+            const slozky = (window.KB.planySlozky || []).filter(s => (s.rodic || "") === slozka);
+            const soubory = vse.filter(f => (f.slozka || "") === slozka);
+            $("seznam").innerHTML =
+                (slozky.length ? '<div class="plsekce">Složky</div>' + mrizka(slozky.map(slozkaHtml).join("")) : "") +
+                '<div class="plsekce">Plány ve složce</div>' +
+                mrizka(soubory.map(f => planHtml(f)).join(""), "Ve složce nejsou žádné plány.");
+            return;
+        }
+
+        let html = "";
+        /* Naposledy otevřené – rychlý návrat na patro, na kterém člověk dělá. */
+        if (!filtrZak) {
+            const otevrene = (() => {
+                try { return JSON.parse(localStorage.getItem("kb-plany-otevrene")) || {}; }
+                catch (err) { return {}; }
+            })();
+            const posledni = vse.filter(f => otevrene[f.id])
+                .sort((a, b) => otevrene[b.id] - otevrene[a.id]).slice(0, 4);
+            if (posledni.length) {
+                html += '<div class="plsekce">Naposledy otevřené</div>' +
+                    mrizka(posledni.map(f => planHtml(f, true)).join(""));
+            }
+        }
+
+        const zakazky = new Map();
+        vse.filter(f => f.projektId).forEach(f => {
+            if (!zakazky.has(f.projektId)) zakazky.set(f.projektId, []);
+            zakazky.get(f.projektId).push(f);
+        });
+        if (filtrZak && filtrZak !== "-" && !zakazky.has(filtrZak)) zakazky.set(filtrZak, []);
+        const jmeno = (id, plany) => nazevZakazky({ projektId: id, projektNazev: (plany[0] || {}).projektNazev });
+        Array.from(zakazky.entries())
+            .filter(([id]) => !filtrZak || filtrZak === id)
+            .sort((a, b) => jmeno(a[0], a[1]).localeCompare(jmeno(b[0], b[1]), "cs", { numeric: true }))
+            .forEach(([id, plany]) => {
+                plany.sort(poradiPlanu);
+                const budovy = Array.from(new Set(plany.map(f => f.budova || "")));
+                html += '<section class="plzak" data-zakazka="' + esc(id) + '">' +
+                    '<div class="plzak__nadpis">' + esc(jmeno(id, plany)) +
+                        '<span class="plzak__pocet">' + pocetPlanu(plany.length) + "</span></div>" +
+                    (plany.length ? budovy.map(b =>
+                        (budovy.length > 1 || b ? '<div class="plbudova">' + esc(b || "Bez budovy") + "</div>" : "") +
+                        mrizka(plany.filter(f => (f.budova || "") === b).map(f => planHtml(f)).join(""))).join("")
+                        : mrizka("", "Zakázka zatím nemá žádný plán – nahraj první tlačítkem Nahrát plán.")) +
+                    "</section>";
+            });
+
+        if (!filtrZak || filtrZak === "-") {
+            const slozky = (window.KB.planySlozky || []).filter(s => !(s.rodic || ""));
+            const bez = vse.filter(f => !f.projektId && !(f.slozka || ""));
+            if (slozky.length || bez.length || filtrZak === "-") {
+                html += '<section class="plzak" data-zakazka="-"><div class="plzak__nadpis">Bez zakázky</div>' +
+                    (slozky.length ? mrizka(slozky.map(slozkaHtml).join("")) : "") +
+                    (bez.length || !slozky.length ? mrizka(bez.map(f => planHtml(f)).join(""), "Žádné plány bez zakázky.") : "") +
+                    "</section>";
+            }
+        }
+        $("seznam").innerHTML = html || '<p class="small muted">Zatím tu nejsou žádné plány. ' +
+            "Nahraj první tlačítkem Nahrát plán – vybereš k němu zakázku, budovu a patro." +
+            (window.KBUI.isAdmin() ? "" : " Plány tvých zakázek se ukážou tady.") + "</p>";
+    }
+
+    /* ------------------------------- okno zakázka / budova / patro ----
+       Při nahrání (a manažerovi v ⋯ u plánu). Budovy a patra nabízí z os
+       zakázky (budget), název se složí z nich, dokud ho člověk nepřepíše. */
+    let zarHotovo = null;           // resolve otevřeného okna
+    let zarNazevRucne = false;
+
+    function zarPatraNabidka() {
+        const p = projekty().find(x => x.id === $("zarProjekt").value);
+        const o = osy(p);
+        const b = $("zarBudova").value.trim();
+        const patra = (b && o.patraBudov && o.patraBudov[b] && o.patraBudov[b].length) ? o.patraBudov[b] : o.patra;
+        $("zarBudovy").innerHTML = (o.budovy || []).map(x => '<option value="' + esc(x) + '">').join("");
+        $("zarPatra").innerHTML = (patra || []).map(x => '<option value="' + esc(x) + '">').join("");
+        $("zarKdo").textContent = p
+            ? "Plán uvidí lidé zakázky (" + ((p.lide || []).length) + ") a manažeři."
+            : "Bez zakázky plán uvidí všichni z firmy.";
+    }
+    function zarSlozNazev() {
+        if (zarNazevRucne) return;
+        const n = [$("zarBudova").value.trim(), $("zarPatro").value.trim()].filter(Boolean).join(" – ");
+        if (n) $("zarNazev").value = n;
+    }
+
+    /** Otevře okno; vrací {projektId, budova, patro, nazev} nebo null (zrušeno). */
+    function oknoZarazeni(volby) {
+        const v = volby || {};
+        const plan = v.plan || {};
+        $("zarNadpis").textContent = v.plan ? "Zakázka, budova, patro" : "Nahrát plán";
+        $("zarOk").textContent = v.plan ? "Uložit" : "Nahrát";
+        $("zarSoubor").textContent = v.soubor ? v.soubor.name : (plan.nazev || "");
+        const pid = v.plan ? (plan.projektId || "") : (filtrZak && filtrZak !== "-" ? filtrZak : "");
+        const sel = $("zarProjekt");
+        const nabidka = projekty().filter(p => p.uzavreno !== true || p.id === pid);
+        sel.innerHTML = '<option value="">— bez zakázky —</option>' + nabidka.map(p =>
+            '<option value="' + esc(p.id) + '">' + esc(popisProjektu(p)) + "</option>").join("");
+        if (pid && !nabidka.some(p => p.id === pid)) {
+            sel.insertAdjacentHTML("beforeend", '<option value="' + esc(pid) + '">' +
+                esc(plan.projektNazev || pid) + "</option>");
+        }
+        sel.value = pid;
+        $("zarBudova").value = plan.budova || "";
+        $("zarPatro").value = plan.patro || "";
+        $("zarNazev").value = v.plan ? (plan.nazev || "") : (v.soubor ? v.soubor.name.replace(/\.[a-z0-9]+$/i, "") : "");
+        zarNazevRucne = !!v.plan;
+        zarPatraNabidka();
+        $("oknoZar").hidden = false;
+        window.KBUI.naseptavac(sel, { popis: "Piš název nebo číslo zakázky…", nazev: "Zakázka" });
+        setTimeout(() => $("zarBudova").focus(), 30);
+        return new Promise(ok => { zarHotovo = ok; });
+    }
+    function zavriZarazeni(vysledek) {
+        $("oknoZar").hidden = true;
+        const ok = zarHotovo;
+        zarHotovo = null;
+        if (ok) ok(vysledek);
     }
 
     /* --------------------------------------------------- nahrání plánu -- */
@@ -808,17 +1005,18 @@
                 " Převeď plán (má ho Michal) na JPEG a nahraj ten – trvá to vteřiny.",
                 "warn");
         }
-        const nazev = await window.KBUI.zeptej({ nadpis: "Název plánu",
-            placeholder: "např. G61 – 2NP – SLB", vychozi: soubor.name.replace(/\.[a-z]+$/i, ""),
-            ano: "Nahrát" });
-        if (nazev === null) return;
+        /* zakázka, budova a patro – plán podle nich najdou ti, kdo na zakázce dělají */
+        const zar = await oknoZarazeni({ soubor: soubor });
+        if (!zar) return;
+        const nazev = zar.nazev;
         window.KBUI.toast("Zpracovávám plán… (u velkých výkresů to chvíli trvá)");
         try {
             const vysledek = soubor.type === "application/pdf"
                 ? await zpracujPdf(soubor)
                 : await zpracujObrazek(soubor);
             await window.KB.ulozPlanSoubor({
-                nazev: nazev || soubor.name, slozka: slozka,
+                nazev: nazev || soubor.name, slozka: zar.projektId ? "" : slozka,
+                projektId: zar.projektId, budova: zar.budova, patro: zar.patro,
                 sirka: vysledek.sirka, vyska: vysledek.vyska,
                 dlazdice: vysledek.dlazdice,
                 miniatura: vysledek.miniatura,
@@ -2124,6 +2322,51 @@
             await window.KB.prejmenujPlan(druh, id, nazev)
                 .catch(() => window.KBUI.toast("Přejmenování selhalo.", "error"));
         }
+        async function upravZarazeni(id) {
+            const plan = (window.KB.planySoubory || []).find(f => f.id === id);
+            if (!plan) return;
+            const zar = await oknoZarazeni({ plan: plan });
+            if (!zar) return;
+            await window.KB.ulozPlanZarazeni(id, zar)
+                .then(() => window.KBUI.toast("Uloženo."))
+                .catch(() => window.KBUI.toast("Uložení selhalo.", "error"));
+        }
+
+        /* ------------------------------------- okno zakázka/budova/patro -- */
+        $("zarProjekt").addEventListener("change", zarPatraNabidka);
+        $("zarBudova").addEventListener("input", () => { zarPatraNabidka(); zarSlozNazev(); });
+        $("zarPatro").addEventListener("input", zarSlozNazev);
+        $("zarNazev").addEventListener("input", () => { zarNazevRucne = !!$("zarNazev").value.trim(); });
+        $("zarZrusit").addEventListener("click", () => zavriZarazeni(null));
+        $("oknoZar").addEventListener("click", (e) => { if (e.target === $("oknoZar")) zavriZarazeni(null); });
+        $("oknoZar").addEventListener("keydown", (e) => {
+            if (e.key === "Escape") { e.stopPropagation(); zavriZarazeni(null); }
+            if (e.key === "Enter" && e.target.tagName === "INPUT" && !e.target.closest(".hledac")) $("zarOk").click();
+        });
+        $("zarOk").addEventListener("click", () => {
+            const v = {
+                projektId: $("zarProjekt").value,
+                budova: $("zarBudova").value.trim(),
+                patro: $("zarPatro").value.trim(),
+                nazev: $("zarNazev").value.trim()
+            };
+            if (!v.nazev) v.nazev = [v.budova, v.patro].filter(Boolean).join(" – ");
+            if (!v.nazev) return window.KBUI.toast("Doplň patro nebo název plánu.", "warn");
+            zavriZarazeni(v);
+        });
+
+        /* filtr zakázky – pamatuje se v adrese, ať jde odkaz poslat dál */
+        $("filtrZak").addEventListener("change", () => {
+            filtrZak = $("filtrZak").value;
+            slozka = "";
+            try {
+                const u = new URL(location.href);
+                if (filtrZak && filtrZak !== "-") u.searchParams.set("zak", filtrZak); else u.searchParams.delete("zak");
+                history.replaceState(null, "", u.pathname + u.search);
+            } catch (err) { /* nic */ }
+            vykresliSeznam();
+        });
+
         $("seznam").addEventListener("click", async (e) => {
             const vic = e.target.closest("[data-menu-plan], [data-menu-slozka]");
             if (vic) {
@@ -2133,6 +2376,7 @@
                     const id = vic.dataset.menuPlan;
                     ukazMenu(r.left, r.bottom + 4, [
                         { text: "Otevřít", akce: () => otevri(id) },
+                        manazer && { text: "Zakázka, budova, patro…", akce: () => upravZarazeni(id) },
                         manazer && { text: "Přejmenovat…", akce: () => prejmenuj("plan", id) },
                         manazer && "-",
                         manazer && { text: "Smazat plán…", pozor: true, akce: () => smazPlanS(id) }
@@ -2584,8 +2828,44 @@
             } catch (err) { window.KBUI.toast("Uložení barev selhalo.", "error"); }
         });
 
+        /* Odkazy z jiných stránek: ?zak=ID ukáže plány zakázky, ?plan=ID plán
+           rovnou otevře (jakmile dorazí). */
+        const adresa = new URLSearchParams(location.search);
+        filtrZak = adresa.get("zak") || "";
+        let otevritPlan = adresa.get("plan") || "";
+        /* z úkolu: zakázka + budova + patro → plán toho patra, když je právě jeden */
+        let hledatPatro = (filtrZak && adresa.get("patro"))
+            ? { budova: adresa.get("budova") || "", patro: adresa.get("patro") } : null;
+
+        /* Lidé zakázky se mění ve Správě – manažer při návštěvě Plánů srovná,
+           kdo plány vidí (zapisuje jen rozdíly). */
+        let srovnavam = null;
+        const srovnejLidi = () => {
+            if (!window.KBUI.isAdmin() || !window.KB.srovnejLidiPlanu) return;
+            clearTimeout(srovnavam);
+            srovnavam = setTimeout(() => window.KB.srovnejLidiPlanu().catch(err =>
+                console.warn("Srovnání lidí plánů:", err)), 1500);
+        };
+        const sledujProjekty = () => {
+            if (!window.KB.currentUid || !window.KB.currentUid()) return;
+            if (window.KBUI.isAdmin()) window.KB.watchProjekty(); else window.KB.watchMojeProjekty();
+        };
+        window.KB.on("projekty-docs", () => { vykresliSeznam(); srovnejLidi(); });
+
         window.KB.on("plany", () => {
             vykresliSeznam();
+            srovnejLidi();
+            if (hledatPatro && (window.KB.planySoubory || []).length) {
+                const shoda = window.KB.planySoubory.filter(f => f.projektId === filtrZak &&
+                    (f.patro || "") === hledatPatro.patro &&
+                    (!hledatPatro.budova || (f.budova || "") === hledatPatro.budova));
+                if (shoda.length === 1) { otevritPlan = shoda[0].id; hledatPatro = null; }
+            }
+            if (otevritPlan && (window.KB.planySoubory || []).some(f => f.id === otevritPlan)) {
+                const id = otevritPlan;
+                otevritPlan = "";
+                otevri(id);
+            }
             // změna palety se musí propsat do otevřeného prohlížeče
             if (otevreny) {
                 naplnPaletovePrvky();
@@ -2597,8 +2877,9 @@
             vykresliZnacky();
             if (!$("oknoHladiny").hidden) vykresliHlVolby();
         });
-        document.addEventListener("kb-role", () => { window.KB.watchPlany(); vykresliSeznam(); });
+        document.addEventListener("kb-role", () => { window.KB.watchPlany(); sledujProjekty(); vykresliSeznam(); });
         window.KB.watchPlany();
+        sledujProjekty();
         vykresliSeznam();
     });
 })();
