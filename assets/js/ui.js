@@ -6047,8 +6047,18 @@
             return s.length > 2 && s.charAt(s.length - 1) === zavrit && celaCesta(c)
                 ? dlazdiceCesty(c) : null;
         }
-        const u = cestaNa(s, 0);
-        return u && u.od === 0 && u.do === s.length ? dlazdiceCesty(s) : null;
+        /* Na samostatném řádku cestu ukončuje konec řádku, takže tady smí mít
+           mezery i bez uvozovek – naše cesty je mají skoro všechny
+           („P:\2024-007 …\01 NAŠE STAVBA\…“) a kolega je sem vkládá tak, jak
+           je zkopíroval. Pravidlo pro člověka: na řádku je jen ta cesta a nic
+           jiného. Druhá dvojtečka = dvě cesty nebo věta, to dlaždice není
+           (v řádku se pak odkazují jednotlivě jako dřív). Tečku, čárku a
+           podobnou interpunkci na konci odřízneme stejně jako odkaz v řádku. */
+        const bez = s.replace(/[.,;:!]+$/, "");
+        const zavorka = bez.charAt(bez.length - 1) === ")" &&
+            bez.split("(").length < bez.split(")").length;
+        const cesta = zavorka ? bez.slice(0, -1) : bez;
+        return celaCesta(cesta) && cesta.indexOf(":", 2) === -1 ? dlazdiceCesty(cesta) : null;
     }
 
     /** Kde v textu začínají řádky s dlaždicí: Map(od → { konec, html }). */
