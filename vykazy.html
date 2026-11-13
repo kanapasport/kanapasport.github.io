@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=344">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=344">
+    <link rel="stylesheet" href="assets/css/app.css?v=345">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=345">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -395,14 +395,12 @@
             <div class="vt-wrap">
                 <table class="vt"><thead id="vtHlava"></thead><tbody id="vtTelo"></tbody></table>
             </div>
-            <div class="tiny muted" style="line-height:1.7">
+            <!-- stejná legenda jako Vytížení týmu (.vt-leg v app.css); druhy absence kreslí skript z vykazy.js -->
+            <div class="vt-leg">
                 <span class="vt-leg-x vt--malo">méně než 7 h</span>
                 <span class="vt-leg-x vt--akorat">7–8 h</span>
                 <span class="vt-leg-x vt--hodne">víc než 8 h</span>
-                <span class="vt-leg-x vt--abs">D</span> absence celý den ·
-                štítek u hodin = absence s hodinami (např. <span class="vt-a">V 2</span>):
-                <b>V</b> volno (čerpání přesčasu) · <b>L</b> lékař · <b>D</b> dovolená · <b>N</b> nemoc ·
-                <b>NV</b> neplacené volno · <b>Š</b> školení
+                <span id="vtLegAbsence" class="vt-leg__abs"></span>
             </div>
         </div>
 
@@ -636,11 +634,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=344"></script>
-<script src="assets/js/ui.js?v=344"></script>
-<script src="assets/js/nabidka.js?v=344"></script>
-<script src="assets/js/vykazy.js?v=344"></script>
-<script type="module" src="assets/js/store.js?v=344"></script>
+<script src="assets/js/taxonomy.js?v=345"></script>
+<script src="assets/js/ui.js?v=345"></script>
+<script src="assets/js/nabidka.js?v=345"></script>
+<script src="assets/js/vykazy.js?v=345"></script>
+<script type="module" src="assets/js/store.js?v=345"></script>
 
 <script>
 (function () {
@@ -1989,26 +1987,29 @@
         const dny = [];
         for (let c = 1; c <= new Date(y, m + 1, 0).getDate(); c++) {
             const d = new Date(y, m, c);
-            dny.push({ iso: vtIso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6 });
+            // pondělí nese silnější levou čáru – začátek týdne v mřížce (app.css .vt--po)
+            dny.push({ iso: vtIso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6,
+                pondeli: d.getDay() === 1 });
         }
 
         $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + dny.map(x =>
-            '<th class="' + (x.vikend ? "vt--vik " : "") +
+            '<th class="' + (x.pondeli ? "vt--po " : "") + (x.vikend ? "vt--vik " : "") +
             (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") + "</tr>";
 
         $("vtTelo").innerHTML = "<tr><td>" + esc(clovek ? V.jmeno(clovek) : "") + "</td>" +
             dny.map(x => {
                 const h = hodiny.get(x.iso) || 0;
+                const abs = absence.get(x.iso);
                 let cls = x.vikend ? "vt--vik" : "";
                 let text = "";
                 if (h > 8)       { cls = "vt--hodne";  text = vtHodiny(h); }
                 else if (h >= 7) { cls = "vt--akorat"; text = vtHodiny(h); }
                 else if (h > 0)  { cls = "vt--malo";   text = vtHodiny(h); }
-                else if (absence.has(x.iso)) cls = "vt--abs";
+                else if (abs)    cls = V.tridyBunkyAbsence(abs);   // barva podle druhu (vykazy.js)
                 /* Část dne absence vedle hodin práce: „6“ + štítek „V 2“; celý den
                    bez práce jen písmeno druhu – stejně jako Vytížení (Michal 13. 11. 2026). */
-                const abs = absence.get(x.iso);
-                return '<td class="' + cls + '">' + esc(text) + (abs ? V.stitkyAbsenceHtml(abs, h > 0) : "") + "</td>";
+                return '<td class="' + (x.pondeli ? "vt--po " : "") + cls + '">' + esc(text) +
+                    (abs ? V.stitkyAbsenceHtml(abs, h > 0) : "") + "</td>";
             }).join("") + "</tr>";
     }
 
@@ -5666,6 +5667,8 @@
         });
         pouzijSkryti();
 
+        // druhy absence v legendě mřížky – z jednoho slovníku ve vykazy.js, stejně jako Vytížení týmu
+        $("vtLegAbsence").innerHTML = V.legendaAbsenciHtml();
         // měsíc v mřížce vytížení se přepíná nezávisle na filtru období výše
         $("vtZpet").addEventListener("click", () => {
             vtKotva = new Date(vtKotva.getFullYear(), vtKotva.getMonth() - 1, 1);

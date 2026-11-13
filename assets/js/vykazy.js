@@ -546,6 +546,21 @@
     V.PISMENO_ABSENCE = { "Volno": "V", "Doktor": "L", "Dovolená": "D", "Nemoc": "N",
         "Neplacené volno": "NV", "Školení": "Š" };
     V.pismenoAbsence = (druh) => V.PISMENO_ABSENCE[druh] || String(druh || "A").charAt(0).toUpperCase();
+    /* Barva podle druhu (Michal 13. 11. 2026: jedna modrá nebyla vidět, volno
+       a dovolená mají být různě, nemoc a spol. fialově). Tady jen přípona
+       třídy – buňka `vt--abs vt--abs-<přípona>`, štítek `vt-a vt-a--<přípona>`,
+       barvy jsou v app.css. Druh mimo slovník dostane „jine" (výchozí šeď),
+       nikdy nespadne. */
+    V.TRIDA_ABSENCE = { "Volno": "volno", "Dovolená": "dovolena", "Nemoc": "nemoc",
+        "Doktor": "doktor", "Neplacené volno": "neplacene", "Školení": "skoleni" };
+    V.tridaAbsence = (druh) => V.TRIDA_ABSENCE[String(druh || "").trim()] || "jine";
+    /** Třídy buňky celodenní absence jednoho druhu: „vt--abs vt--abs-<přípona>" (buňka i vzorek v legendě). */
+    V.tridyAbsence = (druh) => "vt--abs vt--abs-" + V.tridaAbsence(druh);
+    /** Druh s nejvíc hodinami ze { druh: hodiny } (shoda → pořadí V.ABSENCE); prázdné → undefined. */
+    V.hlavniAbsence = (druhy) => Object.keys(druhy || {}).sort((a, b) =>
+        ((Number(druhy[b]) || 0) - (Number(druhy[a]) || 0)) || (V.ABSENCE.indexOf(a) - V.ABSENCE.indexOf(b)))[0];
+    /** Třídy buňky dne s absencí a bez práce – barvu určí druh s nejvíc hodinami; Vytížení i měsíc ve Výkazech. */
+    V.tridyBunkyAbsence = (druhy) => V.tridyAbsence(V.hlavniAbsence(druhy));
     /** HTML štítků absencí jednoho dne / týdne: druhy = { druh: hodiny }; sHodinami = vždy s hodinami. */
     V.stitkyAbsenceHtml = (druhy, sHodinami) => {
         const esc = (s) => (window.KBUI && window.KBUI.esc) ? window.KBUI.esc(s) : String(s);
@@ -553,9 +568,21 @@
         return Object.keys(druhy || {}).sort((a, b) => V.ABSENCE.indexOf(a) - V.ABSENCE.indexOf(b)).map(druh => {
             const h = druhy[druh];
             const celeDny = h > 0 && h % 8 === 0;
-            return '<span class="vt-a" title="' + esc(V.nazevAbsence(druh) + " " + txt(h) + " h") + '">' +
+            return '<span class="vt-a vt-a--' + V.tridaAbsence(druh) + '" title="' +
+                esc(V.nazevAbsence(druh) + " " + txt(h) + " h") + '">' +
                 esc(V.pismenoAbsence(druh) + (sHodinami || !celeDny ? " " + txt(h) : "")) + "</span>";
         }).join("");
+    };
+    /** Legenda druhů absence pod mřížkou: vzorek barvy s písmenem + název, pro každý druh z V.ABSENCE
+     *  (písmeno V.pismenoAbsence, název V.nazevAbsence) – jedno místo, ať se Vytížení a Výkazy neliší. */
+    V.legendaAbsenciHtml = () => {
+        const esc = (s) => (window.KBUI && window.KBUI.esc) ? window.KBUI.esc(s) : String(s);
+        const priklad = {};
+        priklad[V.NAHRADNI_VOLNO] = 2;
+        return "<span>Absence (celý den barva buňky, u hodin štítek, např. " +
+            V.stitkyAbsenceHtml(priklad, true) + "):</span>" +
+            V.ABSENCE.map(druh => '<span><span class="vt-leg-x ' + V.tridyAbsence(druh) + '">' +
+                esc(V.pismenoAbsence(druh)) + "</span> " + esc(V.nazevAbsence(druh)) + "</span>").join("");
     };
 
     /* Kdo vůbec fond hodin má. OSVČ a student ne – přesčas ani dovolená

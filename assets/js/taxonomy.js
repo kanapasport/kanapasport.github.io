@@ -244,7 +244,7 @@ window.KB_NAV = [
             })))
     },
     /* osobní poznámky se screenshoty – každý má svoje, sdílí, komu chce */
-    { title: 'POZNÁMKY', href: 'poznamky.html', barva: '#a8432a' },
+    { title: 'CHAT', href: 'poznamky.html', barva: '#a8432a' },
     // podklady pater se společnými značkami – parta si značí naráz
     { title: 'PLÁNY', href: 'plany.html', icon: 'map', barva: '#a8432a' },
     // kolik fotek je v BPH u které místnosti a technologie – podklad pro plánování focení

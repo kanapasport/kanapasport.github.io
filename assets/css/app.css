@@ -4213,6 +4213,13 @@ button.mx__bunka:hover { background: var(--accent-tint); }
     padding: 6px 4px; border-bottom: 1px solid var(--line-soft);
     text-align: center; white-space: nowrap; min-width: 34px;
 }
+/* Rozdělovníky dnů (Michal 13. 11. 2026): bez svislých čar splývalo třicet
+   sloupců v jeden pruh. Mezi dny tenká čára, na začátku týdne silnější –
+   pondělí dostává třídu vt--po ze skriptu obou stránek, protože víkend sám
+   je jen podbarvený a při práci o víkendu podbarvení ztratí; čára týdne
+   musí držet vždy. */
+.vt th, .vt td { border-right: 1px solid var(--line-soft); }
+.vt .vt--po { border-left: 2px solid var(--line); }
 /* Jména drží při vodorovném posunu na místě – bez nich čísla nic neříkají.
    Podklad musí být neprůhledný, jinak pod nimi prosvítají projíždějící buňky. */
 .vt th:first-child, .vt td:first-child {
@@ -4226,12 +4233,33 @@ button.mx__bunka:hover { background: var(--accent-tint); }
 .vt--malo   { background: #f5e6b8; color: #111; }
 .vt--akorat { background: #d3ebdc; color: #111; }
 .vt--hodne  { background: #f6cfd6; color: #111; }
-.vt--abs    { background: #cfe9f3; color: #111; font-weight: 900; }
-/* štítek absence vedle hodin v mřížce (V 2 = volno 2 h) – Vytížení i měsíc ve Výkazech, 13. 11. 2026 */
-.vt-a { display: inline-block; background: #cfe9f3; color: #111; border-radius: var(--r-sm); padding: 0 4px;
+/* Absence – barva podle druhu (Michal 13. 11. 2026: jedna světle modrá nebyla
+   vidět). Buňka celého dne `vt--abs vt--abs-<druh>`, štítek u hodin
+   `vt-a vt-a--<druh>` (V 2 = volno 2 h); příponu dává V.tridaAbsence ve
+   vykazy.js, tady jsou jen barvy. Volno a dovolená zřetelně jiné (modrá ×
+   tyrkysová), nemoc, lékař a neplacené volno fialově, školení meruňkově –
+   nic z toho se nepotkává s odstíny hodin (žlutá, zelená, růžová). Pastely
+   s černým textem, druh navíc říká písmeno. Samotná .vt--abs / .vt-a = druh
+   mimo slovník (šedomodrá). */
+.vt--abs    { background: #d5dde6; color: #111; font-weight: 900; }
+.vt-a { display: inline-block; background: #d5dde6; color: #111; border-radius: var(--r-sm); padding: 0 4px;
         margin-left: 4px; font-size: var(--fs-1); font-weight: 900; white-space: nowrap; }
+.vt--abs-volno,     .vt-a--volno     { background: #a9cdf0; }
+.vt--abs-dovolena,  .vt-a--dovolena  { background: #9edcd6; }
+.vt--abs-nemoc,     .vt-a--nemoc     { background: #d8c4f2; }
+.vt--abs-doktor,    .vt-a--doktor    { background: #e6c6ea; }
+.vt--abs-neplacene, .vt-a--neplacene { background: #cfc9e6; }
+.vt--abs-skoleni,   .vt-a--skoleni   { background: #f6c99e; }
 .vt th.vt--dnes { box-shadow: inset 0 0 0 2px var(--accent); border-radius: var(--r); color: var(--accent); }
 
+/* Legenda pod mřížkou – vzorky hodin a druhů absence, zalamuje se. Do 13. 11.
+   2026 jen ve Vytížení, teď i u měsíce ve Výkazech; druhy absence do obou
+   kreslí V.legendaAbsenciHtml. Obal položek absence má display: contents, ať
+   jsou sourozenci vzorků hodin a zalamují se s nimi, ne jako jeden blok. */
+.vt-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--fs-1); color: var(--text-soft); }
+.vt-leg i { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-sm);
+    margin-right: 6px; vertical-align: -1px; }
+.vt-leg__abs { display: contents; }
 /* barevný štítek v legendě pod mřížkou */
 .vt-leg-x { display: inline-block; padding: 1px 7px; border-radius: var(--r-sm);
     margin-right: 4px; font-weight: 700; }
@@ -4587,3 +4615,87 @@ main h2[style*="font-size:24px"][style*="font-weight:900"] {
 .semafor--zastaraly { color: var(--dim); }
 .semafor--zastaraly::before { background: transparent; box-shadow: inset 0 0 0 2px var(--dim); }
 .semafor--tecka { gap: 0; }
+
+/* ================================================ PŘÍRUČKA – DLAŽDICE ===== */
+/* prirucka.html a prirucka-kancelar.html (Michal 13. 11. 2026): každá kapitola
+   je samostatná dlaždice a kapitoly leží v mřížce přes celou šířku – na širokém
+   monitoru víc vedle sebe, na telefonu jeden sloupec. Text příručky žije
+   v databázi a při načtení projde KBUI.cistyHtml (section, class i id nechává);
+   dlaždice přesto stojí na „> section“, ne na třídě – i kapitola bez třídy
+   (dopsaná v režimu úprav) zůstane dlaždicí. */
+.pr__telo {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+    grid-auto-flow: dense;              /* kratší kapitola doplní díru vedle široké */
+    gap: var(--sp-4);
+    container-type: inline-size;        /* dva sloupce se měří z mřížky, ne z okna */
+}
+/* úvod, zvýrazněná poznámka, obsah a patička – přes celou šířku nad a pod mřížkou */
+.pr__telo > :not(section) { grid-column: 1 / -1; }
+.pr__telo > section {
+    display: flex; flex-direction: column; gap: var(--sp-3);
+    min-width: 0;
+    padding: var(--sp-4) 18px 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow);
+}
+/* dlouhá kapitola přes dva sloupce – jen když se dva sloupce vejdou (2 × 360 + mezera) */
+@container (min-width: 736px) {
+    .pr__telo > .pr__kap--siroka { grid-column: span 2; }
+}
+/* kotvy (#vykazy i obsah z nadpisů) sedí pod pevnou lištou */
+.pr__telo > section, .pr__telo h3 { scroll-margin-top: 90px; }
+
+.pr__telo > section > h3 {
+    margin: 0; padding-bottom: var(--sp-2);
+    font-size: var(--fs-4); font-weight: 900; line-height: 1.3;
+    border-bottom: 2px solid var(--accent-lt);
+}
+.pr__telo h4 { margin: var(--sp-1) 0 0; font-size: var(--fs-3); font-weight: 900; color: var(--accent); }
+/* text bez vlastních okrajů – mezery mezi bloky dělá gap dlaždice, odrážky zarovnané s textem */
+.pr__telo p, .pr__telo ul, .pr__telo ol { margin: 0; line-height: 1.65; }
+.pr__telo ul, .pr__telo ol { padding-left: 20px; }
+.pr__telo li { margin: 0; }
+.pr__telo li + li, .pr__telo li > ul, .pr__telo li > ol { margin-top: var(--sp-1); }
+
+.pr__uvod { font-size: var(--fs-4); line-height: 1.7; color: var(--text-soft); }
+
+/* Obsah nahoře – stránka je dlouhá a většina lidí sem chodí kvůli jedné věci. */
+.pr__obsah { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.pr__obsah a {
+    padding: 5px 11px; border: 1px solid var(--line); border-radius: var(--r-pill);
+    font-size: var(--fs-1); font-weight: 700; color: var(--accent);
+    text-decoration: none; background: var(--surface);
+}
+.pr__obsah a:hover { background: var(--accent-tint); border-color: var(--accent-lt); }
+
+/* Zvýrazněná poznámka – pravidlo, na kterém se firma dohodla; --pozor = past. */
+.pr__pozn {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-tint);
+    padding: 12px 16px; border-radius: 0 var(--r) var(--r) 0;
+    font-size: var(--fs-3); line-height: 1.65;
+}
+.pr__pozn--pozor { border-left-color: var(--warn); background: #fdf6ec; }
+.pr__telo > section .pr__pozn { padding: 10px 14px; }
+
+/* Očíslované kroky (texty uložené v databázi je můžou používat) */
+.pr__kroky { counter-reset: krok; display: flex; flex-direction: column; gap: 10px; }
+.pr__krok { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; align-items: start; }
+.pr__krok::before {
+    counter-increment: krok; content: counter(krok);
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: var(--fs-2); font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+}
+.pr__krok div { line-height: 1.65; }
+
+/* „Něco chybí?“ pod mřížkou */
+.pr__nedodelano {
+    border: 1px dashed var(--line);
+    border-radius: var(--r-lg); padding: 14px 16px;
+    font-size: var(--fs-2); line-height: 1.7; color: var(--muted);
+}

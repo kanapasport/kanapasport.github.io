@@ -1259,7 +1259,7 @@ async function zapisUdalost(l, ucastnici, akce, kdo) {
 function ohlasPridani(nazev, uids, zpravaId) {
     if (!uids || !uids.length) return;
     KB.saveQuickTodo(KB.newQuickId(), {
-        text: "Přidal tě do konverzace „" + String(nazev || "bez názvu").slice(0, 80) + "“ v Poznámkách.",
+        text: "Přidal tě do konverzace „" + String(nazev || "bez názvu").slice(0, 80) + "“ v Chatu.",
         proUids: uids.slice(),
         druh: "info", rezim: "kazdy",       // oznámení – každý bere na vědomí sám
         poznamka: zpravaId || ""

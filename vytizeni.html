@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Vytížení týmu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=344">
+    <link rel="stylesheet" href="assets/css/app.css?v=345">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -22,51 +22,19 @@
         .hlavicka { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
         .hlavicka__text { min-width: 0; }
 
-        /* Mřížka lidé × dny. Posouvá se jen tabulka, ne celá stránka –
-           měsíc má přes třicet sloupců a na mobilu by rozbil layout. */
-        .vt-wrap { overflow-x: auto; }
-        .vt { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--fs-1); }
-        .vt th {
-            font-size: var(--fs-1); font-weight: 700; letter-spacing: .05em;
-            color: var(--muted); padding: 6px 4px; border-bottom: 1px solid var(--line);
-            text-align: center; white-space: nowrap;
-        }
-        .vt td {
-            padding: 6px 4px; border-bottom: 1px solid var(--line-soft);
-            text-align: center; white-space: nowrap; min-width: 34px;
-        }
-        /* Jména drží při vodorovném posunu na místě – bez nich čísla nic neříkají.
-           Podklad musí být neprůhledný, jinak pod nimi prosvítají projíždějící buňky. */
-        .vt th:first-child, .vt td:first-child {
-            position: sticky; left: 0; z-index: 1; background: var(--surface);
-            text-align: left; padding-right: 14px; border-right: 1px solid var(--line);
-        }
-        .vt td:first-child { font-weight: 700; }
-        .vt .vt--vik { background: var(--bg-soft); }
+        /* Mřížka lidé × dny (.vt, .vt--malo…, .vt--abs…, rozdělovníky dnů, legenda
+           .vt-leg) je v app.css – společná s měsícem ve Výkazech. Do 13. 11. 2026 tu
+           byla kopie těch pravidel; pozdější pravidlo stejné síly vyhrává, takže by
+           přebila barvy druhů absence z app.css. Tady zůstává jen to, co má jen
+           tahle stránka. */
+        /* Písmo o stupeň menší než ve Výkazech – celý tým × 31 dní se musí vejít. */
+        .vt { font-size: var(--fs-1); }
         /* Součet měsíce a přesčas – oddělené od mřížky dnů silnější čarou. */
         .vt .vt__soucet { border-left: 2px solid var(--line); font-weight: 900;
             background: var(--surface); white-space: nowrap; padding-left: 10px;
             padding-right: 10px; }
         .vt th.vt__soucet { font-size: var(--fs-1); }
         .vt .vt__soucet--minus { color: var(--danger); }
-        /* Pastelové podklady s černým textem – čitelné i pro barvoslepé,
-           protože nesou i číslo (barva není jediné vodítko). */
-        .vt--malo   { background: #f5e6b8; color: #111; }
-        .vt--akorat { background: #d3ebdc; color: #111; }
-        .vt--hodne  { background: #f6cfd6; color: #111; }
-        .vt--abs    { background: #cfe9f3; color: #111; font-weight: 900; }
-        .vt th.vt--dnes { box-shadow: inset 0 0 0 2px var(--accent); border-radius: var(--r); color: var(--accent); }
-        /* značka absence vedle hodin (.vt-a) je v app.css – společná s měsícem ve Výkazech */
-        /* Legenda pod tabulkou začíná u stejného levého okraje jako mřížka –
-           na široké stránce by odsazená doprava odplula od toho, co vysvětluje. */
-        .vt-leg {
-            display: flex; flex-wrap: wrap;
-            gap: 6px 16px; font-size: var(--fs-1); color: var(--text-soft);
-        }
-        .vt-leg i {
-            display: inline-block; width: 12px; height: 12px;
-            border-radius: var(--r-sm); margin-right: 6px; vertical-align: -1px;
-        }
         /* KONTROLA TÝDNE (21. 10. 2026): v pohledu Týdny se u týdne člověka
            dá klikem dát značka „zkontrolováno" (zelený ✓). Nic nezamyká. */
         .vt-odkaz { color: inherit; text-decoration: none; }
@@ -134,10 +102,8 @@
                 <span><i class="vt--malo"></i>Vykázáno málo</span>
                 <span><i class="vt--akorat"></i>Tak akorát</span>
                 <span><i class="vt--hodne"></i>Přesčasy</span>
-                <span><i class="vt--abs"></i>Absence celý den</span>
-                <span>Štítek u hodin = absence s hodinami (např. <span class="vt-a">V 2</span>):
-                    <b>V</b> Volno (čerpání přesčasu) · <b>L</b> lékař · <b>D</b> dovolená · <b>N</b> nemoc ·
-                    <b>NV</b> neplacené volno · <b>Š</b> školení</span>
+                <!-- druhy absence (vzorek, písmeno, název) kreslí skript z vykazy.js – jedno místo pro obě stránky -->
+                <span id="legAbsence" class="vt-leg__abs"></span>
                 <!-- jen v pohledu Týdny -->
                 <span id="legKontrola" hidden><span class="vt-kontrola vt-kontrola--ano" aria-hidden="true">✓</span>Týden
                     zkontrolovaný manažerem – klik na kroužek značku dá nebo zruší, klik na hodiny otevře výkazy týdne</span>
@@ -146,10 +112,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=344"></script>
-<script src="assets/js/ui.js?v=344"></script>
-<script src="assets/js/vykazy.js?v=344"></script>
-<script type="module" src="assets/js/store.js?v=344"></script>
+<script src="assets/js/taxonomy.js?v=345"></script>
+<script src="assets/js/ui.js?v=345"></script>
+<script src="assets/js/vykazy.js?v=345"></script>
+<script type="module" src="assets/js/store.js?v=345"></script>
 
 <script>
 (function () {
@@ -376,11 +342,13 @@
         const dny = [];
         for (let c = 1; c <= new Date(y, m + 1, 0).getDate(); c++) {
             const d = new Date(y, m, c);
-            dny.push({ iso: iso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6 });
+            // pondělí nese silnější levou čáru – začátek týdne v mřížce (app.css .vt--po)
+            dny.push({ iso: iso(d), cislo: c, vikend: d.getDay() === 0 || d.getDay() === 6,
+                pondeli: d.getDay() === 1 });
         }
 
         $("vtHlava").innerHTML = "<tr><th>Kdo</th>" + dny.map(x =>
-            '<th class="' + (x.vikend ? "vt--vik " : "") +
+            '<th class="' + (x.pondeli ? "vt--po " : "") + (x.vikend ? "vt--vik " : "") +
             (x.iso === dnesIso ? "vt--dnes" : "") + '">' + x.cislo + "</th>").join("") +
             '<th class="vt__soucet">Celkem</th><th class="vt__soucet">Přesčas</th></tr>';
 
@@ -388,16 +356,17 @@
             "<tr><td>" + esc(V.jmeno(u)) + "</td>" + dny.map(x => {
             const k = u.id + "|" + x.iso;
             const h = data.hodiny.get(k) || 0;
+            const abs = data.absence.get(k);
             let cls = x.vikend ? "vt--vik" : "";
             let text = "";
             if (h > 8)       { cls = "vt--hodne";  text = hodinyTxt(h); }
             else if (h >= 7) { cls = "vt--akorat"; text = hodinyTxt(h); }
             else if (h > 0)  { cls = "vt--malo";   text = hodinyTxt(h); }
-            else if (data.absence.has(k)) cls = "vt--abs";
+            else if (abs)    cls = V.tridyBunkyAbsence(abs);   // barva podle druhu (vykazy.js)
             /* Část dne absence vedle hodin práce: „6“ + štítek „V 2“;
                celý den bez práce jen písmeno druhu (Michal 13. 11. 2026). */
-            const abs = data.absence.get(k);
-            return '<td class="' + cls + '">' + esc(text) + (abs ? stitkyAbsence(abs, h > 0) : "") + "</td>";
+            return '<td class="' + (x.pondeli ? "vt--po " : "") + cls + '">' + esc(text) +
+                (abs ? stitkyAbsence(abs, h > 0) : "") + "</td>";
         }).join("") + souhrnCloveka(u, data) + "</tr>");
     }
 
@@ -489,6 +458,8 @@
         // a mezi jejich stránkami se přepíná podlištou
         window.KBUI.mountNav({ active: "vykazy.html", subbar: true });
         paintSubbar();
+        // druhy absence v legendě – z jednoho slovníku ve vykazy.js, stejně jako ve Výkazech
+        $("legAbsence").innerHTML = V.legendaAbsenciHtml();
 
         $("btnZpet").addEventListener("click", () => {
             kotva = new Date(kotva.getFullYear(), kotva.getMonth() - 1, 1); vykresli();

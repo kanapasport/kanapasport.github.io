@@ -2833,7 +2833,7 @@
             '<div class="hookno__deska card">' +
                 '<div class="hookno__hlava"><span data-pozn-nadpis>Poznámka</span>' +
                     '<a class="linkbtn linkbtn--tmavy" data-pozn-cela' +
-                        ' href="poznamky.html">Otevřít v Poznámkách</a>' +
+                        ' href="poznamky.html">Otevřít v Chatu</a>' +
                     '<button type="button" class="linkbtn linkbtn--tmavy"' +
                         " data-pozn-zavri>Zavřít</button></div>" +
                 '<div class="hookno__telo" data-pozn-telo></div>' +
@@ -2869,7 +2869,7 @@
         if (!z) {
             telo.innerHTML = '<p class="small muted" style="line-height:1.6">' +
                 "Tuhle poznámku ti nikdo nesdílel, nebo už neexistuje." +
-                " Zkus ji otevřít v Poznámkách.</p>";
+                " Zkus ji otevřít v Chatu.</p>";
             return;
         }
         const kdy = z.ms ? new Date(z.ms).toLocaleDateString("cs-CZ") : "";
@@ -2886,7 +2886,7 @@
                   'border-radius:8px;border:1px solid var(--line)">' : "") +
             (Number(z.obrazku) > 1
                 ? '<p class="tiny muted" style="margin-top:6px">Poznámka má ' +
-                  esc(String(z.obrazku)) + " obrázků – zbytek je v Poznámkách.</p>" : "") +
+                  esc(String(z.obrazku)) + " obrázků – zbytek je v Chatu.</p>" : "") +
             ((z.komentare || []).length
                 ? '<div style="margin-top:14px;border-top:1px solid var(--line-soft);padding-top:10px">' +
                     '<div class="tiny muted" style="font-weight:900;letter-spacing:.06em;' +
@@ -4202,7 +4202,7 @@
                 '<button type="button" class="chip' + (quickRezim === "zadane" ? " chip--active" : "") +
                     '" data-quick-rezim="zadane">Zadané</button>' +
                 '<button type="button" class="chip' + (jenPozn ? " chip--active" : "") +
-                    '" data-quick-rezim="poznamky">Poznámky</button>' +
+                    '" data-quick-rezim="poznamky">Chat</button>' +
             "</div>" +
             /* Řádky jdou do mřížky – na stránce Quick TO-DO se na širokém
                monitoru složí do sloupců místo jednoho úzkého pruhu. */

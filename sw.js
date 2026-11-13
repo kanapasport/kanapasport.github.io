@@ -37,7 +37,7 @@ const TERENNI = {
     "index.html": "Nástěnka",
     "plany.html": "Plány",
     "quicktodo.html": "Quick TO-DO",
-    "poznamky.html": "Poznámky",
+    "poznamky.html": "Chat",
     "ukoly.html": "Úkoly",
     // poznámky z terénu – psát jde i ve sklepě, odešlou se se signálem (Michal 12. 11. 2026, Iris)
     "info-zakazky.html": "Info k zakázkám"
