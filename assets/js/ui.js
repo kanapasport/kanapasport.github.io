@@ -5945,31 +5945,153 @@
         return { od: i, do: k };
     }
 
+    const CESTA_TITLE = "Otevřít v Průzkumníku (potřebuje pomocníka Otevřít v Průzkumníku)";
+
+    /** Adresa pro pomocníka, nebo null – jinou než `pasport-slozka:` tudy nepodstrčíš. */
+    function adresaSlozky(cesta) {
+        // osamocená půlka znaku (podvržená data) by encodeURIComponent shodila celé vykreslení
+        try { return "pasport-slozka:" + encodeURIComponent(cesta); } catch (err) { return null; }
+    }
+
     /** Odkaz na cestu – stejný tvar jako tlačítko složky ve FOTKY BPH. */
     function odkazCesty(cesta) {
-        let adresa;
-        // osamocená půlka znaku (podvržená data) by encodeURIComponent shodila celé vykreslení
-        try { adresa = "pasport-slozka:" + encodeURIComponent(cesta); } catch (err) { return esc(cesta); }
+        const adresa = adresaSlozky(cesta);
+        if (!adresa) return esc(cesta);
         return '<a class="odkazcesta" href="' + esc(adresa) +
-            '" title="Otevřít v Průzkumníku (potřebuje pomocníka Otevřít v Průzkumníku)">' + esc(cesta) + "</a>";
+            '" title="' + CESTA_TITLE + '">' + esc(cesta) + "</a>";
+    }
+
+    /* Dlaždice místo odkazu v řádku (Michal 13. 11. 2026) – nepovinný režim
+       `volby.dlazdice`. Ve Chatu kolega nemá hledat podtržené místo ve větě:
+       řádek, na kterém není nic jiného než cesta (nebo sada návrhů v Iris), se
+       vykreslí jako barevná dlaždice – název složky velký, celá cesta pod ním
+       (ať je vidět, odkud to je) a Kopírovat cestu pro toho, kdo pomocníka
+       nemá nebo je na telefonu. Klik na dlaždici vede na stejnou adresu jako
+       odkaz v řádku, takže stávajícímu pomocníkovi se nic nemění.
+
+       Cesta uvnitř věty zůstává odkazem v řádku jako dřív a bez `volby` se
+       nemění vůbec nic – Quick TO-DO, úkoly a milníky vypisují text do jednoho
+       řádku seznamu a blok by jim ho rozpadl.
+
+       Sada návrhů v Iris (`iris:<název sady>`) vede na `pasport-iris:<sada>`;
+       vybírá se v programu, ve webu ani na telefonu odkaz nic neudělá, proto
+       to dlaždice říká malým textem. */
+    const SADA_ZNAKY = /^[\p{L}\p{N} _.-]{1,120}$/u;
+    const IKONY_DLAZDICE = {
+        slozka: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+        soubor: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>',
+        iris: '<path d="M4 7l2 2 3-3"/><path d="M4 17l2 2 3-3"/><path d="M13 8h7M13 18h7"/>'
+    };
+
+    /** Ikonka dlaždice – obrys 24×24 barvou textu, stejně jako ikonky v nabídce. */
+    const ikonaDlazdice = (druh) => '<svg class="dlcesta__ikona dlcesta__ikona--' + druh + '" ' +
+        'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + IKONY_DLAZDICE[druh] + "</svg>";
+
+    /** Jen bezpečný název sady: písmena, číslice, mezera, _ - . (bez \ / : a „.."). */
+    function nazevSady(nazev) {
+        const n = String(nazev || "").trim();
+        return SADA_ZNAKY.test(n) && n.indexOf("..") === -1 ? n : "";
+    }
+
+    /** Je celý text jedna cesta? (v uvozovkách smí mít i mezery) */
+    const celaCesta = (c) => CESTA_ZACATEK.test(c.slice(0, 3)) && !/[<>|?*"`„“”\t]/.test(c);
+
+    /** Dlaždice cesty; null, když adresa nejde sestavit (podvržená data). */
+    function dlazdiceCesty(cesta) {
+        const adresa = adresaSlozky(cesta);
+        if (!adresa) return null;
+        const casti = cesta.split(/[\\/]+/).filter(Boolean);
+        const jmeno = casti.length ? casti[casti.length - 1] : cesta;
+        // soubor pozná tečka s krátkou příponou v poslední části cesty
+        const druh = /\.[\p{L}\p{N}]{1,5}$/u.test(jmeno) ? "soubor" : "slozka";
+        return '<div class="dlcesta">' +
+            '<a class="dlcesta__odkaz" href="' + esc(adresa) + '" title="' + CESTA_TITLE + '">' +
+                ikonaDlazdice(druh) +
+                '<span class="dlcesta__text">' +
+                    '<span class="dlcesta__jmeno">' + esc(jmeno) + "</span>" +
+                    '<span class="dlcesta__cesta">' + esc(cesta) + "</span>" +
+                "</span></a>" +
+            '<button type="button" class="dlcesta__akce" data-dlcesta-kopiruj="' + esc(cesta) +
+                '" title="Zkopírovat cestu do schránky">Kopírovat cestu</button>' +
+        "</div>";
+    }
+
+    /** Dlaždice sady návrhů v Iris; null, když adresa nejde sestavit. */
+    function dlazdiceIris(nazev) {
+        let adresa;
+        try { adresa = "pasport-iris:" + encodeURIComponent(nazev); } catch (err) { return null; }
+        return '<div class="dlcesta dlcesta--iris">' +
+            '<a class="dlcesta__odkaz" href="' + esc(adresa) + '" title="Otevřít sadu návrhů v programu Iris">' +
+                ikonaDlazdice("iris") +
+                '<span class="dlcesta__text">' +
+                    '<span class="dlcesta__jmeno">' + esc(nazev) + "</span>" +
+                    '<span class="dlcesta__cesta">Vybírá se v programu Iris na počítači, kde Iris běží</span>' +
+                "</span>" +
+                '<span class="dlcesta__akce">Otevřít v Iris</span></a>' +
+        "</div>";
+    }
+
+    /** Řádek, na kterém není nic než cesta nebo „iris:<sada>" → dlaždice, jinak null. */
+    function dlazdiceRadku(radek) {
+        const s = radek.trim();
+        if (!s) return null;
+        if (s.slice(0, 5).toLowerCase() === "iris:") {
+            const n = nazevSady(s.slice(5));
+            return n ? dlazdiceIris(n) : null;
+        }
+        const zavrit = CESTA_UVOZOVKY[s.charAt(0)];
+        if (zavrit) {
+            // uvozovky jsou jen obal (cesta s mezerou), do dlaždice se neberou
+            const c = s.slice(1, -1);
+            return s.length > 2 && s.charAt(s.length - 1) === zavrit && celaCesta(c)
+                ? dlazdiceCesty(c) : null;
+        }
+        const u = cestaNa(s, 0);
+        return u && u.od === 0 && u.do === s.length ? dlazdiceCesty(s) : null;
+    }
+
+    /** Kde v textu začínají řádky s dlaždicí: Map(od → { konec, html }). */
+    function dlazdiceVTextu(t) {
+        const kde = new Map();
+        for (let od = 0; od <= t.length;) {
+            const zlom = t.indexOf("\n", od), konec = zlom === -1 ? t.length : zlom;
+            const html = dlazdiceRadku(t.slice(od, konec));
+            if (html) kde.set(od, { konec: konec, html: html });
+            if (zlom === -1) break;
+            od = zlom + 1;
+        }
+        return kde;
     }
 
     /**
      * Text do innerHTML: všechno přes esc, „#Název" z `odkazy` jako odkaz,
      * „@Jméno" zvýrazněné a cesta P:\… / \\server\… jako odkaz pro Průzkumník.
      * Bez odkazů, zmínek a cest vrací přesně esc(text).
+     * @param {{dlazdice?: boolean}} [volby] `dlazdice` = řádek, na kterém není
+     *   nic než cesta nebo „iris:<sada>", vykreslit jako dlaždici (jen Chat).
+     *   Bez `volby` vrací přesně to samé jako dřív.
      */
-    UI.textSOdkazy = (text, odkazy) => {
+    UI.textSOdkazy = (text, odkazy, volby) => {
         const t = String(text == null ? "" : text);
         const znacky = UI.cisteOdkazy(odkazy).map(o => ({ s: "#" + o.n, o: o }));
         if (t.indexOf("@") !== -1) lideKZmince().forEach(u => znacky.push({ s: "@" + u.jmeno }));
         const cesty = /[Pp]:\\|\\\\/.test(t);
-        if (!znacky.length && !cesty) return esc(t);
+        const dlazdice = volby && volby.dlazdice ? dlazdiceVTextu(t) : null;
+        if (!znacky.length && !cesty && !(dlazdice && dlazdice.size)) return esc(t);
         // delší přednost: „#VZT – G61" se nesmí rozpadnout na „#VZT"
         znacky.sort((a, b) => b.s.length - a.s.length);
         const sedi = (z, i) => t.startsWith(z.s, i) && !PISMENO.test(t.charAt(i + z.s.length));
         let ven = "", od = 0, i = 0;
         while (i < t.length) {
+            // dlaždice je blok – zlom řádku vedle ní zahodíme, jinak zůstane prázdný řádek
+            const dl = dlazdice ? dlazdice.get(i) : null;
+            if (dl) {
+                const pred = i && t.charAt(i - 1) === "\n" ? i - 1 : i;
+                ven += esc(t.slice(od, pred)) + dl.html;
+                i = od = dl.konec + (t.charAt(dl.konec) === "\n" ? 1 : 0);
+                continue;
+            }
             const c = t.charAt(i);
             // cesta dřív než # a @ – „#" nebo „@" uvnitř cesty k ní patří
             const cesta = cesty && 'Pp\\"`„“'.indexOf(c) !== -1 ? cestaNa(t, i) : null;
@@ -6170,6 +6292,20 @@
     }
     window.addEventListener("scroll", srovnejNapovedu, true);
     window.addEventListener("resize", srovnejNapovedu);
+
+    /* „Kopírovat cestu" z dlaždice cesty (UI.textSOdkazy s { dlazdice: true }).
+       Kdo pomocníka „Otevřít v Průzkumníku" nemá nebo je na telefonu, vloží si
+       cestu do Průzkumníka sám. Jeden posluchač na celý web – dlaždice se
+       překreslují s každou zprávou. */
+    document.addEventListener("click", (e) => {
+        const b = e.target.closest && e.target.closest("[data-dlcesta-kopiruj]");
+        if (!b) return;
+        e.preventDefault();
+        if (window.KBNabidka) {
+            window.KBNabidka.kopiruj(b.getAttribute("data-dlcesta-kopiruj"),
+                "Cesta zkopírovaná – vlož ji do Průzkumníka souborů.");
+        }
+    });
 
     /* ------------------------------------------------------ vyhledávání */
 
