@@ -7740,6 +7740,8 @@ KB.smazPlan = async (id) => {
     }
     const kousky = await getDocs(planKousky(id));
     for (const d of kousky.docs) await deleteDoc(d.ref);
+    const kdo = await getDocs(planKdoCol(id)).catch(() => null);
+    if (kdo) for (const d of kdo.docs) await deleteDoc(d.ref).catch(() => {});
     const dlazdice = await getDocs(planDlazdiceCol(id));
     for (const d of dlazdice.docs) await deleteDoc(d.ref);
     await deleteDoc(planDoc(id));
@@ -7755,11 +7757,54 @@ KB.watchZnacky = async (planId) => {
     if (!planId) { emit("znacky", null); return; }
     if (authReady) await authReady;
     requireDb();
-    znackyOdber = onSnapshot(planZnacky(planId), (snap) => {
+    /* includeMetadataChanges: snímek přijde i ve chvíli, kdy databáze
+       potvrdí zápis – podle `hasPendingWrites` stránka ukáže, kolik změn
+       ještě čeká na signál (terén bez signálu, etapa E 13. 11. 2026). */
+    znackyOdber = onSnapshot(planZnacky(planId), { includeMetadataChanges: true }, (snap) => {
         KB.znackyPlanu = [];
-        snap.forEach(d => KB.znackyPlanu.push({ id: d.id, ...d.data() }));
+        let ceka = 0;
+        snap.forEach(d => {
+            KB.znackyPlanu.push({ id: d.id, ...d.data() });
+            if (d.metadata && d.metadata.hasPendingWrites) ceka++;
+        });
+        KB.znackyCeka = ceka;
+        KB.znackyZMezipameti = !!(snap.metadata && snap.metadata.fromCache);
         emit("znacky", null);
     }, (err) => console.error("Chyba čtení značek:", err));
+};
+
+/* -------------------------------------------- kdo je právě v plánu ---
+   `private/plany/soubory/{id}/kdo/{uid}` { jmeno, ms } – zapisuje se při
+   otevření plánu a pak každou minutu, při zavření se smaže. Stránka
+   ukazuje ty, kdo se ozvali v posledních 3 minutách. */
+const planKdoCol = (id) => collection(db, "artifacts", APP_ID, "private", "plany", "soubory", id, "kdo");
+const planKdoDoc = (id, uid) => doc(db, "artifacts", APP_ID, "private", "plany", "soubory", id, "kdo", uid);
+KB.kdoVPlanu = [];
+let kdoOdber = null;
+
+KB.ohlasVPlanu = async (planId) => {
+    if (authReady) await authReady;
+    if (!db || !planId || !KB.currentUid()) return;
+    // jen když je signál – fronta zápisů by jinak po návratu poslala staré „jsem tu"
+    if (navigator.onLine === false) return;
+    await setDocSdk(planKdoDoc(planId, KB.currentUid()), { jmeno: window.KB_USER || "", ms: Date.now() })
+        .catch(() => { /* pravidla ještě nepublikovaná – nic se neděje */ });
+};
+KB.odhlasZPlanu = async (planId) => {
+    if (!db || !planId || !KB.currentUid() || navigator.onLine === false) return;
+    await deleteDocSdk(planKdoDoc(planId, KB.currentUid())).catch(() => {});
+};
+KB.watchKdoVPlanu = async (planId) => {
+    if (kdoOdber) { try { kdoOdber(); } catch (e) {} kdoOdber = null; }
+    KB.kdoVPlanu = [];
+    if (!planId) { emit("kdovplanu", null); return; }
+    if (authReady) await authReady;
+    requireDb();
+    kdoOdber = onSnapshot(planKdoCol(planId), (snap) => {
+        KB.kdoVPlanu = [];
+        snap.forEach(d => KB.kdoVPlanu.push({ id: d.id, ...d.data() }));
+        emit("kdovplanu", null);
+    }, () => { /* starší pravidla: bez přítomnosti */ });
 };
 
 KB.ulozZnacku = async (planId, zid, data) => {

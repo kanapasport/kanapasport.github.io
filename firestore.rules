@@ -841,6 +841,15 @@ service cloud.firestore {
       allow delete: if clen() && resource.data.uid == request.auth.uid;
     }
 
+    /* Kdo je právě v plánu (od 13. 11. 2026, varianta E): každý jen svůj
+       dokument (id = uid), jen jméno a čas; vidí ho, kdo vidí plán. */
+    match /artifacts/firemni-kb-app/private/plany/soubory/{planId}/kdo/{uid} {
+      allow read:           if planVidiId(planId);
+      allow create, update: if clen() && uid == request.auth.uid && planVidiId(planId)
+                               && request.resource.data.keys().hasOnly(['jmeno', 'ms']);
+      allow delete:         if clen() && uid == request.auth.uid;
+    }
+
     /* --- fotky v BPH (přehled po místnostech a technologiích) ------------
        Podklad pro plánování focení: u které místnosti a technologie kolik
        fotek leží. Čte ho celý tým – kdo jede fotit, musí vidět, kde je

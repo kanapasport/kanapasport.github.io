@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Plány – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=352">
+    <link rel="stylesheet" href="assets/css/app.css?v=353">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -370,6 +370,10 @@
         .zarpole .field { font-weight: 400; color: var(--text); }
         .zarradek { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+        .prstav { display: flex; gap: 10px; flex-wrap: wrap; font-size: var(--fs-1); font-weight: 700; opacity: .9; }
+        .prstav span { white-space: nowrap; }
+        .prstav__bez { background: #c8102e; border-radius: var(--r-pill); padding: 1px 8px; }
+
         /* ------------------------- karta značky a panel Značky (etapa C) -- */
         .prohl__stred { flex: 1; display: flex; min-height: 0; position: relative; }
         .prohl__stred > .prohl__plocha { min-width: 0; }
@@ -472,6 +476,7 @@
 <div id="prohl" class="prohl no-print" hidden>
     <div class="prohl__horni">
         <span class="prohl__nazev" id="prNazev"></span>
+        <span class="prstav" id="prStav" aria-live="polite"></span>
         <div class="rezim" id="rezimy">
             <button type="button" data-rezim="posun" class="je-aktivni"
                 title="Posun plánu (Esc). Posouvat jde v každém režimu prostředním tlačítkem nebo s mezerníkem.">Posun</button>
@@ -507,6 +512,8 @@
             <select id="volbaHladina" class="nastroje__vyber"
                     title="Do které hladiny se nová značka zakreslí"></select>
         </div>
+        <button type="button" class="btn btn--sm btn--ghost" id="btnStahnout"
+            title="Uložit plán do tohohle zařízení – otevře se i bez signálu">Do zařízení</button>
         <button type="button" class="btn btn--sm btn--ghost" id="btnZnacky"
             title="Seznam značek s filtrem, skok na značku, export do Excelu (klávesa L)">Značky</button>
         <button type="button" class="btn btn--sm btn--ghost" id="btnHladiny"
@@ -687,10 +694,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=352"></script>
-<script src="assets/js/ui.js?v=352"></script>
-<script src="assets/js/vykazy.js?v=352"></script>
-<script type="module" src="assets/js/store.js?v=352"></script>
+<script src="assets/js/taxonomy.js?v=353"></script>
+<script src="assets/js/ui.js?v=353"></script>
+<script src="assets/js/vykazy.js?v=353"></script>
+<script type="module" src="assets/js/store.js?v=353"></script>
 
 <script>
 (function () {
@@ -832,6 +839,7 @@
                         esc(f.id) + '">⋯</button></div>' +
                 '<div class="plpolozka__nazev">' + esc(f.nazev) + "</div>" +
                 '<div class="plpolozka__meta">' +
+                    (jeStazeny(f.id) ? "✓ v zařízení · " : "") +
                     (sZakazkou && f.projektId ? esc(nazevZakazky(f)) + " · " : "") +
                     esc(f.kdo || "") + " · " +
                     esc(new Date(f.ms || 0).toLocaleDateString("cs-CZ")) + "</div>" +
@@ -1366,7 +1374,7 @@
                     (y * krok) + "px;width:" + krok + "px;pointer-events:none";
                 dlazdiceMam.set(klic, img);
                 const planId = otevreny;
-                window.KB.nactiPlanDlazdici(planId, klic).then(d => {
+                nactiDlazdici(planId, klic).then(d => {
                     if (!d || otevreny !== planId || !dlazdiceMam.has(klic)) return;
                     img.src = d.data;
                     // krajní dlaždice je užší – šířka podle skutečných pixelů
@@ -1375,6 +1383,15 @@
                 }).catch(() => dlazdiceMam.delete(klic));
             }
         }
+    }
+
+    /** Dlaždice: u staženého plánu ze zařízení, jinak z databáze. */
+    async function nactiDlazdici(planId, klic) {
+        if (jeStazeny(planId)) {
+            const t = await kesCti(planId, "d_" + klic);
+            if (t) { try { return JSON.parse(t); } catch (err) { /* poškozená – z databáze */ } }
+        }
+        return window.KB.nactiPlanDlazdici(planId, klic);
     }
 
     /* Kolečka výběru barvy nové značky a filtr výběru se skládají z palety
@@ -1396,6 +1413,9 @@
         if (!plan) return;
         otevreny = id;
         planPripraven = false;
+        znameZnacky = null;
+        znackyZeZarizeni = false;
+        blika.clear();
         aktivniZnacka = "";
         vybrane.clear();
         try {
@@ -1416,6 +1436,8 @@
                 rows: Math.ceil(plan.vyska * plan.dlazScale / (plan.dlazT || 1024)) }
             : null;
         window.KB.watchZnacky(id);
+        zacniPritomnost(id);
+        vykresliStav();
         naplnPaletovePrvky();
         /* Zapnuté hladiny si každý plán pamatuje zvlášť (jsou jeho).
            Vypínátka textu a průhlednosti naopak drží napříč plány –
@@ -1425,7 +1447,8 @@
         nactiZobrazeni();
         srovnejVypinatka();
         try {
-            const dataUrl = await window.KB.nactiPlanObrazek(id);
+            // stažený plán z úložiště zařízení – rychleji a i bez signálu
+            const dataUrl = (jeStazeny(id) && await kesCti(id, "nahled")) || await window.KB.nactiPlanObrazek(id);
             // bez signálu je prázdný (nebo neúplný), když plán v tomhle zařízení online otevřený nebyl
             if (!dataUrl) throw new Error("Obrázek plánu není k dispozici.");
             $("obrazek").src = dataUrl;
@@ -1449,10 +1472,11 @@
                nakreslily do levého horního rohu a nebyly vidět */
             vykresliZnacky();
             zkusOtevritZnacku();
+            setTimeout(() => zkusZnackyZeZarizeni(id), 1500);
         } catch (err) {
             console.error(err);
             window.KBUI.toast(navigator.onLine === false
-                ? "Tenhle plán bez signálu nejde – v zařízení jsou jen plány, které už jsi otevřel online."
+                ? "Tenhle plán bez signálu nejde – bez signálu se otevřou plány stažené tlačítkem Do zařízení."
                 : "Plán se nepodařilo načíst.", "error");
         }
         $("nahravam").hidden = true;
@@ -1505,6 +1529,7 @@
     }
 
     function zavri() {
+        skonciPritomnost(otevreny);
         zavriKartu();
         $("panelZnacky").hidden = true;
         otevreny = "";
@@ -1543,6 +1568,7 @@
         const vel = Number(z.vel) || 26;
         return '<div class="znacka' +
             ((z.pozn || z.fotek) ? " znacka--pozn" : "") +
+            ((blika.get(z.id) || 0) > Date.now() ? " znacka--blik" : "") +
             (vybrane.has(z.id) ? " znacka--vybrana" : "") +
             (z.id === aktivniZnacka ? " znacka--aktivni" : "") +
             '" data-znacka="' + esc(z.id) + '" ' +
@@ -1571,6 +1597,7 @@
         const pismo = Math.max(5, Math.min(sirka / 4, vyska * 0.42));
         return '<div class="tvar' +
             ((z.pozn || z.fotek) ? " tvar--pozn" : "") +
+            ((blika.get(z.id) || 0) > Date.now() ? " znacka--blik" : "") +
             (vybrane.has(z.id) ? " tvar--vybrana" : "") +
             (z.id === aktivniZnacka ? " tvar--aktivni" : "") +
             '" data-znacka="' + esc(z.id) + '" ' +
@@ -2655,6 +2682,173 @@
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     });
 
+    /* ------------------------------ terén bez signálu (etapa E) -------
+       „Stáhnout do zařízení" uloží náhled, všechny dlaždice detailu a značky
+       do úložiště prohlížeče (Cache API). Funguje i v Safari na iPadu
+       a iPhonu, kde databáze trvalou mezipaměť nemá. Stažený plán se pak
+       otevírá z úložiště (rychleji a bez čtení z databáze). Zápisy bez
+       signálu drží fronta databáze (Chrome, Android); v Safari se bez
+       signálu dá plán jen prohlížet. */
+    const KES = "kb-plany-v1";
+    const kesKlic = (planId, cast) => location.origin + "/__plany/" + encodeURIComponent(planId) + "/" + cast;
+    const maKes = () => typeof caches !== "undefined";
+    async function kesUloz(planId, cast, text) {
+        if (!maKes()) return false;
+        try { await (await caches.open(KES)).put(kesKlic(planId, cast), new Response(text)); return true; }
+        catch (err) { console.warn("Úložiště plánu:", err); return false; }
+    }
+    async function kesCti(planId, cast) {
+        if (!maKes()) return null;
+        try {
+            const r = await (await caches.open(KES)).match(kesKlic(planId, cast));
+            return r ? await r.text() : null;
+        } catch (err) { return null; }
+    }
+    async function kesSmaz(planId) {
+        if (!maKes()) return;
+        try {
+            const c = await caches.open(KES);
+            const pred = kesKlic(planId, "");
+            for (const r of await c.keys()) if (r.url.indexOf(pred) === 0) await c.delete(r);
+        } catch (err) { /* nic */ }
+    }
+    const STAZENE_KLIC = "kb-plany-stazene";
+    function stazene() {
+        try { return JSON.parse(localStorage.getItem(STAZENE_KLIC)) || {}; } catch (err) { return {}; }
+    }
+    function ulozStazene(mapa) {
+        try { localStorage.setItem(STAZENE_KLIC, JSON.stringify(mapa)); } catch (err) { /* soukromý režim */ }
+    }
+    const jeStazeny = (id) => !!stazene()[id];
+
+    let stahuji = "";
+    async function stahniPlan(id) {
+        const plan = (window.KB.planySoubory || []).find(f => f.id === id);
+        if (!plan || stahuji) return;
+        if (!maKes()) return window.KBUI.toast("Tenhle prohlížeč neumí plán uložit do zařízení.", "warn");
+        if (navigator.onLine === false) return window.KBUI.toast("Stáhnout jde jen se signálem.", "warn");
+        stahuji = id;
+        try {
+            window.KBUI.toast("Stahuji plán do zařízení…");
+            const nahled = await window.KB.nactiPlanObrazek(id);
+            if (!nahled || !(await kesUloz(id, "nahled", nahled))) throw new Error("náhled se neuložil");
+            let dlazdic = 0;
+            if (plan.dlazScale > 1 && plan.dlazdic) {
+                const T = plan.dlazT || 1024;
+                const cols = Math.ceil(plan.sirka * plan.dlazScale / T);
+                const rows = Math.ceil(plan.vyska * plan.dlazScale / T);
+                const celkem = cols * rows;
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        const klic = x + "_" + y;
+                        const d = await window.KB.nactiPlanDlazdici(id, klic);
+                        if (d) { await kesUloz(id, "d_" + klic, JSON.stringify(d)); dlazdic++; }
+                        if (dlazdic % 10 === 0) window.KBUI.toast("Stahuji detail " + dlazdic + "/" + celkem + "…");
+                    }
+                }
+            }
+            if (otevreny === id) await kesUloz(id, "znacky", JSON.stringify(window.KB.znackyPlanu || []));
+            const mapa = stazene();
+            mapa[id] = { ms: Date.now(), dlazdic: dlazdic, nazev: plan.nazev || "" };
+            ulozStazene(mapa);
+            window.KBUI.toast("Plán je v zařízení – otevřeš ho i bez signálu" +
+                (window.KB.offlineFronta ? "." : " (bez signálu jen k prohlížení)."));
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Stažení selhalo: " + (err.message || err), "error");
+        } finally {
+            stahuji = "";
+            vykresliSeznam();
+            vykresliStav();
+        }
+    }
+    async function odeberPlan(id) {
+        await kesSmaz(id);
+        const mapa = stazene();
+        delete mapa[id];
+        ulozStazene(mapa);
+        window.KBUI.toast("Plán odebraný ze zařízení.");
+        vykresliSeznam();
+        vykresliStav();
+    }
+
+    /* Značky staženého plánu se do zařízení přepisují s každou změnou
+       (po vteřině klidu) – bez signálu se pak ukáže poslední známý stav. */
+    let kesZnackyCasovac = null;
+    function kesZnackyPozdeji() {
+        if (!otevreny || !jeStazeny(otevreny) || window.KB.znackyZMezipameti) return;
+        const id = otevreny;
+        clearTimeout(kesZnackyCasovac);
+        kesZnackyCasovac = setTimeout(() => kesUloz(id, "znacky", JSON.stringify(window.KB.znackyPlanu || [])), 1000);
+    }
+    /** Bez signálu a bez značek z databáze (Safari) – značky ze zařízení, jen ke čtení. */
+    let znackyZeZarizeni = false;
+    async function zkusZnackyZeZarizeni(id) {
+        if (navigator.onLine !== false || !jeStazeny(id) || (window.KB.znackyPlanu || []).length) return;
+        const t = await kesCti(id, "znacky");
+        if (!t || otevreny !== id || (window.KB.znackyPlanu || []).length) return;
+        try { window.KB.znackyPlanu = JSON.parse(t) || []; } catch (err) { return; }
+        znackyZeZarizeni = true;
+        vykresliZnacky();
+        vykresliStav();
+    }
+
+    /* ---------------------------------- kdo je v plánu, signál, fronta -- */
+    let ohlasCasovac = null;
+    const blika = new Map();             // id značky -> do kdy bliká (nová od kolegy)
+    let znameZnacky = null;              // id značek z prvního snímku – ty neblikají
+
+    function vykresliStav() {
+        const el = $("prStav");
+        if (!el) return;
+        const ja = window.KB.currentUid ? window.KB.currentUid() : "";
+        const ted = Date.now();
+        const jini = (window.KB.kdoVPlanu || []).filter(k => k.id !== ja && ted - (Number(k.ms) || 0) < 3 * 60e3)
+            .map(k => String(k.jmeno || "kolega").split(" ")[0]);
+        const casti = [];
+        if (navigator.onLine === false) casti.push('<span class="prstav__bez" title="Změny se odešlou, až bude signál">bez signálu</span>');
+        if (window.KB.znackyCeka) casti.push('<span title="Uložené v zařízení, čekají na odeslání">⏳ ' +
+            window.KB.znackyCeka + " čeká na odeslání</span>");
+        if (znackyZeZarizeni) casti.push("<span>značky ze zařízení – jen k prohlížení</span>");
+        if (jini.length) casti.push('<span title="Právě v plánu">👥 ' + esc(jini.join(", ")) + "</span>");
+        if (otevreny && jeStazeny(otevreny)) casti.push('<span title="Plán je stažený v zařízení">✓ v zařízení</span>');
+        el.innerHTML = casti.join("");
+        $("btnStahnout").textContent = otevreny && jeStazeny(otevreny) ? "Aktualizovat v zařízení" : "Do zařízení";
+    }
+    window.addEventListener("online", () => { vykresliStav(); if (otevreny) window.KB.ohlasVPlanu(otevreny); });
+    window.addEventListener("offline", () => { vykresliStav(); if (otevreny) zkusZnackyZeZarizeni(otevreny); });
+    $("btnStahnout").addEventListener("click", () => { if (otevreny) stahniPlan(otevreny); });
+
+    function zacniPritomnost(id) {
+        clearInterval(ohlasCasovac);
+        window.KB.watchKdoVPlanu(id);
+        window.KB.ohlasVPlanu(id);
+        ohlasCasovac = setInterval(() => { window.KB.ohlasVPlanu(id); vykresliStav(); }, 60e3);
+    }
+    function skonciPritomnost(id) {
+        clearInterval(ohlasCasovac);
+        ohlasCasovac = null;
+        window.KB.watchKdoVPlanu("");
+        if (id) window.KB.odhlasZPlanu(id);
+    }
+    window.addEventListener("pagehide", () => { if (otevreny) window.KB.odhlasZPlanu(otevreny); });
+
+    /** Nové značky od kolegů po otevření plánu krátce zablikají. */
+    function hlidejNoveZnacky() {
+        const vse = window.KB.znackyPlanu || [];
+        if (znameZnacky === null) {
+            // první snímek po otevření – to není „nové", jen načtené
+            if (vse.length || !window.KB.znackyZMezipameti) znameZnacky = new Set(vse.map(z => z.id));
+            return;
+        }
+        const ja = window.KB.currentUid();
+        vse.forEach(z => {
+            if (znameZnacky.has(z.id)) return;
+            znameZnacky.add(z.id);
+            if (z.uid && z.uid !== ja) blika.set(z.id, Date.now() + 2500);
+        });
+    }
+
     /* -------------------------------------------------------------- start */
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -2778,6 +2972,9 @@
                     const id = vic.dataset.menuPlan;
                     ukazMenu(r.left, r.bottom + 4, [
                         { text: "Otevřít", akce: () => otevri(id) },
+                        jeStazeny(id)
+                            ? { text: "Odebrat ze zařízení", akce: () => odeberPlan(id) }
+                            : { text: "Stáhnout do zařízení", akce: () => stahniPlan(id) },
                         manazer && { text: "Zakázka, budova, patro…", akce: () => upravZarazeni(id) },
                         manazer && { text: "Přejmenovat…", akce: () => prejmenuj("plan", id) },
                         manazer && "-",
@@ -3256,6 +3453,7 @@
             if (window.KBUI.isAdmin()) window.KB.watchProjekty(); else window.KB.watchMojeProjekty();
         };
         window.KB.on("projekty-docs", () => { vykresliSeznam(); srovnejLidi(); });
+        window.KB.on("kdovplanu", vykresliStav);
 
         window.KB.on("plany", () => {
             vykresliSeznam();
@@ -3279,7 +3477,11 @@
             }
         });
         window.KB.on("znacky", () => {
+            hlidejNoveZnacky();
+            if ((window.KB.znackyPlanu || []).length || !window.KB.znackyZMezipameti) znackyZeZarizeni = false;
+            kesZnackyPozdeji();
             vykresliZnacky();
+            vykresliStav();
             if (!$("oknoHladiny").hidden) vykresliHlVolby();
         });
         document.addEventListener("kb-role", () => { window.KB.watchPlany(); sledujProjekty(); vykresliSeznam(); });
