@@ -20,6 +20,27 @@
         .replace(/'/g, "&#39;");
     UI.esc = esc;
 
+    /* ------------------------------------------ názvy druhů absence ---
+       Michal 13. 11. 2026: všude (kalendář, nástěnka, Rychlý zápis, vzkazy,
+       výkazy, výpis pro mzdovou…) se píše „Volno (čerpání přesčasu)“ jako
+       ve výběru zakázky. Uložená hodnota zůstává „Volno“ / typ `volno`
+       (filtry, pravidla, Apps Script). Jediná mapa – vykazy.js ji vystavuje
+       i jako KBVYK.nazevAbsence / KBVYK.nazevTypuUdalosti; tady je proto,
+       že ui.js běží na každé stránce (i bez vykazy.js). */
+    UI.NAZEV_ABSENCE = { "Volno": "Volno (čerpání přesčasu)" };
+    /** Zakázka absence → popisek („Volno“ → „Volno (čerpání přesčasu)“, i název zápisu „Volno – Jan Novák“). */
+    UI.nazevAbsence = (x) => {
+        const s = String(x == null ? "" : x).trim();
+        if (UI.NAZEV_ABSENCE[s]) return UI.NAZEV_ABSENCE[s];
+        const m = /^(\S+) – /.exec(s);
+        return m && UI.NAZEV_ABSENCE[m[1]] ? UI.NAZEV_ABSENCE[m[1]] + s.slice(m[1].length) : x;
+    };
+    /* Typ události kalendáře → popisek s velkým písmenem (začátek věty). */
+    UI.NAZEV_TYPU_UDALOSTI = { dovolena: "Dovolená", volno: UI.NAZEV_ABSENCE.Volno, neplacene: "Neplacené volno",
+        nemoc: "Nemoc", doktor: "Doktor", skoleni: "Školení", homeoffice: "Home office" };
+    /** `volno` → „Volno (čerpání přesčasu)“; neznámý typ → `zaloha` (jinak typ sám). */
+    UI.nazevTypuUdalosti = (typ, zaloha) => UI.NAZEV_TYPU_UDALOSTI[typ] || (zaloha === undefined ? typ : zaloha);
+
     /* ------------------------------------------- bezpečné hodnoty do HTML ---
        Pravidla databáze hlídají, KDO smí psát, ne CO zapíše. Poznámku,
        návod, tabuli nebo plán tak může podvrhnout i student z konzole
@@ -945,7 +966,7 @@
        Ze seznamu platí jen ten, kdo je pořád manažer (jako v pravidlech). */
     /* POTVRZOVANI-UI-ZACATEK */
     UI.DRUHY_POTVRZENI = {
-        nepritomnosti: { nazev: "Nepřítomnosti", popis: "dovolená, volno a neplacené volno" },
+        nepritomnosti: { nazev: "Nepřítomnosti", popis: "dovolená, volno (čerpání přesčasu) a neplacené volno" },
         ukoly:         { nazev: "Hotové úkoly",  popis: "úkol, který zpracovatel dokončil" },
         milniky:       { nazev: "Milníky",       popis: "splnění odškrtnuté zpracovatelem" },
         zpetne:        { nazev: "Zpětný zápis",  popis: "povolení zápisu do uzavřeného týdne" },
@@ -1010,7 +1031,6 @@
             text: "Splnění se zruší (navázané úkoly zůstanou) a kdo milník odškrtl, dostane oznámení s důvodem.",
             hotovo: "Milník vrácen mezi rozdělané – zpracovatel dostane oznámení." }
     };
-    const NAZEV_NEPRITOMNOSTI = { dovolena: "Dovolená", volno: "Volno", neplacene: "Neplacené volno" };
     const denMesic = (iso) => {
         const c = String(iso || "").split("-");
         return c.length === 3 ? Number(c[2]) + ". " + Number(c[1]) + "." : "";
@@ -1021,7 +1041,7 @@
         const KB = window.KB || {};
         if (druh === "nepritomnosti") {
             const k = (KB.kalendar || []).find(x => x.id === id);
-            return k ? (NAZEV_NEPRITOMNOSTI[k.typ] || "Nepřítomnost") + " – " + (k.osoba || "") + ", " +
+            return k ? UI.nazevTypuUdalosti(k.typ, "Nepřítomnost") + " – " + (k.osoba || "") + ", " +
                 denMesic(k.od) + (k.do && k.do !== k.od ? " – " + denMesic(k.do) : "") : "";
         }
         if (druh === "ukoly") {
@@ -2170,7 +2190,7 @@
             { nazev: "Quick TO-DO", ikona: "blesk", attr: "data-quick-otevri", odznak: "data-quick-pocet",
               popis: "Napsat vzkaz – kolik vzkazů na tebe čeká, ukazuje číslo" },
             { nazev: "Rychlý zápis", ikona: "calendar", attr: "data-ho-otevri",
-              popis: "Home office, volno, dovolená a doktor na pár kliknutí" },
+              popis: "Home office, volno (čerpání přesčasu), dovolená a doktor na pár kliknutí" },
             { nazev: "Postup dne", ikona: "scan", href: "postup.html" },
             { nazev: "Mini okno", ikona: "okno", attr: "data-mini-okno", need: "vykaz.otevrit",
               popis: "Rychlý zápis hodin v malém okně (Alt+Shift+M)" }
@@ -3054,7 +3074,7 @@
             K.saveQuickTodo(id, {
                 text: DEN_S_PREDLOZKOU[d.getDay()] + " " + d.getDate() + ". " + (d.getMonth() + 1) +
                     ". máš zapsáno jen " + V.hod(k.hodiny) + " (chybí " + V.hod(k.chybi) +
-                    "). Zapiš Volno – čerpání přesčasu – za zbytek dne, nebo doplň další výkaz.",
+                    "). Zapiš " + UI.nazevAbsence("Volno") + " za zbytek dne, nebo doplň další výkaz. Potvrď, co s tím:",
                 proUids: [uid],
                 odKoho: uid,
                 odKohoJmeno: "Hlídka výkazů",
@@ -3080,8 +3100,8 @@
        „Dopíšu výkaz“ = vzkaz hotový a Výkazy (skok na den adresou neumí). */
     const hodinyText = (h) => window.KBVYK ? window.KBVYK.hod(h) : (Number(h) || 0) + " h";
     UI.quickKratkyHtml = (q) => '<button type="button" class="btn btn--sm btn--primary" data-kratky-volno="' +
-            esc(q.id) + '">Zapsat Volno (' + esc(hodinyText(q.chybi)) + ")</button>" +
-        '<button type="button" class="btn btn--sm btn--ghost" data-kratky-dopisu="' + esc(q.id) + '">Dopíšu výkaz</button>';
+            esc(q.id) + '">Ano, zapsat ' + esc(UI.nazevAbsence("Volno")) + " – " + esc(hodinyText(q.chybi)) + "</button>" +
+        '<button type="button" class="btn btn--sm btn--ghost" data-kratky-dopisu="' + esc(q.id) + '">Ne, dopíšu výkaz</button>';
 
     document.addEventListener("click", async (event) => {
         const volno = event.target.closest && event.target.closest("[data-kratky-volno]");
@@ -3096,7 +3116,7 @@
             return;
         }
         const chybi = Number(q.chybi) || 0;
-        if (!(chybi > 0 && chybi <= 8)) return UI.toast("Vzkaz nenese, kolik hodin chybí – zapiš Volno ve Výkazech.", "warn");
+        if (!(chybi > 0 && chybi <= 8)) return UI.toast("Vzkaz nenese, kolik hodin chybí – zapiš " + UI.nazevAbsence("Volno") + " ve Výkazech.", "warn");
         // stejné hlídky jako Rychlý zápis a formulář Výkazů: čára uzávěrky a uzavřený týden (úterý 00:00 dalšího týdne)
         const cara = String((window.KB && window.KB.uzaverkaOd) || "");
         if (cara && q.datum < cara && !UI.can("vykaz.view")) {
@@ -3105,7 +3125,7 @@
         const lhuta = new Date(q.datum + "T00:00:00");
         lhuta.setDate(lhuta.getDate() - (lhuta.getDay() + 6) % 7 + 8);
         if (Date.now() >= lhuta.getTime() && !UI.can("vykaz.view")) {
-            return UI.toast("Týden je už uzavřený – Volno zapíšeš ve Výkazech přes zpětný zápis.", "warn");
+            return UI.toast("Týden je už uzavřený – " + UI.nazevAbsence("Volno") + " zapíšeš ve Výkazech přes zpětný zápis.", "warn");
         }
         volno.disabled = true;
         try {
@@ -3122,7 +3142,7 @@
                 zdroj: "panel", vykazId: vykazId
             });
             await UI.quickPrepni(q, true);
-            UI.toast("Zapsáno Volno " + hodinyText(chybi) + " na " + Number(q.datum.slice(8, 10)) + ". " +
+            UI.toast("Zapsáno " + UI.nazevAbsence("Volno") + " " + hodinyText(chybi) + " na " + Number(q.datum.slice(8, 10)) + ". " +
                 Number(q.datum.slice(5, 7)) + ". – potvrdí ho manažer.");
         } catch (err) {
             console.error(err);
@@ -3293,7 +3313,7 @@
             return u ? ((u.first || "") + " " + (u.last || "")).trim() : (z.osoba || "někdo");
         };
         const popis = dopredu.slice(0, 4).map(z =>
-            jmeno(z) + " " + cesky(z.datum) + " (" + (z.zakazka || "bez projektu") + ")").join(", ");
+            jmeno(z) + " " + cesky(z.datum) + " (" + (UI.nazevAbsence(z.zakazka) || "bez projektu") + ")").join(", ");
         const text = "Výkaz dopředu: " + popis +
             (dopredu.length > 4 ? " a další " + (dopredu.length - 4) : "") +
             ". Do Tabulek to půjde až po tom dni.";
@@ -4282,7 +4302,7 @@
 
     const HO_TYPY = [
         { id: "homeoffice", popis: "HO",       cely: "Home office" },
-        { id: "volno",      popis: "Volno",    cely: "Volno (čerpání přesčasu)" },
+        { id: "volno",      popis: "Volno",    cely: UI.nazevTypuUdalosti("volno") },
         /* Neplacené volno (Michal 2. 11. 2026): přesčas ani dovolenou
            nemění. Na tlačítku kratší, celý název je v bublině a ve výkazu. */
         { id: "neplacene",  popis: "Neplacené", cely: "Neplacené volno" },
@@ -4391,10 +4411,10 @@
         telo.innerHTML =
             '<p class="tiny muted" style="margin:0;line-height:1.6;grid-column:1/-1">' +
                 "Zaklikni si dny dopředu. <b>Dovolená</b> = jedeš pryč," +
-                " <b>Volno</b> = náhradní volno, jsi doma a čerpáš přesčas (−8 h)," +
+                " <b>Volno</b> = " + esc(UI.nazevAbsence("Volno")) + ", jsi doma a čerpáš přesčas (−8 h)," +
                 " <b>Neplacené</b> = neplacené volno, přesčas ani dovolenou nemění," +
                 " <b>HO</b> = pracuješ z domu. Uvidí to všichni v kalendáři;" +
-                " dovolená, volno i neplacené volno se rovnou zapíšou i do výkazu a potvrzuje je" +
+                " dovolená, volno (čerpání přesčasu) i neplacené volno se rovnou zapíšou i do výkazu a potvrzuje je" +
                 " manažer. Na státní svátek se absence nezapisuje.</p>" +
             tydnyPracovnichDnu(HO_DNU).map((tyden, i) =>
                 '<section class="hotyden hotyden--' + (i % 2) + '">' +

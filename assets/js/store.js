@@ -5355,7 +5355,8 @@ KB.potvrdDovolenou = async (id) => {
         potvrzenoMs: Date.now()
     }, { merge: true });
     const u = (KB.kalendar || []).find(x => x.id === id);
-    const DRUH = { dovolena: "dovolenou", volno: "volno", neplacene: "neplacené volno",
+    // popisek volna jednotně z ui.js (Michal 13. 11. 2026)
+    const DRUH = { dovolena: "dovolenou", volno: window.KBUI.nazevAbsence("Volno").toLowerCase(), neplacene: "neplacené volno",
         nemoc: "nemoc", skoleni: "školení" };
     KB.zapisAktivitu("kalendar", "potvrdil " + (DRUH[(u || {}).typ] || "dovolenou") +
         (u ? " – " + (u.osoba || "?") + " (" + (u.od || "") +
@@ -5495,9 +5496,10 @@ KB.zamitniDovolenou = async (id, duvod) => {
         await davka.commit();
     }
 
-    const nazev = zakazka || "Nepřítomnost";
+    const nazev = window.KBUI.nazevAbsence(zakazka) || "Nepřítomnost";
     const kdy = rozsahKratce(u.od, u.do);
-    const KOHO = { dovolena: "dovolenou", volno: "volno", neplacene: "neplacené volno" };
+    const KOHO = { dovolena: "dovolenou", volno: window.KBUI.nazevAbsence("Volno").toLowerCase(),
+        neplacene: "neplacené volno" };
     KB.zapisAktivitu("kalendar", "zamítl " + (KOHO[u.typ] || "nepřítomnost") + " – " + (u.osoba || "?") +
         (kdy ? " (" + kdy + ")" : "") + (idcka.length ? ", smazáno záznamů výkazu: " + idcka.length : "") +
         " – " + text);
@@ -5639,7 +5641,7 @@ KB.saveUdalost = async (id, data) => {
     /* Rychlý zápis (HO, volno, dovolená z pásu) se v Reportu má poznat
        na první pohled – „uložil událost homeoffice" nikomu nic neřekne
        (přání Michala 1. 9. 2026). */
-    const NAZEV_TYPU = { homeoffice: "home office", volno: "volno",
+    const NAZEV_TYPU = { homeoffice: "home office", volno: window.KBUI.nazevAbsence("Volno").toLowerCase(),
                          neplacene: "neplacené volno",
                          dovolena: "dovolenou", doktor: "doktora",
                          nemoc: "nemoc", skoleni: "školení" };
@@ -5668,7 +5670,7 @@ KB.deleteUdalost = async (id) => {
     requireDb();
     const u = (KB.kalendar || []).find(x => x.id === id);
     await deleteDoc(kalendarDoc(id));
-    KB.zapisAktivitu("kalendar", "smazal událost " + (u ? (u.typ || "") + " " +
+    KB.zapisAktivitu("kalendar", "smazal událost " + (u ? window.KBUI.nazevTypuUdalosti(u.typ || "", u.typ || "").toLowerCase() + " " +
         (u.od || "") + (u.osoba ? " – " + u.osoba : "") : id));
 };
 

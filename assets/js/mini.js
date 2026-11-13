@@ -1154,7 +1154,7 @@
             ? "Fond do dneška " + cislo(r.fondDoDnes) + " h · " + (rozdil < 0 ? "chybí " + cislo(-rozdil) + " h"
                 : rozdil > 0 ? "o " + cislo(rozdil) + " h víc" : "přesně podle fondu") +
               (r.tydenAbsence ? " · z toho absence " + cislo(r.tydenAbsence) + " h" : "") +
-              (r.tydenVolno ? " · náhradní volno " + cislo(r.tydenVolno) + " h čerpá přesčas" : "")
+              (r.tydenVolno ? " · " + V().nazevAbsence("Volno").toLowerCase() + " " + cislo(r.tydenVolno) + " h" : "")
             : "";
         box.innerHTML = '<h2 class="mini__nadpis">Hodiny <span>proti fondu</span></h2>' +
             radek("Dnes", r.dnes, r.fondDnes, r.fondDnes ? "" : "Dnes je víkend nebo svátek – fond je nula.") +
@@ -1310,8 +1310,9 @@
 
         const radky = zapisy.map(z => {
             const u = z.ukolId ? ukoly.find(x => x.id === z.ukolId) : null;
-            const co = (u && u.nazev) || z.nazev || z.zakazka || "—";
-            const kde = [co === z.zakazka ? "" : (z.zakazka || ""), z.obed === true ? "oběd" : ""]
+            // „Volno“ → „Volno (čerpání přesčasu)“ i v názvu „Volno – Jméno“ (Michal 13. 11. 2026)
+            const co = (u && u.nazev) || v.nazevAbsence(z.nazev || z.zakazka) || "—";
+            const kde = [co === v.nazevAbsence(z.zakazka) ? "" : v.nazevAbsence(z.zakazka || ""), z.obed === true ? "oběd" : ""]
                 .filter(Boolean).join(" · ");
             const cas = celodenni(z) ? "celý den" : (z.od || "") + "–" + (z.do || "");
             return '<li class="mini__zaznam' + (z.absence === true ? " mini__zaznam--absence" : "") + '">' +
@@ -1325,7 +1326,7 @@
 
         box.innerHTML =
             (volno ? '<p class="mini__volno">' + esc(volno.typ === "volno"
-                ? "Pozor: na dnešek máš nahlášené volno."
+                ? "Pozor: na dnešek máš nahlášené " + v.nazevAbsence("Volno").toLowerCase() + "."
                 : volno.typ === "neplacene"
                     ? "Pozor: na dnešek máš nahlášené neplacené volno."
                     : "Pozor: na dnešek máš nahlášenou dovolenou.") + "</p>" : "") +

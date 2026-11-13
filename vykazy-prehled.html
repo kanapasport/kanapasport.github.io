@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Přehled výkazů – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=341">
+    <link rel="stylesheet" href="assets/css/app.css?v=342">
     <style>
         /* Styly téhle stránky jsou schválně až ZA app.css – doplňují ji
            a u stejné síly pravidla musí vyhrát to pozdější. */
@@ -208,10 +208,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=341"></script>
-<script src="assets/js/ui.js?v=341"></script>
-<script src="assets/js/vykazy.js?v=341"></script>
-<script type="module" src="assets/js/store.js?v=341"></script>
+<script src="assets/js/taxonomy.js?v=342"></script>
+<script src="assets/js/ui.js?v=342"></script>
+<script src="assets/js/vykazy.js?v=342"></script>
+<script type="module" src="assets/js/store.js?v=342"></script>
 
 <script>
 (function () {
@@ -334,7 +334,7 @@
     function vykresliNabidku(dotaz) {
         const kusy = bezDiakritiky(dotaz).split(/\s+/).filter(Boolean);
         const sedi = (r) => {
-            const nazev = bezDiakritiky(r.nazev);
+            const nazev = bezDiakritiky(V.nazevAbsence(r.nazev));
             return kusy.every(k => nazev.indexOf(k) !== -1);
         };
         const seznam = zakazkyProVyber();
@@ -342,7 +342,7 @@
             '<button type="button" class="zaknabidka__polozka' +
                 (prazdny ? " zaknabidka__polozka--bez" : "") +
                 '" data-zak="' + esc(r.nazev) + '">' +
-                '<span class="zaknabidka__nazev">' + esc(r.nazev) + "</span>" +
+                '<span class="zaknabidka__nazev">' + esc(V.nazevAbsence(r.nazev)) + "</span>" +
                 '<span class="zaknabidka__cislo">' + esc(prazdny ? "bez zápisu"
                     : V.pocet(r.zapisu, ["zápis", "zápisy", "zápisů"]) + " · " + V.hod(r.hodiny)) +
                 "</span></button>";
@@ -366,7 +366,7 @@
         filtr.zakazka = nazev || "";
         filtr.projekt = "";                 // jiná zakázka = jiné projekty
         // do pole patří celý název, ne to, co se z něj stihlo napsat
-        $("fZakazka").value = filtr.zakazka;
+        $("fZakazka").value = V.nazevAbsence(filtr.zakazka);
         zavriNabidku();
         render();
     }
@@ -375,7 +375,7 @@
         $("fOsoba").innerHTML = V.options(V.lide().map(u => ({ value: u.id, label: V.jmeno(u) })),
             filtr.uid, "Všichni lidé");
         // do pole se píše, hodnotu proto přepisujeme jen když v něm nikdo nestojí
-        if ($("fZakazka") !== document.activeElement) $("fZakazka").value = filtr.zakazka;
+        if ($("fZakazka") !== document.activeElement) $("fZakazka").value = V.nazevAbsence(filtr.zakazka);
         $("zakVyber").classList.toggle("zakvyber--doma", !filtr.zakazka);
         // bez vybrané zakázky by seznam projektů byl směsice ze všech zakázek
         $("fProjekt").innerHTML = filtr.zakazka
@@ -422,7 +422,7 @@
             razene.map(p => {
                 const druh = (druhy || {})[p.klic] || "";
                 const podil = celek ? Math.round(hodnota(p) / celek * 100) : 0;
-                return "<tr><td title=\"" + esc(p.klic) + "\">" + esc(p.klic) +
+                return "<tr><td title=\"" + esc(V.nazevAbsence(p.klic)) + "\">" + esc(V.nazevAbsence(p.klic)) +
                         (druh ? '<span class="vsezak__druh">' + esc(druh) + "</span>" : "") + "</td>" +
                     "<td>" + V.cislo(p.pocet) + "</td>" +
                     "<td>" + V.hod(p.hodiny) + "</td>" +
@@ -610,9 +610,9 @@
         return "<tr" + (z.absence ? ' class="vyk__absence"' : "") + ">" +
             "<td>" + esc(V.czDatum(z.datum)) +
                 '<span class="vyk__pozn">' + esc(denZkratka(z.datum)) + "</span></td>" +
-            '<td class="vyk__nazev">' + esc(z.nazev || "") +
+            '<td class="vyk__nazev">' + esc(V.nazevAbsence(z.nazev || "")) +
                 (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
-            "<td>" + esc(z.zakazka || "") +
+            "<td>" + esc(V.nazevAbsence(z.zakazka || "")) +
                 (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
             "<td>" + esc(z.cinnost || "") + "</td>" +
             '<td title="' + esc(V.techLabel(z.technologie)) + '">' + esc(z.technologie || "") + "</td>" +
@@ -685,7 +685,7 @@
             .map(m => Object.assign({}, m, { klic: nazevMesice(m.klic) }));
 
         return karta("Po měsících",
-            (filtr.zakazka ? filtr.zakazka + " · " : "") + "za celou dobu, ne jen za vybrané období",
+            (filtr.zakazka ? V.nazevAbsence(filtr.zakazka) + " · " : "") + "za celou dobu, ne jen za vybrané období",
             V.pruhy(mesice, metrika));
     }
 
@@ -854,7 +854,7 @@
         });
         $("fZakazka").addEventListener("blur", () => {
             // co se nedopsalo do konce, se po odchodu vrátí na vybranou zakázku
-            setTimeout(() => { zavriNabidku(); $("fZakazka").value = filtr.zakazka; }, 120);
+            setTimeout(() => { zavriNabidku(); $("fZakazka").value = V.nazevAbsence(filtr.zakazka); }, 120);
         });
         $("btnDomov").addEventListener("click", () => {
             $("fZakazka").value = "";

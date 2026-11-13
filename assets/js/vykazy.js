@@ -195,8 +195,6 @@
     const denPotvrzen = (kalendar, uid, typ, datum) => (kalendar || []).some(k => k && k.uid === uid &&
         k.typ === typ && k.potvrzeno === true && k.stav !== "zamitnuto" && k.zamitnuto !== true &&
         String(k.od || "") <= datum && datum <= String(k.do || k.od || ""));
-    /* Pro mzdovou účetní: „Volno“ je na webu náhradní volno (čerpá přesčas). */
-    const MZDY_POPISEK = { "Volno": "Náhradní volno" };
     const MZDY_VARIANTY = ["", "placene", "nepotvrzeno"];
     const MZDY_VARIANTA_TEXT = { placene: " (placené)", nepotvrzeno: " (nepotvrzeno)" };
     const MESICE_NAZEV = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec",
@@ -297,7 +295,7 @@
             const celeDny = new Set();
             let celkemHodin = 0;
             skupiny.forEach(s => {
-                const popisek = (MZDY_POPISEK[s.druh] || s.druh) + (MZDY_VARIANTA_TEXT[s.varianta] || "");
+                const popisek = V.nazevAbsence(s.druh) + (MZDY_VARIANTA_TEXT[s.varianta] || "");
                 const cele = Array.from(s.cele).sort();
                 if (cele.length) {
                     cele.forEach(d => celeDny.add(d));
@@ -534,8 +532,12 @@
     /* Popisek pro lidi (Michal 9. 11. 2026): uložená hodnota zůstává „Volno“
        (zápisy, kalendář `volno`, Apps Script), jen se všude ukazuje s dovětkem,
        ať je jasné, že den volna ubírá z přesčasu. */
-    V.NAZEV_ABSENCE = { "Volno": "Volno (čerpání přesčasu)" };
-    V.nazevAbsence = (x) => V.NAZEV_ABSENCE[String(x == null ? "" : x).trim()] || x;
+    /* Od 13. 11. 2026 jedna mapa pro celý web v ui.js (běží na každé stránce):
+       V.nazevAbsence(zakázka) a V.nazevTypuUdalosti(typ kalendáře) ji jen vystavují. */
+    V.NAZEV_ABSENCE = window.KBUI.NAZEV_ABSENCE || {};
+    V.nazevAbsence = (x) => window.KBUI.nazevAbsence ? window.KBUI.nazevAbsence(x) : x;
+    V.nazevTypuUdalosti = (typ, zaloha) => window.KBUI.nazevTypuUdalosti
+        ? window.KBUI.nazevTypuUdalosti(typ, zaloha) : (zaloha === undefined ? typ : zaloha);
 
     /* Kdo vůbec fond hodin má. OSVČ a student ne – přesčas ani dovolená
        se jim nikde neukazují a nic se u nich nenastavuje (Michal 26. 10.
@@ -952,13 +954,13 @@
        u milníku jen ten, kdo vidí termín (bez termínu není štítek).
        Částečná absence (lékař na dvě hodiny) termín nepřekazí – nepočítá se. */
     const NEPRITOMNOST_STITEK = {
-        dovolena: "termín v dovolené", volno: "termín ve volnu",
+        dovolena: "termín v dovolené", volno: "termín ve volnu (čerpání přesčasu)",
         neplacene: "termín v neplaceném volnu", nemoc: "v den termínu nepřítomen",
         doktor: "v den termínu nepřítomen", skoleni: "v den termínu na školení"
     };
     const NEPRITOMNOST_DRUH = {
-        dovolena: "dovolenou", volno: "volno", neplacene: "neplacené volno",
-        nemoc: "nemoc", doktor: "lékaře", skoleni: "školení"
+        dovolena: "dovolenou", volno: V.nazevAbsence("Volno").toLowerCase(),
+        neplacene: "neplacené volno", nemoc: "nemoc", doktor: "lékaře", skoleni: "školení"
     };
 
     /**
@@ -2449,7 +2451,7 @@
             const sirka = Math.max(1, Math.round(hodnota(p) / max * 100));
             const hlavni = metrika === "hod" ? V.hod(p.hodiny) : V.kc(p.castka);
             const vedlejsi = metrika === "hod" ? V.kc(p.castka) : V.hod(p.hodiny);
-            const nazev = popisek ? popisek(p.klic) : p.klic;
+            const nazev = popisek ? popisek(p.klic) : V.nazevAbsence(p.klic);
 
             /* Seřazený žebříček je o velikosti, ne o totožnosti – každý pruh má
                vlastní popisek, takže barva nic nerozlišuje a všechny jsou stejné.
@@ -2495,7 +2497,7 @@
 
         const stred = metrika === "hod" ? V.hod(celek) : V.kc(celek);
         const legenda = polozky.map(p => {
-            const nazev = popisek ? popisek(p.klic) : p.klic;
+            const nazev = popisek ? popisek(p.klic) : V.nazevAbsence(p.klic);
             return '<li class="bpleg__radek">' +
                 '<span class="bpleg__tecka" style="background:' + p.barva + '"></span>' +
                 '<span class="bpleg__nazev" title="' + esc(nazev) + '">' + esc(nazev) + "</span>" +
@@ -3096,7 +3098,7 @@
         const casti = String(jmeno || "").trim().split(/\s+/);
         return casti.length > 1 ? casti[0].charAt(0) + ". " + casti.slice(1).join(" ") : casti.join(" ");
     };
-    const NEPOTVRZENO_TEXT = { "Dovolená": "nepotvrzená dovolená", "Volno": "nepotvrzené náhradní volno",
+    const NEPOTVRZENO_TEXT = { "Dovolená": "nepotvrzená dovolená", "Volno": "nepotvrzené " + V.nazevAbsence("Volno").toLowerCase(),
         "Neplacené volno": "nepotvrzené neplacené volno" };
     const UZAVERKA_TEXT_MAX = 300;
 

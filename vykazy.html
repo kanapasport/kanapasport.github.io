@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=341">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=341">
+    <link rel="stylesheet" href="assets/css/app.css?v=342">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=342">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -399,7 +399,7 @@
                 <span class="vt-leg-x vt--malo">méně než 7 h</span>
                 <span class="vt-leg-x vt--akorat">7–8 h</span>
                 <span class="vt-leg-x vt--hodne">víc než 8 h</span>
-                <span class="vt-leg-x vt--abs">A</span> absence – dovolená, volno, neplacené volno, nemoc, doktor nebo školení
+                <span class="vt-leg-x vt--abs">A</span> absence – dovolená, volno (čerpání přesčasu), neplacené volno, nemoc, doktor nebo školení
             </div>
         </div>
 
@@ -633,11 +633,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=341"></script>
-<script src="assets/js/ui.js?v=341"></script>
-<script src="assets/js/nabidka.js?v=341"></script>
-<script src="assets/js/vykazy.js?v=341"></script>
-<script type="module" src="assets/js/store.js?v=341"></script>
+<script src="assets/js/taxonomy.js?v=342"></script>
+<script src="assets/js/ui.js?v=342"></script>
+<script src="assets/js/nabidka.js?v=342"></script>
+<script src="assets/js/vykazy.js?v=342"></script>
+<script type="module" src="assets/js/store.js?v=342"></script>
 
 <script>
 (function () {
@@ -1025,7 +1025,7 @@
         absHlaska.hidden = !abs;
         if (abs) {
             absHlaska.textContent = abs.typ === "volno"
-                ? "Pozor: na tento den máš nahlášené volno."
+                ? "Pozor: na tento den máš nahlášené " + V.nazevAbsence("Volno").toLowerCase() + "."
                 : abs.typ === "neplacene"
                     ? "Pozor: na tento den máš nahlášené neplacené volno."
                     : "Pozor: na tento den máš nahlášenou dovolenou.";
@@ -4273,12 +4273,12 @@
      */
     function naplnHledaciFiltr(select, volby, hodnota, vse, nastaveni, popisek) {
         const seznam = (volby || []).map(v =>
-            typeof v === "string" ? { value: v, label: v } : v);
+            typeof v === "string" ? { value: v, label: V.nazevAbsence(v) } : v);
         /* Hodnota, která v nabídce není (člověk, co už nepracuje, z adresy
            ?zapis=…), se přidá – jinak by pole hlásilo „Všichni lidé" a
            tabulka přitom ukazovala jednoho. */
         if (hodnota && !seznam.some(v => v.value === hodnota)) {
-            seznam.push({ value: hodnota, label: popisek ? popisek(hodnota) : hodnota });
+            seznam.push({ value: hodnota, label: popisek ? popisek(hodnota) : V.nazevAbsence(hodnota) });
         }
         const nabidka = '<option value="' + esc(FILTR_VSE) + '">' + esc(vse) + "</option>" +
             V.options(seznam, null);
@@ -4572,17 +4572,17 @@
 
             return '<tr data-zid="' + esc(z.id || "") + '"' + (spravce ? ' class="kt-vybiratelny"' : "") + ">" +
                 (spravce ? '<td class="kt-vyber">' + vyberZapisu.box(z.id || "",
-                    V.czDatum(z.datum || "") + " " + (z.nazev || z.zakazka || "")) + "</td>" : "") +
+                    V.czDatum(z.datum || "") + " " + V.nazevAbsence(z.nazev || z.zakazka || "")) + "</td>" : "") +
                 (spravce ? '<td data-l="Kdo">' + esc(V.osobaText(z)) + "</td>" : "") +
                 /* Popis říká, do čeho zápis spadá; jak se jmenuje úkol,
                    na který se to účtuje, je v bublině. */
                 '<td class="vyk__nazev kt-hlavni"' + (ukolNazev(z)
                     ? ' title="' + esc("Úkol: " + ukolNazev(z)) + '"' : "") + ">" +
-                    esc(z.nazev || "") +
+                    esc(V.nazevAbsence(z.nazev || "")) +
                     (jeVypomoc(z) ? ' <span class="tag" title="Hodiny na úkolu, který má přiřazený někdo jiný" ' +
                         'style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">výpomoc</span>' : "") +
                     (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
-                '<td data-l="Projekt">' + esc(z.zakazka || "") +
+                '<td data-l="Projekt">' + esc(V.nazevAbsence(z.zakazka || "")) +
                     (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
                 (z.firma ? '<td data-l="Firma">' + esc(z.firma) + "</td>" : "<td></td>") +
                 (z.cinnost ? '<td data-l="Druh">' + esc(z.cinnost) + "</td>" : "<td></td>") +
@@ -4629,7 +4629,7 @@
     function otevriOpravu(z) {
         opravaId = z.id;
         $("opVykaz").innerHTML = "Jde o zápis z <b>" + esc(V.czDatum(z.datum || "")) + "</b>" +
-            (z.zakazka ? " – " + esc(z.zakazka) : "") +
+            (z.zakazka ? " – " + esc(V.nazevAbsence(z.zakazka)) : "") +
             " · " + esc(V.hod(Number(z.hodiny) || 0)) +
             (podCarou(z.datum)
                 ? '<br><span style="color:var(--warn);font-weight:700">Měsíc je uzavřený (uzávěrka do ' +
@@ -5032,7 +5032,7 @@
                 u && spravce && filtr.ukolId !== u.id && {
                     text: "Všechny výkazy tohoto úkolu", ikona: "lupa", fn: () => vykazyUkolu(u.id) },
                 projektVNabidce && filtr.zakazka !== z.zakazka && {
-                    text: "Jen projekt " + z.zakazka, ikona: "filtr", oddel: true,
+                    text: "Jen projekt " + V.nazevAbsence(z.zakazka), ikona: "filtr", oddel: true,
                     fn: () => filtrujNa("zakazka", z.zakazka) },
                 clovekVNabidce && filtr.uid !== z.uid && {
                     text: "Jen " + V.osobaText(z), ikona: "clovek", fn: () => filtrujNa("uid", z.uid) },
