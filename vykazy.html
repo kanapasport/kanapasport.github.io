@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=343">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=343">
+    <link rel="stylesheet" href="assets/css/app.css?v=344">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=344">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -399,7 +399,10 @@
                 <span class="vt-leg-x vt--malo">méně než 7 h</span>
                 <span class="vt-leg-x vt--akorat">7–8 h</span>
                 <span class="vt-leg-x vt--hodne">víc než 8 h</span>
-                <span class="vt-leg-x vt--abs">A</span> absence – dovolená, volno (čerpání přesčasu), neplacené volno, nemoc, doktor nebo školení
+                <span class="vt-leg-x vt--abs">D</span> absence celý den ·
+                štítek u hodin = absence s hodinami (např. <span class="vt-a">V 2</span>):
+                <b>V</b> volno (čerpání přesčasu) · <b>L</b> lékař · <b>D</b> dovolená · <b>N</b> nemoc ·
+                <b>NV</b> neplacené volno · <b>Š</b> školení
             </div>
         </div>
 
@@ -633,11 +636,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=343"></script>
-<script src="assets/js/ui.js?v=343"></script>
-<script src="assets/js/nabidka.js?v=343"></script>
-<script src="assets/js/vykazy.js?v=343"></script>
-<script type="module" src="assets/js/store.js?v=343"></script>
+<script src="assets/js/taxonomy.js?v=344"></script>
+<script src="assets/js/ui.js?v=344"></script>
+<script src="assets/js/nabidka.js?v=344"></script>
+<script src="assets/js/vykazy.js?v=344"></script>
+<script type="module" src="assets/js/store.js?v=344"></script>
 
 <script>
 (function () {
@@ -1968,11 +1971,16 @@
            na jednom projektu. Absence se počítá taky, jinak by dovolená
            vypadala jako prázdný den. */
         const hodiny = new Map();
-        const absence = new Set();
+        const absence = new Map();          // iso → { druh: hodiny } (Michal 13. 11. 2026: ne „A“, ale druh a hodiny)
         (window.KB.vykazy || []).forEach(z => {
             if (z.uid !== uid) return;
             const k = z.datum;
-            if (z.absence === true || jeAbsence(z.zakazka)) return void absence.add(k);
+            if (z.absence === true || jeAbsence(z.zakazka)) {
+                const druhy = absence.get(k) || {};
+                const druh = String(z.zakazka || "").trim() || "Absence";
+                druhy[druh] = (druhy[druh] || 0) + (Number(z.hodiny) || 0);
+                return void absence.set(k, druhy);
+            }
             hodiny.set(k, (hodiny.get(k) || 0) + (Number(z.hodiny) || 0));
         });
 
@@ -1993,11 +2001,14 @@
                 const h = hodiny.get(x.iso) || 0;
                 let cls = x.vikend ? "vt--vik" : "";
                 let text = "";
-                if (absence.has(x.iso)) { cls = "vt--abs"; text = "A"; }
-                else if (h > 8)  { cls = "vt--hodne";  text = vtHodiny(h); }
+                if (h > 8)       { cls = "vt--hodne";  text = vtHodiny(h); }
                 else if (h >= 7) { cls = "vt--akorat"; text = vtHodiny(h); }
                 else if (h > 0)  { cls = "vt--malo";   text = vtHodiny(h); }
-                return '<td class="' + cls + '">' + esc(text) + "</td>";
+                else if (absence.has(x.iso)) cls = "vt--abs";
+                /* Část dne absence vedle hodin práce: „6“ + štítek „V 2“; celý den
+                   bez práce jen písmeno druhu – stejně jako Vytížení (Michal 13. 11. 2026). */
+                const abs = absence.get(x.iso);
+                return '<td class="' + cls + '">' + esc(text) + (abs ? V.stitkyAbsenceHtml(abs, h > 0) : "") + "</td>";
             }).join("") + "</tr>";
     }
 

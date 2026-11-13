@@ -539,6 +539,25 @@
     V.nazevTypuUdalosti = (typ, zaloha) => window.KBUI.nazevTypuUdalosti
         ? window.KBUI.nazevTypuUdalosti(typ, zaloha) : (zaloha === undefined ? typ : zaloha);
 
+    /* Absence v mřížkách (Vytížení, měsíc ve Výkazech) ne jako „A", ale písmeno
+       druhu + hodiny: „6" práce a vedle štítek „V 2" = volno (čerpání přesčasu)
+       2 h; celý den bez práce jen písmeno s bublinou (Michal 13. 11. 2026).
+       Jedno místo pro obě stránky. */
+    V.PISMENO_ABSENCE = { "Volno": "V", "Doktor": "L", "Dovolená": "D", "Nemoc": "N",
+        "Neplacené volno": "NV", "Školení": "Š" };
+    V.pismenoAbsence = (druh) => V.PISMENO_ABSENCE[druh] || String(druh || "A").charAt(0).toUpperCase();
+    /** HTML štítků absencí jednoho dne / týdne: druhy = { druh: hodiny }; sHodinami = vždy s hodinami. */
+    V.stitkyAbsenceHtml = (druhy, sHodinami) => {
+        const esc = (s) => (window.KBUI && window.KBUI.esc) ? window.KBUI.esc(s) : String(s);
+        const txt = (h) => Number(h).toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
+        return Object.keys(druhy || {}).sort((a, b) => V.ABSENCE.indexOf(a) - V.ABSENCE.indexOf(b)).map(druh => {
+            const h = druhy[druh];
+            const celeDny = h > 0 && h % 8 === 0;
+            return '<span class="vt-a" title="' + esc(V.nazevAbsence(druh) + " " + txt(h) + " h") + '">' +
+                esc(V.pismenoAbsence(druh) + (sHodinami || !celeDny ? " " + txt(h) : "")) + "</span>";
+        }).join("");
+    };
+
     /* Kdo vůbec fond hodin má. OSVČ a student ne – přesčas ani dovolená
        se jim nikde neukazují a nic se u nich nenastavuje (Michal 26. 10.
        2026). Jedna odpověď pro dlaždice, Vytížení, mini okno, Nastavení
