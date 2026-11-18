@@ -295,7 +295,7 @@
             const celeDny = new Set();
             let celkemHodin = 0;
             skupiny.forEach(s => {
-                const popisek = V.nazevAbsence(s.druh) + (MZDY_VARIANTA_TEXT[s.varianta] || "");
+                const popisek = V.nazevAbsence(s.druh, uid) + (MZDY_VARIANTA_TEXT[s.varianta] || "");
                 const cele = Array.from(s.cele).sort();
                 if (cele.length) {
                     cele.forEach(d => celeDny.add(d));
@@ -535,9 +535,12 @@
     /* Od 13. 11. 2026 jedna mapa pro celý web v ui.js (běží na každé stránce):
        V.nazevAbsence(zakázka) a V.nazevTypuUdalosti(typ kalendáře) ji jen vystavují. */
     V.NAZEV_ABSENCE = window.KBUI.NAZEV_ABSENCE || {};
-    V.nazevAbsence = (x) => window.KBUI.nazevAbsence ? window.KBUI.nazevAbsence(x) : x;
-    V.nazevTypuUdalosti = (typ, zaloha) => window.KBUI.nazevTypuUdalosti
-        ? window.KBUI.nazevTypuUdalosti(typ, zaloha) : (zaloha === undefined ? typ : zaloha);
+    /* Nepovinné `uid` = čí absence (bez něj přihlášený); OSVČ přesčas nemá,
+       u něj zůstává jen „Volno“ (Michal 18. 11. 2026). */
+    V.nazevAbsence = (x, uid) => window.KBUI.nazevAbsence ? window.KBUI.nazevAbsence(x, uid) : x;
+    V.nazevTypuUdalosti = (typ, zaloha, uid) => window.KBUI.nazevTypuUdalosti
+        ? window.KBUI.nazevTypuUdalosti(typ, zaloha, uid) : (zaloha === undefined ? typ : zaloha);
+    V.bezPrescasu = (uid) => !!(window.KBUI.bezPrescasu && window.KBUI.bezPrescasu(uid));
 
     /* Absence v mřížkách (Vytížení, měsíc ve Výkazech) ne jako „A", ale písmeno
        druhu + hodiny: „6" práce a vedle štítek „V 2" = volno (čerpání přesčasu)
@@ -1005,7 +1008,7 @@
         doktor: "v den termínu nepřítomen", skoleni: "v den termínu na školení"
     };
     const NEPRITOMNOST_DRUH = {
-        dovolena: "dovolenou", volno: V.nazevAbsence("Volno").toLowerCase(),
+        dovolena: "dovolenou", volno: "volno (čerpání přesčasu)",
         neplacene: "neplacené volno", nemoc: "nemoc", doktor: "lékaře", skoleni: "školení"
     };
 
@@ -1033,8 +1036,10 @@
         return {
             typ: zaznam.typ,
             uid: uid,
-            stitek: NEPRITOMNOST_STITEK[zaznam.typ],
-            popis: jmeno + " má v den termínu " + NEPRITOMNOST_DRUH[zaznam.typ] +
+            // OSVČ přesčas nemá – volno bez dovětku (Michal 18. 11. 2026)
+            stitek: zaznam.typ === "volno" && V.bezPrescasu(uid) ? "termín ve volnu" : NEPRITOMNOST_STITEK[zaznam.typ],
+            popis: jmeno + " má v den termínu " + (zaznam.typ === "volno"
+                ? V.nazevAbsence("Volno", uid).toLowerCase() : NEPRITOMNOST_DRUH[zaznam.typ]) +
                 " (" + rozsah + (nepotvrzena ? ", ještě nepotvrzeno" : "") + ")."
         };
     };
@@ -3123,7 +3128,7 @@
             const ap = dnyDruhu(s), az = dnyDruhu(z);
             new Set([...ap.keys(), ...az.keys()]).forEach(druh => {
                 const text = zmenaDnu(ap.get(druh) || [], az.get(druh) || []);
-                if (text) pridej(V.nazevAbsence(druh) + ": " + text);
+                if (text) pridej(V.nazevAbsence(druh, uid) + ": " + text);
             });
 
             const chybi = zmenaDnu(s.chybi || [], z.chybi || []);
@@ -3144,8 +3149,10 @@
         const casti = String(jmeno || "").trim().split(/\s+/);
         return casti.length > 1 ? casti[0].charAt(0) + ". " + casti.slice(1).join(" ") : casti.join(" ");
     };
-    const NEPOTVRZENO_TEXT = { "Dovolená": "nepotvrzená dovolená", "Volno": "nepotvrzené " + V.nazevAbsence("Volno").toLowerCase(),
-        "Neplacené volno": "nepotvrzené neplacené volno" };
+    /* Volno podle člověka řádku – OSVČ bez „čerpání přesčasu“ (Michal 18. 11. 2026). */
+    const NEPOTVRZENO_TEXT = { "Dovolená": () => "nepotvrzená dovolená",
+        "Volno": (uid) => "nepotvrzené " + V.nazevAbsence("Volno", uid).toLowerCase(),
+        "Neplacené volno": () => "nepotvrzené neplacené volno" };
     const UZAVERKA_TEXT_MAX = 300;
 
     /**
@@ -3163,7 +3170,7 @@
             if ((c.kratke || []).length) co.push(V.pocet(c.kratke.length, tvaryDne) + " pod 8 h");
             (c.absence || []).forEach(a => {
                 const n = (a.nepotvrzeno || []).length;
-                if (n) co.push((NEPOTVRZENO_TEXT[a.druh] || "nepotvrzeno: " + a.druh) + " (" + V.pocet(n, tvaryDne) + ")");
+                if (n) co.push((NEPOTVRZENO_TEXT[a.druh] ? NEPOTVRZENO_TEXT[a.druh](c.uid) : "nepotvrzeno: " + a.druh) + " (" + V.pocet(n, tvaryDne) + ")");
             });
             if (co.length) polozky.push(kratkeJmeno(c.jmeno) + " " + co.join(", "));
         });

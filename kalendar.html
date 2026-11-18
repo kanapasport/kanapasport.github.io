@@ -219,7 +219,7 @@
                  založené jako akce (skoleniAkce) – viz DRUH_FILTRU. -->
             <label class="filtr__druh"><input type="checkbox" data-druh="skoleni"><i class="ud--skoleni"></i>Školení</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="homeoffice"><i class="ud--homeoffice"></i>Home office</label>
-            <label class="filtr__druh"><input type="checkbox" data-druh="volno"><i class="ud--volno"></i>Volno (čerpání přesčasu)</label>
+            <label class="filtr__druh"><input type="checkbox" data-druh="volno"><i class="ud--volno"></i><span data-nazev-volno>Volno (čerpání přesčasu)</span></label>
             <label class="filtr__druh"><input type="checkbox" data-druh="neplacene"><i class="ud--neplacene"></i>Neplacené volno</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="doktor"><i class="ud--doktor"></i>Doktor</label>
             <label class="filtr__druh"><input type="checkbox" data-druh="ukol"><i class="ud--ukol"></i>Termíny úkolů</label>
@@ -254,7 +254,7 @@
                         <option value="nemoc">Nemoc</option>
                         <option value="skoleni">Školení</option>
                         <option value="homeoffice">Home office</option>
-                        <option value="volno">Volno (čerpání přesčasu)</option>
+                        <option value="volno" id="uTypVolno">Volno (čerpání přesčasu)</option>
                         <option value="neplacene">Neplacené volno</option>
                         <option value="doktor">Doktor</option>
                         <option value="udalost">Firemní akce</option>
@@ -416,8 +416,16 @@
     /* Popisky druhů s velkým písmenem – v kalendáři stojí druh na začátku
        řádku („Dovolená – Jan Novák"), takže se píše jako začátek věty. */
     const DRUHY = { udalost: "Firemní akce", doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", homeoffice: "Home office", volno: V.nazevTypuUdalosti("volno"), neplacene: "Neplacené volno",
+        skoleni: "Školení", homeoffice: "Home office", volno: V.NAZEV_ABSENCE.Volno, neplacene: "Neplacené volno",
         teams: "Teams call", schuzka: "Schůzka", skoleniAkce: "Školení" };
+    /* Volno podle člověka události – OSVČ přesčas nemá, píše se jen „Volno“
+       (Michal 18. 11. 2026). Bez člověka (filtr) se řídí přihlášeným. */
+    const nazevDruhuPro = (u) => u.typ === "volno"
+        ? V.nazevTypuUdalosti("volno", "", u.uid || "") : (DRUHY[u.typ] || DRUHY.udalost);
+    function popiskyVolna() {
+        const filtr = document.querySelector("[data-nazev-volno]");
+        if (filtr) filtr.textContent = V.nazevTypuUdalosti("volno");
+    }
     /* Druhy, u kterých je v mřížce vlastní název místo názvu druhu – jsou
        to domluvené věci, ne stavy člověka. „Teams call", „Schůzka"
        a školení založené jako akce (`skoleniAkce`, Michal 21. 10. 2026) se
@@ -532,7 +540,7 @@
         // jméno raději z uid – uložené se mohlo mezitím změnit
         const clovek = V.clovek(u.uid);
         const kdo = clovek ? V.jmeno(clovek) : (u.osoba || "");
-        const nazevDruhu = DRUHY[u.typ] || DRUHY.udalost;
+        const nazevDruhu = nazevDruhuPro(u);
 
         /* Vlastní text se připojí jen tehdy, když opravdu něco přidává.
            Absence z výkazu měly v textu název druhu, takže vycházelo
@@ -558,7 +566,7 @@
 
         return { druh: druh, kdo: kdo, popis: druh + (kdo ? " – " + kdo : ""),
                  // starý text „Volno“ u druhu „Volno (čerpání přesčasu)“ nic nepřidává (Michal 13. 11. 2026)
-                 vlastni: vlastni && V.nazevAbsence(vlastni).toLowerCase() !== nazevDruhu.toLowerCase()
+                 vlastni: vlastni && V.nazevAbsence(vlastni, u.uid || "").toLowerCase() !== nazevDruhu.toLowerCase()
                           ? vlastni : "" };
     }
 
@@ -924,7 +932,7 @@
             : "";
 
         return '<div class="detail__hlava ud--' + esc(u.typ || "udalost") + '">' +
-                esc(DRUHY[u.typ] || DRUHY.udalost) + "</div>" +
+                esc(nazevDruhuPro(u)) + "</div>" +
             '<div class="detail__telo">' +
                 radek("Kdo", p.kdo) +
                 radek("Kdy", obdobi) +
@@ -1052,6 +1060,8 @@
         const u = (window.KB.kalendar || []).find(x => x.id === upravovanaId);
         if (!u) return;
 
+        // volba Volno podle člověka události, ne přihlášeného (Michal 18. 11. 2026)
+        $("uTypVolno").textContent = V.nazevTypuUdalosti("volno", "", u.uid || "");
         $("uTyp").value = u.typ || "udalost";
         $("uOd").value = u.od || "";
         $("uDo").value = u.do || u.od || "";
@@ -1363,7 +1373,7 @@
             $("btnDruhyVse").textContent = zapnout ? "Skrýt vše" : "Zobrazit vše";
         });
 
-        const obnov = () => { zapniSledovani(); naplnKdo(); vykresli(); };
+        const obnov = () => { zapniSledovani(); naplnKdo(); popiskyVolna(); vykresli(); };
         document.addEventListener("kb-role", obnov);
         window.KB.on("users", obnov);
         window.KB.on("kalendar", () => { vykresli(); obnovDetail(); otevriCil(); });

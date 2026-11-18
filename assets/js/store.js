@@ -5365,8 +5365,8 @@ KB.potvrdDovolenou = async (id) => {
         potvrzenoMs: Date.now()
     }, { merge: true });
     const u = (KB.kalendar || []).find(x => x.id === id);
-    // popisek volna jednotně z ui.js (Michal 13. 11. 2026)
-    const DRUH = { dovolena: "dovolenou", volno: window.KBUI.nazevAbsence("Volno").toLowerCase(), neplacene: "neplacené volno",
+    // popisek volna jednotně z ui.js (Michal 13. 11. 2026), podle žadatele – OSVČ bez přesčasu (18. 11.)
+    const DRUH = { dovolena: "dovolenou", volno: window.KBUI.nazevAbsence("Volno", (u && u.uid) || "").toLowerCase(), neplacene: "neplacené volno",
         nemoc: "nemoc", skoleni: "školení" };
     KB.zapisAktivitu("kalendar", "potvrdil " + (DRUH[(u || {}).typ] || "dovolenou") +
         (u ? " – " + (u.osoba || "?") + " (" + (u.od || "") +
@@ -5506,9 +5506,10 @@ KB.zamitniDovolenou = async (id, duvod) => {
         await davka.commit();
     }
 
-    const nazev = window.KBUI.nazevAbsence(zakazka) || "Nepřítomnost";
+    // popisek podle žadatele – OSVČ přesčas nemá (Michal 18. 11. 2026)
+    const nazev = window.KBUI.nazevAbsence(zakazka, u.uid || "") || "Nepřítomnost";
     const kdy = rozsahKratce(u.od, u.do);
-    const KOHO = { dovolena: "dovolenou", volno: window.KBUI.nazevAbsence("Volno").toLowerCase(),
+    const KOHO = { dovolena: "dovolenou", volno: window.KBUI.nazevAbsence("Volno", u.uid || "").toLowerCase(),
         neplacene: "neplacené volno" };
     KB.zapisAktivitu("kalendar", "zamítl " + (KOHO[u.typ] || "nepřítomnost") + " – " + (u.osoba || "?") +
         (kdy ? " (" + kdy + ")" : "") + (idcka.length ? ", smazáno záznamů výkazu: " + idcka.length : "") +
@@ -5651,7 +5652,7 @@ KB.saveUdalost = async (id, data) => {
     /* Rychlý zápis (HO, volno, dovolená z pásu) se v Reportu má poznat
        na první pohled – „uložil událost homeoffice" nikomu nic neřekne
        (přání Michala 1. 9. 2026). */
-    const NAZEV_TYPU = { homeoffice: "home office", volno: window.KBUI.nazevAbsence("Volno").toLowerCase(),
+    const NAZEV_TYPU = { homeoffice: "home office", volno: window.KBUI.nazevAbsence("Volno", uid).toLowerCase(),
                          neplacene: "neplacené volno",
                          dovolena: "dovolenou", doktor: "doktora",
                          nemoc: "nemoc", skoleni: "školení" };
@@ -5680,7 +5681,7 @@ KB.deleteUdalost = async (id) => {
     requireDb();
     const u = (KB.kalendar || []).find(x => x.id === id);
     await deleteDoc(kalendarDoc(id));
-    KB.zapisAktivitu("kalendar", "smazal událost " + (u ? window.KBUI.nazevTypuUdalosti(u.typ || "", u.typ || "").toLowerCase() + " " +
+    KB.zapisAktivitu("kalendar", "smazal událost " + (u ? window.KBUI.nazevTypuUdalosti(u.typ || "", u.typ || "", u.uid || "").toLowerCase() + " " +
         (u.od || "") + (u.osoba ? " – " + u.osoba : "") : id));
 };
 

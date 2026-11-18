@@ -2102,11 +2102,16 @@
         neplacene: "#546e7a" };
     const TYP_NAZEV = { udalost: "Firemní akce", teams: "Teams call", schuzka: "Schůzka",
         doktor: "Doktor", dovolena: "Dovolená", nemoc: "Nemoc",
-        skoleni: "Školení", skoleniAkce: "Školení", homeoffice: "Home office", volno: "Volno (čerpání přesčasu)",
+        skoleni: "Školení", skoleniAkce: "Školení", homeoffice: "Home office", volno: window.KBUI.NAZEV_ABSENCE.Volno,
         neplacene: "Neplacené volno" };
     // absence, které platí až po manažerově razítku
-    const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená", volno: "Nepotvrzené volno (čerpání přesčasu)",
+    const NEPOTVRZENE = { dovolena: "Nepotvrzená dovolená",
+        volno: "Nepotvrzené " + window.KBUI.NAZEV_ABSENCE.Volno.toLowerCase(),
         neplacene: "Nepotvrzené neplacené volno" };
+    /* Název druhu z mapy podle člověka události: OSVČ přesčas nemá, jeho
+       volno je jen „volno“ (Michal 18. 11. 2026). Mapy nesou dnešní text. */
+    const nazevDruhu = (mapa, typ, uid) => typ === "volno" && mapa[typ] && window.KBUI.bezPrescasu(uid || "")
+        ? mapa[typ].replace(" (čerpání přesčasu)", "") : mapa[typ];
 
     function renderKalendarDlazdice() {
         const dny = [];
@@ -2120,9 +2125,9 @@
             (window.KB.kalendar || []).forEach(k => {
                 if (!proMneJe(k)) return;
                 if ((k.od || "") <= iso && iso <= (k.do || k.od || "")) {
-                    let druh = TYP_NAZEV[k.typ] || "událost";
+                    let druh = nazevDruhu(TYP_NAZEV, k.typ, k.uid) || "událost";
                     const zamitnuto = NEPOTVRZENE[k.typ] && k.zamitnuto === true;
-                    if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true && !zamitnuto) druh = NEPOTVRZENE[k.typ];
+                    if (NEPOTVRZENE[k.typ] && k.potvrzeno !== true && !zamitnuto) druh = nazevDruhu(NEPOTVRZENE, k.typ, k.uid);
                     /* u potvrzené dovolené / volna řekne bublina, kdo a kdy
                        ji potvrdil – celým jménem (Michal 20. 10. 2026) */
                     const potvrdil = NEPOTVRZENE[k.typ] && k.potvrzeno === true
@@ -2249,7 +2254,7 @@
 
     /* Druhy, které potvrzuje manažer, a jak se jmenují v řádku dlaždice.
        Neplacené volno přibylo 2. 11. 2026 (Michal) – potvrzuje se jako volno. */
-    const POTVRZOVANE = { dovolena: "dovolená", volno: "volno (čerpání přesčasu)", neplacene: "neplacené volno" };
+    const POTVRZOVANE = { dovolena: "dovolená", volno: window.KBUI.NAZEV_ABSENCE.Volno.toLowerCase(), neplacene: "neplacené volno" };
 
     function renderDovolene() {
         const box = document.getElementById("dovoleneSeznam");
@@ -2275,7 +2280,7 @@
                         '<span class="kontrola__datum" style="color:var(--accent)">' +
                             esc(czDatum(k.od)) + (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>" +
                         "<span><b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b>" +
-                            " · " + POTVRZOVANE[k.typ] + "</span></a>" +
+                            " · " + nazevDruhu(POTVRZOVANE, k.typ, k.uid) + "</span></a>" +
                     /* Potvrdit a Odmítnout… jen tomu, kdo nepřítomnosti potvrzuje */
                     (smimDovolene ? '<button type="button" class="btn btn--sm btn--primary" data-potvrd-dovolenou="' +
                         esc(k.id) + '">Potvrdit</button>' + window.KBUI.odmitnoutHtml("nepritomnosti", k.id)
@@ -2289,7 +2294,7 @@
                 .map(k => ({
                     ms: Number(k.potvrzenoMs), kdo: k.potvrdil, href: "kalendar.html",
                     co: "<b>" + esc(k.osoba || jmenoUid(k.uid) || "?") + "</b> · " +
-                        POTVRZOVANE[k.typ] + " " + esc(czDatum(k.od)) +
+                        nazevDruhu(POTVRZOVANE, k.typ, k.uid) + " " + esc(czDatum(k.od)) +
                         (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "")
                 }))) +
             /* Zamítnuté (3. 11. 2026): přeškrtnuté, štítek „zamítnuto", důvod v bublině. */
@@ -2301,7 +2306,7 @@
                     href: "kalendar.html?udalost=" + encodeURIComponent(k.id),
                     co: window.KBUI.zamitnutoStitek(k) + ' <span class="je-zamitnuto"><b>' +
                         esc(k.osoba || jmenoUid(k.uid) || "?") + "</b> · " +
-                        POTVRZOVANE[k.typ] + " " + esc(czDatum(k.od)) +
+                        nazevDruhu(POTVRZOVANE, k.typ, k.uid) + " " + esc(czDatum(k.od)) +
                         (k.do && k.do !== k.od ? " – " + esc(czDatum(k.do)) : "") + "</span>"
                 })));
     }
@@ -2607,7 +2612,7 @@
         if (!box || !window.KBUI.can("vykaz.view")) return;
         const dnes = new Date().toISOString().slice(0, 10);
         const za14 = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-        const POPIS = { homeoffice: "Home office", volno: "Volno (čerpání přesčasu)",
+        const POPIS = { homeoffice: "Home office", volno: window.KBUI.NAZEV_ABSENCE.Volno,
             neplacene: "Neplacené volno", dovolena: "Dovolená", doktor: "Doktor" };
 
         const radky = (window.KB.kalendar || [])
@@ -2635,7 +2640,7 @@
                     '<b style="flex:none;min-width:74px">' + esc(czDatum(k.od)) + "</b>" +
                     '<span class="grow truncate">' + esc(k.osoba || jmenoUid(k.uid) || "?") + "</span>" +
                     '<span style="flex:none;font-weight:700;color:var(--accent)">' +
-                        esc(POPIS[k.typ] || k.typ) + "</span>" + stav +
+                        esc(nazevDruhu(POPIS, k.typ, k.uid) || k.typ) + "</span>" + stav +
                 "</div>";
               }).join("")
             : '<div class="tiny muted" style="padding:10px 2px;line-height:1.6">' +
@@ -3435,7 +3440,7 @@
                 .sort((a, b) => (a.od || "").localeCompare(b.od || ""))
                 .map(k => ({
                     datum: kratkeDatum(k.od) + (k.do && k.do !== k.od ? " – " + kratkeDatum(k.do) : ""),
-                    nazev: (k.osoba || jmenoUid(k.uid) || "?") + " · " + POTVRZOVANE[k.typ],
+                    nazev: (k.osoba || jmenoUid(k.uid) || "?") + " · " + nazevDruhu(POTVRZOVANE, k.typ, k.uid),
                     meta: k.text || "", href: "kalendar.html?udalost=" + encodeURIComponent(k.id),
                     tlacitko: tlacitko("data-potvrd-dovolenou", k.id, "nepritomnosti")
                 })),
@@ -3528,7 +3533,7 @@
             if (!POTVRZOVANE[k.typ] || k.potvrzeno !== true || k.celyDen === false) return;
             if ((m.owners || []).indexOf(k.uid) === -1) return;
             if ((k.od || "") > ne || (k.do || k.od || "") < po) return;
-            kdo.push((jmenoUid(k.uid) || k.osoba || "?") + " – " + POTVRZOVANE[k.typ] + " " +
+            kdo.push((jmenoUid(k.uid) || k.osoba || "?") + " – " + nazevDruhu(POTVRZOVANE, k.typ, k.uid) + " " +
                 kratkeDatum(k.od) + (k.do && k.do !== k.od ? " – " + kratkeDatum(k.do) : ""));
         });
         return kdo.length ? '<span class="milpil milpil--dovolena" title="' +
@@ -3782,7 +3787,7 @@
                     radky.push({ druh: "akce", poradi: 1, cas: casText(k), text: k.text || TYP_NAZEV[typ] || "Akce" });
                 } else if (POTVRZOVANE[typ] ? k.potvrzeno === true : ABSENCE_BEZ_POTVRZENI.indexOf(typ) !== -1) {
                     radky.push({ druh: "absence", poradi: 3, cas: casText(k),
-                        text: (k.osoba || jmenoUid(k.uid) || "?") + " – " + (TYP_NAZEV[typ] || typ) });
+                        text: (k.osoba || jmenoUid(k.uid) || "?") + " – " + (nazevDruhu(TYP_NAZEV, typ, k.uid) || typ) });
                 }
             });
             radky.sort((a, b) => a.poradi - b.poradi || (a.cas || "99").localeCompare(b.cas || "99") ||

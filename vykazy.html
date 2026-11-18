@@ -748,15 +748,21 @@
         try { return localStorage.getItem(CISLA_KLIC) === "1"; } catch (err) { return false; }
     }
 
-    function projektyVolby() {
+    /* `uid` = za koho se píše (bez něj přihlášený): OSVČ přesčas nemá,
+       volba Volno je u něj bez „čerpání přesčasu“ (Michal 18. 11. 2026). */
+    function projektyVolby(uid) {
+        const volno = (n) => ({ value: n, label: V.nazevAbsence(n, uid) });
         const nazvy = nabidkaProjektu();
-        if (!cislaProjektu()) return nazvy;
+        if (!cislaProjektu()) return nazvy.map(n => n === V.NAHRADNI_VOLNO ? volno(n) : n);
         const cisla = {};
         (window.KB.projektyDocs || []).forEach(p => {
             if (p.nazev && p.cislo) cisla[p.nazev] = String(p.cislo).trim();
         });
-        return nazvy.map(n => ({ value: n, label: cisla[n] ? cisla[n] + " " + n : n }));
+        return nazvy.map(n => n === V.NAHRADNI_VOLNO ? volno(n)
+            : ({ value: n, label: cisla[n] ? cisla[n] + " " + n : n }));
     }
+    /** Za koho se píše v zápisu dne (prázdná roletka = přihlášený). */
+    const osobaZapisu = () => ($("dOsoba") && $("dOsoba").value) || undefined;
 
     document.addEventListener("change", (event) => {
         if (!event.target.matches || !event.target.matches("[data-cisla-projektu]")) return;
@@ -778,9 +784,11 @@
      * osmdesáti a hledat se dalo leda v nich (Michal 13. 10. 2026).
      */
     function obnovNabidkuProjektu() {
-        const volby = projektyVolby();
         document.querySelectorAll('[data-z="zakazka"], [data-f="zakazka"]').forEach(sel => {
             const drzena = sel.value;
+            // okno úpravy patří člověku zápisu, zápis dne vybranému v „Kdo pracoval“
+            const volby = projektyVolby(sel.closest("#editRadek")
+                ? ($("eOsoba").value || undefined) : osobaZapisu());
             sel.innerHTML = V.options(volby, drzena, "— vyber —");
             sel.value = drzena;
             /* Našeptávač si drží vlastní text v poli, takže ho musí
@@ -1026,7 +1034,7 @@
         absHlaska.hidden = !abs;
         if (abs) {
             absHlaska.textContent = abs.typ === "volno"
-                ? "Pozor: na tento den máš nahlášené " + V.nazevAbsence("Volno").toLowerCase() + "."
+                ? "Pozor: na tento den máš nahlášené " + V.nazevAbsence("Volno", uid).toLowerCase() + "."
                 : abs.typ === "neplacene"
                     ? "Pozor: na tento den máš nahlášené neplacené volno."
                     : "Pozor: na tento den máš nahlášenou dovolenou.";
@@ -1598,7 +1606,7 @@
         const zakazkaCast = o.sZakazkou
             ? '<div><label class="label">Projekt</label>' +
                   '<select class="field" data-f="zakazka">' +
-                      V.options(projektyVolby(), d.zakazka || "", "— vyber —") + "</select></div>" +
+                      V.options(projektyVolby(d.uid || undefined), d.zakazka || "", "— vyber —") + "</select></div>" +
 
               '<div><label class="label">Fakturovat firmě</label>' +
                   '<select class="field" data-f="firma">' +
@@ -1794,7 +1802,7 @@
             '<div class="zblok__grid">' +
                 '<div><label class="label">Projekt</label>' +
                     '<select class="field" data-z="zakazka">' +
-                        V.options(projektyVolby(), d.zakazka || "", "— vyber —") + "</select></div>" +
+                        V.options(projektyVolby(osobaZapisu()), d.zakazka || "", "— vyber —") + "</select></div>" +
 
 
 
@@ -4584,17 +4592,17 @@
 
             return '<tr data-zid="' + esc(z.id || "") + '"' + (spravce ? ' class="kt-vybiratelny"' : "") + ">" +
                 (spravce ? '<td class="kt-vyber">' + vyberZapisu.box(z.id || "",
-                    V.czDatum(z.datum || "") + " " + V.nazevAbsence(z.nazev || z.zakazka || "")) + "</td>" : "") +
+                    V.czDatum(z.datum || "") + " " + V.nazevAbsence(z.nazev || z.zakazka || "", z.uid)) + "</td>" : "") +
                 (spravce ? '<td data-l="Kdo">' + esc(V.osobaText(z)) + "</td>" : "") +
                 /* Popis říká, do čeho zápis spadá; jak se jmenuje úkol,
                    na který se to účtuje, je v bublině. */
                 '<td class="vyk__nazev kt-hlavni"' + (ukolNazev(z)
                     ? ' title="' + esc("Úkol: " + ukolNazev(z)) + '"' : "") + ">" +
-                    esc(V.nazevAbsence(z.nazev || "")) +
+                    esc(V.nazevAbsence(z.nazev || "", z.uid)) +
                     (jeVypomoc(z) ? ' <span class="tag" title="Hodiny na úkolu, který má přiřazený někdo jiný" ' +
                         'style="background:var(--accent-tint);color:var(--accent);border:1px solid var(--accent-lt)">výpomoc</span>' : "") +
                     (z.poznamka ? '<span class="vyk__pozn">' + esc(z.poznamka) + "</span>" : "") + "</td>" +
-                '<td data-l="Projekt">' + esc(V.nazevAbsence(z.zakazka || "")) +
+                '<td data-l="Projekt">' + esc(V.nazevAbsence(z.zakazka || "", z.uid)) +
                     (z.projekt ? '<span class="vyk__pozn">' + esc(z.projekt) + "</span>" : "") + "</td>" +
                 (z.firma ? '<td data-l="Firma">' + esc(z.firma) + "</td>" : "<td></td>") +
                 (z.cinnost ? '<td data-l="Druh">' + esc(z.cinnost) + "</td>" : "<td></td>") +
@@ -4641,7 +4649,7 @@
     function otevriOpravu(z) {
         opravaId = z.id;
         $("opVykaz").innerHTML = "Jde o zápis z <b>" + esc(V.czDatum(z.datum || "")) + "</b>" +
-            (z.zakazka ? " – " + esc(V.nazevAbsence(z.zakazka)) : "") +
+            (z.zakazka ? " – " + esc(V.nazevAbsence(z.zakazka, z.uid)) : "") +
             " · " + esc(V.hod(Number(z.hodiny) || 0)) +
             (podCarou(z.datum)
                 ? '<br><span style="color:var(--warn);font-weight:700">Měsíc je uzavřený (uzávěrka do ' +
@@ -5044,7 +5052,7 @@
                 u && spravce && filtr.ukolId !== u.id && {
                     text: "Všechny výkazy tohoto úkolu", ikona: "lupa", fn: () => vykazyUkolu(u.id) },
                 projektVNabidce && filtr.zakazka !== z.zakazka && {
-                    text: "Jen projekt " + V.nazevAbsence(z.zakazka), ikona: "filtr", oddel: true,
+                    text: "Jen projekt " + V.nazevAbsence(z.zakazka, z.uid), ikona: "filtr", oddel: true,
                     fn: () => filtrujNa("zakazka", z.zakazka) },
                 clovekVNabidce && filtr.uid !== z.uid && {
                     text: "Jen " + V.osobaText(z), ikona: "clovek", fn: () => filtrujNa("uid", z.uid) },
@@ -5641,10 +5649,12 @@
             srovnejPulhodiny();
             nastavVychoziSazbu(false);
             obnovAbsenceTexty();        // „Dovolená – Jméno" musí sedět na vybraného člověka
+            obnovNabidkuProjektu();     // Volno u OSVČ bez „čerpání přesčasu“ (Michal 18. 11. 2026)
             vykresliNavrhy();           // návrh je z výkazů toho, za koho se píše
         });
         $("eOsoba").addEventListener("change", () => {
             srovnejPulhodiny();
+            obnovNabidkuProjektu();     // volba Volno podle vybraného člověka (Michal 18. 11. 2026)
             const box = $("editRadek").querySelector("[data-polozka]");
             if (box) {
                 const druh = box.querySelector('[data-f="zakazka"]');

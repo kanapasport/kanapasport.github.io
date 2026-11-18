@@ -1310,9 +1310,10 @@
 
         const radky = zapisy.map(z => {
             const u = z.ukolId ? ukoly.find(x => x.id === z.ukolId) : null;
-            // „Volno“ → „Volno (čerpání přesčasu)“ i v názvu „Volno – Jméno“ (Michal 13. 11. 2026)
-            const co = (u && u.nazev) || v.nazevAbsence(z.nazev || z.zakazka) || "—";
-            const kde = [co === v.nazevAbsence(z.zakazka) ? "" : v.nazevAbsence(z.zakazka || ""), z.obed === true ? "oběd" : ""]
+            // „Volno“ → „Volno (čerpání přesčasu)“ i v názvu „Volno – Jméno“ (Michal 13. 11. 2026);
+            // podle člověka zápisu – OSVČ přesčas nemá, zůstane „Volno“ (18. 11. 2026)
+            const co = (u && u.nazev) || v.nazevAbsence(z.nazev || z.zakazka, z.uid) || "—";
+            const kde = [co === v.nazevAbsence(z.zakazka, z.uid) ? "" : v.nazevAbsence(z.zakazka || "", z.uid), z.obed === true ? "oběd" : ""]
                 .filter(Boolean).join(" · ");
             const cas = celodenni(z) ? "celý den" : (z.od || "") + "–" + (z.do || "");
             return '<li class="mini__zaznam' + (z.absence === true ? " mini__zaznam--absence" : "") + '">' +
