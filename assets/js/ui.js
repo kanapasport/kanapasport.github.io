@@ -28,18 +28,32 @@
        i jako KBVYK.nazevAbsence / KBVYK.nazevTypuUdalosti; tady je proto,
        že ui.js běží na každé stránce (i bez vykazy.js). */
     UI.NAZEV_ABSENCE = { "Volno": "Volno (čerpání přesčasu)" };
-    /** Zakázka absence → popisek („Volno“ → „Volno (čerpání přesčasu)“, i název zápisu „Volno – Jan Novák“). */
-    UI.nazevAbsence = (x) => {
+    /* Michal 18. 11. 2026: OSVČ přesčas nemá – jeho Volno je prostě volno,
+       a tak se mu popisek nemění. Řídí se člověkem, kterému absence patří
+       (`uid`); bez `uid` přihlášeným. Dokud lidé nejsou načtení, nikoho
+       nepoznáme – pak zůstává dnešní popisek. */
+    /** Je člověk (`uid`, bez něj přihlášený) bez přesčasu – OSVČ? */
+    UI.bezPrescasu = (uid) => {
+        const kb = window.KB || {};
+        const id = uid === undefined ? (kb.currentUid ? kb.currentUid() : "") : uid;
+        if (!id) return false;
+        const u = (kb.users || []).find(x => x && x.id === id);
+        return !!u && UI.typUvazku(u) === "osvc";
+    };
+    /** Zakázka absence → popisek („Volno“ → „Volno (čerpání přesčasu)“, i název zápisu „Volno – Jan Novák“);
+     *  `uid` = čí absence (bez něj přihlášený), u OSVČ se nemění. */
+    UI.nazevAbsence = (x, uid) => {
         const s = String(x == null ? "" : x).trim();
-        if (UI.NAZEV_ABSENCE[s]) return UI.NAZEV_ABSENCE[s];
+        if (UI.NAZEV_ABSENCE[s]) return UI.bezPrescasu(uid) ? s : UI.NAZEV_ABSENCE[s];
         const m = /^(\S+) – /.exec(s);
-        return m && UI.NAZEV_ABSENCE[m[1]] ? UI.NAZEV_ABSENCE[m[1]] + s.slice(m[1].length) : x;
+        if (!(m && UI.NAZEV_ABSENCE[m[1]])) return x;
+        return UI.bezPrescasu(uid) ? s : UI.NAZEV_ABSENCE[m[1]] + s.slice(m[1].length);
     };
     /* Typ události kalendáře → popisek s velkým písmenem (začátek věty). */
     UI.NAZEV_TYPU_UDALOSTI = { dovolena: "Dovolená", volno: UI.NAZEV_ABSENCE.Volno, neplacene: "Neplacené volno",
         nemoc: "Nemoc", doktor: "Doktor", skoleni: "Školení", homeoffice: "Home office" };
-    /** `volno` → „Volno (čerpání přesčasu)“; neznámý typ → `zaloha` (jinak typ sám). */
-    UI.nazevTypuUdalosti = (typ, zaloha) => UI.NAZEV_TYPU_UDALOSTI[typ] || (zaloha === undefined ? typ : zaloha);
+    /** `volno` → „Volno (čerpání přesčasu)“ (u OSVČ `uid` jen „Volno“); neznámý typ → `zaloha` (jinak typ sám). */
+    UI.nazevTypuUdalosti = (typ, zaloha, uid) => (typ === "volno" && UI.bezPrescasu(uid) ? "Volno" : "") || UI.NAZEV_TYPU_UDALOSTI[typ] || (zaloha === undefined ? typ : zaloha);
 
     /* ------------------------------------------- bezpečné hodnoty do HTML ---
        Pravidla databáze hlídají, KDO smí psát, ne CO zapíše. Poznámku,
@@ -1041,7 +1055,7 @@
         const KB = window.KB || {};
         if (druh === "nepritomnosti") {
             const k = (KB.kalendar || []).find(x => x.id === id);
-            return k ? UI.nazevTypuUdalosti(k.typ, "Nepřítomnost") + " – " + (k.osoba || "") + ", " +
+            return k ? UI.nazevTypuUdalosti(k.typ, "Nepřítomnost", k.uid) + " – " + (k.osoba || "") + ", " +
                 denMesic(k.od) + (k.do && k.do !== k.od ? " – " + denMesic(k.do) : "") : "";
         }
         if (druh === "ukoly") {
@@ -3325,7 +3339,7 @@
             return u ? ((u.first || "") + " " + (u.last || "")).trim() : (z.osoba || "někdo");
         };
         const popis = dopredu.slice(0, 4).map(z =>
-            jmeno(z) + " " + cesky(z.datum) + " (" + (UI.nazevAbsence(z.zakazka) || "bez projektu") + ")").join(", ");
+            jmeno(z) + " " + cesky(z.datum) + " (" + (UI.nazevAbsence(z.zakazka, z.uid) || "bez projektu") + ")").join(", ");
         const text = "Výkaz dopředu: " + popis +
             (dopredu.length > 4 ? " a další " + (dopredu.length - 4) : "") +
             ". Do Tabulek to půjde až po tom dni.";
@@ -4314,7 +4328,8 @@
 
     const HO_TYPY = [
         { id: "homeoffice", popis: "HO",       cely: "Home office" },
-        { id: "volno",      popis: "Volno",    cely: UI.nazevTypuUdalosti("volno") },
+        // název až při vykreslení – OSVČ jen „Volno“, lidé při načtení ui.js ještě nejsou (Michal 18. 11. 2026)
+        { id: "volno",      popis: "Volno",    cely: () => UI.nazevTypuUdalosti("volno") },
         /* Neplacené volno (Michal 2. 11. 2026): přesčas ani dovolenou
            nemění. Na tlačítku kratší, celý název je v bublině a ve výkazu. */
         { id: "neplacene",  popis: "Neplacené", cely: "Neplacené volno" },
@@ -4391,7 +4406,7 @@
                     '" data-ho-den="' + den.iso + '" data-ho-typ="' + t.id + '"' +
                     (svatekBlokuje ? " disabled" : "") +
                     ' title="' + (svatekBlokuje ? esc(den.svatek) + " – na státní svátek se absence nezapisuje"
-                        : t.cely) + '">' + t.popis + "</button>";
+                        : esc(typeof t.cely === "function" ? t.cely() : t.cely)) + '">' + t.popis + "</button>";
             }).join("");
             /* Kdo další ten den chybí – NEJEN home office. Dovolená, volno
                i doktor patří k plánování stejně (přání Michala 1. 9. 2026).
@@ -4423,10 +4438,12 @@
         telo.innerHTML =
             '<p class="tiny muted" style="margin:0;line-height:1.6;grid-column:1/-1">' +
                 "Zaklikni si dny dopředu. <b>Dovolená</b> = jedeš pryč," +
-                " <b>Volno</b> = " + esc(UI.nazevAbsence("Volno")) + ", jsi doma a čerpáš přesčas (−8 h)," +
+                // OSVČ přesčas nemá – Volno je u něj jen volno (Michal 18. 11. 2026)
+                (UI.bezPrescasu() ? " <b>Volno</b> = jsi doma (volno)," :
+                    " <b>Volno</b> = " + esc(UI.nazevAbsence("Volno")) + ", jsi doma a čerpáš přesčas (−8 h),") +
                 " <b>Neplacené</b> = neplacené volno, přesčas ani dovolenou nemění," +
                 " <b>HO</b> = pracuješ z domu. Uvidí to všichni v kalendáři;" +
-                " dovolená, volno (čerpání přesčasu) i neplacené volno se rovnou zapíšou i do výkazu a potvrzuje je" +
+                " dovolená, " + esc(UI.nazevAbsence("Volno").toLowerCase()) + " i neplacené volno se rovnou zapíšou i do výkazu a potvrzuje je" +
                 " manažer. Na státní svátek se absence nezapisuje.</p>" +
             tydnyPracovnichDnu(HO_DNU).map((tyden, i) =>
                 '<section class="hotyden hotyden--' + (i % 2) + '">' +

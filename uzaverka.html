@@ -459,10 +459,11 @@
     const radekHtml = (popisek, obsah, varovani) => '<div class="uz-radek' + (varovani ? " uz-radek--warn" : "") + '">' +
         "<dt>" + esc(popisek) + "</dt><dd>" + obsah + "</dd></div>";
 
-    function absenceHtml(a) {
+    /* `uid` = člověk řádku – OSVČ přesčas nemá, Volno bez dovětku (Michal 18. 11. 2026). */
+    function absenceHtml(a, uid) {
         const nep = Array.isArray(a.nepotvrzeno) ? a.nepotvrzeno : [];
         const dny = Array.isArray(a.dny) ? a.dny : [];
-        return esc(V.nazevAbsence(a.druh) + " – " + V.pocet(dny.length, ["den", "dny", "dní"]) +
+        return esc(V.nazevAbsence(a.druh, uid) + " – " + V.pocet(dny.length, ["den", "dny", "dní"]) +
                 (Number(a.hodiny) ? " (" + V.hod(a.hodiny) + ")" : "") + ": " + dny.map(denKratce).join(", ")) +
             (nep.length ? ' <span class="uz-nepotvrzeno">(nepotvrzeno: ' + esc(nep.map(denKratce).join(", ")) + ")</span>" : "");
     }
@@ -495,7 +496,7 @@
         const r = [];
         r.push(radekHtml("Zakázky", zakazky.length
             ? esc(zakazky.map(z => z.nazev + " " + V.hod(z.hodiny)).join(", ")) : '<span class="muted">bez práce</span>'));
-        if (absence.length) r.push(radekHtml("Nepřítomnost", absence.map(absenceHtml).join("<br>"), nepotvrzeno));
+        if (absence.length) r.push(radekHtml("Nepřítomnost", absence.map(a => absenceHtml(a, o.uid || "")).join("<br>"), nepotvrzeno));
         if (o.prescas) r.push(radekHtml("Přesčas", prescasHtml(o.prescas)));
         if (chybi.length) r.push(radekHtml("Chybí výkaz", esc(V.pocet(chybi.length, ["den", "dny", "dní"]) + ": " +
             chybi.map(denKratce).join(", ")), true));
