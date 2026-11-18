@@ -6071,32 +6071,64 @@
     }
 
     /** Řádek, na kterém není nic než cesta nebo „iris:<sada>" → dlaždice, jinak null. */
+    /* Kde na řádku, který cestou začíná, cesta končí a začíná věta (Michal
+       18. 11. 2026: „P:\…\Kuba - je tam otevřít v iris soubor…“ má být odkaz
+       na složku a zbytek obyčejný text – dřív se do cesty vzal celý řádek
+       a dlaždice nikam nevedla). Mezera cestu neukončí (cesty je mají),
+       ukončí ji první ODDĚLOVAČ VĚTY – pomlčka s mezerami, čárka, středník,
+       dvojtečka, dvě tečky nebo výpustka –, za kterým už není žádné zpětné
+       lomítko (cesta za ním tedy nepokračuje). Složka, která má takový
+       oddělovač v POSLEDNÍ části názvu („…\RD Vrbice - Nesoulad“), se napíše
+       celá do uvozovek. Vrací { cesta: kde cesta končí, text: kde začíná
+       věta }, nebo null = cestou je celý řádek. */
+    const ODDELOVAC_VETY = /\s[-–—]\s|[,;:]\s|\s\.{2,}\s|\s…\s/gu;
+    function konecCestyNaRadku(s) {
+        ODDELOVAC_VETY.lastIndex = 0;
+        for (let m; (m = ODDELOVAC_VETY.exec(s));) {
+            const text = m.index + m[0].length;
+            if (m.index >= 3 && s.slice(text).trim() && s.indexOf("\\", text) === -1) {
+                return { cesta: m.index, text: text };
+            }
+        }
+        return null;
+    }
+
+    /** Řádek, který je (nebo začíná) cestou či „iris:<sada>" → { html dlaždice,
+     *  delka: kolik znaků řádku dlaždice nahradila }, jinak null. */
     function dlazdiceRadku(radek) {
         const s = radek.trim();
         if (!s) return null;
+        const cely = (html) => (html ? { html: html, delka: radek.length } : null);
         if (s.slice(0, 5).toLowerCase() === "iris:") {
             const n = nazevSady(s.slice(5));
-            return n ? dlazdiceIris(n) : null;
+            return n ? cely(dlazdiceIris(n)) : null;
         }
         const zavrit = CESTA_UVOZOVKY[s.charAt(0)];
         if (zavrit) {
             // uvozovky jsou jen obal (cesta s mezerou), do dlaždice se neberou
             const c = s.slice(1, -1);
             return s.length > 2 && s.charAt(s.length - 1) === zavrit && celaCesta(c)
-                ? dlazdiceCesty(c) : null;
+                ? cely(dlazdiceCesty(c)) : null;
         }
         /* Na samostatném řádku cestu ukončuje konec řádku, takže tady smí mít
            mezery i bez uvozovek – naše cesty je mají skoro všechny
            („P:\2024-007 …\01 NAŠE STAVBA\…“) a kolega je sem vkládá tak, jak
-           je zkopíroval. Pravidlo pro člověka: na řádku je jen ta cesta a nic
-           jiného. Druhá dvojtečka = dvě cesty nebo věta, to dlaždice není
-           (v řádku se pak odkazují jednotlivě jako dřív). Tečku, čárku a
-           podobnou interpunkci na konci odřízneme stejně jako odkaz v řádku. */
-        const bez = s.replace(/[.,;:!]+$/, "");
+           je zkopíroval. Když za cestou pokračuje věta (viz konecCestyNaRadku),
+           dlaždice nahradí jen cestu s oddělovačem a věta jde pod ni jako
+           obyčejný text. Druhá dvojtečka v cestě = dvě cesty na řádku, to
+           dlaždice není (v řádku se pak odkazují jednotlivě jako dřív). Tečku,
+           čárku a podobnou interpunkci na konci odřízneme stejně jako odkaz
+           v řádku. */
+        const veta = konecCestyNaRadku(s);
+        const bez = (veta ? s.slice(0, veta.cesta) : s).replace(/[.,;:!]+$/, "");
         const zavorka = bez.charAt(bez.length - 1) === ")" &&
             bez.split("(").length < bez.split(")").length;
         const cesta = zavorka ? bez.slice(0, -1) : bez;
-        return celaCesta(cesta) && cesta.indexOf(":", 2) === -1 ? dlazdiceCesty(cesta) : null;
+        if (!celaCesta(cesta) || cesta.indexOf(":", 2) !== -1) return null;
+        const html = dlazdiceCesty(cesta);
+        if (!html) return null;
+        // odsazení řádku + cesta + oddělovač; věta za nimi zůstane textu
+        return veta ? { html: html, delka: radek.length - radek.trimStart().length + veta.text } : cely(html);
     }
 
     /** Kde v textu začínají řádky s dlaždicí: Map(od → { konec, html }). */
@@ -6104,8 +6136,8 @@
         const kde = new Map();
         for (let od = 0; od <= t.length;) {
             const zlom = t.indexOf("\n", od), konec = zlom === -1 ? t.length : zlom;
-            const html = dlazdiceRadku(t.slice(od, konec));
-            if (html) kde.set(od, { konec: konec, html: html });
+            const r = dlazdiceRadku(t.slice(od, konec));
+            if (r) kde.set(od, { konec: od + r.delka, html: r.html });
             if (zlom === -1) break;
             od = zlom + 1;
         }
