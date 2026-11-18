@@ -2102,16 +2102,24 @@
             window.KB.on("milniky", refreshNav);
             window.KB.on("vykazy", () => { renderMujDen();
                 /* hlídka smí rozhodnout až nad skutečnými záznamy – emit
-                   umí vyvolat i odběr částek dřív, než záznamy dorazí */
-                if (window.KB.vykazyPrisly) {
+                   umí vyvolat i odběr částek dřív, než záznamy dorazí. A až
+                   nad záznamy ZE SERVERU: nad starou mezipamětí prohlížeče
+                   psala falešné „Nemáš zapsaný výkaz" (16. 11. 2026; příznaky
+                   nastavuje store.js – „data ze serveru, ne z mezipaměti"). */
+                if (window.KB.vykazyZeServeru) {
                     hlidkaPrislo.vykazy = true; hlidkaVykazu(); hlidkaDopredu(); hlidkaKratkychDnu();
                 }
                 dopocitejCastky(); });
+            /* Číselník sazeb umí server potvrdit až po zápisech a částkách –
+               dopočet na něj čeká, tak ať se rozběhne i s jeho příchodem. */
+            window.KB.on("vykazy-meta", dopocitejCastky);
             /* Panel se překresluje taky – byl navázaný jen pás, takže nový
                vzkaz (i vlastní poznámka) se v otevřeném panelu objevil až
                po jeho zavření a otevření. */
             window.KB.on("quicktodo", () => { odznakAplikace.quick = true; renderMujDen(); renderQuick();
-                hlidkaPrislo.quick = true; hlidkaVykazu(); hlidkaDopredu(); hlidkaKratkychDnu();
+                // hlídky kontrolují, jestli vzkaz už existuje – taky až nad vzkazy ze serveru
+                if (window.KB.quickZeServeru) hlidkaPrislo.quick = true;
+                hlidkaVykazu(); hlidkaDopredu(); hlidkaKratkychDnu();
                 hlidkaAkci(); hlidkaUzaverky(); });
             // připomenutí akcí se přepočítá i s příchodem kalendáře
             window.KB.on("kalendar", hlidkaAkci);
@@ -3220,6 +3228,7 @@
         K.watchProjekty();
         K.watchUkoly();
         if (!K.vykazyPrisly || !K.sazbyPrisly || !K.vyplatyPrisly || !K.kontrolaOkPrislo || !(K.users || []).length) return;
+        if (!K.vykazyZeServeru || !K.sazbyZeServeru) return;      // souhrn „co chybí" ne nad starou mezipamětí
 
         uzaverkaHlidka = "hotovo";      // rozhodnuto – druhé kolo by zapsalo znovu
         const snimek = V.uzaverkaMesice(mesic, {

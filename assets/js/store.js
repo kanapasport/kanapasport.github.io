@@ -346,6 +346,8 @@ const zrusVykazy = () => {
     vykazyRezim = "";
     mojeCastkyOdber = null;
     KB.mojeCastkyPrisly = false;
+    // nové odběry začnou zase mezipamětí – „ze serveru“ platí jen pro ty běžící
+    KB.vykazyZeServeru = KB.castkyZeServeru = KB.sazbyZeServeru = false;
     starsiZaznamy = [];
     starsiCastky = {};
 };
@@ -459,6 +461,8 @@ try {
             quickOdbery = []; quickPrijate = []; quickPrijateSkupina = [];
             quickOdeslane = []; KB.quicktodo = [];
             quickPrislo.skupina = quickPrislo.prijate = quickPrislo.odeslane = false;
+            quickZeServeru.skupina = quickZeServeru.prijate = quickZeServeru.odeslane = false;
+            KB.quickZeServeru = false;
             zrusPoznamky();
             KB.guides = []; KB.tasks = []; KB.users = []; KB.boards = []; KB.auta = [];
             KB.vykazy = []; syroveZaznamy = []; syroveCastky = {};
@@ -783,6 +787,27 @@ let quickOdeslane = [];
    úplným seznamem, jinak by kopii, kterou zrovna nevidí, založila znovu. */
 const quickPrislo = { skupina: false, prijate: false, odeslane: false };
 
+/* ------------------------------------------ data ze serveru, ne z mezipaměti ---
+   Web má trvalou mezipaměť (persistentLocalCache): první snímek odběru přijde
+   z ní a teprve po něm čerstvá data ze serveru. Kdo web dlouho neotevřel
+   (druhý počítač, dovolená), má v mezipaměti týdny starý stav. Všechno, co
+   po načtení SAMO ZAPISUJE (dopočet částek, hlídky), proto smí rozhodovat až
+   nad snímkem ze serveru – jinak nad starými daty přepíše ta správná.
+   16. 11. 2026 takhle dopočet z domácího prohlížeče přepsal 59 částek
+   (jednu na starou sazbu) a hlídka zapsala falešné „Nemáš zapsaný výkaz“;
+   stejná příčina stála za přepisy z 3. a 9. 11.
+   Odběry, na kterých to stojí, se proto ptají s `includeMetadataChanges` –
+   bez něj druhý snímek nepřijde, když se data serveru od mezipaměti neliší,
+   a příznak „ze serveru“ by se nikdy nezapnul. Bez signálu zůstávají snímky
+   z mezipaměti, takže dopočet ani hlídky neběží; rozběhnou se s připojením. */
+const jeZeServeru = (snimek) => !(snimek && snimek.metadata && snimek.metadata.fromCache);
+/* Snímek jen se změnou metadat (zápis čeká na odeslání, potvrzení serveru beze
+   změny dat) nic nového nenese – znovu se nezpracovává, ať se zbytečně nekreslí. */
+const maZmeny = (snimek) => typeof snimek.docChanges !== "function" || snimek.docChanges().length > 0;
+const quickZeServeru = { skupina: false, prijate: false, odeslane: false };
+/** Všechny tři dotazy na vzkazy už odpověděl server – hlídky smí rozhodovat. */
+KB.quickZeServeru = false;
+
 function slejQuick() {
     const mapa = new Map();
     quickPrijate.concat(quickPrijateSkupina, quickOdeslane).forEach(q => mapa.set(q.id, q));
@@ -790,6 +815,7 @@ function slejQuick() {
         .sort((a, b) => (a.hotovo ? 1 : 0) - (b.hotovo ? 1 : 0)
             || (a.doKdy || "9999").localeCompare(b.doKdy || "9999")
             || (b.ms || 0) - (a.ms || 0));
+    KB.quickZeServeru = quickZeServeru.skupina && quickZeServeru.prijate && quickZeServeru.odeslane;
     emit("quicktodo", KB.quicktodo);
     hlidkaOpakovaniQuick();
 }
@@ -821,6 +847,8 @@ KB.zalozDalsiQuick = async (q) => {
 
 function hlidkaOpakovaniQuick() {
     if (!quickPrislo.skupina || !quickPrislo.prijate || !quickPrislo.odeslane) return;
+    // nad mezipamětí by kopii, o které ještě neví, založila znovu – až nad daty ze serveru
+    if (!KB.quickZeServeru) return;
     const uid = KB.currentUid();
     if (!uid) return;
     (KB.quicktodo || []).forEach(q => {
@@ -837,21 +865,25 @@ KB.watchQuickTodo = async () => {
     /* Dva dotazy na přijaté: `proUids` je dnešní podoba (vzkaz může mít víc
        adresátů), `proUid` drží starší záznamy z doby, kdy měl každý svůj
        vlastní dokument. Sléváme je podle id, takže se nezdvojí. */
-    quickOdbery.push(onSnapshot(query(quickCol(), where("proUids", "array-contains", uid)), (s) => {
+    /* `klic` = který ze tří dotazů; snímek jen se změnou metadat se přeskočí,
+       kromě toho, který poprvé potvrdí data ze serveru (na něj čekají hlídky). */
+    const odber = (klic, dotaz, uloz) => onSnapshot(dotaz, { includeMetadataChanges: true }, (s) => {
+        const zeServeru = jeZeServeru(s);
+        if (quickPrislo[klic] && !maZmeny(s) && (quickZeServeru[klic] || !zeServeru)) return;
+        uloz(s);
+        quickPrislo[klic] = true;
+        if (zeServeru) quickZeServeru[klic] = true;
+        slejQuick();
+    }, (err) => console.error("Chyba čtení Quick TO-DO:", err));
+    quickOdbery.push(odber("skupina", query(quickCol(), where("proUids", "array-contains", uid)), (s) => {
         quickPrijateSkupina = []; s.forEach(d => quickPrijateSkupina.push({ id: d.id, ...d.data() }));
-        quickPrislo.skupina = true;
-        slejQuick();
-    }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
-    quickOdbery.push(onSnapshot(query(quickCol(), where("proUid", "==", uid)), (s) => {
+    }));
+    quickOdbery.push(odber("prijate", query(quickCol(), where("proUid", "==", uid)), (s) => {
         quickPrijate = []; s.forEach(d => quickPrijate.push({ id: d.id, ...d.data() }));
-        quickPrislo.prijate = true;
-        slejQuick();
-    }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
-    quickOdbery.push(onSnapshot(query(quickCol(), where("odKoho", "==", uid)), (s) => {
+    }));
+    quickOdbery.push(odber("odeslane", query(quickCol(), where("odKoho", "==", uid)), (s) => {
         quickOdeslane = []; s.forEach(d => quickOdeslane.push({ id: d.id, ...d.data() }));
-        quickPrislo.odeslane = true;
-        slejQuick();
-    }, (err) => console.error("Chyba čtení Quick TO-DO:", err)));
+    }));
 };
 
 KB.newQuickId = () => "qt_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
@@ -3435,6 +3467,12 @@ KB.castkaAutomaticka = (c) => {
 KB.doplnCastky = async () => {
     if (!db || !auth || !auth.currentUser) return null;
     if (!KB.sazbyPrisly || vykazyRezim !== "vse") return null;   // jen manažer
+    /* Zápisy, částky i číselník musí být ze SERVERU. Nad mezipamětí prohlížeče
+       vidí dopočet čerstvý zápis a k němu starou nebo žádnou částku (či starý
+       číselník bez sazby zakázky) a přepíše tu správnou, i ručně nastavenou –
+       pojistky níž se dívají do téže mezipaměti, takže nepomůžou (16. 11. 2026,
+       59 částek; viz „data ze serveru, ne z mezipaměti"). */
+    if (!KB.vykazyZeServeru || !KB.castkyZeServeru || !KB.sazbyZeServeru) return null;
 
     const chybiSazba = new Set();
     const kUlozeni = [];
@@ -3580,6 +3618,12 @@ let mojeCastkyOdber = null;
    sloupce s penězi a v nich samé nuly. */
 KB.mojeCastkyPrisly = false;
 
+/* Zápisy, částky a číselník sazeb už potvrdil server (ne jen mezipaměť
+   prohlížeče) – na to čeká dopočet částek a hlídky; nastavuje sledujVykazy. */
+KB.vykazyZeServeru = false;
+KB.castkyZeServeru = false;
+KB.sazbyZeServeru = false;
+
 /** Typ spolupráce přihlášeného. Stejné odvození jako UI.typUvazku. */
 KB.mujTyp = () => {
     const uid = (auth && auth.currentUser) ? auth.currentUser.uid : "";
@@ -3617,7 +3661,16 @@ function sledujVykazy(jenSve) {
         ? query(vykazyCol(), where("uid", "==", auth.currentUser.uid))
         : query(vykazyCol(), where("datum", ">=", KB.vykazyOknoOd));
 
-    vykazyOdbery.push(onSnapshot(zdroj, (snapshot) => {
+    /* Tři odběry níž (zápisy, částky, číselník) hlásí i to, jestli už mluví
+       server – viz „data ze serveru, ne z mezipaměti" u Quick TO-DO. Snímek
+       jen se změnou metadat se přeskočí, kromě toho, který data ze serveru
+       poprvé potvrdí: ten se musí ohlásit, i když se nic nezměnilo. */
+    const novy = { zaznamy: true, castky: true };
+
+    vykazyOdbery.push(onSnapshot(zdroj, { includeMetadataChanges: true }, (snapshot) => {
+        const zeServeru = jeZeServeru(snapshot);
+        if (!novy.zaznamy && !maZmeny(snapshot) && (KB.vykazyZeServeru || !zeServeru)) return;
+        novy.zaznamy = false;
         syroveZaznamy = [];
         snapshot.forEach(d => syroveZaznamy.push({ id: d.id, ...d.data() }));
         /* U manažerů emituje „vykazy" i odběr částek – ten ale umí doběhnout
@@ -3625,6 +3678,7 @@ function sledujVykazy(jenSve) {
            prázdnem a rozdávala falešné vzkazy. Tenhle příznak říká, že už
            dorazily skutečné záznamy. */
         KB.vykazyPrisly = true;
+        if (zeServeru) KB.vykazyZeServeru = true;
         spojVykazy();
     }, (err) => {
         console.error("Chyba čtení výkazů:", err);
@@ -3639,15 +3693,21 @@ function sledujVykazy(jenSve) {
     }
 
     vykazyOdbery.push(onSnapshot(
-        query(castkyCol(), where("datum", ">=", KB.vykazyOknoOd)), (snapshot) => {
+        query(castkyCol(), where("datum", ">=", KB.vykazyOknoOd)), { includeMetadataChanges: true }, (snapshot) => {
+        const zeServeru = jeZeServeru(snapshot);
+        if (!novy.castky && !maZmeny(snapshot) && (KB.castkyZeServeru || !zeServeru)) return;
+        novy.castky = false;
         syroveCastky = {};
         snapshot.forEach(d => { syroveCastky[d.id] = d.data(); });
         // částky dorazily (Výplaty bez nich nepočítají – vyšly by nuly)
         KB.castkyPrisly = true;
+        if (zeServeru) KB.castkyZeServeru = true;
         spojVykazy();
     }, (err) => console.error("Chyba čtení částek:", err)));
 
-    vykazyOdbery.push(onSnapshot(vykazyMeta(), (snap) => {
+    vykazyOdbery.push(onSnapshot(vykazyMeta(), { includeMetadataChanges: true }, (snap) => {
+        // číselník je jeden malý dokument – zpracuje se každý snímek, i potvrzení ze serveru
+        if (jeZeServeru(snap)) KB.sazbyZeServeru = true;
         const data = snap.exists() ? snap.data() : {};
         // prázdný uložený číselník nesmí přebít výchozí hodnoty z kódu
         KB.cinnosti = (Array.isArray(data.cinnosti) && data.cinnosti.length)
