@@ -2943,6 +2943,16 @@
        ignoruje a svoje staré vzkazy z doby před spuštěním každému uklidí. */
     const HLIDKA_START = "2026-08-31";
 
+    /* Rozsah týdne do vzkazu hlídky: „9.–15. 11.“, přes konec měsíce
+       „27. 10. – 2. 11.“. Ze samotného „v minulém týdnu“ nebylo o pár dní
+       později poznat, o kterém týdnu je řeč (Michal 18. 11. 2026). */
+    function rozsahTydne(po, ne) {
+        const dm = (d) => d.getDate() + ". " + (d.getMonth() + 1) + ".";
+        return po.getMonth() === ne.getMonth()
+            ? po.getDate() + ".–" + dm(ne)
+            : dm(po) + " – " + dm(ne);
+    }
+
     function hlidkaVykazu() {
         if (hlidkaBezela || !hlidkaPrislo.vykazy || !hlidkaPrislo.quick) return;
         const uid = window.KB.currentUid && window.KB.currentUid();
@@ -3003,10 +3013,12 @@
             try { if (localStorage.getItem("kb-hlidka") === id) return; } catch (err) { }
         }
 
+        const tyden = rozsahTydne(po, ne);
+
         window.KB.saveQuickTodo(id, {
             text: minuly
-                ? "Nemáš zapsaný výkaz v minulém týdnu, naprav to"
-                : "Nemáš zapsaný výkaz v tomhle týdnu, naprav to",
+                ? "Nemáš zapsaný výkaz v minulém týdnu (" + tyden + "), naprav to"
+                : "Nemáš zapsaný výkaz v tomhle týdnu (" + tyden + "), naprav to",
             proUids: [uid],
             odKoho: uid,
             odKohoJmeno: "Hlídka výkazů",
