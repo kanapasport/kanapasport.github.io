@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=357">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=357">
+    <link rel="stylesheet" href="assets/css/app.css?v=358">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=358">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -634,11 +634,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=357"></script>
-<script src="assets/js/ui.js?v=357"></script>
-<script src="assets/js/nabidka.js?v=357"></script>
-<script src="assets/js/vykazy.js?v=357"></script>
-<script type="module" src="assets/js/store.js?v=357"></script>
+<script src="assets/js/taxonomy.js?v=358"></script>
+<script src="assets/js/ui.js?v=358"></script>
+<script src="assets/js/nabidka.js?v=358"></script>
+<script src="assets/js/vykazy.js?v=358"></script>
+<script type="module" src="assets/js/store.js?v=358"></script>
 
 <script>
 (function () {
@@ -4482,8 +4482,6 @@
            (Michal 26. 10. 2026). */
         const zst = (kdoZustatek && jedenClovek && V.maFond(V.clovek(kdoZustatek)))
             ? V.zustatek(kdoZustatek) : null;
-        const zbyvaText = zst && (zst.zbyva === Math.round(zst.zbyva)
-            ? V.cislo(zst.zbyva) : zst.zbyva.toFixed(1).replace(".", ","));
         /* Nezapsané pracovní dny: řádek v dlaždici, data po rozkliknutí
            (na PC i po najetí). Fond za ně běží dál – proto je přesčas
            v mínusu; tohle říká, co dopsat. */
@@ -4502,8 +4500,12 @@
                   penizeDlazdice("Fakturováno", V.kc(s.castka), "", true)
                 : V.dlazdice("Najeto", V.cislo(s.km) + " km", "cestovní náhrady")) +
             (zst && zst.nastaveno
-                ? V.dlazdice("Dovolená zbývá", zbyvaText + " dní",
-                      "z " + V.cislo(zst.narok) + " · vyčerpáno " + V.cislo(zst.cerpano) +
+                /* Dovolená v hodinách i ve dnech (Michal 19. 11. 2026): počítá se
+                   v hodinách, den = 8 h; převod z loňska je vidět zvlášť. */
+                ? V.dlazdice("Dovolená zbývá", V.hod(zst.zbyvaH) + " · " + V.dnyText(zst.zbyva),
+                      "z " + V.hod(zst.celkemH) +
+                      (zst.prenosH ? " (nárok " + V.hod(zst.narokH) + ", převod z loňska " + V.hod(zst.prenosH) + ")" : "") +
+                      " · vyčerpáno " + V.hodADny(zst.cerpanoH) +
                       (zst.neuplne ? " · neúplné" : "")) +
                   /* Komu se přesčas nevede, tomu dlaždice chybí úplně –
                      prázdné číslo by jen vybízelo k otázce, proč tam je. */

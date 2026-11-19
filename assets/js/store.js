@@ -7071,11 +7071,19 @@ async function obnovPushToken() {
 /* ------------------------------------------- ZŮSTATKY DOVOLENÉ ----------
    Kolik komu zbývá dovolené a kolik má naběháno přesčasů. Web nemá
    historii z doby před sebou, takže se u každého člověka nastaví, OD KDY
-   počítá a s čím do toho jde – nárok na rok, dny už vyčerpané a hodiny
-   přesčasu. Bez toho by všichni začali na nule a čísla by lhala.
+   počítá a s čím do toho jde – nárok na rok, převod z loňska, hodiny už
+   vyčerpané a hodiny přesčasu. Bez toho by všichni začali na nule a čísla
+   by lhala.
+
+   Dovolená se vede v HODINÁCH (Michal 19. 11. 2026) – nárok, převod
+   i čerpání; lidem se ukazuje v hodinách i ve dnech (den = 8 h,
+   V.HODIN_DEN). Dokumenty z doby před tím mají jen dny (`narok`,
+   `cerpanoPred`) – čtou se jako dny × 8 (V.dovolenaNastaveni).
 
      private/vykazy/zustatky/{uid}
-       { narok:20, cerpanoPred:5, prescasPred:12.5, odIso:"2026-09-01", pozn }
+       { narokH:160, prenosH:24, cerpanoPredH:40, prescasPred:12.5,
+         odIso:"2026-09-01", pozn,
+         narok:23, cerpanoPred:5 }     // dny pro okna se starším kódem
 
    Svůj zůstatek vidí každý – je to jeho nárok a má si ho hlídat. Cizí
    a zápis jen manažer (firestore.rules). */
@@ -7116,9 +7124,20 @@ KB.watchZustatky = async () => {
 KB.ulozZustatek = async (uid, data) => {
     if (authReady) await authReady;
     requireDb();
+    const na2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
+    const narokH = Math.max(0, na2(data.narokH));
+    /* Převod smí být i záporný – kdo loni přečerpal, začíná rok s dluhem. */
+    const prenosH = na2(data.prenosH);
+    const cerpanoPredH = Math.max(0, na2(data.cerpanoPredH));
     await setDoc(zustatekDoc(uid), {
-        narok: Math.max(0, Number(data.narok) || 0),
-        cerpanoPred: Math.max(0, Number(data.cerpanoPred) || 0),
+        narokH: narokH,
+        prenosH: prenosH,
+        cerpanoPredH: cerpanoPredH,
+        /* Staré pole ve dnech se píše dál, ať okno se starším kódem (čte jen
+           `narok` a `cerpanoPred`) neukáže nulu; převod je v něm přičtený
+           k nároku, protože ho starý kód jinak nezná. Nový kód je nečte. */
+        narok: Math.max(0, na2((narokH + prenosH) / 8)),
+        cerpanoPred: na2(cerpanoPredH / 8),
         prescasPred: Number(data.prescasPred) || 0,
         /* Komu se přesčas nevede (kancelář, vedení) – hodiny na web nepíše,
            tak by mu věčně svítil mínus ve výši celého fondu. Dovolenou má

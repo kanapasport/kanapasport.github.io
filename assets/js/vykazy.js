@@ -43,6 +43,37 @@
         return V.cislo(n) + " " + tvar;
     };
 
+    /* ---------------------------------------------- dovolená v hodinách ---
+       Michal 19. 11. 2026: dovolená se vede v HODINÁCH (nárok, převod
+       z loňska, čerpání i zůstatek) a lidem se ukazuje v hodinách i ve dnech.
+       Den = 8 h, stejně jako fond hodin a krátké dny. */
+    V.HODIN_DEN = 8;
+    /** Hodiny → dny dovolené na dvě desetinná místa. */
+    V.dnyZHodin = (h) => Math.round((Number(h) || 0) / V.HODIN_DEN * 100) / 100;
+    /** „13 dní“ · „1 den“ · „11,5 dne“ – desetinný počet se skloňuje „dne“. */
+    V.dnyText = (dny) => {
+        const d = Math.round((Number(dny) || 0) * 100) / 100;
+        return d % 1 === 0 ? V.pocet(d, ["den", "dny", "dní"]) : V.cislo(d, 2).replace(/0+$/, "") + " dne";
+    };
+    /** „92 h (11,5 dne)“ – hodiny dovolené i s přepočtem na dny. */
+    V.hodADny = (h) => V.hod(h) + " (" + V.dnyText(V.dnyZHodin(h)) + ")";
+    /**
+     * Nastavení dovolené člověka v hodinách. Nový dokument nese `narokH`
+     * (nárok na rok), `prenosH` (převod z loňska) a `cerpanoPredH` (vyčerpáno
+     * před začátkem počítání); starší má jen dny `narok` a `cerpanoPred` –
+     * ty se berou × 8, takže se po přechodu nikomu zůstatek nezměnil.
+     */
+    V.dovolenaNastaveni = (z) => {
+        const d = z || {};
+        const je = (x) => x !== undefined && x !== null && x !== "";
+        const cislo = (x) => Number(x) || 0;
+        return {
+            narokH: je(d.narokH) ? cislo(d.narokH) : cislo(d.narok) * V.HODIN_DEN,
+            prenosH: cislo(d.prenosH),
+            cerpanoPredH: je(d.cerpanoPredH) ? cislo(d.cerpanoPredH) : cislo(d.cerpanoPred) * V.HODIN_DEN
+        };
+    };
+
     V.czDatum = (iso) => {
         if (!iso) return "";
         const [y, m, d] = iso.split("-");
@@ -671,13 +702,19 @@
         const moje = (window.KB.vykazy || []).filter(v =>
             v.uid === uid && v.datum && v.datum >= od && v.datum <= dnes);
 
-        /* Dovolená se ukládá rozepsaná po pracovních dnech, takže jeden
-           zápis = jeden den. Volno, neplacené volno a nemoc se do nároku
-           nepočítají.
-           Dovolená omylem zapsaná na svátek nárok nečerpá. */
-        const dovolenaDnu = moje.filter(v => v.zakazka === "Dovolená" && !V.absenceNaSvatek(v)).length;
-        const narok = Number(z.narok) || 0;
-        const cerpano = (Number(z.cerpanoPred) || 0) + dovolenaDnu;
+        /* Dovolená se čerpá v HODINÁCH (Michal 19. 11. 2026): sčítají se
+           hodiny zápisů „Dovolená“ – celý den jich nese osm, půlden čtyři.
+           Dřív platilo zápis = den, takže i půlden ubral celý den. Zápisy
+           jsou rozepsané po pracovních dnech. Volno, neplacené volno a nemoc
+           se do nároku nepočítají; dovolená omylem zapsaná na svátek nárok
+           nečerpá. K nároku na rok se přičítá převod z loňska. */
+        const dovolena = moje.filter(v => v.zakazka === "Dovolená" && !V.absenceNaSvatek(v));
+        const dovolenaDnu = dovolena.length;
+        const dovolenaH = na2(dovolena.reduce((n, v) => n + (Number(v.hodiny) || 0), 0));
+        const dn = V.dovolenaNastaveni(z);
+        const celkemH = na2(dn.narokH + dn.prenosH);
+        const cerpanoH = na2(dn.cerpanoPredH + dovolenaH);
+        const zbyvaH = na2(celkemH - cerpanoH);
 
         /* Přesčas stejně jako ve Vytížení: odpracováno + absence − fond.
            Absence se počítá jako odpracovaný čas, jinak by týden dovolené
@@ -723,9 +760,17 @@
         return {
             nastaveno: nastaveno,
             od: od,
-            narok: narok,
-            cerpano: cerpano,
-            zbyva: narok - cerpano,
+            // dovolená v hodinách: nárok na rok, převod z loňska, obojí dohromady, vyčerpáno, zbývá
+            narokH: dn.narokH,
+            prenosH: dn.prenosH,
+            celkemH: celkemH,
+            cerpanoH: cerpanoH,
+            zbyvaH: zbyvaH,
+            dovolenaH: dovolenaH,
+            // totéž ve dnech (hodiny / 8) – pro zobrazení vedle hodin
+            narok: V.dnyZHodin(celkemH),
+            cerpano: V.dnyZHodin(cerpanoH),
+            zbyva: V.dnyZHodin(zbyvaH),
             dovolenaDnu: dovolenaDnu,
             prescas: Math.round(prescas * 10) / 10,
             bezZapisu: bezZapisu,
