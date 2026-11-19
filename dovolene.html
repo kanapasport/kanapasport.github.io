@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Dovolené – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=359">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        .hlavicka__popis { margin-top: 6px; max-width: 900px; line-height: 1.6; }
+
+        /* ---------------------------------------- přehled čerpání po měsících ---
+           Řádek = člověk, sloupec = měsíc. V buňce hodiny a pod nimi dny; po
+           najetí myší (nebo ťuknutí) se ukáže, které dny to byly. Tabulka smí
+           rolovat do strany uvnitř karty – měsíců přibývá. */
+        .dov-obal { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+        .dov { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--fs-2); }
+        .dov th, .dov td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); text-align: right;
+            white-space: nowrap; vertical-align: middle; }
+        .dov thead th { font-size: var(--fs-1); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+            color: var(--muted); background: var(--bg-soft); border-bottom: 1px solid var(--line); vertical-align: bottom; }
+        .dov thead th small { display: block; font-weight: 600; letter-spacing: 0; text-transform: none; }
+        .dov th:first-child, .dov td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface);
+            font-weight: 800; z-index: 1; }
+        .dov thead th:first-child { background: var(--bg-soft); }
+        .dov td small { display: block; font-size: var(--fs-1); color: var(--muted); font-weight: 400; }
+        .dov tbody tr:last-child td { border-bottom: 0; }
+        /* měsíc s dovolenou: jde na něj najet / ťuknout */
+        .dov__mes { cursor: help; border-radius: 6px; outline: none; }
+        .dov__mes:hover, .dov__mes:focus { background: var(--bg-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+        .dov__mes b { font-weight: 800; }
+        /* v měsíci jsou i dny, které teprve přijdou (dovolená zapsaná dopředu) */
+        .dov__mes--plan b { font-style: italic; }
+        .dov__nic { color: var(--line); }
+        .dov__sep { border-left: 1px solid var(--line); }
+        .dov__minus { color: var(--danger); font-weight: 800; }
+        /* čára mezi lidmi nad ní a vedením s kanceláří pod ní */
+        .dov__cara td { padding: 0; height: 0; border-bottom: 2px solid var(--line); }
+        .dov tfoot td { font-weight: 800; background: var(--bg-soft); border-top: 1px solid var(--line); border-bottom: 0; }
+        .dov tfoot td:first-child { background: var(--bg-soft); }
+
+        /* bublina s dny – jedna plovoucí pro celou tabulku, ať ji neořízne rolování karty */
+        .dovtip { position: fixed; z-index: 60; max-width: min(340px, calc(100vw - 24px)); padding: 9px 12px;
+            border-radius: var(--radius); background: var(--ink, #1c2530); color: #fff; font-size: var(--fs-2);
+            line-height: 1.55; white-space: pre-line; box-shadow: 0 6px 22px rgba(0, 0, 0, .28); pointer-events: none; }
+        .dovtip b { display: block; margin-bottom: 2px; }
+
+        /* ------------------------------------------------ nastavení (z Nastavení) ---
+           Řádek dovolené: jméno vlevo, políčka vedle sebe. Na úzké obrazovce
+           se zalomí pod sebe, ať se dá vyplnit i na tabletu. */
+        .zustatky { display: flex; flex-direction: column; gap: 8px; }
+        .zustrad { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+            padding: 8px 10px; border: 1px solid var(--line-soft);
+            border-radius: var(--radius); background: var(--bg-soft); }
+        .zustrad__jmeno { flex: 1 1 190px; min-width: 150px; font-weight: 800;
+            font-size: var(--fs-3); align-self: center; }
+        .zustrad__pole { display: flex; flex-direction: column; gap: 3px; }
+        .zustrad__pole > span { font-size: var(--fs-1); font-weight: 800; letter-spacing: .04em;
+            text-transform: uppercase; color: var(--muted); }
+        /* nadpis pole dovolené se smí zalomit – jinak by šířku sloupce určoval
+           nadpis, ne pole, a řádek by se na běžném monitoru nevešel vedle sebe */
+        .zustrad__pole--uzke > span { max-width: 112px; line-height: 1.25; }
+        .zustrad__pole input[type="date"] { width: 150px; }
+        /* Dovolená se zadává v hodinách nebo ve dnech – pod polem je vždy
+           přepočet na tu druhou jednotku. Řádek přepočtu má každé pole
+           (u ostatních prázdný), ať jsou všechna pole v řadě stejně vysoko. */
+        .zustrad__prepocet { font-size: var(--fs-1); color: var(--muted); min-height: 1.4em;
+            line-height: 1.4; white-space: nowrap; }
+        .zustjed { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+            font-size: var(--fs-2); }
+        .zustjed label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+        /* Přepínač „počítat přesčas" – ať je v řadě stejně vysoký jako pole. */
+        .zustrad__prepinac { display: flex; align-items: center; gap: 6px;
+            height: 38px; font-size: var(--fs-2); white-space: nowrap; }
+        /* čára mezi lidmi nad ní a pod ní – stejná jako v přehledu */
+        .zustcara { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px;
+            font-size: var(--fs-1); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+        .zustcara::before, .zustcara::after { content: ""; flex: 1; border-top: 2px solid var(--line); }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<!-- sloupec s mezerou jako u Správy: karta zámku (KBUI.zamekCitlive) se vkládá před obsah -->
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="bezPrav" class="card center" style="padding:40px 24px" hidden>
+        <b>Na dovolené nemáš právo</b>
+        <p class="small muted" style="margin-top:6px;line-height:1.6">
+            Tahle stránka je pro manažery. Svůj zůstatek dovolené vidíš ve Výkazech
+            v dlaždici Dovolená zbývá.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:18px">
+
+        <div>
+            <h2 class="nadpis-stranky">Dovolené a přesčasy</h2>
+            <p class="small muted hlavicka__popis">
+                Kdo si kolik dovolené vybral a s čím do toho šel. Dovolená se vede v hodinách
+                (den = 8 h) a ukazuje se v hodinách i ve dnech.
+            </p>
+        </div>
+
+        <!-- ================================== ČERPÁNÍ PO MĚSÍCÍCH -->
+        <section class="card col nastaveni" id="sekce-prehled">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Čerpání po měsících</b>
+                    <span class="small muted">kdo si kolik vybral – najeď na číslo a uvidíš dny</span>
+                </div>
+                <span class="tag" id="prehledStav"></span>
+            </div>
+            <div class="dov-obal"><table class="dov" id="prehled"></table></div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Počítají se zápisy <b>Dovolená</b> z výkazů od data, od kterého web u člověka počítá;
+                co vybral dřív, je ve sloupci Vybráno dřív. <i>Kurzívou</i> je měsíc, ve kterém jsou
+                i dny zapsané dopředu – ty se do Vybráno a Zbývá započítají, až nastanou.
+            </p>
+        </section>
+
+        <!-- ======================================= DOVOLENÁ A PŘESČASY -->
+        <section class="card col nastaveni" id="sekce-zustatky">
+            <div class="nastaveni__hlava">
+                <div>
+                    <b>Nastavení dovolené a přesčasů</b>
+                    <span class="small muted">odkud web počítá a s čím do toho člověk jde</span>
+                </div>
+                <span class="tag" id="pocetZustatku"></span>
+            </div>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                Web zná jen to, co je v něm zapsané. Proto se u každého nastaví
+                <b>datum, od kterého počítá</b>, a stav k tomu dni: nárok na rok,
+                převod z loňska, kolik dovolené už měl vybráno a kolik hodin přesčasu si nesl.
+                Od toho data si pak zůstatek dopočítá sám z výkazů — a každý ho
+                vidí u svého výkazu.
+            </p>
+            <p class="tiny muted" style="margin:0;line-height:1.6">
+                <b>Dovolená se vede v hodinách</b> (den = 8 h): nárok, převod i čerpání se počítají
+                v hodinách a lidem se ukazují v hodinách i ve dnech. Zadat je můžeš v hodinách nebo
+                ve dnech, pod polem vidíš přepočet. Půlden dovolené ve výkazu ubere 4 h, ne celý den.
+            </p>
+            <p class="tiny" style="margin:0;line-height:1.6;color:var(--danger)">
+                Datum je den, <b>od kterého má web hodiny toho člověka</b> —
+                u většiny 1. 9. 2026. Není to začátek dovolenkového roku.
+                Z toho data se totiž počítá i fond směn: datum o půl roku
+                zpátky znamená půl roku směn, ke kterým web nemá jediný
+                zápis, a přesčas spadne o celý ten fond do mínusu.
+                Co si člověk přináší z doby předtím, patří do polí
+                „vybráno" a „přesčas".
+            </p>
+            <div class="zustjed" id="zustJednotka" role="radiogroup" aria-label="Jednotka zadávání dovolené">
+                <b>Dovolenou zadávám v:</b>
+                <label><input type="radio" name="zustJednotka" value="h" checked> hodinách</label>
+                <label><input type="radio" name="zustJednotka" value="d"> dnech (den = 8 h)</label>
+            </div>
+            <div id="zustatky" class="zustatky"></div>
+            <div class="row row--wrap" style="gap:12px">
+                <button type="button" id="btnZustatkyUloz" class="btn btn--primary">
+                    Uložit dovolené a přesčasy</button>
+                <span id="stavZustatky" class="small muted"></span>
+            </div>
+        </section>
+    </div>
+</main>
+
+<div class="dovtip" id="dovTip" role="tooltip" hidden></div>
+
+<script src="assets/js/taxonomy.js?v=359"></script>
+<script src="assets/js/ui.js?v=359"></script>
+<script src="assets/js/vykazy.js?v=359"></script>
+<script type="module" src="assets/js/store.js?v=359"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const V = window.KBVYK;
+    const jeIso = (x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x || ""));
+
+    let sledovaniZapnuto = false;
+    /* Data z databáze dotečou až po prvním vykreslení, takže se formulář plní
+       znovu s každou dávkou. Jakmile do něj někdo sáhne, přeplňovat se přestane
+       – jinak by mu rozepsaná změna zmizela pod rukama. */
+    let upravovano = false;
+    /* Starší výkazy, než kam sahá živé okno manažera (pár měsíců), se dotáhnou
+       jednou – přehled jde od začátku počítání. */
+    let dotazenoOd = "";
+
+    function zapniSledovani() {
+        if (sledovaniZapnuto || !window.KBUI.can("vykaz.view")) return;
+        sledovaniZapnuto = true;
+        window.KB.watchVykazy();
+        window.KB.watchZustatky();
+    }
+
+    /** Nejstarší začátek počítání mezi lidmi přehledu ("" = nikdo nastavený). */
+    function nejstarsiZacatek() {
+        const z = window.KB.zustatky || {};
+        let od = "";
+        V.dovolenaLide().forEach(({ u }) => {
+            const o = (z[u.id] || {}).odIso;
+            if (jeIso(o) && (!od || o < od)) od = o;
+        });
+        return od;
+    }
+
+    function dotahniStarsi() {
+        const od = nejstarsiZacatek(), okno = window.KB.vykazyOknoOd || "";
+        if (!od || !okno || od >= okno || dotazenoOd === od || !window.KB.nactiVykazyRozsah) return;
+        dotazenoOd = od;
+        window.KB.nactiVykazyRozsah(od, V.posunIso(okno, -1))
+            .catch(err => { dotazenoOd = ""; console.warn("Starší výkazy se nenačetly:", err); });
+    }
+
+    /* ----------------------------------------------- čerpání po měsících --- */
+
+    /** Měsíce přehledu: od nejstaršího začátku počítání po poslední měsíc se zápisem dovolené (nejméně do dneška). */
+    function mesicePrehledu() {
+        const od = nejstarsiZacatek();
+        if (!od) return [];
+        let doMesice = V.dnesISO().slice(0, 7);
+        (window.KB.vykazy || []).forEach(v => {
+            if (v && v.zakazka === "Dovolená" && v.datum && v.datum.slice(0, 7) > doMesice) doMesice = v.datum.slice(0, 7);
+        });
+        const ven = [];
+        for (let m = od.slice(0, 7), pojistka = 0; m <= doMesice && pojistka < 60; m = V.posunMesic(m, 1), pojistka++) ven.push(m);
+        return ven;
+    }
+
+    const DNY_KRATCE = ["ne", "po", "út", "st", "čt", "pá", "so"];
+    const denText = (iso) => DNY_KRATCE[new Date(iso + "T00:00:00").getDay()] + " " +
+        Number(iso.slice(8, 10)) + ". " + Number(iso.slice(5, 7)) + ".";
+    const velke = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+    /** Buňka s hodinami a dny; nula = pomlčka. */
+    const hd = (h, tridy) => '<td class="' + (tridy || "") + '">' + (h
+        ? esc(V.hod(h)) + "<small>" + esc(V.dnyText(V.dnyZHodin(h))) + "</small>" : '<span class="dov__nic">–</span>') + "</td>";
+
+    function vykresliPrehled() {
+        const lide = V.dovolenaLide();
+        const mesice = mesicePrehledu();
+        const dnes = V.dnesISO();
+        const z = window.KB.zustatky || {};
+        const sloupcu = 6 + mesice.length;
+        const soucty = mesice.map(() => 0);
+        let bylaCara = false;
+
+        const radek = ({ u, dole }, i) => {
+            const cara = dole && !bylaCara && i > 0 ? '<tr class="dov__cara"><td colspan="' + sloupcu + '"></td></tr>' : "";
+            if (dole) bylaCara = true;
+            const d = z[u.id] || {};
+            if (!jeIso(d.odIso)) {
+                return cara + "<tr><td>" + esc(V.jmeno(u)) + '</td><td colspan="' + (sloupcu - 1) +
+                    '" style="text-align:left" class="muted">nenastaveno – doplň níž datum, od kterého se počítá</td></tr>';
+            }
+            const s = V.zustatek(u.id);
+            const pm = V.dovolenaPoMesicich(u.id, dnes);
+            let planH = 0;
+            const bunky = mesice.map((m, k) => {
+                const b = pm[m];
+                const sep = k === 0 ? " dov__sep" : "";     // svislá čára před prvním měsícem
+                if (!b || !b.hodiny) return '<td class="' + sep.trim() + '"><span class="dov__nic">–</span></td>';
+                soucty[k] += b.hodiny;
+                planH += b.planH;
+                const dny = b.dny.map(x => denText(x.datum) + (x.hodiny !== V.HODIN_DEN ? " – " + V.hod(x.hodiny) : "") +
+                    (x.plan ? " (naplánováno)" : "")).join("\n");
+                const bublina = V.jmeno(u) + " – " + V.mesicText(m) + ": " + V.hodADny(b.hodiny) + "\n" + dny;
+                return '<td class="dov__mes' + (b.planH ? " dov__mes--plan" : "") + sep + '" tabindex="0" data-dny="' + esc(bublina) + '">' +
+                    "<b>" + esc(V.hod(b.hodiny)) + "</b><small>" + esc(V.dnyText(V.dnyZHodin(b.hodiny))) + "</small></td>";
+            }).join("");
+            return cara + "<tr>" +
+                "<td>" + esc(V.jmeno(u)) + "</td>" +
+                hd(s.narokH) + hd(s.prenosH) + hd(V.dovolenaNastaveni(d).cerpanoPredH) +
+                bunky +
+                hd(s.cerpanoH, "dov__sep") +
+                '<td class="' + (s.zbyvaH < 0 ? "dov__minus" : "") + '"><b>' + esc(V.hod(s.zbyvaH)) + "</b><small>" +
+                    esc(V.dnyText(s.zbyva)) + (planH ? " · po plánu " + esc(V.hod(s.zbyvaH - planH)) : "") + "</small></td>" +
+            "</tr>";
+        };
+
+        const telo = lide.map(radek).join("");
+        $("prehled").innerHTML = !lide.length
+            ? '<tbody><tr><td class="muted" style="text-align:left">V seznamu zatím žádný zaměstnanec není.</td></tr></tbody>'
+            : "<thead><tr><th>Kdo</th><th>Nárok</th><th>Převod<small>z loňska</small></th><th>Vybráno<small>dřív</small></th>" +
+                mesice.map((m, k) => "<th" + (k === 0 ? ' class="dov__sep"' : "") + ">" + esc(velke(V.mesicText(m).split(" ")[0])) +
+                    "<small>" + esc(m.slice(0, 4)) + "</small></th>").join("") +
+                '<th class="dov__sep">Vybráno<small>k dnešku</small></th><th>Zbývá</th></tr></thead>' +
+              "<tbody>" + telo + "</tbody>" +
+              (mesice.length ? "<tfoot><tr><td>Celkem</td><td></td><td></td><td></td>" +
+                  soucty.map(h => "<td>" + (h ? esc(V.hod(h)) : "") + "</td>").join("") + "<td></td><td></td></tr></tfoot>" : "");
+        const okno = window.KB.vykazyOknoOd || "", od = nejstarsiZacatek();
+        $("prehledStav").textContent = !window.KB.vykazyPrisly ? "načítám výkazy…"
+            : (od && okno && od < okno && dotazenoOd !== od) ? "načítám starší měsíce…"
+            : mesice.length ? "od " + V.mesicText(mesice[0]) : "";
+    }
+
+    /* Bublina s dny: jedna plovoucí pro celou tabulku. Ukáže se po najetí
+       myší, po ťuknutí (buňka dostane fokus) i z klávesnice. */
+    let tipBunka = null;        // buňka, u které bublina právě je
+    function ukazDny(bunka) {
+        const tip = $("dovTip");
+        const text = bunka.dataset.dny || "";
+        const zlom = text.indexOf("\n");
+        tip.innerHTML = "<b>" + esc(zlom === -1 ? text : text.slice(0, zlom)) + "</b>" + esc(zlom === -1 ? "" : text.slice(zlom + 1));
+        tip.hidden = false;
+        const r = bunka.getBoundingClientRect(), t = tip.getBoundingClientRect();
+        let x = r.left + r.width / 2 - t.width / 2;
+        x = Math.max(12, Math.min(x, window.innerWidth - t.width - 12));
+        // pod buňku; když by přetekla dolů, tak nad ni
+        const y = r.bottom + 8 + t.height > window.innerHeight ? r.top - t.height - 8 : r.bottom + 8;
+        tip.style.left = Math.round(x) + "px";
+        tip.style.top = Math.round(Math.max(8, y)) + "px";
+        tipBunka = bunka;
+    }
+    const schovejDny = () => { $("dovTip").hidden = true; tipBunka = null; };
+
+    /* -------------------------------------------- dovolená a přesčasy ---
+       Za heslem k citlivým sekcím (Michal 19. 11. 2026) – do té doby bylo
+       nastavení v Nastavení bez zámku. */
+
+    /* Jednotka, ve které manažer dovolenou ZADÁVÁ ("h" hodiny / "d" dny po
+       8 h). Ukládají se vždy hodiny – volba je jen pohodlí při psaní (nárok
+       zná každý ve dnech, převod a čerpání bývají v hodinách) a pamatuje si
+       ji prohlížeč (Michal 19. 11. 2026). */
+    let zustJednotka = "h";
+    try { if (localStorage.getItem("kb-dovolena-jednotka") === "d") zustJednotka = "d"; } catch (err) { }
+    const jednotkaZustatku = () => zustJednotka;
+    const naMist = (x, mist) => { const k = Math.pow(10, mist); return Math.round((Number(x) || 0) * k) / k; };
+    /** Hodiny → číslo do pole ve zvolené jednotce (dny na tři místa: 3 h = 0,375 dne). */
+    const zHodin = (h, jed) => jed === "d" ? naMist(h / V.HODIN_DEN, 3) : naMist(h, 2);
+    /** Číslo z pole ve zvolené jednotce → hodiny. */
+    const naHodiny = (x, jed) => naMist(jed === "d" ? x * V.HODIN_DEN : x, 2);
+
+    /** Pod každým polem dovolené přepočet na druhou jednotku. */
+    function prepoctyZustatku() {
+        $("zustatky").querySelectorAll("[data-dovolena]").forEach(el => {
+            const kam = el.parentElement.querySelector("[data-prepocet]");
+            if (!kam) return;
+            if (el.value === "") { kam.textContent = ""; return; }
+            const h = naHodiny(Number(el.value), zustJednotka);
+            kam.textContent = "= " + (zustJednotka === "d" ? V.hod(h) : V.dnyText(V.dnyZHodin(h)));
+        });
+    }
+
+    /** Přepnutí jednotky: čísla v polích se přepočítají, hodnota se nemění. */
+    function prepniJednotkuZustatku(nova) {
+        if ((nova !== "h" && nova !== "d") || nova === zustJednotka) return;
+        const stara = zustJednotka;
+        zustJednotka = nova;
+        try { localStorage.setItem("kb-dovolena-jednotka", nova); } catch (err) { }
+        $("zustatky").querySelectorAll("[data-dovolena]").forEach(el => {
+            if (el.value !== "") el.value = zHodin(naHodiny(Number(el.value), stara), nova);
+        });
+        $("zustatky").querySelectorAll("[data-jednotka]").forEach(el => {
+            el.textContent = nova === "d" ? "dny" : "h";
+        });
+        prepoctyZustatku();
+    }
+
+    function naplnZustatky() {
+        if (upravovano) return;
+        document.querySelectorAll('input[name="zustJednotka"]').forEach(r => { r.checked = r.value === zustJednotka; });
+        const z = window.KB.zustatky || {};
+        /* Jen zaměstnanci: OSVČ a student fond hodin nemají, přesčas se
+           jim nikde neukazuje a nic se u nich nenastavuje (Michal
+           26. 10. 2026; do té doby tu byli všichni – „i student si může
+           nést přesčas"). Pořadí a čára jako v přehledu (V.dovolenaLide). */
+        const lide = V.dovolenaLide();
+        $("pocetZustatku").textContent =
+            lide.filter(({ u }) => jeIso((z[u.id] || {}).odIso)).length + " z " + lide.length + " nastaveno";
+
+        const jed = jednotkaZustatku();
+        const radek = ({ u, dole }) => {
+            const d = z[u.id] || {};
+            const pole = (klic, hodnota, krok, sirka, dovolena) =>
+                '<input type="number" class="field" step="' + krok + '" ' +
+                    'style="width:' + sirka + 'px" data-zust="' + esc(u.id) + '" ' +
+                    (dovolena ? "data-dovolena " : "") +
+                    'data-pole="' + klic + '" value="' + (hodnota === 0 ? "0" : (hodnota || "")) + '">';
+            /* Dovolená: v dokumentu jsou hodiny (starší dokument dny – čte
+               V.dovolenaNastaveni), pole je ukáže v jednotce, kterou si manažer
+               vybral, a pod ním přepočet na druhou (Michal 19. 11. 2026). */
+            const dn = V.dovolenaNastaveni(d);
+            const dov = (nadpis, klic, hodiny) =>
+                '<label class="zustrad__pole zustrad__pole--uzke"><span>' + nadpis + ' (<i data-jednotka style="font-style:normal">' +
+                    (jed === "d" ? "dny" : "h") + "</i>)</span>" +
+                    pole(klic, hodiny ? zHodin(hodiny, jed) : "", "0.5", 84, true) +
+                    '<small class="zustrad__prepocet" data-prepocet></small></label>';
+            const prazdny = '<small class="zustrad__prepocet"></small>';   // drží pole v jedné výšce
+            return '<div class="zustrad">' +
+                '<span class="zustrad__jmeno">' + esc(V.jmeno(u)) + "</span>" +
+                '<label class="zustrad__pole"><span>Počítat od</span>' +
+                    '<input type="date" class="field" data-zust="' + esc(u.id) + '" ' +
+                        'data-pole="odIso" value="' + esc(d.odIso || "") + '">' + prazdny + "</label>" +
+                dov("Nárok na rok", "narokH", dn.narokH) +
+                dov("Převod z loňska", "prenosH", dn.prenosH) +
+                dov("Vybráno do té doby", "cerpanoPredH", dn.cerpanoPredH) +
+                '<label class="zustrad__pole"><span>Přesčas (h)</span>' +
+                    pole("prescasPred", Number(d.prescasPred) || "", "0.5", 86) + prazdny + "</label>" +
+                /* Kdo hodiny na web nepíše, tomu přesčas jen svítí mínusem ve
+                   výši celého fondu – dovolenou si přitom nechává. */
+                '<label class="zustrad__pole"><span>Přesčas</span>' +
+                    '<span class="zustrad__prepinac"><input type="checkbox" ' +
+                        'data-zust="' + esc(u.id) + '" data-pole="vedePrescas"' +
+                        (d.bezPrescasu === true ? "" : " checked") + ">" +
+                        "<span>počítat</span></span>" + prazdny + "</label>" +
+                /* Řazení v přehledu i tady: pod čarou je vedení a kancelář
+                   (dokud se nenastaví, rozhoduje role), vyšší pořadí je níž. */
+                '<div class="zustrad__pole"><span>Řazení</span>' +
+                    '<span class="zustrad__prepinac">' +
+                        '<input type="number" class="field" step="1" style="width:58px" aria-label="Pořadí" ' +
+                            'title="Pořadí – vyšší číslo je v seznamu níž, prázdné = podle abecedy" ' +
+                            'data-zust="' + esc(u.id) + '" data-pole="poradi" value="' + (Number(d.poradi) || "") + '">' +
+                        '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">' +
+                            '<input type="checkbox" data-zust="' + esc(u.id) + '" data-pole="podCarou"' + (dole ? " checked" : "") + ">" +
+                            "<span>pod čarou</span></label>" +
+                    "</span>" + prazdny + "</div>" +
+            "</div>";
+        };
+
+        const nad = lide.filter(x => !x.dole), pod = lide.filter(x => x.dole);
+        $("zustatky").innerHTML = (lide.length
+            ? '<div class="popisek" style="margin:10px 0 2px">Zaměstnanci' +
+                ' <span class="muted">(' + lide.length + ")</span></div>" +
+              nad.map(radek).join("") +
+              (nad.length && pod.length ? '<div class="zustcara" role="separator">pod čarou</div>' : "") +
+              pod.map(radek).join("")
+            : '<div class="tiny muted">V seznamu zatím žádný zaměstnanec není.</div>') +
+            '<p class="tiny muted" style="margin:8px 0 0">OSVČ a studenti fond hodin nemají –' +
+                " přesčas ani dovolená se u nich nevedou.</p>";
+        prepoctyZustatku();
+    }
+
+    async function ulozZustatky() {
+        const podle = new Map();
+        $("zustatky").querySelectorAll("[data-zust]").forEach(el => {
+            const uid = el.dataset.zust;
+            if (!podle.has(uid)) podle.set(uid, {});
+            podle.get(uid)[el.dataset.pole] =
+                el.type === "checkbox" ? el.checked
+                : el.type === "date" ? el.value
+                : el.value === "" ? ""
+                // dovolená se ukládá v hodinách, ať ji manažer psal v čemkoli
+                : ("dovolena" in el.dataset) ? naHodiny(Number(el.value), zustJednotka)
+                : Number(el.value);
+        });
+
+        /* Ukládá se jen to, co je opravdu vyplněné – prázdný řádek by
+           člověku nastavil nárok nula a tvářil se, že mu nic nezbývá. */
+        const kUlozeni = [...podle.entries()].filter(([, d]) =>
+            d.odIso || d.narokH !== "" || d.prenosH !== "" || d.cerpanoPredH !== "" || d.prescasPred !== "");
+        const bezData = kUlozeni.filter(([, d]) => !d.odIso);
+        if (bezData.length) {
+            return window.KBUI.toast("U vyplněných lidí doplň i datum, od kterého se počítá.", "warn");
+        }
+
+        $("btnZustatkyUloz").disabled = true;
+        $("stavZustatky").textContent = "Ukládám…";
+        try {
+            for (const [uid, d] of kUlozeni) {
+                // přepínač je v rozhraní kladný („počítat"), v datech záporný
+                await window.KB.ulozZustatek(uid,
+                    Object.assign({}, d, { bezPrescasu: d.vedePrescas === false }));
+            }
+            $("stavZustatky").textContent = "Uloženo u " + kUlozeni.length + " lidí.";
+            window.KBUI.toast("Dovolené a přesčasy uloženy.");
+            upravovano = false;
+            vykresli();
+        } catch (err) {
+            console.error(err);
+            $("stavZustatky").textContent = "";
+            window.KBUI.toast("Uložení selhalo – tohle mění jen správce.", "error");
+        } finally {
+            $("btnZustatkyUloz").disabled = false;
+        }
+    }
+
+    /* ---------------------------------------------------------- vykreslení */
+
+    function vykresli() {
+        if (!window.KBUI.can("vykaz.view")) return;
+        dotahniStarsi();
+        vykresliPrehled();
+        naplnZustatky();
+    }
+
+    function rozhodni() {
+        // podlišta se po roli překreslí, ať se dorovnají práva u položek
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_NASTAVENI, "dovolene.html");
+        const smim = window.KBUI.can("vykaz.view");
+        $("obsah").hidden = !smim;
+        $("bezPrav").hidden = smim || !window.KBUI.me();
+        if (smim) { zapniSledovani(); vykresli(); }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "nastaveni.html", subbar: true });
+        window.KBUI.paintSubbar(window.KBUI.PODLISTA_NASTAVENI, "dovolene.html");
+        // opona: dovolené jsou za heslem k citlivým sekcím (Michal 19. 11. 2026)
+        window.KBUI.zamekCitlive({ obsah: ["obsah"], nadpis: "Dovolené jsou zamčené" });
+
+        $("btnZustatkyUloz").addEventListener("click", ulozZustatky);
+        $("zustatky").addEventListener("input", () => { upravovano = true; prepoctyZustatku(); });
+        $("zustJednotka").addEventListener("change", (e) => prepniJednotkuZustatku(e.target.value));
+
+        // bublina s dny: myš, ťuknutí (fokus) i klávesnice
+        const prehled = $("prehled");
+        /* Pohyb myši, ne jen vjezd do buňky: rolování stránky bublinu schová
+           (ujela by od buňky) a s dalším pohybem se má zase ukázat. */
+        prehled.addEventListener("mousemove", (e) => { const b = e.target.closest("[data-dny]"); if (b && b !== tipBunka) ukazDny(b); });
+        prehled.addEventListener("mouseout", (e) => {
+            const b = e.target.closest("[data-dny]");
+            const kam = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest("[data-dny]") : null;
+            if (b && kam !== b && document.activeElement !== b) schovejDny();
+        });
+        prehled.addEventListener("focusin", (e) => { const b = e.target.closest("[data-dny]"); if (b) ukazDny(b); });
+        prehled.addEventListener("focusout", schovejDny);
+        window.addEventListener("scroll", schovejDny, true);
+        document.addEventListener("keydown", (e) => { if (e.key === "Escape") { schovejDny(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } });
+
+        document.addEventListener("kb-role", rozhodni);
+        window.KB.on("users", vykresli);
+        window.KB.on("zustatky", vykresli);
+        window.KB.on("vykazy", () => {
+            if (!window.KBUI.can("vykaz.view")) return;
+            dotahniStarsi();
+            vykresliPrehled();
+        });
+
+        rozhodni();
+    });
+})();
+</script>
+</body>
+</html>

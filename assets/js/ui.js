@@ -1856,6 +1856,17 @@
         { title: "VÝPIS PRO MZDOVOU", href: "mzdy-vypis.html", need: "finance.view", zamek: true },
         { title: "UZÁVĚRKA MĚSÍCE", href: "uzaverka.html", need: "finance.view", zamek: true }
     ];
+    /* Podlišta Nastavení – jedna pro všechny její stránky. Dřív ji měla každá
+       opsanou u sebe (a z Barev webu se kvůli tomu jednou nedalo přeskočit
+       jinam). Dovolené jsou od 19. 11. 2026 samostatná záložka za heslem
+       k citlivým sekcím (Michal): nastavení nároků a přehled čerpání. */
+    UI.PODLISTA_NASTAVENI = [
+        { title: "HODINOVÉ SAZBY", href: "nastaveni.html", need: "vykaz.view" },
+        { title: "DOVOLENÉ", href: "dovolene.html", need: "vykaz.view", zamek: true },
+        { title: "UŽIVATELÉ A HESLA", href: "uzivatele.html", need: "users.manage" },
+        { title: "BARVY WEBU", href: "barvy.html", need: "web.design" },
+        { title: "IMPORT DAT", href: "import.html", need: "vykaz.view" }
+    ];
     /* FAKTURY byly v podliště projektů – od 22. 9. 2026 jsou v levém pásu
        vedle Pokladny (přání Michala: mimo projekty, jen manažeři a asistentka). */
 

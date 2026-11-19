@@ -499,7 +499,7 @@
 
     /* ---------------------------------------------- zůstatky člověka ----
        Kolik zbývá dovolené a kolik je naběháno přesčasů. Počítá se od data,
-       které je u člověka nastavené (Nastavení → Dovolená a přesčasy) –
+       které je u člověka nastavené (Nastavení → Dovolené) –
        před ním web historii nemá a musí se do něj vstoupit s ručně zadanou
        hodnotou, jinak by všichni začali na nule.
 
@@ -781,6 +781,51 @@
             neuplne: nastaveno && !!okno && od < okno,
             chybi: chybi
         };
+    };
+
+    /* ----------------------------------- stránka Dovolené (19. 11. 2026) ---
+       Přehled čerpání po měsících a řazení lidí. Počítá se stejně jako
+       V.zustatek: zápisy „Dovolená“ od začátku počítání (`odIso`; co bylo
+       dřív, je ve „vybráno do té doby“), dovolená na svátek se nepočítá. */
+
+    /**
+     * Dovolená člověka po měsících. Na rozdíl od zůstatku bere i dny po
+     * dnešku – dovolená se zapisuje dopředu a v přehledu má být vidět jako
+     * naplánovaná (`plan: true` u dne, `planH` v měsíci).
+     * @returns {Object<string, {hodiny: number, planH: number, dny: {datum: string, hodiny: number, plan: boolean}[]}>}
+     *          klíč je měsíc RRRR-MM; dny vzestupně
+     */
+    V.dovolenaPoMesicich = (uid, dnesIso) => {
+        const od = String(((window.KB.zustatky || {})[uid] || {}).odIso || "");
+        const dnes = dnesIso || V.dnesISO();
+        const ven = {};
+        if (!uid || !od) return ven;
+        (window.KB.vykazy || []).forEach(v => {
+            if (!v || v.uid !== uid || v.zakazka !== "Dovolená" || !v.datum || v.datum < od) return;
+            if (V.absenceNaSvatek(v)) return;
+            const h = Number(v.hodiny) || 0, plan = v.datum > dnes;
+            const m = ven[v.datum.slice(0, 7)] || (ven[v.datum.slice(0, 7)] = { hodiny: 0, planH: 0, dny: [] });
+            m.hodiny = na2(m.hodiny + h);
+            if (plan) m.planH = na2(m.planH + h);
+            m.dny.push({ datum: v.datum, hodiny: h, plan: plan });
+        });
+        Object.keys(ven).forEach(m => ven[m].dny.sort((a, b) => a.datum.localeCompare(b.datum)));
+        return ven;
+    };
+
+    /* Řazení lidí na stránce Dovolené (Michal 19. 11. 2026): vedení a kancelář
+       jsou POD ČAROU, ostatní nad ní. Dokud to manažer u člověka nenastaví
+       sám (`podCarou` v zůstatku), rozhoduje role. Uvnitř skupiny řadí
+       `poradi` (vyšší číslo níž), jinak pořadí jako všude jinde (V.lide). */
+    V.DOVOLENA_POD_CAROU_ROLE = ["majitel", "asistentka"];
+    V.dovolenaPodCarou = (u, z) => (z && typeof z.podCarou === "boolean")
+        ? z.podCarou : V.DOVOLENA_POD_CAROU_ROLE.indexOf(String((u && u.role) || "")) !== -1;
+    /** Zaměstnanci (kdo má fond hodin) v pořadí pro Dovolené: [{ u, dole, poradi }]. */
+    V.dovolenaLide = () => {
+        const z = window.KB.zustatky || {};
+        return V.lide().filter(V.maFond)
+            .map((u, i) => ({ u: u, i: i, dole: V.dovolenaPodCarou(u, z[u.id]), poradi: Number((z[u.id] || {}).poradi) || 0 }))
+            .sort((a, b) => (a.dole ? 1 : 0) - (b.dole ? 1 : 0) || a.poradi - b.poradi || a.i - b.i);
     };
 
     /* ================================================== VÝPLATY ========

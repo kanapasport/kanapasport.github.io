@@ -7082,7 +7082,7 @@ async function obnovPushToken() {
 
      private/vykazy/zustatky/{uid}
        { narokH:160, prenosH:24, cerpanoPredH:40, prescasPred:12.5,
-         odIso:"2026-09-01", pozn,
+         odIso:"2026-09-01", pozn, podCarou:false, poradi:0,
          narok:23, cerpanoPred:5 }     // dny pro okna se starším kódem
 
    Svůj zůstatek vidí každý – je to jeho nárok a má si ho hlídat. Cizí
@@ -7143,6 +7143,11 @@ KB.ulozZustatek = async (uid, data) => {
            tak by mu věčně svítil mínus ve výši celého fondu. Dovolenou má
            dál (Michal 8. 10. 2026). */
         bezPrescasu: data.bezPrescasu === true,
+        /* Řazení na stránce Dovolené (Michal 19. 11. 2026): kdo je v přehledu
+           pod čarou (vedení a kancelář) a pořadí uvnitř skupiny – vyšší číslo
+           je níž. Bez `podCarou` rozhoduje role (V.dovolenaPodCarou). */
+        podCarou: data.podCarou === true,
+        poradi: Math.round(Number(data.poradi) || 0),
         odIso: String(data.odIso || "").slice(0, 10),
         pozn: String(data.pozn || "").slice(0, 200),
         updatedMs: Date.now(),
