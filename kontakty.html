@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1d556d">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Kontakty – Pasport Kaňa</title>
+    <link rel="stylesheet" href="assets/css/app.css?v=360">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=360">
+    <link rel="apple-touch-icon" href="ikona-180.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="Pasport_Kana_black.png">
+    <style>
+        /* =====================================================================
+           KONTAKTY (Michal 20. 11. 2026) – dodavatelé, řemeslníci a služby,
+           které byly v Excelu. Jen manažerské role (vykaz.view). Tabulka jako
+           Evidence vybavení, okna ze sdíleného .hookno, formulář .fmr. Sloupce
+           i pole se kreslí z KBKontakty.POLE – nové pole = řádek v kontakty.js.
+           ===================================================================== */
+        .kon-hledat { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 10px 14px; }
+        .kon-hledat .field { flex: 1 1 260px; min-width: 0; max-width: 520px; }
+
+        .kon { padding: 0; overflow: hidden; }
+        table.kont { width: 100%; border-collapse: collapse; font-size: var(--fs-2); }
+        .kont th, .kont td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+        .kont th { font-size: var(--fs-1); font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
+            color: var(--muted); white-space: nowrap; background: var(--bg-soft); }
+        .kont tr:last-child td { border-bottom: 0; }
+        .kont tr.konr:hover > td { background: var(--bg-soft); }
+        .kont tr.konr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        .kont tr.konr.je-v-nabidce > td { background: var(--accent-tint); }
+        .kont td { overflow-wrap: anywhere; }
+        .kont td.kon--nazev { font-weight: 800; min-width: 160px; }
+        .kont td.kon--tel { white-space: nowrap; }
+        .kont td.kon--dlouhy { white-space: pre-line; color: var(--text-soft); min-width: 200px; }
+        .kont td.konakce { width: 36px; text-align: right; white-space: nowrap; }
+        .kont a { color: var(--accent); text-decoration: none; }
+        .kont a:hover { text-decoration: underline; }
+        /* Na širokém okně se adresa neláme uprostřed slova (víc adres se zalomí mezi
+           sebou) – místo jí uvolní poznámka. Se skutečnými daty jinak e-mail a web
+           dostaly úzký sloupec a poznámka půl stránky. */
+        @media (min-width: 1100px) {
+            .kont td.kon--email a, .kont td.kon--web a { white-space: nowrap; }
+        }
+        .konprazdno { padding: 34px 22px; text-align: center; line-height: 1.6; }
+
+        /* náhled vložení z Excelu */
+        .konex__pole { min-height: 150px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: var(--fs-1); white-space: pre; }
+        .konex__nahled { max-height: 46vh; overflow: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+        .konex__nahled .kont th { position: sticky; top: 0; }
+        .kont tr.konex--dup > td { color: var(--muted); text-decoration: line-through; }
+        .konex__stav { white-space: nowrap; font-size: var(--fs-1); font-weight: 800; }
+
+        /* telefon: místo tabulky karty pod sebou, nic do strany */
+        @media (max-width: 640px) {
+            #vypis .kont thead { display: none; }
+            #vypis .kont, #vypis .kont tbody, #vypis .kont tr, #vypis .kont td { display: block; width: auto; }
+            #vypis .kont tr.konr { position: relative; padding: 10px 44px 10px 12px; border-bottom: 1px solid var(--line-soft); }
+            #vypis .kont tr.konr:last-child { border-bottom: 0; }
+            #vypis .kont td { padding: 1px 0; border: 0; min-width: 0; white-space: normal; }
+            #vypis .kont td.kon--dlouhy { white-space: pre-line; }
+            #vypis .kont td:empty { display: none; }
+            #vypis .kont td.kon--nazev { font-size: var(--fs-3); }
+            #vypis .kont td.konakce { position: absolute; top: 6px; right: 6px; width: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="appHeader"></div>
+
+<main class="wrap" style="padding-top:26px;padding-bottom:60px;display:flex;flex-direction:column;gap:18px">
+
+    <div id="bezPrav" class="card center" style="padding:40px 24px" hidden>
+        <b>Na kontakty nemáš právo</b>
+        <p class="small muted" style="margin-top:6px;line-height:1.6">
+            Seznam dodavatelů a služeb vedou manažeři. Když si myslíš, že tu být máš,
+            ozvi se hlavnímu správci.
+        </p>
+    </div>
+
+    <div id="obsah" hidden style="display:flex;flex-direction:column;gap:14px">
+
+        <div class="spread">
+            <div style="min-width:0;flex:1 1 300px">
+                <h2 class="nadpis-stranky">Kontakty</h2>
+                <p class="small muted" style="margin-top:3px;line-height:1.6">
+                    Dodavatelé, řemeslníci a služby. Dvojklik na řádek kontakt upraví,
+                    pravé tlačítko nebo ⋯ nabídne kopírování a smazání.
+                </p>
+            </div>
+            <div class="row row--wrap" style="gap:8px">
+                <button type="button" id="btnNovy" class="btn btn--primary btn--sm">Nový kontakt</button>
+                <button type="button" id="btnExcel" class="btn btn--ghost btn--sm">Vložit z Excelu</button>
+            </div>
+        </div>
+
+        <div class="card kon-hledat" role="search">
+            <input type="search" id="hledat" class="field" placeholder="Hledat název, telefon, e-mail, poznámku…"
+                   autocomplete="off" aria-label="Hledat v kontaktech">
+            <span id="pocet" class="small muted" aria-live="polite"></span>
+        </div>
+
+        <div id="vypis"></div>
+    </div>
+</main>
+
+<!-- ================================================ OKNO KONTAKTU -->
+<div id="okno" class="hookno" hidden>
+    <div class="hookno__deska card" role="dialog" aria-modal="true" aria-labelledby="oNadpis">
+        <div class="hookno__hlava"><span id="oNadpis">Nový kontakt</span></div>
+        <div class="hookno__telo col" style="gap:12px">
+            <div id="oPole" class="fmr"></div>
+            <p id="oChyba" class="small" role="alert" style="margin:0;color:var(--danger);font-weight:700" hidden></p>
+            <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+                <button type="button" id="oZrusit" class="btn btn--ghost">Zrušit</button>
+                <button type="button" id="oUlozit" class="btn btn--primary">Uložit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================== OKNO VLOŽENÍ Z EXCELU -->
+<div id="excel" class="hookno" hidden>
+    <div class="hookno__deska hookno__deska--siroka card" role="dialog" aria-modal="true" aria-labelledby="exNadpis">
+        <div class="hookno__hlava"><span id="exNadpis">Vložit z Excelu</span></div>
+        <div class="hookno__telo col" style="gap:10px">
+            <label class="label" for="exText" style="margin:0">Zkopíruj řádky v Excelu a vlož sem (Ctrl+V)</label>
+            <textarea id="exText" class="field konex__pole" spellcheck="false" autocomplete="off"
+                      placeholder="Název&#9;Tel. číslo&#9;E-mail&#9;Web&#9;Poznámka"></textarea>
+            <p class="tiny muted" style="margin:0;line-height:1.5">
+                První řádek může být hlavička (Název, Tel. číslo, E-mail, Web, Poznámka – v jakémkoli pořadí).
+                Bez hlavičky se sloupce berou v tomhle pořadí. Sloupce navíc se připíšou do poznámky.
+                Nic se neuloží, dokud neklikneš na tlačítko dole.
+            </p>
+            <p id="exSouhrn" class="small" style="margin:0;font-weight:700" aria-live="polite"></p>
+            <div id="exNahled" class="konex__nahled" hidden></div>
+            <div class="row row--wrap" style="gap:10px;justify-content:flex-end">
+                <button type="button" id="exZrusit" class="btn btn--ghost">Zrušit</button>
+                <button type="button" id="exPridat" class="btn btn--primary" disabled>Přidat 0 kontaktů</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/taxonomy.js?v=360"></script>
+<script src="assets/js/ui.js?v=360"></script>
+<script src="assets/js/nabidka.js?v=360"></script>
+<!-- čisté funkce kontaktů – store.js je potřebuje při ukládání, proto před ním -->
+<script src="assets/js/kontakty.js?v=360"></script>
+<script type="module" src="assets/js/store.js?v=360"></script>
+
+<script>
+(function () {
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => window.KBUI.esc(value);
+    const K = window.KBKontakty;
+    const POLE = K.POLE;
+
+    let hledani = "";
+    let sledovani = false;
+    let upravuji = null;            // { id } – id "" = nový kontakt
+    let vkladam = [];               // nové kontakty z náhledu Excelu
+    let pracuji = false;
+
+    const smim = () => window.KBUI.can("vykaz.view");
+    const kontakty = () => (window.KB && window.KB.kontakty) || [];
+    const prisly = () => !!(window.KB && window.KB.kontaktyPrisly);
+    const pocet = (n) => n + " " + (n === 1 ? "kontakt" : (n >= 2 && n <= 4 ? "kontakty" : "kontaktů"));
+    const serazene = (seznam) => seznam.slice().sort((a, b) =>
+        String(a.nazev || "").localeCompare(String(b.nazev || ""), "cs"));
+
+    /* --------------------------------------------------------- buňky */
+
+    /** Hodnota pole jako HTML. Odkaz jen z KBKontakty.*Href – holá hodnota do href nikdy. */
+    function hodnotaHtml(p, v) {
+        const text = String(v == null ? "" : v);
+        if (!text) return "";
+        if (p.typ === "tel") {
+            const h = K.telHref(text);
+            return h ? '<a href="' + esc(h) + '">' + esc(text) + "</a>" : esc(text);
+        }
+        if (p.typ === "email") {
+            return K.adresy(text).map(a => {
+                const h = K.mailHref(a);
+                return h ? '<a href="' + esc(h) + '">' + esc(a) + "</a>" : esc(a);
+            }).join(", ");
+        }
+        if (p.typ === "web") {
+            const h = K.webHref(text);
+            return h ? '<a href="' + esc(h) + '" target="_blank" rel="noopener noreferrer">' + esc(text) + "</a>" : esc(text);
+        }
+        return esc(text);
+    }
+
+    const hlavickaHtml = (navic) => "<thead><tr>" + POLE.map(p => "<th>" + esc(p.nazev) + "</th>").join("") +
+        (navic || "") + "</tr></thead>";
+
+    function radekHtml(k) {
+        return '<tr class="konr" data-kon="' + esc(k.id) + '" tabindex="0">' +
+            POLE.map(p => '<td class="kon--' + esc(p.klic === "nazev" ? "nazev" : p.typ) + '">' + hodnotaHtml(p, k[p.klic]) + "</td>").join("") +
+            '<td class="konakce">' + window.KBNabidka.tlacitko("Další akce: " + (k.nazev || "")) + "</td></tr>";
+    }
+
+    /* -------------------------------------------------------- seznam */
+
+    let otisk = null;               // null, ne "" – prázdný stav má taky otisk
+    function vykresli() {
+        const vse = kontakty();
+        const vyber = serazene(vse.filter(k => K.hleda(k, hledani)));
+        $("pocet").textContent = !prisly() ? "" : (hledani ? vyber.length + " z " + vse.length : pocet(vse.length));
+        let html;
+        if (!prisly()) html = '<div class="card konprazdno muted">Načítám…</div>';
+        else if (!vse.length) html = '<div class="card konprazdno">' +
+            "<b>Zatím tu nejsou žádné kontakty.</b>" +
+            '<p class="small muted" style="margin:6px 0 14px">Seznam z Excelu sem dostaneš nejrychleji vložením – zkopíruj řádky a vlož je.</p>' +
+            '<button type="button" class="btn btn--primary btn--sm" data-akce="excel">Vložit z Excelu</button></div>';
+        else if (!vyber.length) html = '<div class="card konprazdno muted">Hledání nic neodpovídá.</div>';
+        else html = '<section class="card kon" aria-label="Kontakty"><div style="overflow-x:auto">' +
+            '<table class="kont">' + hlavickaHtml("<th></th>") + "<tbody>" + vyber.map(radekHtml).join("") +
+            "</tbody></table></div></section>";
+        if (html !== otisk) { otisk = html; $("vypis").innerHTML = html; }
+    }
+
+    function rozhodni() {
+        const prihlasen = !!window.KB_USER;
+        const ok = smim();
+        $("bezPrav").hidden = !prihlasen || ok;
+        $("obsah").hidden = !ok;
+        if (!ok) return;
+        if (!sledovani) { sledovani = true; window.KB.watchKontakty(); }
+        vykresli();
+    }
+
+    /* ---------------------------------------------- okno kontaktu */
+
+    function otevriOkno(id) {
+        const k = id ? kontakty().find(x => x.id === id) : null;
+        if (id && !k) return;
+        upravuji = { id: k ? k.id : "" };
+        $("oNadpis").textContent = k ? "Upravit kontakt" : "Nový kontakt";
+        $("oPole").innerHTML = POLE.map(p => {
+            const v = k ? (k[p.klic] || "") : "";
+            const pole = p.typ === "dlouhy"
+                ? '<textarea id="kp_' + esc(p.klic) + '" class="field" rows="3" maxlength="' + p.max + '">' + esc(v) + "</textarea>"
+                : '<input type="' + (p.typ === "tel" ? "tel" : "text") + '" id="kp_' + esc(p.klic) + '" class="field" maxlength="' +
+                    p.max + '" value="' + esc(v) + '" autocomplete="off"' + (p.typ === "email" || p.typ === "web" ? ' spellcheck="false"' : "") +
+                    (p.typ === "email" ? ' inputmode="email"' : "") + ">";
+            return '<label class="' + (p.typ === "dlouhy" ? "fmr__cely" : "") + '"><span class="label">' + esc(p.nazev) +
+                (p.povinne ? " *" : "") + "</span>" + pole + "</label>";
+        }).join("");
+        $("oChyba").hidden = true;
+        $("okno").hidden = false;
+        setTimeout(() => { const prvni = $("kp_nazev"); if (prvni) prvni.focus(); }, 30);
+    }
+    function zavriOkno() { upravuji = null; $("okno").hidden = true; }
+
+    async function ulozOkno() {
+        if (!upravuji || pracuji) return;
+        const data = {};
+        POLE.forEach(p => { const el = $("kp_" + p.klic); data[p.klic] = el ? el.value : ""; });
+        if (!K.cisti(data).nazev) {
+            $("oChyba").textContent = "Vyplň název.";
+            $("oChyba").hidden = false;
+            $("kp_nazev").focus();
+            return;
+        }
+        pracuji = true;
+        $("oUlozit").disabled = true;
+        try {
+            const novy = !upravuji.id;
+            await window.KB.ulozKontakt(upravuji.id, data);
+            window.KBUI.toast(novy ? "Kontakt přidán." : "Kontakt uložen.");
+            zavriOkno();
+        } catch (err) {
+            console.warn("Kontakt se neuložil:", err && err.message);
+            $("oChyba").textContent = (err && err.message) || "Uložení se nepovedlo.";
+            $("oChyba").hidden = false;
+        } finally {
+            pracuji = false;
+            $("oUlozit").disabled = false;
+        }
+    }
+
+    async function smaz(id) {
+        const k = kontakty().find(x => x.id === id);
+        if (!k || pracuji) return;
+        if (!(await window.KBUI.potvrd({ nadpis: "Smazat kontakt „" + (k.nazev || "") + "“?",
+            text: "Kontakt zmizí ze seznamu pro všechny.", ano: "Smazat", nebezpecne: true }))) return;
+        pracuji = true;
+        try {
+            await window.KB.smazKontakt(id);
+            window.KBUI.toast("Kontakt smazán.");
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Smazání se nepovedlo.", "error");
+        } finally { pracuji = false; }
+    }
+
+    /* ------------------------------------------- vložení z Excelu */
+
+    function otevriExcel() {
+        $("exText").value = "";
+        nahled();
+        $("excel").hidden = false;
+        setTimeout(() => $("exText").focus(), 30);
+    }
+    function zavriExcel() { vkladam = []; $("excel").hidden = true; }
+
+    /* Duplicita = stejný název a telefon (KBKontakty.klic) proti tomu, co už
+       na webu je, i uvnitř vkládaného textu – dvojí vložení téhož výpisu
+       tak nic nezdvojí. */
+    function nahled() {
+        const precteno = K.zExcelu($("exText").value);
+        const naWebu = new Set(kontakty().map(K.klic));
+        const vlozene = new Set();
+        let uzJe = 0, dvakrat = 0;
+        vkladam = [];
+        const radky = precteno.map(k => {
+            const kl = K.klic(k);
+            let stav = "nový";
+            if (naWebu.has(kl)) { stav = "už je na webu"; uzJe++; }
+            else if (vlozene.has(kl)) { stav = "dvakrát ve vložení"; dvakrat++; }
+            else { vlozene.add(kl); vkladam.push(k); }
+            return { k: k, stav: stav };
+        });
+        const n = vkladam.length;
+        $("exPridat").textContent = "Přidat " + pocet(n);
+        $("exPridat").disabled = !n;
+        if (!precteno.length) {
+            $("exSouhrn").textContent = $("exText").value.trim() ? "Nenašel jsem žádný řádek s názvem." : "";
+            $("exNahled").hidden = true;
+            $("exNahled").innerHTML = "";
+            return;
+        }
+        const preskoc = uzJe + dvakrat;
+        $("exSouhrn").textContent = "Přečteno " + precteno.length + " · nových " + n +
+            (preskoc ? " · přeskočím " + preskoc + " " + (preskoc === 1 ? "duplicitu" : (preskoc <= 4 ? "duplicity" : "duplicit")) +
+                " (" + [uzJe ? uzJe + " už na webu" : "", dvakrat ? dvakrat + " dvakrát ve vložení" : ""].filter(Boolean).join(", ") + ")" : "");
+        $("exNahled").innerHTML = '<table class="kont">' + hlavickaHtml("<th>Stav</th>") + "<tbody>" +
+            radky.map(r => '<tr class="' + (r.stav === "nový" ? "" : "konex--dup") + '">' +
+                POLE.map(p => '<td class="kon--' + esc(p.klic === "nazev" ? "nazev" : p.typ) + '">' + esc(r.k[p.klic] || "") + "</td>").join("") +
+                '<td class="konex__stav">' + esc(r.stav) + "</td></tr>").join("") + "</tbody></table>";
+        $("exNahled").hidden = false;
+    }
+
+    async function pridejZExcelu() {
+        if (pracuji || !vkladam.length) return;
+        pracuji = true;
+        $("exPridat").disabled = true;
+        try {
+            const n = await window.KB.vlozKontakty(vkladam);
+            window.KBUI.toast("Přidáno " + pocet(n) + ".");
+            zavriExcel();
+        } catch (err) {
+            console.error(err);
+            window.KBUI.toast("Vložení se nepovedlo.", "error");
+            $("exPridat").disabled = false;
+        } finally { pracuji = false; }
+    }
+
+    /* ------------------------------------------- nabídka u řádku */
+
+    window.KBNabidka.pripoj((prvek) => {
+        const radek = prvek.closest && prvek.closest("[data-kon]");
+        if (!radek || !smim()) return null;
+        const k = kontakty().find(x => x.id === radek.dataset.kon);
+        if (!k) return null;
+        const polozky = [{ text: "Upravit…", ikona: "upravit", fn: () => otevriOkno(k.id) }];
+        if (k.telefon) polozky.push({ text: "Kopírovat telefon", ikona: "kopirovat",
+            fn: () => window.KBNabidka.kopiruj(k.telefon, "Telefon zkopírován.") });
+        if (k.email) polozky.push({ text: "Kopírovat e-mail", ikona: "kopirovat",
+            fn: () => window.KBNabidka.kopiruj(k.email, "E-mail zkopírován.") });
+        polozky.push({ text: "Smazat…", ikona: "smazat", nebezpeci: true, oddel: true, fn: () => smaz(k.id) });
+        return { nadpis: k.nazev || "Kontakt", radek: radek, polozky: polozky };
+    });
+
+    /* ---------------------------------------------------------- start */
+
+    document.addEventListener("DOMContentLoaded", () => {
+        window.KBUI.mountNav({ active: "kontakty.html" });
+
+        $("hledat").addEventListener("input", () => { hledani = $("hledat").value.trim(); vykresli(); });
+        $("btnNovy").addEventListener("click", () => otevriOkno(""));
+        $("btnExcel").addEventListener("click", otevriExcel);
+        $("vypis").addEventListener("click", (event) => {
+            if (event.target.closest("[data-akce='excel']")) otevriExcel();
+        });
+        // dvojklik = úprava; jednoduchý klik nechá odkazy (telefon, e-mail, web) fungovat
+        $("vypis").addEventListener("dblclick", (event) => {
+            if (event.target.closest("a, [data-nabidka-vic]")) return;
+            const radek = event.target.closest("[data-kon]");
+            if (radek) { event.preventDefault(); otevriOkno(radek.dataset.kon); }
+        });
+        $("vypis").addEventListener("keydown", (event) => {
+            const radek = event.target.closest && event.target.closest("[data-kon]");
+            if (radek && event.key === "Enter" && event.target === radek) { event.preventDefault(); otevriOkno(radek.dataset.kon); }
+        });
+
+        $("oZrusit").addEventListener("click", zavriOkno);
+        $("oUlozit").addEventListener("click", ulozOkno);
+        $("okno").addEventListener("click", (event) => { if (event.target === $("okno")) zavriOkno(); });
+        $("exText").addEventListener("input", nahled);
+        $("exZrusit").addEventListener("click", zavriExcel);
+        $("exPridat").addEventListener("click", pridejZExcelu);
+        $("excel").addEventListener("click", (event) => { if (event.target === $("excel")) zavriExcel(); });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                if (!$("okno").hidden) { event.preventDefault(); return zavriOkno(); }
+                if (!$("excel").hidden) { event.preventDefault(); return zavriExcel(); }
+            }
+            // Enter uloží; v poznámce dělá nový řádek, uloží až Ctrl+Enter
+            if (event.key === "Enter" && !$("okno").hidden && event.target.closest && event.target.closest("#okno")) {
+                if (event.target.tagName === "TEXTAREA" && !(event.ctrlKey || event.metaKey)) return;
+                if (event.target.tagName === "BUTTON") return;
+                event.preventDefault();
+                ulozOkno();
+            }
+        });
+
+        document.addEventListener("kb-role", rozhodni);
+        window.KB.on("users", rozhodni);
+        window.KB.on("kontakty", () => {
+            vykresli();
+            if (!$("excel").hidden) nahled();     // duplicity proti webu se mohly změnit
+        });
+        rozhodni();
+    });
+})();
+</script>
+</body>
+</html>

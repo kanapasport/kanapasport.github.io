@@ -2207,6 +2207,8 @@
         // bankovka (Výplaty) a list s grafem (Výpis pro mzdovou)
         vyplata: cesta("M3 7h18v10H3V7zm9 7a2 2 0 100-4 2 2 0 000 4zM3 10a3 3 0 003-3m12 0a3 3 0 003 3M3 14a3 3 0 013 3m12 0a3 3 0 013-3"),
         vypis: cesta("M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"),
+        // sluchátko (Kontakty)
+        telefon: cesta("M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"),
         // podložka se seznamem a fajfkou (Evidence vybavení)
         inventar: cesta("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4")
     };
@@ -2247,14 +2249,20 @@
         ] },
         /* jen hlavní správce, majitel a asistentka (finance.view); „Moje
            výplaty“ vidí dohodář / OSVČ / student bez financí – svůj přehled */
-        { id: "penize", nazev: "Peníze", ikona: "penize", polozky: [
+        /* Skupina se do 20. 11. 2026 jmenovala „Peníze“; s Kontakty (Michal: „dej to
+           k penězům a tu sekci přejmenuj“) je to „Kancelář“. `id` zůstává – drží se
+           na něm zapamatované rozbalení pásu. */
+        { id: "penize", nazev: "Kancelář", ikona: "penize", polozky: [
             { nazev: "Faktury", ikona: "receipt", href: "faktury.html", need: "finance.view" },
             { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" },
             // výplaty a výpis pro mzdovou jako jedna položka se dvěma záložkami (Michal 12. 11. 2026)
             { nazev: "Výplaty a mzdy", ikona: "vyplata", href: "vyplaty.html", need: "finance.view",
               popis: "Výplaty DPP, DPČ, OSVČ a studentů, výpis nepřítomností zaměstnanců pro mzdovou účetní a uzávěrka měsíce" },
             { nazev: "Moje výplaty", ikona: "vyplata", href: "vyplaty.html", gate: "data-jen-vyplaty",
-              popis: "Kolik ti za měsíc vychází, kolik se proplatilo a kolik zbývá" }
+              popis: "Kolik ti za měsíc vychází, kolik se proplatilo a kolik zbývá" },
+            // adresář dodavatelů, řemeslníků a služeb – vidí manažeři (Michal 20. 11. 2026)
+            { nazev: "Kontakty", ikona: "telefon", href: "kontakty.html", need: "vykaz.view",
+              popis: "Dodavatelé, řemeslníci a služby – telefon, e-mail, web" }
         ] },
         { id: "nastaveni", nazev: "Nastavení a nápověda", ikona: "cog", polozky: [
             { nazev: "Nastavení", ikona: "cog", href: "nastaveni.html", need: "vykaz.view" },
@@ -2608,9 +2616,38 @@
     UI.jeOznameni = (q) => !!q && (q.druh === "info" ||
         (q.druh == null && OZNAMENI_TEXT.test(String(q.text || ""))));
 
-    /** Kam oznámení bez vlastního odkazu vede – jen pevné adresy, nic z databáze. */
+    /* Text vzkazu k zobrazení (Michal 20. 11. 2026). Oznámení „milník připravený
+       k odevzdání" do v359 neslo projekt dvakrát a jméno odevzdávajícího v textu –
+       oboje přitom stojí hned pod ním v řádku „Zadal: … · projekt", takže z toho
+       byla stěna textu. Nové se už ukládá krátce; tady se stejně ukážou i starší
+       vzkazy z databáze: název milníku, pod ním stav. */
+    const STARE_PRIPRAVENO = " je připravený k odevzdání: ";
+    UI.quickText = (q) => {
+        const t = String((q && q.text) || "");
+        const i = t.indexOf(STARE_PRIPRAVENO);
+        if (i < 0 || t.indexOf("Milník ") !== 0 || t.indexOf(" · Milníky", i) < 0 || !UI.jeOznameni(q)) return t;
+        const zavorka = q.projekt ? " (" + q.projekt + ")" : "";
+        const nazev = t.slice(0, i);
+        return (zavorka && nazev.endsWith(zavorka) ? nazev.slice(0, -zavorka.length) : nazev) +
+            "\nje připravený k odevzdání";
+    };
+
+    /** Text vzkazu do řádku seznamu: u víceřádkového oznámení zůstane tučně jen
+        první řádek (o co jde), další jdou pod něj obyčejně. */
+    UI.quickTextHtml = (q) => {
+        const html = UI.textSOdkazy(UI.quickText(q), q && q.odkazy);
+        const i = UI.jeOznameni(q) ? html.indexOf("\n") : -1;
+        return i < 0 ? html : html.slice(0, i) + '<span class="quickrad__dal">' +
+            html.slice(i + 1).replace(/\n/g, "<br>") + "</span>";
+    };
+
+    /** Kam oznámení bez vlastního odkazu vede – pevné adresy; z databáze jen id milníku. */
     const cilOznameni = (q) => {
         const t = String((q && q.text) || "");
+        // připravený milník: rovnou na něj (nahrazuje cestu „Milníky → projekt" v textu)
+        if (/je připravený k odevzdání/.test(t)) {
+            return "milniky.html" + (q.milnikId ? "?id=" + encodeURIComponent(q.milnikId) : "");
+        }
         return /^(Máš nově zveřejněné milníky|Změnil se termín milníků)/.test(t) ? "milniky.html"
             : /^Zpětný zápis/.test(t) ? "vykazy.html" : "";
     };
@@ -3709,7 +3746,7 @@
                 (hotovoMne ? ' · <b style="color:var(--ok)">' + (info ? "vzato na vědomí" : "splněno") + "</b>" : "") +
             "</div>" +
             '<div style="font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere">' +
-                UI.textSOdkazy(q.text || "", q.odkazy) + "</div>" +
+                UI.textSOdkazy(UI.quickText(q), q.odkazy) + "</div>" +
             (ostatni.length
                 ? '<div class="tiny muted" style="margin-top:6px">Spoluúčast: ' +
                   esc(ostatni.join(", ")) + (q.rezim === "kazdy" ? " · každý sám" : "") + "</div>"
@@ -4122,7 +4159,7 @@
                     ' title="Otevřít vzkaz – komentáře a obrázky">' +
                 (hlidkaBarva
                     ? '<b style="color:' + hlidkaBarva + '">' + esc(q.text) + "</b>"
-                    : UI.textSOdkazy(q.text, q.odkazy)) +
+                    : UI.quickTextHtml(q)) +
                     '<span class="quickrad__kdo">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
                            zopakování toho, co už tam stojí – vynechává se. */

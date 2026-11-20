@@ -453,6 +453,7 @@ try {
             if (autaOdber) { try { autaOdber(); } catch (e) {} autaOdber = null; }
             zrusVybaveni();
             zrusVybaveniPolozky();
+            zrusKontakty();
             if (tasksOdber) { try { tasksOdber(); } catch (e) {} tasksOdber = null; }
             KB.pritomnost = [];
             if (aktivityOdber) { try { aktivityOdber(); } catch (e) {} aktivityOdber = null; }
@@ -2259,8 +2260,11 @@ KB.oznacPripraveno = async (id, ano) => {
     if (!ano) return;                       // zrušení nikomu nic neposílá
     /* Upozornění (Michal 12. 11. 2026): komu, určuje Nastavení → Potvrzování,
        řádek „Připraveno k odevzdání" (druhy.pripraveno.lide). Prázdné =
-       hlavní správce + kdo potvrzuje milníky. Odkaz na milník Quick TO-DO
-       neumí (odkazy jen projekt/úkol), proto je cesta v textu. */
+       hlavní správce + kdo potvrzuje milníky.
+       Text je jen název a stav, každé na svém řádku (Michal 20. 11. 2026):
+       kdo odevzdává a projekt ukazuje řádek vzkazu sám („Zadal: … · projekt"),
+       dřív tam bylo obojí dvakrát. Na milník vede tlačítko Otevřít
+       (`milnikId` → milniky.html?id=…, KBUI.quickOtevritHtml). */
     const ja = KB.currentUid();
     const p = KB.potvrzovani && KB.potvrzovani.druhy;
     const urceni = p && p.pripraveno ? p.pripraveno.lide : [];
@@ -2272,9 +2276,8 @@ KB.oznacPripraveno = async (id, ano) => {
     if (!komu.length) return;
     const projekt = m ? (m.zakazka || m.projekt || "") : "";
     await KB.saveQuickTodo(KB.newQuickId(), {
-        text: "Milník " + (nazev || "bez názvu") + (projekt ? " (" + projekt + ")" : "") +
-            " je připravený k odevzdání: " + (kdo || "?") + " · Milníky" + (projekt ? " → " + projekt : ""),
-        proUids: komu, projekt: projekt,
+        text: "Milník " + (nazev || "bez názvu") + "\nje připravený k odevzdání",
+        proUids: komu, projekt: projekt, milnikId: id,
         druh: "info", rezim: "kazdy"          // oznámení – bere se na vědomí
     }).catch(err => console.warn("Upozornění na připravený milník neodešlo:", err));
     KB.ohlasPotvrzeni({ udalost: "pripraveno", druh: "milniky", id: id, uid: ja });   // push hned
@@ -8262,6 +8265,122 @@ KB.dalsiKodVybaveni = (prefix) => {
         sirka = Math.max(sirka, m[2].length);
     });
     return prefix + String(max + 1).padStart(sirka, "0");
+};
+
+/* ------------------------------------------------------------- kontakty ---
+   Dodavatelé, řemeslníci a služby (Michal 20. 11. 2026 – seznam měl
+   v Excelu). Jeden kontakt = jeden dokument `kon_<ms>_<0–999>`. Čte a píše
+   jen manažerská role – kryje to zachytávací pravidlo private/{kolekce}/**
+   → spravce(), pravidla se kvůli tomu neměnila. Úklid polí a limity jsou
+   v assets/js/kontakty.js (window.KBKontakty), ať stránka, vložení z Excelu
+   i robot ukládají stejný tvar. */
+
+const kontaktyCol = () => collection(db, "artifacts", APP_ID, "private", "kontakty", "seznam");
+const kontaktDoc = (id) => doc(db, "artifacts", APP_ID, "private", "kontakty", "seznam", id);
+const ID_KONTAKTU = /^[A-Za-z0-9_-]{1,80}$/;
+
+KB.kontakty = [];
+KB.kontaktyPrisly = false;
+let kontaktyOdber = null;
+
+function zrusKontakty() {
+    if (kontaktyOdber) { try { kontaktyOdber(); } catch (e) {} kontaktyOdber = null; }
+    KB.kontakty = [];
+    KB.kontaktyPrisly = false;
+}
+
+/** Odběr celého seznamu – jen manažer; jinému by ho databáze zamítla, tak se ani nezkouší. */
+KB.watchKontakty = async () => {
+    if (kontaktyOdber) return;
+    if (authReady) await authReady;
+    if (!db || !auth || !auth.currentUser || kontaktyOdber) return;
+    if (pockejNaRoli(KB.watchKontakty)) return;
+    if (kontaktyOdber) return;
+    if (!jsemManazer()) {
+        KB.kontaktyPrisly = true;
+        emit("kontakty", KB.kontakty);
+        return;
+    }
+    kontaktyOdber = onSnapshot(kontaktyCol(), (snap) => {
+        KB.kontakty = [];
+        snap.forEach(d => KB.kontakty.push(Object.assign({ id: d.id }, d.data())));
+        KB.kontakty.sort((a, b) => String(a.nazev || "").localeCompare(String(b.nazev || ""), "cs"));
+        KB.kontaktyPrisly = true;
+        emit("kontakty", KB.kontakty);
+    }, (err) => {
+        console.error("Chyba čtení kontaktů:", err);
+        emit("kontakty-chyba", err);
+    });
+};
+
+/* Pole kontaktu jdou VŽDY přes KBKontakty.cisti – i když kontakt přijde
+   z konzole nebo z cizí stránky, do databáze se nedostane nic mimo seznam
+   polí, nic přes limit a žádné `undefined`. */
+function kontaktProDb(data) {
+    const K = window.KBKontakty;
+    if (!K) throw new Error("Chybí assets/js/kontakty.js – stránka ho musí načíst před store.js.");
+    const k = K.cisti(data);
+    if (!k.nazev) throw new Error("Název kontaktu nesmí být prázdný.");
+    return k;
+}
+const novyIdKontaktu = (pouzite) => {
+    let id;
+    do { id = "kon_" + Date.now() + "_" + Math.floor(Math.random() * 1000); } while (pouzite && pouzite.has(id));
+    if (pouzite) pouzite.add(id);
+    return id;
+};
+
+/** Uloží kontakt. Bez `id` založí nový; vrací id. Úprava mění jen pole kontaktu a razítko. */
+KB.ulozKontakt = async (id, data) => {
+    if (authReady) await authReady;
+    requireDb();
+    const k = kontaktProDb(data);
+    const ted = Date.now(), kdo = window.KB_USER || "";
+    if (id) {
+        if (!ID_KONTAKTU.test(String(id))) throw new Error("Neplatné id kontaktu.");
+        // updateDoc, ne setDoc: kontakt, který mezitím někdo smazal, se tiše nezaloží znovu bez createdMs
+        await updateDoc(kontaktDoc(id), Object.assign(k, { updatedMs: ted, updatedBy: kdo }));
+        KB.zapisAktivitu("kontakty", "Kontakt " + k.nazev.slice(0, 80) + " upraven");
+        return id;
+    }
+    const noveId = novyIdKontaktu(null);
+    await setDoc(kontaktDoc(noveId), Object.assign(k, { createdMs: ted, createdBy: kdo, updatedMs: ted, updatedBy: kdo }));
+    KB.zapisAktivitu("kontakty", "Kontakt " + k.nazev.slice(0, 80) + " založen");
+    return noveId;
+};
+
+KB.smazKontakt = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!ID_KONTAKTU.test(String(id || ""))) throw new Error("Neplatné id kontaktu.");
+    const k = (KB.kontakty || []).find(x => x.id === id);
+    await deleteDoc(kontaktDoc(id));
+    KB.zapisAktivitu("kontakty", "Kontakt " + (k ? String(k.nazev || "").slice(0, 80) + " " : "") + "smazán");
+};
+
+/**
+ * Hromadné vložení (z Excelu). Duplicity hlídá stránka v náhledu – tady se
+ * jen vynechají řádky bez názvu. Dávky po 400 (limit dávky je 500). Id se
+ * hlídají proti sobě: v jedné milisekundě by se náhodná čísla 0–999 u dvaceti
+ * řádků potkala skoro každé čtvrté vložení. Vrací počet zapsaných.
+ */
+KB.vlozKontakty = async (seznam) => {
+    if (authReady) await authReady;
+    requireDb();
+    const K = window.KBKontakty;
+    if (!K) throw new Error("Chybí assets/js/kontakty.js – stránka ho musí načíst před store.js.");
+    const ted = Date.now(), kdo = window.KB_USER || "";
+    const pouzite = new Set((KB.kontakty || []).map(x => x.id));
+    const zaznamy = (Array.isArray(seznam) ? seznam : []).map(d => K.cisti(d)).filter(k => k.nazev)
+        .map(k => ({ id: novyIdKontaktu(pouzite),
+                     data: Object.assign(k, { createdMs: ted, createdBy: kdo, updatedMs: ted, updatedBy: kdo }) }));
+    for (let i = 0; i < zaznamy.length; i += 400) {
+        const davka = writeBatch(db);
+        zaznamy.slice(i, i + 400).forEach(z => davka.set(kontaktDoc(z.id), z.data));
+        await davka.commit();
+    }
+    if (zaznamy.length) KB.zapisAktivitu("kontakty", "Vloženo " + zaznamy.length + " kontaktů z Excelu");
+    return zaznamy.length;
 };
 
 emit("boot");

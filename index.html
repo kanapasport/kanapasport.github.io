@@ -8,8 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="Pasport Kaňa">
     <meta name="theme-color" content="#1d556d">
     <title>Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=359">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=359">
+    <link rel="stylesheet" href="assets/css/app.css?v=360">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=360">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -149,6 +149,7 @@
         .novinky__radek { padding: 8px 0; border-bottom: 1px dashed var(--line-soft); }
         .novinky__radek:last-child { border-bottom: none; }
         .novinky__radek b { display: block; font-size: var(--fs-3); }
+        .novinky__radek em { display: block; font-style: normal; font-size: var(--fs-2); margin-top: 1px; }
         .novinky__radek span { display: block; font-size: var(--fs-1); color: var(--muted); margin-top: 1px; }
 
         /* Milníky: řádek jako zadaný úkol, jen místo procent je vlevo datum.
@@ -815,12 +816,12 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=359"></script>
-<script src="assets/js/doc.js?v=359"></script>
-<script src="assets/js/ui.js?v=359"></script>
-<script src="assets/js/nabidka.js?v=359"></script>
-<script src="assets/js/vykazy.js?v=359"></script>
-<script type="module" src="assets/js/store.js?v=359"></script>
+<script src="assets/js/taxonomy.js?v=360"></script>
+<script src="assets/js/doc.js?v=360"></script>
+<script src="assets/js/ui.js?v=360"></script>
+<script src="assets/js/nabidka.js?v=360"></script>
+<script src="assets/js/vykazy.js?v=360"></script>
+<script type="module" src="assets/js/store.js?v=360"></script>
 
 <script>
 (function () {
@@ -1875,7 +1876,7 @@
                     ? " qtrad--vzato" : "") + (navic ? " dl-radek" : "") +
                 '" data-quick-radek="' + esc(q.id) + '">' +
                 '<span class="grow" style="min-width:0;font-size:var(--fs-3);line-height:1.5">' +
-                    '<span class="qtrad__text" style="font-weight:700">' + window.KBUI.textSOdkazy(q.text, q.odkazy) + "</span>" +
+                    '<span class="qtrad__text" style="font-weight:700">' + window.KBUI.quickTextHtml(q) + "</span>" +
                     '<span class="muted qtrad__meta" style="display:block;font-size:var(--fs-1)">' +
                         /* Pod nadpisem „Poslal jsem" je „Zadal: já" jen
                            zopakování toho, co už tam stojí – vynechává se. */
@@ -3883,16 +3884,24 @@
                 .indexOf(mojeUid()) !== -1 && (q.ms || 0) > odKdy);
         if (!ukoly.length && !vzkazy.length) return;
 
-        const radek = (nadpis, text) =>
+        const radek = (nadpis, text, dal) =>
             '<div class="novinky__radek"><b>' + esc(nadpis) + "</b>" +
+            (dal ? "<em>" + esc(dal) + "</em>" : "") +
             '<span>' + esc(text) + "</span></div>";
+        /* Oznámení bez slova „Oznámení:" a po řádcích (Michal 20. 11. 2026):
+           tučně o co jde, pod tím zbytek textu, dole od koho. */
+        const oznameni = (q) => {
+            const radky = window.KBUI.quickText(q).split("\n");
+            return radek(radky[0], "od " + (q.odKohoJmeno || jmenoUid(q.odKoho) || "?"),
+                radky.slice(1).join(" "));
+        };
 
         document.getElementById("novinkyObsah").innerHTML =
             ukoly.map(u => radek("Nový úkol: " + (u.nazev || ""),
                 [u.projekt, u.termin ? "termín " + czDatum(u.termin) : ""]
                     .filter(Boolean).join(" · "))).join("") +
             vzkazy.map(q => window.KBUI.jeOznameni(q)
-                ? radek("Oznámení: " + (q.text || ""), "od " + (q.odKohoJmeno || jmenoUid(q.odKoho) || "?"))
+                ? oznameni(q)
                 : radek("Quick TO-DO: " + (q.text || ""),
                 "od " + (q.odKohoJmeno || jmenoUid(q.odKoho) || "?") +
                 (q.asap ? " · co nejdříve" : q.doKdy ? " · do " + czDatum(q.doKdy) : "")))
