@@ -73,7 +73,19 @@ const DEFAULT_CINNOSTI = ["ArcGIS/Kreslení", "Focení", "Skeny", "Tabulky", "Ad
 /* Paušály k výkazu. Jsou to firemní čísla, ne tajemství – zaměstnanec si
    svoje stravné i kilometry spočítá sám, tak ať je vidí i ve formuláři. */
 const OBED_KC = 200;      // placený oběd, když ho zápis obsahuje
-const KM_KC = 5;          // cestovní náhrada za kilometr
+/* Cestovní náhrada za kilometr se v čase mění: platí sazba DNE ZÁPISU, starší
+   zápisy drží tu svou (Michal 20. 11. 2026 – od 1. 11. 2026 je 6 Kč, do té doby
+   5 Kč). Další změna = další řádek na konec. Stejná tabulka je v gas/Kod.gs
+   (NASTAVENI.kmKc + kmKcOd) – měnit obě naráz, jinak sešit nesedí s webem. */
+const KM_KC_OD = [
+    { od: "",           kc: 5 },
+    { od: "2026-11-01", kc: 6 }
+];
+/** Kč za kilometr platné v den `datum` (RRRR-MM-DD); bez data ta poslední. */
+const kmKc = (datum) => {
+    const den = String(datum || "").slice(0, 10) || "9999-12-31";
+    return KM_KC_OD.reduce((kc, r) => (r.od <= den ? r.kc : kc), KM_KC_OD[0].kc);
+};
 
 /* Technologie – zkratky podle budgetového excelu zakázek (list
    s rozpadem na technologie). Na tyhle se dělá rozpočet, na ně se
@@ -112,7 +124,7 @@ const KB = {
     DEFAULT_CINNOSTI: DEFAULT_CINNOSTI,
     DEFAULT_TECHNOLOGIE: DEFAULT_TECHNOLOGIE,
     OBED_KC: OBED_KC,
-    KM_KC: KM_KC,
+    kmKc: kmKc,
     guides: [],
     tasks: [],
     zakazky: [],            // číselník zakázek – aby se překlepem nezakládaly nové
@@ -3992,7 +4004,7 @@ KB.spocitejCastky = (zaznam, sazba) => {
     const zaokrouhli = (x) => Math.round(x * 100) / 100;
     const prace = zaokrouhli((Number(zaznam.hodiny) || 0) * (Number(sazba) || 0));
     const obedKc = zaznam.obed ? OBED_KC : 0;
-    const dopravaKc = zaokrouhli((Number(zaznam.km) || 0) * KM_KC);
+    const dopravaKc = zaokrouhli((Number(zaznam.km) || 0) * kmKc(zaznam.datum));
     return {
         castkaPrace: prace,
         obedKc: obedKc,
