@@ -4841,6 +4841,44 @@ KB.deleteFaktura = async (id, cislo) => {
     KB.zapisAktivitu("faktura", "smazal fakturu " + (cislo || ""));
 };
 
+/* Požadavky pro pracovní PC (Michal 20. 11. 2026). Web na disk NAS nedosáhne – co se má
+   na disku stát, sem jen zapíše a provede to nástroj na pracovním PC, který výsledek vrátí:
+     private/faktury/pozadavky/{id}  { typ:"prejmenuj", fakturaId, novyNazev (bez přípony),
+                                       stav:"nova|hotovo|chyba", createdMs, createdBy,
+                                       hotovoMs, novaCesta | chyba (věta pro člověka) }
+   Pravidla názvu hlídá i nástroj – web je jen první síto. */
+const fakturyPozadavkyCol = () => collection(db, "artifacts", APP_ID, "private", "faktury", "pozadavky");
+
+/** Žádost o přejmenování souboru dokladu na disku. Vrací id požadavku. */
+KB.pozadejPrejmenovani = async (fakturaId, novyNazev) => {
+    if (authReady) await authReady;
+    requireDb();
+    const id = "poz_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(doc(db, "artifacts", APP_ID, "private", "faktury", "pozadavky", id), {
+        typ: "prejmenuj",
+        fakturaId: String(fakturaId || ""),
+        novyNazev: String(novyNazev || "").slice(0, 150),
+        stav: "nova",
+        createdMs: Date.now(),
+        createdBy: window.KB_USER || ""
+    });
+    const f = (KB.faktury || []).find(x => x.id === fakturaId) || {};
+    KB.zapisAktivitu("faktura", "požádal o přejmenování souboru faktury " + (f.cislo || "(bez čísla)") +
+        (f.protistrana ? " od " + f.protistrana : ""));
+    return id;
+};
+
+/** Živý stav požadavků k jednomu dokladu, nejnovější první. Vrací funkci, která odběr ukončí. */
+KB.sledujPozadavkyFaktury = (fakturaId, zpet) => {
+    if (!db || !auth || !auth.currentUser) return () => {};
+    return onSnapshot(query(fakturyPozadavkyCol(), where("fakturaId", "==", String(fakturaId || ""))), (snapshot) => {
+        const seznam = [];
+        snapshot.forEach(d => seznam.push({ id: d.id, ...d.data() }));
+        seznam.sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
+        zpet(seznam);
+    }, (err) => console.error("Chyba čtení požadavků faktur:", err));
+};
+
 /* Náhledy stránek dokladu (JPEG) – každá strana vlastní dokument pod 1 MB,
    aby je živý přenos seznamu faktur netahal; stránka si je vyžádá až při
    otevření faktury. Ukládá je „Načíst ze souboru“ (vytezeni.py je vyrobí z PDF).

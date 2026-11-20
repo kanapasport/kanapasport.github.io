@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Faktury – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=363">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=363">
+    <link rel="stylesheet" href="assets/css/app.css?v=364">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=364">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -439,13 +439,26 @@
                                         <select id="fStav" class="field"></select></label>
                                     <!-- cesta na vlastním řádku přes celou šířku, ať je vidět celá (Michal 22. 9.) -->
                                     <label class="pole fmr__cely"><span class="popisek">Soubor – cesta nebo odkaz</span>
-                                        <span class="row" style="gap:6px">
-                                            <input type="text" id="fCesta" class="field" style="flex:1;min-width:0;font-size:var(--fs-1)"
+                                        <span class="row" style="gap:6px;flex-wrap:wrap">
+                                            <input type="text" id="fCesta" class="field" style="flex:1;min-width:180px;font-size:var(--fs-1)"
                                                    placeholder="D:\FAKTURY\… nebo https://…">
                                             <button type="button" id="btnOtevrit" class="btn btn--ghost btn--sm" hidden>Otevřít</button>
                                             <button type="button" id="btnKopirovat" class="btn btn--ghost btn--sm" hidden
                                                     title="Zkopíruje cestu – vlož ji do Průzkumníka souborů">Kopírovat</button>
+                                            <button type="button" id="btnPrejmenovat" class="btn btn--ghost btn--sm" hidden
+                                                    title="Přejmenuje soubor na disku – provede pracovní PC">Přejmenovat</button>
                                         </span></label>
+                                    <!-- přejmenování souboru na disku: web zapíše požadavek, provede pracovní PC (Michal 20. 11. 2026) -->
+                                    <div class="pole fmr__cely" id="prejmBlok" hidden><span class="popisek">Nový název souboru</span>
+                                        <span class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+                                            <input type="text" id="fNovyNazev" class="field" maxlength="120" autocomplete="off"
+                                                   style="flex:1;min-width:180px;font-size:var(--fs-1)">
+                                            <span id="prejmPripona" class="small muted">.pdf</span>
+                                            <button type="button" id="btnPrejmNavrh" class="btn btn--ghost btn--sm" hidden>Použít navržený</button>
+                                            <button type="button" id="btnPrejmPoslat" class="btn btn--primary btn--sm">Přejmenovat</button>
+                                            <button type="button" id="btnPrejmZrusit" class="btn btn--ghost btn--sm">Zrušit</button>
+                                        </span></div>
+                                    <div class="fmr__cely small muted" id="prejmStav" role="status" hidden></div>
                                 </div>
                                 <!-- QR k platbě z dokladu – šéf ho naskenuje a zaplatí (Michal 22. 9.) -->
                                 <div id="qrBlok" class="qrblok" hidden></div>
@@ -615,11 +628,11 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=363"></script>
-<script src="assets/js/ui.js?v=363"></script>
-<script src="assets/js/nabidka.js?v=363"></script>
-<script src="assets/js/vykazy.js?v=363"></script>
-<script type="module" src="assets/js/store.js?v=363"></script>
+<script src="assets/js/taxonomy.js?v=364"></script>
+<script src="assets/js/ui.js?v=364"></script>
+<script src="assets/js/nabidka.js?v=364"></script>
+<script src="assets/js/vykazy.js?v=364"></script>
+<script type="module" src="assets/js/store.js?v=364"></script>
 <script>
 (function () {
     "use strict";
@@ -1336,6 +1349,8 @@
         // náhled a QR nejsou pole formuláře – kreslí se i nad rozepsanou fakturou
         vykresliNahled(f, !!nova);
         vykresliQr(f, !!nova);
+        prejmSleduj(nova ? "" : vybrana);
+        vykresliPrejmenovani();
 
         if (dotknuto) { nastavTypCastek(typ); vykresliMenu(); return; }
 
@@ -1356,6 +1371,7 @@
             (s.id === (f.stav || "nova") ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
         posledniStav = f.stav || "nova";
         $("fCesta").value = f.cesta || "";
+        cestaNactena = f.cesta || "";
         $("fMena").innerHTML = moznostiMeny(f.mena || "CZK");
         $("fKurz").value = f.kurz ? String(f.kurz) : "";
         $("fCastkaBez").value = f.castkaBez ? String(f.castkaBez) : "";
@@ -1537,6 +1553,109 @@
         const cesta = $("fCesta").value.trim();
         $("btnOtevrit").hidden = !/^https?:\/\//i.test(cesta);
         $("btnKopirovat").hidden = !cesta;
+        vykresliPrejmenovani();
+    }
+
+    /* ------------------------------ přejmenování souboru na disku ----
+       Web na disk NAS nedosáhne. Zapíše proto požadavek (KB.pozadejPrejmenovani)
+       a soubor přejmenuje pracovní PC – do půl minuty, když běží. Výsledek se
+       vrátí do požadavku; pod cestou je vidět, co se děje (Michal 20. 11. 2026). */
+    let cestaNactena = "";   // cesta, se kterou se formulář naplnil – přejmenovat jde jen uložený soubor
+    let prejmOdber = null;   // odběr požadavků k otevřenému dokladu
+    let prejmDoklad = "";    // ke kterému dokladu odběr patří
+    let prejmSeznam = [];    // jeho požadavky, nejnovější první
+    let prejmCekal = {};     // požadavky, které jsme viděli čekat – jen u nich se hlásí dokončení
+    let prejmCasovac = 0;
+    const ZNAMA_PRIPONA = /^\.(pdf|isdocx?|jpe?g|png)$/i;
+
+    /** "R:\a\soubor.pdf" → { zaklad: "soubor", pripona: ".pdf" } */
+    function nazevZCesty(cesta) {
+        const jmeno = String(cesta || "").split(/[\\/]/).pop();
+        const tecka = jmeno.lastIndexOf(".");
+        const pripona = tecka > 0 ? jmeno.slice(tecka) : "";
+        // soubor bez známé přípony (z Macu „….pdf(slash conflict)“) dostane na PC .pdf, je-li to PDF
+        return ZNAMA_PRIPONA.test(pripona) ? { zaklad: jmeno.slice(0, tecka), pripona: pripona }
+            : { zaklad: jmeno, pripona: ".pdf" };
+    }
+
+    /** Proč název nejde (věta), nebo "". Stejná pravidla hlídá nástroj na PC – tohle je první síto. */
+    function nazevSouboruChyba(nazev) {
+        if (!nazev) return "Napiš nový název souboru.";
+        if (/[\\/:*?"<>|\u0000-\u001f]/.test(nazev)) return 'Název nesmí obsahovat znaky \\ / : * ? " < > |';
+        if (/^[ .]|[ .]$/.test(nazev)) return "Název nesmí začínat ani končit mezerou nebo tečkou.";
+        if (nazev.length > 120) return "Název je moc dlouhý (nejvýš 120 znaků).";
+        if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(nazev)) return "Tenhle název Windows nedovolí.";
+        return "";
+    }
+
+    function vykresliPrejmenovani() {
+        const cesta = $("fCesta").value.trim();
+        const posledni = prejmSeznam[0] || null;
+        const ceka = !!posledni && posledni.stav === "nova";
+        // jen soubor uloženého dokladu na disku, a jen když pole ukazuje cestu, která je teď v databázi
+        const lze = !!vybrana && !nova && !!cesta && !/^https?:\/\//i.test(cesta) && cesta === ((doklad(vybrana) || {}).cesta || "");
+        $("btnPrejmenovat").hidden = !lze || ceka;
+        if (!lze || ceka) $("prejmBlok").hidden = true;
+        clearTimeout(prejmCasovac);
+        let text = "", chyba = false;
+        if (ceka) {
+            const ubehlo = Date.now() - (posledni.createdMs || 0);
+            text = "Přejmenování na „" + (posledni.novyNazev || "") + "“ čeká na pracovní PC" +
+                (ubehlo > 90000 ? " – to zatím neodpovědělo. Přejmenuje se, jakmile poběží." : "…");
+            if (ubehlo <= 90000) prejmCasovac = setTimeout(vykresliPrejmenovani, 91000 - ubehlo);
+        } else if (posledni && posledni.stav === "chyba" && Date.now() - (posledni.hotovoMs || 0) < 86400000) {
+            text = "Přejmenování na „" + (posledni.novyNazev || "") + "“ se nepovedlo: " + (posledni.chyba || "neznámá chyba");
+            chyba = true;
+        }
+        const stav = $("prejmStav");
+        stav.textContent = text;
+        stav.hidden = !text;
+        stav.style.color = chyba ? "var(--danger)" : "";
+    }
+
+    /** Odběr požadavků patří otevřenému dokladu; "" ho ukončí. */
+    function prejmSleduj(id) {
+        if (id === prejmDoklad) return;
+        if (prejmOdber) { prejmOdber(); prejmOdber = null; }
+        prejmDoklad = id;
+        prejmSeznam = [];
+        prejmCekal = {};
+        if (!id || !window.KB.sledujPozadavkyFaktury) return;
+        prejmOdber = window.KB.sledujPozadavkyFaktury(id, (seznam) => {
+            if (id !== prejmDoklad) return;
+            seznam.forEach(p => {
+                if (p.stav === "nova") { prejmCekal[p.id] = true; return; }
+                if (!prejmCekal[p.id]) return;
+                delete prejmCekal[p.id];
+                if (p.stav !== "hotovo" || !p.novaCesta) return;
+                // rozepsaný formulář se z databáze nepřepisuje – cestu srovnat tady, ať ji Uložit nevrátí zpět
+                if ($("fCesta").value.trim() === cestaNactena) $("fCesta").value = p.novaCesta;
+                cestaNactena = p.novaCesta;
+                toast("Soubor je přejmenovaný.");
+            });
+            prejmSeznam = seznam;
+            vykresliSoubor();
+        });
+    }
+
+    async function posliPrejmenovani() {
+        const stare = nazevZCesty($("fCesta").value.trim());
+        let nazev = $("fNovyNazev").value.trim();
+        if (nazev.toLowerCase().endsWith(stare.pripona.toLowerCase())) nazev = nazev.slice(0, -stare.pripona.length).trim();
+        const chyba = nazevSouboruChyba(nazev);
+        if (chyba) return void toast(chyba, "warn");
+        if (nazev === stare.zaklad) return void toast("Soubor se tak už jmenuje.", "warn");
+        $("btnPrejmPoslat").disabled = true;
+        try {
+            await window.KB.pozadejPrejmenovani(vybrana, nazev);
+            $("prejmBlok").hidden = true;
+            toast("Požadavek odeslán – soubor přejmenuje pracovní PC, obvykle do půl minuty.");
+        } catch (err) {
+            console.error(err);
+            toast("Požadavek se nepodařilo odeslat.", "error");
+        } finally {
+            $("btnPrejmPoslat").disabled = false;
+        }
     }
 
     /* -------------------------------------------------- rozpis DPH ----
@@ -1880,7 +1999,9 @@
             stav: potvrdit && $("fStav").value === "nova"
                 ? ($("fUhrazeno").value ? "zaplacena" : "zarazena") : $("fStav").value,
             polozky: typ === "vydana" ? sesbirejPolozky() : [],
-            cesta: $("fCesta").value.trim(),
+            // cestu mezitím mohl změnit pracovní PC (přejmenování, oprava cest) – netknuté pole ji nesmí vrátit zpět
+            cesta: (vybrana && stary.cesta !== undefined && $("fCesta").value.trim() === cestaNactena)
+                ? (stary.cesta || "") : $("fCesta").value.trim(),
             poznamka: $("fPoznamka").value.trim(),
             createdMs: stary.createdMs,
             createdBy: stary.createdBy
@@ -2468,6 +2589,7 @@
         vybrana = "";
         nova = "";
         dotknuto = false;
+        prejmSleduj("");
         $("oknoDoklad").hidden = true;
         if (vRamu && window.parent !== window) window.parent.postMessage({ typ: "zavri-doklad" }, location.origin);
         // adresa ?id=… by po obnovení stránky otevřela stejný doklad znovu
@@ -2711,6 +2833,28 @@
             (navigator.clipboard ? navigator.clipboard.writeText(cesta) : Promise.reject())
                 .then(() => toast("Cesta zkopírovaná – vlož ji do Průzkumníka souborů."))
                 .catch(() => { $("fCesta").select(); toast("Zkopíruj cestu ručně (Ctrl+C).", "warn"); });
+        });
+        $("btnPrejmenovat").addEventListener("click", () => {
+            const nyni = nazevZCesty($("fCesta").value.trim());
+            const navrh = nazevZCesty((doklad(vybrana) || {}).navrhSoubor || "").zaklad;
+            $("fNovyNazev").value = nyni.zaklad;
+            $("prejmPripona").textContent = nyni.pripona;
+            $("btnPrejmNavrh").hidden = !navrh || navrh === nyni.zaklad;
+            $("btnPrejmNavrh").title = navrh ? "Použije název „" + navrh + "“" : "";
+            $("prejmBlok").hidden = false;
+            $("fNovyNazev").focus();
+            $("fNovyNazev").select();
+        });
+        $("btnPrejmNavrh").addEventListener("click", () => {
+            $("fNovyNazev").value = nazevZCesty((doklad(vybrana) || {}).navrhSoubor || "").zaklad;
+            $("fNovyNazev").focus();
+        });
+        $("btnPrejmZrusit").addEventListener("click", () => { $("prejmBlok").hidden = true; });
+        $("btnPrejmPoslat").addEventListener("click", posliPrejmenovani);
+        // nový název není pole dokladu – psaní do něj nesmí doklad označit za rozepsaný
+        $("fNovyNazev").addEventListener("input", (event) => event.stopPropagation());
+        $("fNovyNazev").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); posliPrejmenovani(); }
         });
 
         $("btnPolozka").addEventListener("click", () => {
