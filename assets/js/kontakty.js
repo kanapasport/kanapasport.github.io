@@ -13,10 +13,14 @@
 
     /* Pole kontaktu na JEDNOM místě. Stránka z nich kreslí sloupce tabulky,
        kartu na telefonu i formulář, hledání a úklid jedou přes ně taky –
-       další pole (štítky, kontaktní osoba, město…) si Michal teprve vybere
-       a má stačit přidat řádek sem. `hlavicky` = jak se sloupec může
+       další pole (štítky, kontaktní osoba…) má stačit přidat řádek sem. `hlavicky` = jak se sloupec může
        jmenovat v Excelu (bez diakritiky, mezer a teček, malými písmeny).
-       `typ` říká, jak se hodnota ukáže: text | tel | email | web | dlouhy. */
+       `typ` říká, jak se hodnota ukáže: text | tel | email | web | misto |
+       dlouhy | ano (true/false) | vycet (jen hodnoty z `hodnoty`) | datum (RRRR-MM-DD).
+       `bunka` = pole nemá vlastní sloupec, kreslí se v buňce jiného pole
+       (hvězdička u názvu, palec a datum u zkušenosti) – Michal 20. 11. 2026
+       chtěl k pěti polím město, zkušenost a oblíbené a tabulka by jinak
+       měla dvanáct sloupců. */
     const POLE = [
         { klic: "nazev", nazev: "Název", typ: "text", max: 120, povinne: true,
           hlavicky: ["nazev", "nazevfirmy", "firma", "jmeno", "kontakt", "dodavatel"] },
@@ -26,9 +30,22 @@
           hlavicky: ["email", "mail", "emailovaadresa", "emaily"] },
         { klic: "web", nazev: "Web", typ: "web", max: 160,
           hlavicky: ["web", "www", "webovestranky", "stranky", "url", "adresawebu"] },
+        // jedno pole: někdo má adresu sídla, jiný jen „Brno a okolí“ – obojí jde do map
+        { klic: "mesto", nazev: "Město / adresa", typ: "misto", max: 160,
+          hlavicky: ["mesto", "adresa", "mestoadresa", "sidlo", "misto", "obec", "lokalita", "kdejezdi"] },
+        { klic: "palec", nazev: "Hodnocení", typ: "vycet", hodnoty: ["", "nahoru", "dolu"], bunka: "zkusenost", hlavicky: [] },
+        { klic: "zkusenost", nazev: "Zkušenost", typ: "text", max: 200,
+          hlavicky: ["zkusenost", "zkusenosti", "hodnoceni", "reference"] },
+        { klic: "naposledy", nazev: "Naposledy použit", typ: "datum", bunka: "zkusenost", hlavicky: [] },
         { klic: "poznamka", nazev: "Poznámka", typ: "dlouhy", max: 500,
-          hlavicky: ["poznamka", "poznamky", "pozn", "popis", "info"] }
+          hlavicky: ["poznamka", "poznamky", "pozn", "popis", "info"] },
+        { klic: "oblibeny", nazev: "Oblíbený", typ: "ano", bunka: "nazev", hlavicky: [] }
     ];
+    /* Bez hlavičky z Excelu platí pořadí PŮVODNÍCH pěti sloupců – tak vypadal
+       Michalův sešit a nová pole v něm nejsou. */
+    const BEZ_HLAVICKY = ["nazev", "telefon", "email", "web", "poznamka"];
+    /** Pole, která se dají hledat a psát jako text (ne ano/ne, výčet a datum). */
+    const TEXTOVE = (p) => ["ano", "vycet", "datum"].indexOf(p.typ) === -1;
 
     /** Malými písmeny bez diakritiky – na hledání a na porovnání hlaviček. */
     const fold = (s) => String(s == null ? "" : s).toLowerCase()
@@ -66,15 +83,36 @@
             .split(/[\s,;]+/).map(x => x.replace(/^mailto:/i, "").trim()).filter(Boolean).join(", ");
     }
 
+    /** RRRR-MM-DD jen jako skutečné datum (žádný 31. 2.), jinak "". */
+    function cistiDatum(v) {
+        const s = String(v == null ? "" : v).trim();
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+        if (!m) return "";
+        const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+        return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? s : "";
+    }
+
+    /** „2026-10-12“ → „12. 10. 2026“ (neplatné → ""). */
+    function datumCesky(v) {
+        const s = cistiDatum(v);
+        return s ? Number(s.slice(8)) + ". " + Number(s.slice(5, 7)) + ". " + s.slice(0, 4) : "";
+    }
+
     /**
      * Ořez a limity podle smlouvy dat; vrací vždy všechna pole z POLE
-     * jako texty (bez `undefined`). Poznámka smí mít víc řádků, ostatní ne.
+     * (bez `undefined`). Poznámka smí mít víc řádků, ostatní texty ne.
+     * Ano/ne jen z `=== true`, výčet jen ze seznamu, datum jen ISO – co
+     * kdo podvrhne z konzole, skončí jako prázdno. Náhled a počet obrázků
+     * sem nepatří: píše je jen KB.pridejKontaktObrazek / smazKontaktObrazek.
      */
     function cisti(data) {
         const d = data || {};
         const vysledek = {};
         POLE.forEach(p => {
             let v = d[p.klic];
+            if (p.typ === "ano") { vysledek[p.klic] = v === true; return; }
+            if (p.typ === "vycet") { vysledek[p.klic] = p.hodnoty.indexOf(v) !== -1 ? v : ""; return; }
+            if (p.typ === "datum") { vysledek[p.klic] = cistiDatum(v); return; }
             if (p.typ === "tel") v = cistiTelefon(v);
             else if (p.typ === "web") v = cistiWeb(v);
             else if (p.typ === "email") v = cistiEmail(v);
@@ -121,6 +159,18 @@
         return jeEmail(prvni) ? "mailto:" + prvni : "";
     }
 
+    /* Město / adresa → hledání na Mapy.cz. Hodnota jde jen do parametru
+       přes encodeURIComponent, takže ani podvrh odkaz nezmění. */
+    function mapaHref(mesto) {
+        const s = radek(mesto);
+        return s ? "https://mapy.cz/zakladni?q=" + encodeURIComponent(s.slice(0, 160)) : "";
+    }
+
+    /** Oblíbené první, pak ostatní; v obou částech česky podle názvu. */
+    const serad = (seznam) => (Array.isArray(seznam) ? seznam : []).slice().sort((a, b) =>
+        ((b && b.oblibeny === true) - (a && a.oblibeny === true)) ||
+        String((a && a.nazev) || "").localeCompare(String((b && b.nazev) || ""), "cs"));
+
     /* ---------------------------------------------- duplicity a hledání */
 
     /** Klíč duplicity: název bez diakritiky a interpunkce + posledních 9 číslic
@@ -132,12 +182,12 @@
         return nazev + "|" + cislice;
     }
 
-    /** Hledání přes všechna pole; mezera = všechna slova musí sedět. */
+    /** Hledání přes textová pole (i město a zkušenost); mezera = všechna slova musí sedět. */
     function hleda(k, dotaz) {
         const slova = fold(dotaz).split(/\s+/).filter(Boolean);
         if (!slova.length) return true;
         const x = k || {};
-        const text = fold(POLE.map(p => x[p.klic] || "").join(" \n ")) +
+        const text = fold(POLE.filter(TEXTOVE).map(p => x[p.klic] || "").join(" \n ")) +
             " " + String(x.telefon || "").replace(/\D/g, "");    // „737698“ najde i „737 698 306“
         return slova.every(s => text.indexOf(s) !== -1);
     }
@@ -196,8 +246,8 @@
 
     /**
      * Text zkopírovaný z Excelu → pole kontaktů (vyčištěných `cisti`).
-     * První řádek s hlavičkou určí sloupce v jakémkoli pořadí; bez hlavičky
-     * platí pořadí z POLE. Sloupce navíc (bez známého názvu) se připojí
+     * První řádek s hlavičkou určí sloupce v jakémkoli pořadí (pozná i Město /
+     * Adresa a Zkušenost); bez hlavičky platí pořadí BEZ_HLAVICKY. Sloupce navíc (bez známého názvu) se připojí
      * k poznámce přes „ · “. Prázdné řádky a řádky bez názvu vynechá.
      */
     function zExcelu(text) {
@@ -216,7 +266,7 @@
             sloupce = prvni;
             radky.shift();
         } else {
-            sloupce = POLE.map(p => p.klic);
+            sloupce = BEZ_HLAVICKY.slice();
         }
         return radky.map(r => {
             const k = {}, navic = [];
@@ -231,7 +281,33 @@
         }).filter(k => k.nazev);
     }
 
+    /* ------------------------------------------------- zmenšenina
+       Malá podoba prvního obrázku do seznamu (nejvýš 240 px na delší straně).
+       KBUI.nahledObrazku dělá 420 px na šířku – u vysokého snímku e-mailu
+       to přeleze 90 000 znaků, které na kontakt smí, a seznam kreslí
+       zmenšeninu jen 40 px vysokou. Jen v prohlížeči (canvas). */
+    function zmensenina(dataUrl) {
+        return new Promise((ok) => {
+            if (typeof Image === "undefined" || typeof document === "undefined") return ok("");
+            const img = new Image();
+            img.onload = () => {
+                const k = Math.min(1, 240 / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+                const c = document.createElement("canvas");
+                c.width = Math.max(1, Math.round(img.naturalWidth * k));
+                c.height = Math.max(1, Math.round(img.naturalHeight * k));
+                const g = c.getContext("2d");
+                g.fillStyle = "#fff";               // průhledné PNG by v JPEG zčernalo
+                g.fillRect(0, 0, c.width, c.height);
+                g.drawImage(img, 0, 0, c.width, c.height);
+                ok(c.toDataURL("image/jpeg", 0.75));
+            };
+            img.onerror = () => ok("");
+            img.src = dataUrl;
+        });
+    }
+
     root.KBKontakty = {
+        zmensenina: zmensenina,
         POLE: POLE,
         fold: fold,
         cisti: cisti,
@@ -240,6 +316,10 @@
         webHref: webHref,
         telHref: telHref,
         mailHref: mailHref,
+        mapaHref: mapaHref,
+        datumCesky: datumCesky,
+        serad: serad,
+        MAX_OBRAZKU: 6,
         adresy: adresy,
         jeEmail: jeEmail,
         klic: klic,

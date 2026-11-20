@@ -2250,9 +2250,9 @@
         /* jen hlavní správce, majitel a asistentka (finance.view); „Moje
            výplaty“ vidí dohodář / OSVČ / student bez financí – svůj přehled */
         /* Skupina se do 20. 11. 2026 jmenovala „Peníze“; s Kontakty (Michal: „dej to
-           k penězům a tu sekci přejmenuj“) je to „Kancelář“. `id` zůstává – drží se
-           na něm zapamatované rozbalení pásu. */
-        { id: "penize", nazev: "Kancelář", ikona: "penize", polozky: [
+           k penězům a tu sekci přejmenuj“) je to „Administrativa“ (jeho výběr v Iris).
+           `id` zůstává – drží se na něm zapamatované rozbalení pásu. */
+        { id: "penize", nazev: "Administrativa", ikona: "penize", polozky: [
             { nazev: "Faktury", ikona: "receipt", href: "faktury.html", need: "finance.view" },
             { nazev: "Pokladna", ikona: "penize", href: "pokladna.html", need: "finance.view" },
             // výplaty a výpis pro mzdovou jako jedna položka se dvěma záložkami (Michal 12. 11. 2026)

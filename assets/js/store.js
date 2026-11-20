@@ -8349,11 +8349,87 @@ KB.ulozKontakt = async (id, data) => {
     return noveId;
 };
 
+/* Hvězdička v řádku (Michal 20. 11. 2026) – zapíše JEN `oblibeny` a razítko,
+   ať klik na hvězdičku nepřepíše pole, která má někdo jiný zrovna otevřená. */
+KB.oznacKontaktOblibeny = async (id, ano) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!ID_KONTAKTU.test(String(id || ""))) throw new Error("Neplatné id kontaktu.");
+    await updateDoc(kontaktDoc(id), { oblibeny: ano === true, updatedMs: Date.now(), updatedBy: window.KB_USER || "" });
+};
+
+/* ---- obrázky kontaktu (snímky e-mailů, Michal 20. 11. 2026) -------------
+   Stejně jako Quick TO-DO: velký obrázek v podkolekci
+   seznam/{id}/obrazky/{img_<ms>_<n>} = { data, ms, kdo }, na kontaktu jen
+   malý `nahled` (první obrázek) a počet `obrazku` – seznam tak nečte
+   megabajty kvůli zmenšeninám. Podkolekci kryje zachytávací pravidlo
+   private/{kolekce}/{document=**}. */
+const kontaktObrazkyCol = (id) => collection(db, "artifacts", APP_ID, "private", "kontakty", "seznam", id, "obrazky");
+const kontaktObrazekDoc = (id, n) => doc(db, "artifacts", APP_ID, "private", "kontakty", "seznam", id, "obrazky", n);
+const ID_OBRAZKU_KONTAKTU = /^img_\d{1,16}_\d{1,3}$/;
+// limit drží KBKontakty.MAX_OBRAZKU (stránka podle něj schová tlačítko)
+const MAX_OBRAZKU_KONTAKTU = () => (window.KBKontakty && window.KBKontakty.MAX_OBRAZKU) || 6;
+const obrazekOk = (url) => !!(window.KBUI && window.KBUI.bezpecnyObrazek && window.KBUI.bezpecnyObrazek(url));
+
+KB.nactiKontaktObrazky = async (id) => {
+    if (authReady) await authReady;
+    requireDb();
+    if (!ID_KONTAKTU.test(String(id || ""))) throw new Error("Neplatné id kontaktu.");
+    const snap = await getDocs(kontaktObrazkyCol(id));
+    const ven = [];
+    snap.forEach(d => ven.push(Object.assign({ id: d.id }, d.data())));
+    ven.sort((a, b) => (a.ms || 0) - (b.ms || 0) || String(a.id).localeCompare(String(b.id)));
+    return ven;
+};
+
+/**
+ * Přidá kontaktu obrázek (data URL z KBUI.zmensiObrazek). `nahled` se zapíše,
+ * jen když kontakt ještě žádný nemá – zmenšenina patří prvnímu obrázku.
+ * Počet se bere z podkolekce, ne z čísla na kontaktu: to mohl rozhodit
+ * souběžný zápis z druhého okna. Kontakt se přes updateDoc nezaloží znovu,
+ * když ho mezitím někdo smazal.
+ */
+KB.pridejKontaktObrazek = async (id, dataUrl, nahled) => {
+    const stare = await KB.nactiKontaktObrazky(id);
+    if (stare.length >= MAX_OBRAZKU_KONTAKTU()) throw new Error("Kontakt už má " + MAX_OBRAZKU_KONTAKTU() + " obrázků – nejdřív nějaký smaž.");
+    if (!obrazekOk(dataUrl) || String(dataUrl).length > 1000000) throw new Error("Tohle není obrázek, který jde uložit.");
+    const n = "img_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    await setDoc(kontaktObrazekDoc(id, n), { data: dataUrl, ms: Date.now(), kdo: window.KB_USER || "" });
+    const k = (KB.kontakty || []).find(x => x.id === id);
+    const patch = { obrazku: stare.length + 1 };
+    const malyOk = obrazekOk(nahled) && String(nahled).length <= 90000;
+    // u dalších obrázků jen doplnit chybějící náhled – prázdným nikdy nepřepsat (seznam v KB.kontakty může být o krok pozadu)
+    if (!stare.length) patch.nahled = malyOk ? String(nahled) : "";
+    else if (malyOk && !(k && obrazekOk(k.nahled))) patch.nahled = String(nahled);
+    await updateDoc(kontaktDoc(id), patch);
+    return n;
+};
+
+/** Smaže jeden obrázek a srovná počet i zmenšeninu (po prvním z dalšího, po posledním prázdno). */
+KB.smazKontaktObrazek = async (id, imgId) => {
+    if (!ID_OBRAZKU_KONTAKTU.test(String(imgId || ""))) throw new Error("Neplatné id obrázku.");
+    const pred = await KB.nactiKontaktObrazky(id);
+    await deleteDoc(kontaktObrazekDoc(id, imgId));
+    const zbyva = pred.filter(o => o.id !== imgId);
+    const patch = { obrazku: zbyva.length };
+    if (!zbyva.length) patch.nahled = "";
+    else if (pred.length && pred[0].id === imgId) {
+        let nahled = "";
+        try { nahled = window.KBKontakty && window.KBKontakty.zmensenina ? await window.KBKontakty.zmensenina(zbyva[0].data) : ""; }
+        catch (err) { nahled = ""; }
+        patch.nahled = obrazekOk(nahled) && nahled.length <= 90000 ? nahled : "";
+    }
+    await updateDoc(kontaktDoc(id), patch);
+};
+
 KB.smazKontakt = async (id) => {
     if (authReady) await authReady;
     requireDb();
     if (!ID_KONTAKTU.test(String(id || ""))) throw new Error("Neplatné id kontaktu.");
     const k = (KB.kontakty || []).find(x => x.id === id);
+    // obrázky napřed – jako u Quick TO-DO; podkolekce by jinak zůstala viset bez kontaktu
+    const obrazky = await getDocs(kontaktObrazkyCol(id)).catch(() => null);
+    if (obrazky) { for (const d of obrazky.docs) await deleteDoc(d.ref); }
     await deleteDoc(kontaktDoc(id));
     KB.zapisAktivitu("kontakty", "Kontakt " + (k ? String(k.nazev || "").slice(0, 80) + " " : "") + "smazán");
 };
