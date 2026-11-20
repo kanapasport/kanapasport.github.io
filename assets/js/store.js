@@ -1823,16 +1823,17 @@ const milnikTerminCol = () => collection(db, "artifacts", APP_ID, "private", "mi
 const milnikSeznamDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "seznam", id);
 const milnikTerminDoc = (id) => doc(db, "artifacts", APP_ID, "private", "milniky", "terminy", id);
 
-let milnikySeznam = {};      // id -> milník ze zveřejněných
-let milnikyPostup = {};      // id -> milník z mojí technologie (i nezveřejněný)
+let milnikySeznam = {};      // id -> milník (manažer všechny, ostatní zveřejněné)
 let syroveTerminy = {};      // id -> termín, jen ty, na které mám právo
 let syrovePuvodni = {};      // id -> původní termín (štítek „posunuto“ na stránce Milníky)
 let milnikyOdbery = [];
 
 /**
- * Kdo na téhle technologii dělá – ti uvidí její milníky jako svůj postup,
- * i když ještě nejsou zveřejněné. Termín u nich stejně nedostanou; jde
- * o to, aby člověk věděl, co po jeho profesi přijde (Michal 8. 10. 2026).
+ * Kdo na téhle technologii dělá. Sloužilo pohledu „Můj postup" (Michal
+ * 8. 10. 2026), který zmizel 20. 11. 2026 – zaměstnanci teď vidí jen
+ * zveřejněné milníky a o `kdoVidiPostup` se web neptá. Zápis pole zůstává,
+ * protože ho čtou pravidla databáze (čtení seznamu milníků); dokud se
+ * pravidla nezmění, drží se pole aspoň správně, ne zastarale.
  *
  * Technologie se porovnává CELÁ. „STAVBA + SLN" je společný milník obou
  * profesí, ne důvod, aby stavař viděl ve svém postupu všechny elektro
@@ -1857,10 +1858,7 @@ KB.newMilnikId = () => "mil_" + Date.now() + "_" + Math.floor(Math.random() * 10
 function slijMilniky() {
     const uid = (auth && auth.currentUser) ? auth.currentUser.uid : "";
     const manazer = jsemManazer();
-    /* Dvě hromádky: zveřejněné milníky (vidí je každý) a milníky mojí
-       technologie (i nezveřejněné). Můžou se překrývat, proto klíč podle id. */
-    const vse = Object.assign({}, milnikyPostup, milnikySeznam);
-    KB.milniky = Object.keys(vse).map(id => vse[id]).map(m => {
+    KB.milniky = Object.keys(milnikySeznam).map(id => milnikySeznam[id]).map(m => {
         const zpracovatele = Array.isArray(m.zpracovatele) ? m.zpracovatele : [];
         const muj = !!uid && zpracovatele.indexOf(uid) !== -1;
         const termin = syroveTerminy[m.id] || "";
@@ -1871,16 +1869,15 @@ function slijMilniky() {
             // původní termín (před posuny) – stránka Milníky z něj dělá štítek „posunuto“
             terminPuvodni: termin ? (syrovePuvodni[m.id] || "") : "",
             // termín existuje, ale není pro mě – ne totéž co milník bez termínu
-            terminSkryty: !termin && !manazer && !muj,
-            /* Tenhle milník mám jen jako výhled své profese – v běžných
-               pohledech nemá co dělat, patří do „Můj postup". */
-            jenPostup: !manazer && m.zverejneno === false
+            terminSkryty: !termin && !manazer && !muj
         });
     }).sort((a, b) => (Number(a.poradi) || 0) - (Number(b.poradi) || 0));
     emit("milniky", KB.milniky);
 }
 
-/** Odběr podle role: manažer celý harmonogram, člen jen zveřejněné. */
+/** Odběr podle role: manažer celý harmonogram, člen jen zveřejněné.
+ *  Druhý dotaz na nezveřejněné milníky své technologie (`kdoVidiPostup`,
+ *  pohled Můj postup) zmizel 20. 11. 2026 – zaměstnanec je ani nestahuje. */
 KB.watchMilniky = async () => {
     if (authReady) await authReady;
     if (!db || !auth || !auth.currentUser) return;
@@ -1900,18 +1897,6 @@ KB.watchMilniky = async () => {
         snap.forEach(d => { milnikySeznam[d.id] = { id: d.id, ...d.data() }; });
         slijMilniky();
     }, (err) => console.error("Chyba čtení milníků:", err)));
-
-    /* Druhý dotaz: milníky mojí technologie, i nezveřejněné. Pravidla nejsou
-       filtr, takže si o ně musí říct dotaz sám – a `array-contains` na jednom
-       poli se obejde bez složeného indexu. Manažer má všechno z prvního. */
-    if (!manazer) {
-        milnikyOdbery.push(onSnapshot(
-            query(milnikSeznamCol(), where("kdoVidiPostup", "array-contains", uid)), (snap) => {
-                milnikyPostup = {};
-                snap.forEach(d => { milnikyPostup[d.id] = { id: d.id, ...d.data() }; });
-                slijMilniky();
-            }, (err) => console.error("Chyba čtení postupu milníků:", err)));
-    }
 
     milnikyOdbery.push(onSnapshot(dotazTerminy, (snap) => {
         syroveTerminy = {};
@@ -1946,7 +1931,8 @@ function milnikDoDvou(item, puvodni, vsechny) {
             projekt: String(item.zakazka || item.projekt || "").slice(0, 160),
             zpracovatele: zpracovatele,
             zverejneno: zverejneno,
-            // kdo tuhle technologii dělá – ten milník uvidí i před zveřejněním
+            /* kdo tuhle technologii dělá – pozůstatek „Mého postupu" (zrušený
+               20. 11. 2026); web pole nečte, ale pravidla podle něj pouštějí čtení */
             kdoVidiPostup: kdoVidiPostup,
             poradi: Number(item.poradi) || Number(p.poradi) || 0,
             stav: String(item.stav || p.stav || "planovano"),
