@@ -3566,6 +3566,7 @@
                                     '<option value="tyden">každý týden</option>' +
                                     '<option value="14dni">každých 14 dní</option>' +
                                     '<option value="mesic">každý měsíc</option>' +
+                                    '<option value="3mesice">každé 3 měsíce</option>' +
                                 "</select>" +
                             "</label>" +
                         "</div>" +

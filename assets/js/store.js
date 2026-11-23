@@ -4962,7 +4962,7 @@ KB.loadRozpocty = async () => {
            budova:"G61", patro:"1NP", prirazeni:[uid], termin:"2026-09-30",
            budgetHodin: 120, stav:"otevreny|hotovo",
            todo:[{ id, text, pct, by, ms }], poznamka,
-           opakovani:"|tyden|14dni|mesic", opakovaniDen, opakovaniKoren,
+           opakovani:"|tyden|14dni|mesic|3mesice", opakovaniDen, opakovaniKoren,
            opakovanyZ, nasledovnikId }                                       */
 
 /* ------------------------------------------ opakování a stav úkolu ----
@@ -4971,16 +4971,20 @@ KB.loadRozpocty = async () => {
    a pustí v Node. Nic odsud proto nesmí sahat na KB ani na Firestore.
 
    OPAKOVÁNÍ (rešerše 19. 10. 2026, nápad 16): úkol i Quick TO-DO může mít
-   `opakovani` = "tyden" | "14dni" | "mesic". Po splnění vznikne kopie
+   `opakovani` = "tyden" | "14dni" | "mesic" | "3mesice" (čtvrtletí jen
+   v nabídce Quick TO-DO, 23. 11. 2026). Po splnění vznikne kopie
    s DALŠÍM TERMÍNEM POČÍTANÝM OD PŮVODNÍHO TERMÍNU (ne od dne splnění)
    a s vynulovaným TO-DO. Kopie má pevné id `<kořen>_o<termín>`, takže
    ji dvojklik, druhá záložka ani druhý manažer nezaloží podruhé; starý
    záznam si navíc pamatuje `nasledovnikId`.
-   U „každý měsíc" se drží den v měsíci z prvního termínu (`opakovaniDen`):
-   31. 1. → 28. 2. → 31. 3., ne 28. 3. */
+   U „každý měsíc" a „každé 3 měsíce" se drží den v měsíci z prvního
+   termínu (`opakovaniDen`): 31. 1. → 28. 2. → 31. 3., ne 28. 3. */
 /* OPAKOVANI-ZACATEK */
-const OPAKOVANI_DNY = { tyden: 7, "14dni": 14, mesic: 0 };
-const OPAKOVANI_POPIS = { tyden: "každý týden", "14dni": "každých 14 dní", mesic: "každý měsíc" };
+const OPAKOVANI_DNY = { tyden: 7, "14dni": 14, mesic: 0, "3mesice": 0 };
+/* o kolik měsíců se termín posouvá (ostatní volby jdou po dnech) */
+const OPAKOVANI_MESICE = { mesic: 1, "3mesice": 3 };
+const OPAKOVANI_POPIS = { tyden: "každý týden", "14dni": "každých 14 dní", mesic: "každý měsíc",
+    "3mesice": "každé 3 měsíce" };
 
 /** Je to platná volba opakování (prázdná = neopakuje se)? */
 function jeOpakovani(op) {
@@ -4996,11 +5000,12 @@ function dalsiTermin(iso, op, den) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !jeOpakovani(op)) return "";
     const r = Number(s.slice(0, 4)), m = Number(s.slice(5, 7)), d = Number(s.slice(8, 10));
     let datum;
-    if (op === "mesic") {
+    const mesicu = OPAKOVANI_MESICE[op];
+    if (mesicu) {
         const chci = Math.min(31, Math.max(1, Number(den) || d));
-        // poslední den PŘÍŠTÍHO měsíce (m je 1–12, Date.UTC chce 0–11)
-        const posledni = new Date(Date.UTC(r, m + 1, 0)).getUTCDate();
-        datum = new Date(Date.UTC(r, m, Math.min(chci, posledni)));
+        // poslední den CÍLOVÉHO měsíce (m je 1–12, Date.UTC chce 0–11)
+        const posledni = new Date(Date.UTC(r, m + mesicu, 0)).getUTCDate();
+        datum = new Date(Date.UTC(r, m - 1 + mesicu, Math.min(chci, posledni)));
     } else {
         datum = new Date(Date.UTC(r, m - 1, d + OPAKOVANI_DNY[op]));
     }
