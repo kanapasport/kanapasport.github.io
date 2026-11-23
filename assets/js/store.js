@@ -8085,8 +8085,12 @@ KB.KATEGORIE_VYBAVENI = [
               { klic: "kontrola", nazev: "Kontrola", typ: "month" },
               { klic: "tlakovaZkouska", nazev: "Tlaková zkouška", typ: "month" }] },
     { klic: "licence",  prefix: "LIC", nazev: "Programy a licence",
+      /* `licencniKod` (23. 11. 2026): kód licence přiřazené člověku – stránka z něj dělá lištu
+         programu (ZWCAD). Vidí ho jen manažerské role jako celou evidenci; do historie ani
+         do záznamu aktivity se nepíše. Hesla sem dál nepatří. */
       navic: [{ klic: "program", nazev: "Program", typ: "text" }, { klic: "ucetNazev", nazev: "Účet / licence", typ: "text" },
-              { klic: "platnost", nazev: "Platnost do", typ: "text" }] },
+              { klic: "platnost", nazev: "Platnost do", typ: "text" },
+              { klic: "licencniKod", nazev: "Licenční kód", typ: "text" }] },
     { klic: "email",    prefix: "EML", nazev: "E-mailové účty",
       navic: [{ klic: "adresa", nazev: "Adresa", typ: "text" },
               { klic: "druh", nazev: "Druh", typ: "select", moznosti: ["osobni", "alias", "zarizeni", "byvaly"] },

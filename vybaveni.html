@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Evidence vybavení – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=364">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=364">
+    <link rel="stylesheet" href="assets/css/app.css?v=365">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=365">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -88,6 +88,15 @@
         .evl__radek .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .evprazdno { padding: 30px 20px; text-align: center; color: var(--muted); line-height: 1.6; }
 
+        /* ------------------------------------- lišta licencí (ZWCAD) */
+        .evlic { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 14px; }
+        .evlic .field { width: auto; min-height: 34px; padding: 4px 10px; font-size: var(--fs-2); }
+        .evlic .evlic__kod { flex: 1 1 260px; min-width: 200px; }
+        .evlic__popis { flex: 1 1 100%; margin: 0; line-height: 1.6; }
+        .evlickod { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: all; }
+        .evlicakce { text-align: right; white-space: nowrap; }
+        .evlicakce .btn { margin-left: 4px; vertical-align: middle; }
+
         /* ------------------------------------------------------ okno */
         .evokno { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center;
             padding: 18px; background: rgba(11, 13, 16, .55); }
@@ -120,6 +129,21 @@
             .evokno__mrizka { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .evt .evsn { display: none; }
             .evf__nadpis { min-width: 0; }
+            /* lišta licencí: popisek nad polem; řádek jako kartička – kód položky a člověk,
+               pod nimi licenční kód přes celou šířku a tlačítka (tabulka se neposouvá do strany) */
+            .evlic .evf__nadpis { flex: 1 1 100%; }
+            .evlic .evlic__kod, .evlic select.field { flex: 1 1 160px; min-width: 0; }
+            table.evt--lic, .evt--lic tbody { display: block; }
+            .evt--lic thead { display: none; }
+            .evt--lic tr.evr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px;
+                padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+            .evt--lic tr.evr:last-child { border-bottom: 0; }
+            .evt--lic tr.evr > td { display: block; padding: 0; border: 0; min-width: 0; }
+            .evt--lic tr.evr > td.evkod { grid-area: 1 / 1; align-self: center; color: var(--muted); font-size: var(--fs-1); }
+            .evt--lic tr.evr > td:nth-child(3) { grid-area: 1 / 2; text-align: right; }
+            .evt--lic tr.evr > td.evnazev { grid-area: 2 / 1 / 3 / 3; }
+            .evt--lic tr.evr > td.evlicakce { grid-area: 3 / 1 / 4 / 3; text-align: left; }
+            .evt--lic .evlicakce .btn { margin: 0 4px 0 0; }
         }
         @media (max-width: 520px) {
             .evokno__mrizka { grid-template-columns: minmax(0, 1fr); }
@@ -150,6 +174,7 @@
                 <p class="small muted" style="margin:3px 0 0;line-height:1.6">
                     Kdo má jaký notebook, tablet, telefon, dálkoměr, klíč, oblečení, auto, licenci nebo e-mailový účet.
                     Klik na řádek položku otevře, pravé tlačítko nebo ⋯ nabídne předat, vrátit do skladu a vyřadit.
+                    Lišta <b>ZWCAD</b> vede licenční kódy – komu která licence patří.
                 </p>
             </div>
             <div class="row row--wrap" style="gap:8px">
@@ -167,11 +192,24 @@
                 <label class="evf__nadpis" for="fStav">Stav</label>
                 <select id="fStav" class="field"></select>
             </div>
-            <div class="evf__radek">
+            <div class="evf__radek" id="fKatRadek">
                 <span class="evf__nadpis">Kategorie</span>
                 <span id="fKat" class="row row--wrap" style="gap:6px" role="group" aria-label="Kategorie"></span>
             </div>
         </div>
+
+        <!-- lišta licencí jednoho programu (ZWCAD): rychlé přidání. Stojí mimo #vypis, ať ho
+             překreslení výpisu nesmaže pod rukama. -->
+        <form id="licNova" class="card evlic" hidden autocomplete="off">
+            <label class="evf__nadpis" for="licKod">Nová licence</label>
+            <input type="text" id="licKod" class="field evlic__kod evlickod" maxlength="200" placeholder="licenční kód"
+                   autocomplete="off" spellcheck="false">
+            <label class="evf__nadpis" for="licKomu">Komu</label>
+            <select id="licKomu" class="field"></select>
+            <button type="submit" id="licPridat" class="btn btn--primary btn--sm">Přidat licenci</button>
+            <p id="licPopis" class="tiny muted evlic__popis"></p>
+            <p id="licChyba" class="evokno__chyba evlic__popis" role="alert" hidden></p>
+        </form>
 
         <div id="vypis" style="display:flex;flex-direction:column;gap:14px"></div>
     </div>
@@ -223,10 +261,10 @@
     </div>
 </div>
 
-<script src="assets/js/taxonomy.js?v=364"></script>
-<script src="assets/js/ui.js?v=364"></script>
-<script src="assets/js/nabidka.js?v=364"></script>
-<script type="module" src="assets/js/store.js?v=364"></script>
+<script src="assets/js/taxonomy.js?v=365"></script>
+<script src="assets/js/ui.js?v=365"></script>
+<script src="assets/js/nabidka.js?v=365"></script>
+<script type="module" src="assets/js/store.js?v=365"></script>
 
 <script>
 (function () {
@@ -235,12 +273,21 @@
     const $ = (id) => document.getElementById(id);
     const esc = (value) => window.KBUI.esc(value);
 
+    /* LIŠTY LICENCÍ (Michal 23. 11. 2026 – ZWCAD): pohled na licence jednoho programu – licenční
+       kód, komu patří, přidat / přiřadit / odebrat. Jsou to obyčejné položky evidence kategorie
+       „licence“ (kód LICxxx, předání a historie jako u všeho ostatního); k liště patří ty, které
+       mají `hleda` v programu nebo v názvu. Další program = další řádek sem. */
+    const LICENCE = [
+        { klic: "zwcad", nazev: "ZWCAD", hleda: "zwcad",
+          vzor: { nazev: "ZWCAD 2026 Professional – trvalá licence", program: "ZWCAD 2026 Professional", platnost: "trvalá" } }
+    ];
+    const LIC = "lic:";             // klíč pohledu = LIC + klíč lišty
     const POHLEDY = [
         { klic: "polozky", nazev: "Položky" },
         { klic: "lide", nazev: "Lidé" },
         { klic: "sklad", nazev: "Sklad" },
         { klic: "dodelat", nazev: "Dodělat" }
-    ];
+    ].concat(LICENCE.map(l => ({ klic: LIC + l.klic, nazev: l.nazev })));
     const POHLED_KLIC = "kb-vybaveni-pohled";
     const SKLAD_STAVY = ["volne", "rezerva", "firemni"];
     const STITEK_TEXT = { nedoplneno: "nedoplněno", "bez-uctu": "bez účtu", "bez-stitku": "bez štítku",
@@ -282,6 +329,13 @@
     const jmenoUid = (uid) => { const u = ((window.KB && window.KB.users) || []).find(x => x.id === uid); return u ? jmeno(u) : ""; };
     const drzitel = (p) => p.uzivatelJmeno || jmenoUid(p.uzivatel) || "";
     const maCloveka = (p) => !!(p.uzivatel || p.uzivatelJmeno);
+    const licencePohledu = () => LICENCE.find(l => LIC + l.klic === pohled) || null;
+    const jeLicence = (p, l) => p.kategorie === "licence" &&
+        bezDiakritiky(((p.navic || {}).program || "") + " " + (p.nazev || "")).indexOf(l.hleda) !== -1;
+    const licencePolozky = (p) => LICENCE.find(l => jeLicence(p, l)) || null;
+    const licKod = (p) => String((p.navic || {}).licencniKod || "").trim();
+    const klicLicKodu = (k) => String(k || "").toUpperCase().replace(/[\s-]+/g, "");
+    const NEZIVE = ["vyrazene", "ztracene"];
     const bezDiakritiky = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     const dnesIso = () => {
         const t = new Date();
@@ -296,7 +350,7 @@
     /* ------------------------------------------------------------- filtr */
 
     function vyhovuje(p) {
-        if (filtr.kat && p.kategorie !== filtr.kat) return false;
+        if (filtr.kat && !licencePohledu() && p.kategorie !== filtr.kat) return false;
         if (filtr.stav && p.stav !== filtr.stav) return false;
         if (filtr.clovek) {
             if (filtr.clovek === NIKDO) { if (maCloveka(p)) return false; }
@@ -348,6 +402,24 @@
             otisky.set($("fStav"), stavHtml);
             $("fStav").innerHTML = stavHtml;
             $("fStav").value = filtr.stav;
+        }
+
+        // lišta licencí: místo kategorií řádek na rychlé přidání
+        const lic = licencePohledu();
+        $("fKatRadek").hidden = !!lic;
+        $("licNova").hidden = !lic;
+        if (lic) {
+            const komuHtml = '<option value="">— zatím nikomu (volná) —</option>' +
+                lidi.map(u => '<option value="' + esc(u.id) + '">' + esc(jmeno(u)) + "</option>").join("");
+            if (otisky.get($("licKomu")) !== komuHtml) {
+                const drzim = $("licKomu").value;
+                otisky.set($("licKomu"), komuHtml);
+                $("licKomu").innerHTML = komuHtml;
+                $("licKomu").value = drzim;
+                if ($("licKomu").value !== drzim) $("licKomu").value = "";
+            }
+            $("licPopis").textContent = "Založí se jako „" + lic.vzor.nazev + "“ s dalším volným kódem LIC. " +
+                "Odebrat = licence je zase volná a jde přiřadit někomu jinému; klik na řádek otevře podrobnosti a historii.";
         }
     }
 
@@ -452,6 +524,7 @@
         if (k.zarizeni && p.kategorie !== "auto" && !p.seriove) chybi.push("sériové číslo");
         if (p.kategorie === "auto" && !(p.navic || {}).spz) chybi.push("SPZ");
         if (p.kategorie === "hasici" && !(p.navic || {}).vyrobniCislo) chybi.push("výrobní číslo");
+        if (licencePolozky(p) && !licKod(p)) chybi.push("licenční kód");
         if (p.uzivatelJmeno && !p.uzivatel) chybi.push("člověk bez účtu webu (" + p.uzivatelJmeno + ")");
         return chybi;
     }
@@ -471,6 +544,89 @@
                 "<td>" + x.chybi.map(c => '<span class="evst evst--stitek">' + esc(c) + "</span>").join(" ") + "</td>" +
                 '<td class="evakce">' + window.KBNabidka.tlacitko("Další akce: " + (x.p.kod || "")) + "</td></tr>").join("") +
             "</tbody></table></div></section>";
+    }
+
+    /** Řádek lišty licencí: kód položky, licenční kód, komu, akce. */
+    function radekLicence(p, l) {
+        const kod = p.kod || p.id, lk = licKod(p);
+        const pod = [p.nazev !== l.vzor.nazev ? p.nazev : "", p.poznamka].filter(Boolean).join(" · ");
+        return '<tr class="evr" data-kod="' + esc(kod) + '" tabindex="0">' +
+            '<td class="evkod">' + esc(kod) + "</td>" +
+            '<td class="evnazev">' + (lk ? '<b class="evlickod">' + esc(lk) + "</b>"
+                : '<span class="evst evst--stitek" style="display:inline-block">chybí licenční kód</span>') +
+                (pod ? "<span>" + esc(pod) + "</span>" : "") + "</td>" +
+            "<td>" + stavHtml(p) + "</td>" +
+            '<td class="evlicakce">' +
+                (lk ? '<button type="button" class="btn btn--ghost btn--sm" data-lic-akce="kopiruj">Kopírovat</button>' : "") +
+                (NEZIVE.indexOf(p.stav) !== -1 ? "" : maCloveka(p)
+                    ? '<button type="button" class="btn btn--ghost btn--sm" data-lic-akce="odeber">Odebrat</button>'
+                    : '<button type="button" class="btn btn--primary btn--sm" data-lic-akce="prirad">Přiřadit…</button>') +
+                window.KBNabidka.tlacitko("Další akce: " + kod) + "</td>" +
+        "</tr>";
+    }
+
+    function paintLicence(l) {
+        if (!prisly()) return prazdno("Načítám…");
+        const vse = polozky().filter(p => jeLicence(p, l));
+        const zive = vse.filter(p => NEZIVE.indexOf(p.stav) === -1);
+        const prirazeno = zive.filter(maCloveka).length;
+        const seznam = vse.filter(vyhovuje);
+        const telo = !vse.length
+            ? '<div class="evprazdno">Zatím tu žádná licence není. Napiš nahoře licenční kód, vyber, komu patří, a dej <b>Přidat licenci</b>.</div>'
+            : !seznam.length ? '<div class="evprazdno">Filtru nic neodpovídá.</div>'
+            : '<div class="evk__obal"><table class="evt evt--lic"><thead><tr><th>Kód</th><th>Licenční kód</th><th>Komu</th><th></th></tr></thead><tbody>' +
+                seznam.map(p => radekLicence(p, l)).join("") + "</tbody></table></div>";
+        return '<section class="card evk" aria-label="Licence ' + esc(l.nazev) + '">' +
+            '<div class="evk__hlava"><b>' + esc(l.nazev) + '</b><span class="evk__pocet">' +
+                esc(pocet(zive.length, ["licence", "licence", "licencí"])) + " · přiřazeno " + prirazeno +
+                " · volné " + (zive.length - prirazeno) +
+                (vse.length - zive.length ? " · vyřazené " + (vse.length - zive.length) : "") + "</span></div>" +
+            telo + "</section>";
+    }
+
+    function licAkce(akce, kod) {
+        const p = polozky().find(x => (x.kod || x.id) === kod);
+        if (!p) return;
+        if (akce === "kopiruj") window.KBNabidka.kopiruj(licKod(p), "Licenční kód " + kod + " zkopírován.");
+        else if (akce === "odeber") otevriPredat(kod, "s:volne");
+        else if (akce === "prirad") otevriPredat(kod);
+    }
+
+    /** Rychlé přidání licence z lišty: kód + komu → nová položka LICxxx podle vzoru lišty. */
+    async function pridejLicenci() {
+        const l = licencePohledu();
+        if (!l || pracuji) return;
+        const chyba = (text) => { $("licChyba").textContent = text; $("licChyba").hidden = !text; };
+        const lk = $("licKod").value.trim();
+        chyba("");
+        if (!lk) { chyba("Napiš licenční kód."); $("licKod").focus(); return; }
+        const stejny = polozky().find(p => p.kategorie === "licence" && licKod(p) && klicLicKodu(licKod(p)) === klicLicKodu(lk));
+        if (stejny) {
+            chyba("Tenhle licenční kód už v evidenci je – " + (stejny.kod || stejny.id) +
+                (maCloveka(stejny) ? ", má ho " + drzitel(stejny) : ", " + (STAV_TEXT()[stejny.stav] || stejny.stav)) + ".");
+            return;
+        }
+        const komu = $("licKomu").value;
+        pracuji = true;
+        $("licPridat").disabled = true;
+        try {
+            const p = await window.KB.ulozPolozkuVybaveni({
+                kod: window.KB.dalsiKodVybaveni((kat("licence") || {}).prefix || "LIC"), kategorie: "licence",
+                nazev: l.vzor.nazev, uzivatel: komu, uzivatelJmeno: komu ? jmenoUid(komu) : "",
+                stav: komu ? "u-cloveka" : "volne", od: komu ? dnesIso() : "", stitky: [],
+                navic: { program: l.vzor.program, platnost: l.vzor.platnost, licencniKod: lk }
+            }, { novy: true });
+            window.KBUI.toast("Licence " + p.kod + " přidána – " + (komu ? jmenoUid(komu) : "volná") + ".");
+            $("licKod").value = "";
+            $("licKomu").value = "";
+            $("licKod").focus();
+        } catch (err) {
+            console.warn("Licence se nepřidala:", err && err.message);
+            chyba((err && err.message) || "Uložení se nepovedlo.");
+        } finally {
+            pracuji = false;
+            $("licPridat").disabled = false;
+        }
     }
 
     function paintLide() {
@@ -512,7 +668,8 @@
 
     function vykresli() {
         paintFiltr();
-        const html = pohled === "lide" ? paintLide() : pohled === "sklad" ? paintSklad()
+        const lic = licencePohledu();
+        const html = lic ? paintLicence(lic) : pohled === "lide" ? paintLide() : pohled === "sklad" ? paintSklad()
             : pohled === "dodelat" ? paintDodelat() : paintPolozky();
         nastav($("vypis"), html);
     }
@@ -607,7 +764,11 @@
         const p = kod ? polozky().find(x => (x.kod || x.id) === kod) : null;
         okno = { kod: p ? (p.kod || p.id) : "", novy: !p };
         kodRucne = false;
-        const vzor = p || { kategorie: filtr.kat || "tablet", stav: "volne", stitky: [], navic: {} };
+        const lic = licencePohledu();
+        const vzor = p || (lic
+            ? { kategorie: "licence", stav: "volne", stitky: [], nazev: lic.vzor.nazev,
+                navic: { program: lic.vzor.program, platnost: lic.vzor.platnost } }
+            : { kategorie: filtr.kat || "tablet", stav: "volne", stitky: [], navic: {} });
         if (!p) vzor.kod = window.KB.dalsiKodVybaveni((kat(vzor.kategorie) || {}).prefix || "OST");
         $("oNadpis").textContent = p ? (p.kod || p.id) + " – " + p.nazev : "Nová položka";
         $("oKategorieText").textContent = p ? ((kat(p.kategorie) || {}).nazev || "") : "";
@@ -706,7 +867,9 @@
         const p = polozky().find(x => (x.kod || x.id) === kod);
         if (!p) return;
         predavam = { kod: kod };
-        $("dNadpis").textContent = "Předat " + kod;
+        const lic = licencePolozky(p);
+        $("dNadpis").textContent = !lic ? "Předat " + kod
+            : (prednastav === "s:volne" ? "Odebrat licenci " + kod : "Přiřadit licenci " + kod);
         $("dInfo").textContent = p.nazev + " – teď: " + (window.KB.drzitelVybaveni(p) || "—");
         const lidi = lide().slice().sort((a, b) => (a.last || "").localeCompare(b.last || "", "cs"));
         $("dKomu").innerHTML = '<optgroup label="Člověk">' + lidi.map(u => '<option value="' + esc(u.id) + '">' + esc(jmeno(u)) + "</option>").join("") +
@@ -720,7 +883,8 @@
         $("dOd").value = dnesIso();
         $("dPozn").value = "";
         $("dChyba").hidden = true;
-        $("dUlozit").textContent = prednastav && prednastav.indexOf("s:") === 0 ? "Uložit" : "Předat";
+        $("dUlozit").textContent = lic ? (prednastav === "s:volne" ? "Odebrat" : "Přiřadit")
+            : (prednastav && prednastav.indexOf("s:") === 0 ? "Uložit" : "Předat");
         $("predat").hidden = false;
         setTimeout(() => $("dKomu").focus(), 30);
     }
@@ -782,6 +946,7 @@
         if (maCloveka(p)) polozkyNabidky.push({ text: "Vrátit do skladu", ikona: "vratit", fn: () => otevriPredat(kod, "s:volne") });
         if (p.stav !== "vyrazene") polozkyNabidky.push({ text: "Vyřadit", ikona: "skryt", fn: () => vyrad(kod) });
         polozkyNabidky.push({ text: "Kopírovat kód", ikona: "kopirovat", fn: () => window.KBNabidka.kopiruj(kod, "Kód " + kod + " zkopírován.") });
+        if (licKod(p)) polozkyNabidky.push({ text: "Kopírovat licenční kód", ikona: "kopirovat", fn: () => licAkce("kopiruj", kod) });
         polozkyNabidky.push({ text: "Smazat z evidence", ikona: "smazat", nebezpeci: true, oddel: true,
             fn: () => { okno = { kod: kod, novy: false }; smazOkno().then(() => { if (okno && okno.kod === kod && $("okno").hidden) okno = null; }); } });
         return { nadpis: kod + " – " + p.nazev, radek: radek, polozky: polozkyNabidky };
@@ -796,6 +961,7 @@
             const b = event.target.closest("[data-pohled]");
             if (!b) return;
             pohled = b.dataset.pohled;
+            $("licChyba").hidden = true;
             try { localStorage.setItem(POHLED_KLIC, pohled); } catch (err) { /* soukromý režim */ }
             naplanuj();
         });
@@ -813,11 +979,14 @@
         $("fClovek").addEventListener("change", () => { filtr.clovek = $("fClovek").value; naplanuj(); });
         $("fStav").addEventListener("change", () => { filtr.stav = $("fStav").value; naplanuj(); });
         $("btnNova").addEventListener("click", () => otevriOkno(""));
+        $("licNova").addEventListener("submit", (event) => { event.preventDefault(); pridejLicenci(); });
 
         // řádek = otevřít položku (ne při kliku na „⋯“ – to otevírá nabídku)
         $("vypis").addEventListener("click", (event) => {
             if (event.target.closest("[data-nabidka-vic]")) return;
             const radek = event.target.closest("[data-kod]");
+            const akce = event.target.closest("[data-lic-akce]");
+            if (akce && radek) { licAkce(akce.dataset.licAkce, radek.dataset.kod); return; }
             if (radek) otevriOkno(radek.dataset.kod);
         });
         $("vypis").addEventListener("keydown", (event) => {
