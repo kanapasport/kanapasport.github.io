@@ -7,8 +7,8 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Výkazy práce – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=366">
-    <link rel="stylesheet" href="assets/css/nabidka.css?v=366">
+    <link rel="stylesheet" href="assets/css/app.css?v=367">
+    <link rel="stylesheet" href="assets/css/nabidka.css?v=367">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -210,6 +210,11 @@
             text-transform: uppercase; color: var(--muted); }
         .navrhy__zdroj { font-weight: 400; color: var(--muted); }
         .navrhy__cip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* pruh návrhů uvnitř dalšího výkazu (24. 11. 2026) – pod hlavičkou, nad výběrem projektu */
+        .navrhy--blok { margin: 12px 14px 0; background: var(--surface); }
+        /* delší text tlačítka se na telefonu láme po celých částech (den / „na který den"), ne po slovech */
+        .navrhy--blok .btn { flex-wrap: wrap; justify-content: flex-start; gap: 0 8px; padding-top: 5px; padding-bottom: 5px; }
+        .navrhy--blok .btn span { white-space: nowrap; }
         /* „jako minule" pod dnem v hlavičce týdenní mřížky */
         .ty .ty__minule { margin-top: 4px; padding: 1px 7px; font-size: var(--fs-1); font-weight: 700;
             letter-spacing: 0; text-transform: none; }
@@ -634,11 +639,11 @@
 </div>
 
 
-<script src="assets/js/taxonomy.js?v=366"></script>
-<script src="assets/js/ui.js?v=366"></script>
-<script src="assets/js/nabidka.js?v=366"></script>
-<script src="assets/js/vykazy.js?v=366"></script>
-<script type="module" src="assets/js/store.js?v=366"></script>
+<script src="assets/js/taxonomy.js?v=367"></script>
+<script src="assets/js/ui.js?v=367"></script>
+<script src="assets/js/nabidka.js?v=367"></script>
+<script src="assets/js/vykazy.js?v=367"></script>
+<script type="module" src="assets/js/store.js?v=367"></script>
 
 <script>
 (function () {
@@ -1799,6 +1804,9 @@
                 '<button type="button" class="linkbtn linkbtn--tmavy" data-zodeber hidden>Odebrat výkaz</button>' +
             "</div>" +
 
+            /* návrhy v dalším (prázdném) výkazu – plní vykresliNavrhyBloku() */
+            '<div class="navrhy navrhy--blok" data-navrhy-blok hidden></div>' +
+
             '<div class="zblok__grid">' +
                 '<div><label class="label">Projekt</label>' +
                     '<select class="field" data-z="zakazka">' +
@@ -2108,6 +2116,8 @@
             if (zodeber) zodeber.hidden = vsechnyBloky.length < 2;
         });
         soucetDne();
+        // přibyl nebo ubyl výkaz či záznam – návrhy v dalších výkazech se řídí tím, co je nad nimi
+        vykresliNavrhyBloku();
     }
 
     function soucetDne() {
@@ -3396,6 +3406,7 @@
         const box = $("navrhy");
         if (!box) return;
         if ($("zapis").hidden) { box.hidden = true; return; }
+        vykresliNavrhyBloku();      // pruhy v dalších výkazech se řídí stejnými daty
         const uid = $("dOsoba").value;
         const den = navrhDen();
         const zamek = uid ? navrhZamek(den) : "nevybraný člověk";
@@ -3451,19 +3462,36 @@
                     " ho nahradí – nic se zatím neukládá.",
                 ano: "Nahradit" }))) return;
 
-        // projekt + firma = jeden výkaz (blok), stejně jako při ručním psaní
+        radkyBox().innerHTML = "";
+        vlozNavrh(minule.zapisy, den, uid, null);
+        precisluj();
+        vykresliNavrhy();
+        /* Kurzor se nikam nestaví: pole času se při vstupu vyprázdní (kvůli
+           nabídce časů) a návrh by pak vypadal, že čas nepřevzal. */
+        window.KBUI.toast("Návrh podle " + tyDenText(minule.den) + " – zkontroluj ho a ulož." +
+            (minule.vynechano ? " Vynecháno " + V.pocet(minule.vynechano, ["záznam", "záznamy", "záznamů"]) +
+                " (hotový úkol nebo projekt mimo nabídku)." : ""));
+    }
+
+    /**
+     * Vloží návrh do formuláře jako výkazy na den `den` – na konec, nebo
+     * před výkaz `pred`. Projekt + firma = jeden výkaz (blok), stejně jako
+     * při ručním psaní. Nic neukládá a po sobě nepřečísluje.
+     */
+    function vlozNavrh(zapisy, den, uid, pred) {
         const skupiny = [];
-        minule.zapisy.forEach(z => {
+        zapisy.forEach(z => {
             const klic = (z.zakazka || "") + "|" + (z.firma || "");
             let sk = skupiny.find(x => x.klic === klic);
             if (!sk) skupiny.push(sk = { klic: klic, zakazka: z.zakazka || "", firma: z.firma || "", zapisy: [] });
             sk.zapisy.push(z);
         });
 
-        radkyBox().innerHTML = "";
         skupiny.forEach(sk => {
-            radkyBox().insertAdjacentHTML("beforeend", zblokHtml({ zakazka: sk.zakazka, firma: sk.firma }));
-            const blok = bloky().pop();
+            const html = zblokHtml({ zakazka: sk.zakazka, firma: sk.firma });
+            if (pred) pred.insertAdjacentHTML("beforebegin", html);
+            else radkyBox().insertAdjacentHTML("beforeend", html);
+            const blok = pred ? pred.previousElementSibling : bloky().pop();
             const kam = blok.querySelector("[data-polozky]");
             sk.zapisy.forEach(z => kam.insertAdjacentHTML("beforeend",
                 polozkaHtml(navrhZaznamu(z, den, uid, sk.zakazka), { odebrat: true, sDatem: true })));
@@ -3486,23 +3514,137 @@
                 prepocti(box);
             });
         });
+    }
+
+    /* ====================================== NÁVRHY V DALŠÍM VÝKAZU ====
+       Horní pruh návrhů patří k začátku formuláře. Kdo dá „Přidat další
+       výkaz", měl dole prázdný výkaz bez jakékoli nápovědy (Michal
+       24. 11. 2026: „tam nemám to jako minule… když člověk napíše jeden
+       den a pak chce psát další, mohl by tam mít stejně jako minulý den").
+       Každý další PRÁZDNÝ výkaz má proto vlastní pruh podle toho, co je
+       ve formuláři rozepsané NAD ním (den posledního záznamu nad ním):
+         „Stejně jako Po 23. 11." – práce toho dne se zkopíruje jako návrh
+             na další pracovní den, který člověk ještě nemá zapsaný (víkend,
+             svátek, den se zápisem práce i celodenní absence se přeskočí;
+             do budoucna ani na zavřený den se nenabízí);
+         čipy „Rychle přidat" – další úkol na TENTÝŽ den, začátek navazuje
+             na konec poslední práce toho dne.
+       Pruh zmizí, jakmile ve výkazu něco je (projekt, úkol, popis). Nic se
+       neukládá samo – jako u „Jako minule" jde všechno přes Uložit. */
+
+    /** Vyplněná práce (ne absence) ve výkazech NAD výkazem `blok`, i s projektem a firmou. */
+    function praceNad(blok) {
+        const out = [];
+        bloky().some(b => {
+            if (b === blok) return true;
+            const hlava = ctiZblok(b);
+            if (!hlava.zakazka || jeAbsence(hlava.zakazka)) return false;
+            polozkyBloku(b).forEach(box => {
+                const p = Object.assign(ctiPolozku(box), hlava);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(p.datum)) out.push(p);
+            });
+            return false;
+        });
+        return out;
+    }
+
+    /** Další pracovní den po `den`, který člověk ještě nemá zapsaný ani
+        rozepsaný; "" = do dneška žádný není, nebo je zavřený. */
+    function dalsiVolnyDen(uid, den) {
+        const dnes = V.dnesISO();
+        const obsazeno = {};
+        (window.KB.vykazy || []).forEach(z => {
+            if (!z || z.uid !== uid || !z.datum) return;
+            // absence na pár hodin den neobsadí, celodenní ano
+            const absence = z.absence === true || jeAbsence(z.zakazka);
+            if (!absence || (Number(z.hodiny) || 0) >= HODIN_ZA_DEN) obsazeno[z.datum] = true;
+        });
+        prectiRadky().forEach(p => { if (p.zakazka && p.datum) obsazeno[p.datum] = true; });
+        let d = den;
+        for (let i = 0; i < 14; i++) {
+            d = dalsiPracovniDen(d);
+            if (d > dnes) return "";
+            if (obsazeno[d] || (window.KBUI.svatek && window.KBUI.svatek(d))) continue;
+            return navrhZamek(d) ? "" : d;
+        }
+        return "";
+    }
+
+    /** Co nabídnout v dalším prázdném výkazu `blok`; null = nic.
+        @returns {{den: string, zapisy: Array, dalsi: string, ukoly: Array, od: string}|null} */
+    function navrhBloku(blok, uid) {
+        if (!uid || bloky().indexOf(blok) < 1) return null;
+        if (ctiZblok(blok).zakazka ||
+            polozkyBloku(blok).some(b => { const p = ctiPolozku(b); return p.ukolId || p.nazev; })) return null;
+        const nad = praceNad(blok);
+        if (!nad.length) return null;
+        const den = nad[nad.length - 1].datum;
+        const zapisy = nad.filter(p => p.datum === den);
+        const dalsi = dalsiVolnyDen(uid, den);
+        // úkol, který ten den ve formuláři už je, se znovu nenabízí
+        const pouzite = zapisy.map(p => p.ukolId).filter(Boolean);
+        const ukoly = navrhZamek(den) ? []
+            : V.navrhyUkolu(window.KB.vykazy || [], uid, den, window.KB.ukoly || [], 8)
+                .filter(x => pouzite.indexOf(x.ukol.id) === -1 &&
+                    (x.ukol.projekt !== WEB_PRACE || jeMujWeb()));
+        if (!dalsi && !ukoly.length) return null;
+        const konce = zapisy.map(p => p.do).filter(c => minutyCasu(c) !== null).sort();
+        return { den: den, zapisy: zapisy, dalsi: dalsi, ukoly: ukoly, od: konce.length ? konce[konce.length - 1] : "" };
+    }
+
+    function vykresliNavrhyBloku() {
+        if (!$("zapis") || $("zapis").hidden) return;
+        const uid = $("dOsoba").value;
+        bloky().forEach(blok => {
+            const box = blok.querySelector("[data-navrhy-blok]");
+            if (!box) return;
+            const n = navrhBloku(blok, uid);
+            box.hidden = !n;
+            if (!n) { box.innerHTML = ""; return; }
+            const pocet = V.pocet(n.zapisy.length, ["záznam", "záznamy", "záznamů"]);
+            box.innerHTML =
+                (n.dalsi
+                    ? '<button type="button" class="btn btn--ghost btn--sm" data-navrh-stejne title="' +
+                          esc("Připraví " + pocet + " z " + V.czDatum(n.den) + " (jak je máš rozepsané nad tím) " +
+                              "jako návrh na " + V.czDatum(n.dalsi) + ". Uloží se, až ho zkontroluješ a dáš Uložit.") + '">' +
+                          "<span>Stejně jako " + esc(tyDenText(n.den)) + '</span> <span class="navrhy__zdroj">(na ' +
+                          esc(tyDenText(n.dalsi)) + " · " + esc(pocet) + ")</span></button>"
+                    : "") +
+                (n.ukoly.length
+                    ? '<span class="navrhy__popis">Rychle přidat · ' + esc(tyDenText(n.den)) + "</span>" +
+                      n.ukoly.map(x => '<button type="button" class="chip navrhy__cip" data-navrh-blok-ukol="' +
+                          esc(x.ukol.id) + '" title="' + esc(x.ukol.projekt + " · další záznam na " + V.czDatum(n.den) +
+                              (n.od ? " od " + n.od : "")) + '">+ ' +
+                          esc(x.ukol.nazev || "Úkol") + "</button>").join("")
+                    : "");
+        });
+    }
+
+    /** „Stejně jako <den>": prázdný výkaz nahradí kopií dne nad ním na další volný den. */
+    function pouzijStejnyDen(blok) {
+        const uid = $("dOsoba").value;
+        const n = navrhBloku(blok, uid);
+        if (!n || !n.dalsi) return;
+        // hodiny vybrané po půlhodinách (bez času od–do) se berou z roletky Hodin
+        vlozNavrh(n.zapisy.map(p => Object.assign({}, p, { hodiny: p.hodinyVolba || 0 })), n.dalsi, uid, blok);
+        blok.remove();
         precisluj();
         vykresliNavrhy();
-        /* Kurzor se nikam nestaví: pole času se při vstupu vyprázdní (kvůli
-           nabídce časů) a návrh by pak vypadal, že čas nepřevzal. */
-        window.KBUI.toast("Návrh podle " + tyDenText(minule.den) + " – zkontroluj ho a ulož." +
-            (minule.vynechano ? " Vynecháno " + V.pocet(minule.vynechano, ["záznam", "záznamy", "záznamů"]) +
-                " (hotový úkol nebo projekt mimo nabídku)." : ""));
+        window.KBUI.toast("Návrh na " + tyDenText(n.dalsi) + " podle " + tyDenText(n.den) +
+            " – zkontroluj ho a ulož.");
     }
 
     /** Čip úkolu: přidá záznam na ten úkol – do výkazu téhož projektu,
-        do prázdného výkazu, nebo do nového. */
-    function pridejUkolZNavrhu(id) {
+        do prázdného výkazu, nebo do nového. Čip z dalšího výkazu posílá
+        `kam` = { blok, den, od }: záznam jde do toho výkazu, na ten den
+        a začíná časem `od` (konec předchozí práce toho dne). */
+    function pridejUkolZNavrhu(id, kam) {
         const u = (window.KB.ukoly || []).find(x => x.id === id);
-        const den = navrhDen();
+        const den = kam ? kam.den : navrhDen();
         if (!u || !u.projekt || navrhZamek(den)) return;
-        let blok = bloky().find(b => ctiZblok(b).zakazka === u.projekt) ||
-                   bloky().find(b => !ctiZblok(b).zakazka) || null;
+        let blok = kam ? kam.blok
+            : (bloky().find(b => ctiZblok(b).zakazka === u.projekt) ||
+               bloky().find(b => !ctiZblok(b).zakazka) || null);
         if (!blok) blok = pridejBlok();
         const sel = blok.querySelector('[data-z="zakazka"]');
         if (sel && sel.value !== u.projekt) {
@@ -3520,6 +3662,8 @@
         if (!box) box = pridejPolozku(blok);
         const datum = box.querySelector('[data-f="datum"]');
         if (datum) datum.value = den;
+        const zacatek = kam && kam.od ? box.querySelector('[data-f="od"]') : null;
+        if (zacatek) zacatek.value = kam.od;
         const ukolSel = box.querySelector('[data-f="ukolId"]');
         if (ukolSel) {
             ukolSel.innerHTML = ukolOptions(u.projekt, u.id);
@@ -5219,6 +5363,8 @@
             // u absence se do popisu práce doplní „Dovolená – Jméno"
             polozkyBloku(blok).forEach(box =>
                 predvyplnAbsenci(box, event.target.value, $("dOsoba").value));
+            // vybraný projekt = výkaz už není prázdný; a výkazům pod ním přibyl zdroj návrhu
+            if (radkyBox().contains(blok)) vykresliNavrhyBloku();
             return;
         }
 
@@ -5275,6 +5421,9 @@
         // jiný den = jiný návrh; vybraný úkol zmizí z čipů
         if (radkyBox().contains(box) &&
             (event.target.dataset.f === "datum" || event.target.dataset.f === "ukolId")) vykresliNavrhy();
+        // do výkazu s pruhem návrhů někdo začal psát (popis) – pruh už nemá co nabízet
+        else if (radkyBox().contains(box) && event.target.dataset.f === "nazev" &&
+            box.closest("[data-zblok]").querySelector("[data-navrhy-blok]:not([hidden])")) vykresliNavrhyBloku();
     });
 
     /* Napsaný čas srovnáme, až když z pole odejde – během psaní by to
@@ -5565,6 +5714,16 @@
             if (event.target.closest("[data-navrh-minule]")) return void pouzijJakoMinule();
             const cip = event.target.closest("[data-navrh-ukol]");
             if (cip) pridejUkolZNavrhu(cip.dataset.navrhUkol);
+        });
+        /* pruh návrhů v dalším výkazu (24. 11. 2026) */
+        $("radky").addEventListener("click", (event) => {
+            const stejne = event.target.closest("[data-navrh-stejne]");
+            if (stejne) return void pouzijStejnyDen(stejne.closest("[data-zblok]"));
+            const cip = event.target.closest("[data-navrh-blok-ukol]");
+            if (!cip) return;
+            const blok = cip.closest("[data-zblok]");
+            const n = navrhBloku(blok, $("dOsoba").value);
+            if (n) pridejUkolZNavrhu(cip.dataset.navrhBlokUkol, { blok: blok, den: n.den, od: n.od });
         });
         // výkazy, úkoly, lidé, zámky a role chodí průběžně – zavřený formulář se nepřekresluje
         ["vykazy", "ukoly", "users", "zpetne", "uzaverka", "projekty-docs"].forEach(udalost =>

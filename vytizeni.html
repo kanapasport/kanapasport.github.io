@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1d556d">
     <meta name="robots" content="noindex, nofollow">
     <title>Vytížení týmu – Pasport Kaňa</title>
-    <link rel="stylesheet" href="assets/css/app.css?v=366">
+    <link rel="stylesheet" href="assets/css/app.css?v=367">
     <link rel="apple-touch-icon" href="ikona-180.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="Pasport_Kana_black.png">
@@ -112,10 +112,10 @@
     </div>
 </main>
 
-<script src="assets/js/taxonomy.js?v=366"></script>
-<script src="assets/js/ui.js?v=366"></script>
-<script src="assets/js/vykazy.js?v=366"></script>
-<script type="module" src="assets/js/store.js?v=366"></script>
+<script src="assets/js/taxonomy.js?v=367"></script>
+<script src="assets/js/ui.js?v=367"></script>
+<script src="assets/js/vykazy.js?v=367"></script>
+<script type="module" src="assets/js/store.js?v=367"></script>
 
 <script>
 (function () {
@@ -187,11 +187,21 @@
             (a.last || "").localeCompare(b.last || "", "cs") ||
             (a.first || "").localeCompare(b.first || "", "cs"));
 
+        /* Vedení a kancelář výkazy běžně nepíšou a jejich prázdné řádky mezi
+           zaměstnanci jen pletly – mají vlastní skupinu úplně dole (Michal
+           24. 11. 2026). Kdo tam patří, je stejné nastavení jako „pod čarou"
+           na stránce Dovolené (V.dovolenaPodCarou: zaškrtnutí u člověka,
+           dokud není nastavené, rozhoduje role majitel / asistentka). */
+        const z = window.KB.zustatky || {};
+        const dole = (u) => V.dovolenaPodCarou(u, z[u.id]);
+
         const skupiny = [];
         window.KBUI.TYPY.forEach(t => {
-            const lide = serazeni.filter(u => window.KBUI.typUvazku(u) === t.id);
+            const lide = serazeni.filter(u => window.KBUI.typUvazku(u) === t.id && !dole(u));
             if (lide.length) skupiny.push({ nazev: t.mnozne, lide: lide });
         });
+        const kancelar = serazeni.filter(dole);
+        if (kancelar.length) skupiny.push({ nazev: "Vedení a kancelář", lide: kancelar });
         return skupiny;
     }
 
